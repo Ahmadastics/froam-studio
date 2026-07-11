@@ -1331,8 +1331,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         }
         // Remove any old shell overlay
         document.getElementById(DEVICE_SHELL_ID)?.remove();
-        // Always make sure #root is back in body (safety)
-        if (appRoot.parentElement !== document.body) {
+        // Always make sure #root is back in body (safety) — unless the root
+        // IS <body>/<html>, which can never be re-parented into itself.
+        if (appRoot !== document.body && appRoot !== document.documentElement && appRoot.parentElement && appRoot.parentElement !== document.body) {
             document.body.appendChild(appRoot);
         }
         // Reset root styles

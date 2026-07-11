@@ -45,8 +45,18 @@ function markFroamRoot() {
   if (document.querySelector('[data-froam-root]') || document.getElementById('root') || document.getElementById('__next')) {
     return
   }
-  const root = document.querySelector<HTMLElement>('main') ?? document.body
-  root.setAttribute('data-froam-root', '')
+  const main = document.querySelector<HTMLElement>('main')
+  if (main) {
+    main.setAttribute('data-froam-root', '')
+    return
+  }
+  // Plain page with no <main>/#root: the editor frames and re-parents the
+  // root for device simulation, which <body> itself cannot survive — so
+  // wrap the page content in a root div instead of tagging <body>.
+  const wrapper = document.createElement('div')
+  wrapper.setAttribute('data-froam-root', '')
+  while (document.body.firstChild) wrapper.appendChild(document.body.firstChild)
+  document.body.appendChild(wrapper)
 }
 
 function injectEditorStyles(origin: string) {
