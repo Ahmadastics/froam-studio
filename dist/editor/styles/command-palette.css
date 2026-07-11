@@ -1,0 +1,96 @@
+/* ===============================================================
+   FROAM STUDIO — Command palette
+   =============================================================== */
+
+.fs-command-palette {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: grid;
+  place-items: start center;
+  padding-top: 18vh;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  animation: fs-fade-in 150ms ease;
+}
+
+@keyframes fs-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.fs-command-palette__card {
+  width: min(480px, calc(100vw - 40px));
+  border-radius: var(--fs-radius-lg);
+  border: 1px solid var(--fs-border-hover);
+  background: var(--fs-surface-panel);
+  box-shadow: var(--fs-shadow-panel);
+  overflow: hidden;
+  animation: fs-slide-up 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fs-slide-up {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.fs-command-palette__input {
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  border-bottom: 1px solid var(--fs-border);
+  background: transparent;
+  color: var(--fs-text-primary);
+  font: inherit;
+  font-size: 0.92rem;
+  outline: none;
+}
+
+.fs-command-palette__input::placeholder {
+  color: var(--fs-text-tertiary);
+}
+
+.fs-command-palette__list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.fs-command-palette__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--fs-radius-sm);
+  cursor: pointer;
+  transition: background var(--fs-transition-fast);
+  font-size: 0.82rem;
+  color: var(--fs-text-secondary);
+}
+
+.fs-command-palette__item:hover,
+.fs-command-palette__item.is-focused {
+  background: var(--fs-bg-hover);
+  color: var(--fs-text-primary);
+}
+
+.fs-command-palette__item svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.fs-command-palette__item-label {
+  flex: 1;
+}
+
+.fs-command-palette__item-shortcut {
+  font-size: 0.66rem;
+  color: var(--fs-text-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--fs-border);
+  background: var(--fs-bg-secondary);
+  font-variant-numeric: tabular-nums;
+}

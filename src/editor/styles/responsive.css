@@ -1,0 +1,44 @@
+/* ===============================================================
+   FROAM STUDIO — Old sidebar: hide when Figma mode is active · Mobile responsive: collapse to single panel
+   =============================================================== */
+
+/* ─── Old sidebar: hide when Figma mode is active ─── */
+
+.froam-figma-layout ~ .froam-studio {
+  display: none !important;
+}
+
+/* ─── Mobile responsive: collapse to single panel ─── */
+
+@media (max-width: 900px) {
+  .froam-figma-layout {
+    grid-template-columns: 1fr 260px;
+    grid-template-rows: 48px 1fr;
+    grid-template-areas:
+      "toolbar toolbar"
+      "canvas  design";
+  }
+  .froam-figma-layout.is-planning {
+    grid-template-columns: 1fr 260px;
+  }
+  .froam-figma-left { display: none; }
+  .froam-figma-layout__canvas { display: none; }
+}
+
+@media (max-width: 640px) {
+  .froam-figma-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 48px 1fr;
+    grid-template-areas:
+      "toolbar"
+      "design";
+  }
+  .froam-figma-layout.is-planning {
+    grid-template-columns: 1fr;
+  }
+  .froam-figma-left { display: none; }
+  .froam-figma-layout__canvas { display: none; }
+  .froam-dp {
+    max-height: calc(100vh - 48px);
+  }
+}

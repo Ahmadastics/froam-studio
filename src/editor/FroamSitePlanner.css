@@ -1,0 +1,955 @@
+.fsp {
+  display: grid;
+  gap: 12px;
+  color: var(--fs-text-primary);
+}
+
+.fsp button,
+.fsp input,
+.fsp textarea {
+  font: inherit;
+}
+
+.fsp textarea {
+  resize: vertical;
+}
+
+.fsp-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--fs-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.fsp-tabs button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fs-text-tertiary);
+  cursor: pointer;
+}
+
+.fsp-tabs button.is-active {
+  background: rgba(94, 234, 212, 0.12);
+  color: var(--fs-accent);
+}
+
+.fsp-pane {
+  display: grid;
+  gap: 12px;
+}
+
+.fsp-prompt-planner {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(94, 234, 212, 0.18);
+  border-radius: 9px;
+  background:
+    linear-gradient(180deg, rgba(94, 234, 212, 0.07), rgba(255, 255, 255, 0.018)),
+    rgba(8, 10, 14, 0.9);
+}
+
+.fsp-flow-rail {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+
+.fsp-flow-rail span {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--fs-border);
+  border-radius: 999px;
+  color: var(--fs-text-tertiary);
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.fsp-flow-rail span.is-active {
+  border-color: rgba(94, 234, 212, 0.28);
+  background: rgba(94, 234, 212, 0.1);
+  color: var(--fs-accent);
+}
+
+.fsp-prompt-box {
+  display: grid;
+  gap: 6px;
+}
+
+.fsp-prompt-box span {
+  color: var(--fs-text-secondary);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.fsp-prompt-box textarea {
+  width: 100%;
+  min-height: 96px;
+  padding: 10px;
+  border: 1px solid var(--fs-border);
+  border-radius: 8px;
+  outline: none;
+  background: rgba(8, 10, 14, 0.76);
+  color: var(--fs-text-primary);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.fsp-prompt-box textarea:focus {
+  border-color: var(--fs-border-active);
+  box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.08);
+}
+
+.fsp-preset-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.fsp-preset-row button {
+  min-height: 30px;
+  flex: 0 0 auto;
+  padding: 0 10px;
+  border: 1px solid var(--fs-border);
+  border-radius: 999px;
+  background: var(--fs-bg-secondary);
+  color: var(--fs-text-tertiary);
+  cursor: pointer;
+  font-size: 0.65rem;
+}
+
+.fsp-preset-row button:hover {
+  border-color: var(--fs-border-hover);
+  color: var(--fs-accent);
+}
+
+.fsp-prompt-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.fsp-prompt-actions button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--fs-border);
+  border-radius: 7px;
+  background: var(--fs-bg-tertiary);
+  color: var(--fs-text-secondary);
+  cursor: pointer;
+}
+
+.fsp-prompt-actions button.is-primary {
+  border-color: rgba(94, 234, 212, 0.26);
+  background: var(--fs-bg-active);
+  color: var(--fs-accent);
+}
+
+.fsp-prompt-actions button:hover {
+  border-color: var(--fs-border-hover);
+  color: var(--fs-text-primary);
+}
+
+.fsp-blueprint-hero {
+  display: grid;
+  gap: 7px;
+  padding: 14px;
+  border: 1px solid rgba(94, 234, 212, 0.16);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(94, 234, 212, 0.09), rgba(255, 255, 255, 0.025)),
+    rgba(8, 10, 14, 0.88);
+}
+
+.fsp-blueprint-hero span,
+.fsp-blueprint-step__body > span {
+  color: var(--fs-accent);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fsp-blueprint-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.fsp-blueprint-actions button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--fs-border);
+  border-radius: 7px;
+  background: var(--fs-bg-tertiary);
+  color: var(--fs-text-secondary);
+  cursor: pointer;
+}
+
+.fsp-blueprint-actions button:hover {
+  border-color: var(--fs-border-hover);
+  color: var(--fs-text-primary);
+}
+
+.fsp-blueprint-actions button.is-primary {
+  border-color: rgba(94, 234, 212, 0.26);
+  background: var(--fs-bg-active);
+  color: var(--fs-accent);
+}
+
+.fsp-blueprint-flow {
+  display: grid;
+  gap: 9px;
+  max-height: 610px;
+  padding-right: 2px;
+  overflow: auto;
+}
+
+.fsp-blueprint-step {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) 30px;
+  align-items: start;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--fs-border);
+  border-radius: 8px;
+  background: rgba(8, 10, 14, 0.82);
+}
+
+.fsp-blueprint-step:hover {
+  border-color: var(--fs-border-hover);
+  background: rgba(94, 234, 212, 0.055);
+}
+
+.fsp-blueprint-step__preview .fsp-preview {
+  min-height: 76px;
+}
+
+.fsp-blueprint-step__body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fsp-blueprint-title-input,
+.fsp-blueprint-summary-input,
+.fsp-blueprint-section-title,
+.fsp-blueprint-field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--fs-border);
+  border-radius: 7px;
+  outline: none;
+  background: rgba(8, 10, 14, 0.72);
+  color: var(--fs-text-primary);
+}
+
+.fsp-blueprint-title-input {
+  min-height: 38px;
+  padding: 0 10px;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.fsp-blueprint-summary-input {
+  min-height: 72px;
+  padding: 9px 10px;
+  color: var(--fs-text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.fsp-blueprint-section-title {
+  min-height: 34px;
+  padding: 0 9px;
+  color: var(--fs-text-primary);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.fsp-blueprint-field {
+  display: grid;
+  gap: 5px;
+}
+
+.fsp-blueprint-field span {
+  color: var(--fs-text-tertiary);
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fsp-blueprint-field textarea {
+  min-height: 54px;
+  padding: 8px;
+  color: var(--fs-text-secondary);
+  font-size: 0.66rem;
+  line-height: 1.45;
+}
+
+.fsp-blueprint-title-input:focus,
+.fsp-blueprint-summary-input:focus,
+.fsp-blueprint-section-title:focus,
+.fsp-blueprint-field textarea:focus {
+  border-color: var(--fs-border-active);
+  box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.08);
+}
+
+.fsp-blueprint-order-actions {
+  grid-column: 3;
+  display: grid;
+  gap: 4px;
+}
+
+.fsp-blueprint-order-actions button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--fs-border);
+  border-radius: 7px;
+  background: var(--fs-bg-tertiary);
+  color: var(--fs-text-tertiary);
+  cursor: pointer;
+}
+
+.fsp-blueprint-order-actions button:hover {
+  border-color: var(--fs-border-hover);
+  color: var(--fs-accent);
+}
+
+.fsp-blueprint-order-actions button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.fsp-insert-settings {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--fs-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.fsp-setting-label {
+  display: grid;
+  gap: 2px;
+}
+
+.fsp-setting-label span {
+  color: var(--fs-text-secondary);
+  font-size: 0.69rem;
+  font-weight: 800;
+}
+
+.fsp-setting-label small {
+  color: var(--fs-text-tertiary);
+  font-size: 0.61rem;
+  line-height: 1.4;
+}
+
+.fsp-placement-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.fsp-placement-row button {
+  min-height: 29px;
+  padding: 0 5px;
+  border: 1px solid var(--fs-border);
+  border-radius: 6px;
+  background: var(--fs-bg-secondary);
+  color: var(--fs-text-tertiary);
+  cursor: pointer;
+  font-size: 0.65rem;
+}
+
+.fsp-placement-row button:hover,
+.fsp-placement-row button.is-active {
+  border-color: var(--fs-border-hover);
+  background: var(--fs-bg-active);
+  color: var(--fs-accent);
+}
+
+.fsp-frame-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 68px 68px;
+  gap: 6px;
+}
+
+.fsp-frame-settings label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+}
+
+.fsp-frame-settings span {
+  color: var(--fs-text-tertiary);
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.fsp-frame-settings input,
+.fsp-frame-settings select,
+.fsp-section-frame input,
+.fsp-section-frame select {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 7px;
+  border: 1px solid var(--fs-border);
+  border-radius: 6px;
+  outline: none;
+  background: var(--fs-bg-secondary);
+  color: var(--fs-text-primary);
+  font: inherit;
+  font-size: 0.66rem;
+}
+
+.fsp-blank-page-btn {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px dashed rgba(94, 234, 212, 0.28);
+  border-radius: 7px;
+  background: rgba(94, 234, 212, 0.055);
+  color: var(--fs-accent);
+  cursor: pointer;
+}
+
+.fsp-blank-page-btn:hover {
+  background: rgba(94, 234, 212, 0.1);
+}
+
+.fsp-pane__heading,
+.fsp-page-editor__top,
+.fsp-library-count,
+.fsp-build-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fsp-pane__heading > div,
+.fsp-wireframe-item__meta,
+.fsp-library-card__body {
+  display: grid;
+  gap: 3px;
+}
+
+.fsp-pane__heading span,
+.fsp-wireframe-item__meta span,
+.fsp-library-card__body span,
+.fsp-project-name span,
+.fsp-fields span {
+  color: var(--fs-text-tertiary);
+  font-size: 0.63rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fsp-pane__heading strong {
+  font-size: 0.9rem;
+}
+
+.fsp-icon-btn {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--fs-border);
+  border-radius: 7px;
+  background: var(--fs-bg-tertiary);
+  color: var(--fs-text-secondary);
+  cursor: pointer;
+}
+
+.fsp-icon-btn:hover,
+.fsp-icon-btn.is-active {
+  border-color: var(--fs-border-hover);
+  color: var(--fs-accent);
+}
+
+.fsp-icon-btn.is-danger:hover {
+  border-color: var(--fs-border-danger);
+  color: var(--fs-text-danger);
+}
+
+.fsp-project-name,
+.fsp-fields label {
+  display: grid;
+  gap: 5px;
+}
+
+.fsp-project-name input,
+.fsp-fields input,
+.fsp-search input {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--fs-border);
+  border-radius: 7px;
+  outline: none;
+  background: var(--fs-bg-secondary);
+  color: var(--fs-text-primary);
+}
+
+.fsp-project-name input:focus,
+.fsp-fields input:focus,
+.fsp-search:focus-within {
+  border-color: var(--fs-border-active);
+  box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.08);
+}
+
+.fsp-sitemap {
+  display: grid;
+  gap: 6px;
+  max-height: 245px;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid var(--fs-border);
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.fsp-sitemap-branch {
+  display: grid;
+  gap: 6px;
+}
+
+.fsp-page-card {
+  width: calc(100% - var(--fsp-depth, 0px));
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid var(--fs-border);
+  border-radius: 7px;
+  background: rgba(8, 10, 14, 0.88);
+  color: var(--fs-text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.fsp-page-card:hover,
+.fsp-page-card.is-selected {
+  border-color: var(--fs-border-hover);
+  background: rgba(94, 234, 212, 0.08);
+}
+
+.fsp-page-card > span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+}
+
+.fsp-page-card strong {
+  color: var(--fs-text-primary);
+  font-size: 0.75rem;
+}
+
+.fsp-page-card small {
+  color: var(--fs-text-tertiary);
+  font-size: 0.64rem;
+}
+
+.fsp-page-card__status {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fs-warm);
+}
+
+.fsp-page-card__status.is-ready {
+  background: var(--fs-accent);
+}
+
+.fsp-page-editor {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--fs-border);
+  border-radius: 8px;
+  background: var(--fs-bg-secondary);
+}
+
+.fsp-page-editor__top > div,
+.fsp-page-editor__actions,
+.fsp-library-card__actions,
+.fsp-wireframe-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.fsp-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.fsp-page-editor__actions button,
+.fsp-build-bar button,
+.fsp-library-card__actions button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--fs-border);
+  border-radius: 7px;
+  background: var(--fs-bg-tertiary);
+  color: var(--fs-text-secondary);
+  cursor: pointer;
+}
+
+.fsp-page-editor__actions button:hover,
+.fsp-build-bar button:hover,
+.fsp-library-card__actions button:hover {
+  border-color: var(--fs-border-hover);
+  color: var(--fs-text-primary);
+}
+
+.fsp-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  border: 1px solid var(--fs-border-danger);
+  border-radius: 5px;
+  color: var(--fs-text-warm);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.fsp-status.is-ready {
+  border-color: var(--fs-border-hover);
+  color: var(--fs-accent);
+}
+
+.fsp-wireframe {
+  display: grid;
+  gap: 8px;
+  max-height: 440px;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid var(--fs-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.018);
+  min-width: 0;
+}
+
+.fsp-wireframe-item {
+  display: grid;
+  grid-template-columns: 70px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--fs-border);
+  border-radius: 7px;
+  background: rgba(8, 10, 14, 0.82);
+  min-width: 0;
+}
+
+.fsp-wireframe-item__meta strong {
+  font-size: 0.72rem;
+}
+
+.fsp-section-frame {
+  display: grid;
+  grid-template-columns: minmax(70px, 1fr) 58px auto 58px;
+  align-items: center;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.fsp-section-frame > span {
+  color: var(--fs-text-tertiary);
+  font-size: 0.66rem;
+}
+
+.fsp-wireframe-item__actions {
+  display: grid;
+  grid-template-columns: repeat(5, 26px);
+  gap: 2px;
+}
+
+.fsp-wireframe-item__actions button,
+.fsp-favorite {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--fs-border);
+  border-radius: 6px;
+  background: var(--fs-bg-tertiary);
+  color: var(--fs-text-tertiary);
+  cursor: pointer;
+}
+
+.fsp-wireframe-item__actions button:hover,
+.fsp-favorite:hover,
+.fsp-favorite.is-active {
+  border-color: var(--fs-border-hover);
+  color: var(--fs-accent);
+}
+
+.fsp-wireframe-item__actions button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.fsp-preview {
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 5px;
+  background: #f8fafc;
+}
+
+.fsp-preview span {
+  display: block;
+  height: 5px;
+  border-radius: 1px;
+  background: #cbd5e1;
+}
+
+.fsp-preview span.is-strong {
+  height: 8px;
+  background: #0f172a;
+}
+
+.fsp-preview span.is-short {
+  background: #6ee7b7;
+}
+
+.fsp-preview--navigation,
+.fsp-preview--footer {
+  min-height: 42px;
+}
+
+.fsp-preview--hero {
+  min-height: 78px;
+  justify-content: center;
+  align-items: center;
+}
+
+.fsp-preview--hero span {
+  margin-inline: auto;
+}
+
+.fsp-preview--blank {
+  min-height: 72px;
+  align-items: center;
+  color: #94a3b8;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
+}
+
+.fsp-build-bar {
+  position: sticky;
+  bottom: 0;
+  padding-top: 4px;
+}
+
+.fsp-build-bar button {
+  min-height: 38px;
+  flex: 1;
+}
+
+.fsp-build-bar button.is-primary,
+.fsp-library-card__actions button.is-primary {
+  border-color: rgba(94, 234, 212, 0.26);
+  background: var(--fs-bg-active);
+  color: var(--fs-accent);
+}
+
+.fsp-build-bar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.fsp-empty {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  border: 1px dashed var(--fs-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fs-text-tertiary);
+  cursor: pointer;
+}
+
+.fsp-library-tools {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.fsp-search {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 10px;
+  border: 1px solid var(--fs-border);
+  border-radius: 7px;
+  background: var(--fs-bg-secondary);
+  color: var(--fs-text-tertiary);
+}
+
+.fsp-search input {
+  min-height: 32px;
+  padding-left: 0;
+  border: 0;
+  background: transparent;
+}
+
+.fsp-category-row {
+  display: flex;
+  gap: 5px;
+  padding-bottom: 3px;
+  overflow-x: auto;
+}
+
+.fsp-category-row button {
+  min-height: 28px;
+  flex: 0 0 auto;
+  padding: 0 9px;
+  border: 1px solid var(--fs-border);
+  border-radius: 6px;
+  background: var(--fs-bg-secondary);
+  color: var(--fs-text-tertiary);
+  cursor: pointer;
+}
+
+.fsp-category-row button.is-active {
+  border-color: var(--fs-border-hover);
+  background: var(--fs-bg-active);
+  color: var(--fs-accent);
+}
+
+.fsp-library-count {
+  color: var(--fs-text-tertiary);
+  font-size: 0.64rem;
+}
+
+.fsp-library-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 500px;
+  overflow: auto;
+  min-width: 0;
+}
+
+.fsp-library-card {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  border: 1px solid var(--fs-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.fsp-library-card:hover {
+  border-color: var(--fs-border-hover);
+}
+
+.fsp-library-card__preview {
+  position: relative;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.fsp-library-card__preview .fsp-preview {
+  min-height: 92px;
+}
+
+.fsp-favorite {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(8, 10, 14, 0.88);
+}
+
+.fsp-library-card__body {
+  padding: 10px;
+}
+
+.fsp-library-card__body strong {
+  font-size: 0.76rem;
+}
+
+.fsp-library-card__body p {
+  margin: 4px 0 0;
+  color: var(--fs-text-tertiary);
+  font-size: 0.66rem;
+  line-height: 1.45;
+}
+
+.fsp-library-card__actions {
+  padding: 0 8px 8px;
+}
+
+.fsp-library-card__actions button {
+  min-width: 0;
+  flex: 1;
+  padding: 0 7px;
+  font-size: 0.66rem;
+}
+
+@media (max-width: 520px) {
+  .fsp-library-grid,
+  .fsp-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .fsp-wireframe-item {
+    grid-template-columns: 56px 1fr;
+  }
+
+  .fsp-wireframe-item__actions {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(5, 1fr);
+  }
+}

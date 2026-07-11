@@ -1,0 +1,72 @@
+/* ===============================================================
+   FROAM STUDIO — Layers panel
+   =============================================================== */
+
+.fs-layers {
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(94, 234, 212, 0.2) transparent;
+}
+
+.fs-layers__node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: var(--fs-radius-sm);
+  cursor: pointer;
+  transition: background var(--fs-transition-fast);
+  font-size: 0.72rem;
+  color: var(--fs-text-secondary);
+  border: 1px solid transparent;
+}
+
+.fs-layers__node:hover {
+  background: var(--fs-bg-secondary);
+}
+
+.fs-layers__node.is-selected {
+  background: var(--fs-bg-active);
+  border-color: var(--fs-border-hover);
+  color: var(--fs-accent);
+}
+
+.fs-layers__node-tag {
+  font-weight: 700;
+  color: inherit;
+}
+
+.fs-layers__node-class {
+  color: var(--fs-text-tertiary);
+  font-size: 0.66rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+
+.fs-layers__eye {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--fs-text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color var(--fs-transition-fast);
+}
+
+.fs-layers__eye:hover {
+  color: var(--fs-text-primary);
+}
+
+.fs-layers__eye.is-hidden {
+  color: var(--fs-warm);
+  opacity: 0.6;
+}

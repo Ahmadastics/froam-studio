@@ -1,0 +1,629 @@
+/* ===============================================================
+   FROAM STUDIO — TOP TOOLBAR (froam-tb)
+   =============================================================== */
+
+.froam-tb {
+  grid-area: toolbar;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 12px;
+  background: var(--fs-surface-toolbar);
+  border-bottom: 1px solid var(--fs-border-muted);
+  backdrop-filter: blur(20px);
+  z-index: 10;
+  gap: 8px;
+  color: var(--fs-text-primary);
+  transition:
+    background var(--fs-transition-med),
+    border-color var(--fs-transition-med),
+    color var(--fs-transition-med);
+}
+
+.froam-tb__left,
+.froam-tb__right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.froam-tb__center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.froam-tb__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.froam-tb__logo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fs-accent);
+  box-shadow: 0 0 8px rgba(94, 234, 212, 0.5);
+  animation: fs-pulse 2s ease-in-out infinite;
+}
+
+.froam-tb__logo {
+  font-size: 0.9rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--fs-accent), var(--fs-warm));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
+}
+
+.froam-tb__route {
+  font-size: 0.68rem;
+  color: var(--fs-text-tertiary);
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.froam-tb__sep {
+  width: 1px;
+  height: 20px;
+  background: var(--fs-border-muted);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Tool buttons */
+.froam-tb__tool-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--fs-surface-control);
+  border: 1px solid var(--fs-border-muted);
+}
+
+.froam-tb__tool {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--fs-text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--fs-transition-fast),
+    color var(--fs-transition-fast),
+    box-shadow var(--fs-transition-fast),
+    transform var(--fs-transition-fast);
+}
+
+.froam-tb__tool:hover {
+  color: var(--fs-text-primary);
+  background: var(--fs-surface-control-hover);
+}
+
+.froam-tb__tool.is-active {
+  color: var(--fs-text-on-accent);
+  background: var(--fs-accent-control);
+  box-shadow: 0 2px 8px var(--fs-accent-control-shadow);
+}
+
+/* Viewport switcher in toolbar */
+.froam-tb__viewport-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--fs-surface-control);
+  border: 1px solid var(--fs-border-muted);
+}
+
+.froam-tb__vp-btn {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--fs-text-tertiary);
+  cursor: pointer;
+  transition:
+    background var(--fs-transition-fast),
+    color var(--fs-transition-fast),
+    box-shadow var(--fs-transition-fast);
+}
+
+.froam-tb__vp-btn:hover { color: var(--fs-text-primary); background: var(--fs-surface-control-hover); }
+.froam-tb__vp-btn.is-active { color: var(--fs-accent); background: var(--fs-bg-active); }
+
+/* Zoom group */
+.froam-tb__zoom-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.froam-tb__zoom-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--fs-text-secondary);
+  min-width: 36px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Icon buttons */
+.froam-tb__icon-btn {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--fs-text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--fs-transition-fast),
+    color var(--fs-transition-fast),
+    box-shadow var(--fs-transition-fast);
+}
+
+.froam-tb__icon-btn:hover { color: var(--fs-text-primary); background: var(--fs-surface-control-hover); }
+.froam-tb__icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.froam-tb__icon-btn.is-active {
+  color: var(--fs-accent);
+  background: rgba(94, 234, 212, 0.1);
+}
+
+.froam-tb__panel-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.froam-tb__minimize-btn {
+  color: var(--fs-text-warm);
+}
+
+.froam-tb__minimize-btn:hover {
+  color: var(--fs-text-warm);
+  background: rgba(248, 193, 92, 0.1);
+}
+
+.froam-tb__close-btn:hover {
+  color: var(--fs-text-danger);
+  background: rgba(255, 108, 79, 0.1);
+}
+
+/* Compact mode leaves the page fully visible while editing stays active. */
+.froam-mini-dock {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1305;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px;
+  border: 1px solid var(--fs-border-strong);
+  border-radius: 14px;
+  background: var(--fs-bg-primary);
+  color: var(--fs-text-primary);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(18px);
+  font-family: var(--fs-font);
+}
+
+.froam-mini-dock__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 6px;
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.froam-mini-dock__status small {
+  color: var(--fs-text-tertiary);
+  font-size: 0.64rem;
+  font-weight: 600;
+}
+
+.froam-mini-dock__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fs-accent);
+  box-shadow: 0 0 9px rgba(94, 234, 212, 0.65);
+}
+
+.froam-mini-dock__button {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--fs-surface-control);
+  color: var(--fs-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.froam-mini-dock__button:hover,
+.froam-mini-dock__button:focus-visible {
+  background: var(--fs-surface-control-active);
+  color: var(--fs-text-primary);
+  outline: none;
+}
+
+.froam-mini-dock__button--primary {
+  padding-inline: 10px;
+  background: var(--fs-accent-control);
+  color: var(--fs-text-on-accent);
+}
+
+.froam-mini-dock__button--primary:hover,
+.froam-mini-dock__button--primary:focus-visible {
+  background: var(--fs-accent-control-hover);
+}
+
+/* Save button */
+.froam-tb__save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: none;
+  background: var(--fs-accent-control);
+  color: var(--fs-text-on-accent);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.froam-tb__save-btn:hover {
+  background: var(--fs-accent-control-hover);
+  box-shadow: 0 2px 12px rgba(var(--fs-accent-control-rgb), 0.3);
+}
+
+.froam-tb__save-btn:active { transform: scale(0.96); }
+
+/* Save to Repo — git-ready variant (Froam v2) */
+.froam-tb__save-btn--repo {
+  background: #12c877;
+  color: #04160d;
+}
+.froam-tb__save-btn--repo:hover {
+  background: #2be38d;
+  box-shadow: 0 2px 12px rgba(18, 200, 119, 0.35);
+}
+
+/* Git status chip (Froam v2) */
+.froam-tb__git-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  border: 1px solid var(--fs-border, rgba(255, 255, 255, 0.08));
+  color: var(--fs-text-secondary, #c8c8d4);
+  white-space: nowrap;
+  user-select: none;
+}
+.froam-tb__git-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.froam-tb__git-chip--clean {
+  color: #2be38d;
+  border-color: rgba(18, 200, 119, 0.3);
+  background: rgba(18, 200, 119, 0.08);
+}
+.froam-tb__git-chip--dirty {
+  color: #f7d583;
+  border-color: rgba(242, 193, 78, 0.35);
+  background: rgba(242, 193, 78, 0.1);
+}
+.froam-tb__git-chip--dirty .froam-tb__git-dot { animation: froam-git-pulse 1.8s ease-in-out infinite; }
+@keyframes froam-git-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .froam-tb__git-chip--dirty .froam-tb__git-dot { animation: none; }
+}
+
+.froam-tb__draft-count {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--fs-text-tertiary);
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--fs-surface-control-hover);
+}
+
+.froam-tb__tool:focus-visible,
+.froam-tb__vp-btn:focus-visible,
+.froam-tb__icon-btn:focus-visible,
+.froam-tb__save-btn:focus-visible,
+.froam-mini-dock__button:focus-visible {
+  outline: 2px solid var(--fs-accent-control);
+  outline-offset: 2px;
+  box-shadow: var(--fs-focus-ring);
+}
+
+.global-chef-button img.is-avatar {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 999px;
+}
+
+.global-chef-button.is-active img.is-avatar {
+  width: 40px;
+  height: 40px;
+}
+
+.global-chef-button.is-studio-open img.is-avatar {
+  width: 32px;
+  height: 32px;
+}
+
+.froam-tb__brand-btn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    opacity var(--fs-transition-fast),
+    transform var(--fs-transition-fast);
+}
+
+.froam-tb__brand-btn:hover {
+  opacity: 0.95;
+  transform: translateY(-1px);
+}
+
+.froam-tb__avatar {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(135deg, rgba(94, 234, 212, 0.24), rgba(255, 108, 79, 0.18));
+  color: var(--fs-text-primary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+.froam-tb__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.froam-mini-dock__persona {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.froam-mini-dock__persona:hover {
+  color: var(--fs-text-primary);
+}
+
+.froam-mini-dock__avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  object-fit: cover;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+.froam-persona-modal,
+.froam-persona-modal * {
+  box-sizing: border-box;
+}
+
+.froam-persona-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(3, 6, 12, 0.7);
+  backdrop-filter: blur(12px);
+  color: var(--fs-text-primary);
+  font-family: var(--fs-font);
+}
+
+.froam-persona-modal__card {
+  width: min(100%, 460px);
+  max-height: min(720px, calc(100vh - 40px));
+  display: grid;
+  gap: 16px;
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--fs-border-strong);
+  border-radius: 18px;
+  background: rgba(10, 13, 18, 0.97);
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.42);
+}
+
+.froam-persona-modal__header,
+.froam-persona-modal__footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.froam-persona-modal__footer {
+  justify-content: flex-end;
+}
+
+.froam-persona-modal__header h3 {
+  margin: 4px 0 0;
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+
+.froam-persona-modal__eyebrow {
+  margin: 0;
+  color: var(--fs-text-tertiary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.froam-persona-modal__toolbar-preview {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--fs-border-muted);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--froam-accent, #5eead4) 20%, transparent), transparent 42%),
+    rgba(255, 255, 255, 0.03);
+}
+
+.froam-persona-modal__toolbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.froam-persona-modal__toolbar-avatar {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.froam-persona-modal__toolbar-avatar img,
+.froam-persona-modal__toolbar-avatar span {
+  width: 100%;
+  height: 100%;
+  max-width: 42px;
+  max-height: 42px;
+  display: grid;
+  place-items: center;
+  object-fit: cover;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.froam-persona-modal__toolbar-name,
+.froam-persona-modal__toolbar-role,
+.froam-persona-modal__toolbar-tagline {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.froam-persona-modal__toolbar-name {
+  max-width: 150px;
+  font-size: 0.92rem;
+  font-weight: 850;
+}
+
+.froam-persona-modal__toolbar-role {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fs-text-tertiary);
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+
+.froam-persona-modal__toolbar-tagline {
+  grid-column: 1 / -1;
+  color: var(--fs-text-tertiary);
+  font-size: 0.74rem;
+}
+
+.froam-persona-modal__fields {
+  display: grid;
+  gap: 12px;
+}
+
+.froam-persona-modal__field {
+  display: grid;
+  gap: 7px;
+}
+
+.froam-persona-modal__field > span {
+  color: var(--fs-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.froam-persona-modal__accent-row,
+.froam-persona-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.froam-persona-modal__accent-swatch,
+.froam-persona-modal__accent-custom {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: 1px solid var(--fs-border-muted);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.froam-persona-modal__accent-swatch.is-selected {
+  outline: 2px solid var(--fs-text-primary);
+  outline-offset: 2px;
+}
+
+.froam-persona-modal__accent-custom {
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+}

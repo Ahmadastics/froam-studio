@@ -1,0 +1,340 @@
+/* ===============================================================
+   FROAM STUDIO — Main panel · Panel header · Status bar · Divider · Accordion sections · Selection info banner
+   =============================================================== */
+
+/* ─── Main panel ─── */
+
+.froam-studio {
+  position: fixed;
+  top: 80px;
+  right: 18px;
+  z-index: 1190;
+  width: min(400px, calc(100vw - 32px));
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(12px) scale(0.97);
+  transition: opacity var(--fs-transition-med), transform var(--fs-transition-med);
+  font-family: var(--fs-font);
+  font-size: 0.82rem;
+  color: var(--fs-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+.froam-studio.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.froam-studio__card {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  border-radius: var(--fs-radius-xl);
+  border: 1px solid var(--fs-border);
+  background:
+    radial-gradient(ellipse at top right, rgba(94, 234, 212, 0.06), transparent 40%),
+    radial-gradient(ellipse at bottom left, rgba(255, 108, 79, 0.05), transparent 40%),
+    var(--fs-surface-panel);
+  box-shadow: var(--fs-shadow-panel);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(94, 234, 212, 0.28) rgba(255, 255, 255, 0.03);
+}
+
+.froam-studio__card::-webkit-scrollbar { width: 6px; }
+.froam-studio__card::-webkit-scrollbar-track { background: transparent; }
+.froam-studio__card::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(94, 234, 212, 0.36), rgba(255, 108, 79, 0.24));
+  border-radius: var(--fs-radius-pill);
+}
+
+/* ─── Panel header ─── */
+
+.froam-studio__header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--fs-surface-header);
+  backdrop-filter: blur(12px);
+}
+
+.froam-studio__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.froam-studio__logo {
+  font-size: 1.1rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--fs-accent), var(--fs-warm));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
+}
+
+.froam-studio__badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fs-text-warm);
+  padding: 2px 8px;
+  border-radius: var(--fs-radius-pill);
+  border: 1px solid rgba(255, 108, 79, 0.2);
+  background: rgba(255, 108, 79, 0.08);
+}
+
+.froam-studio__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.froam-studio__icon-btn {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--fs-radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--fs-text-secondary);
+  cursor: pointer;
+  transition: all var(--fs-transition-fast);
+}
+
+.froam-studio__icon-btn:hover,
+.froam-studio__icon-btn:focus-visible {
+  color: var(--fs-text-primary);
+  background: var(--fs-bg-tertiary);
+  border-color: var(--fs-border);
+}
+
+.froam-studio__icon-btn.is-active {
+  color: var(--fs-accent);
+  background: var(--fs-bg-active);
+  border-color: var(--fs-border-hover);
+}
+
+.froam-studio__icon-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ─── Status bar ─── */
+
+.froam-studio__status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 6px;
+  gap: 8px;
+}
+
+.froam-studio__status-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.froam-studio__status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fs-accent);
+  box-shadow: 0 0 8px rgba(94, 234, 212, 0.5);
+  animation: fs-pulse 2s ease-in-out infinite;
+}
+
+.froam-studio__status-dot.is-idle {
+  background: var(--fs-text-tertiary);
+  box-shadow: none;
+  animation: none;
+}
+
+@keyframes fs-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.froam-studio__status-text {
+  font-size: 0.72rem;
+  color: var(--fs-text-tertiary);
+}
+
+.froam-studio__route {
+  font-size: 0.68rem;
+  color: var(--fs-text-tertiary);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.froam-studio__viewport-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--fs-text-accent);
+  padding: 2px 7px;
+  border-radius: var(--fs-radius-pill);
+  border: 1px solid rgba(94, 234, 212, 0.24);
+  background: rgba(94, 234, 212, 0.08);
+  font-variant-numeric: tabular-nums;
+}
+
+.froam-viewport-switcher {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--fs-radius-sm);
+  background: var(--fs-bg-secondary);
+  border: 1px solid var(--fs-border);
+}
+
+.froam-studio__header-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--fs-border);
+  margin: 0 2px;
+}
+
+/* ─── Divider ─── */
+
+.froam-studio__divider {
+  height: 1px;
+  margin: 0 16px;
+  background: linear-gradient(90deg, transparent, var(--fs-border), transparent);
+}
+
+/* ─── Accordion sections ─── */
+
+.froam-accordion {
+  border-bottom: 1px solid var(--fs-border);
+}
+
+.froam-accordion:last-child {
+  border-bottom: none;
+}
+
+.froam-accordion__trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 16px;
+  border: none;
+  background: transparent;
+  color: var(--fs-text-primary);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background var(--fs-transition-fast);
+  text-align: left;
+}
+
+.froam-accordion__trigger:hover {
+  background: var(--fs-bg-secondary);
+}
+
+.froam-accordion__trigger-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.froam-accordion__trigger-left svg {
+  color: var(--fs-text-tertiary);
+  flex-shrink: 0;
+}
+
+.froam-accordion__trigger .froam-accordion__chevron {
+  color: var(--fs-text-tertiary);
+  transition: transform var(--fs-transition-med);
+  flex-shrink: 0;
+}
+
+.froam-accordion__trigger[aria-expanded='true'] .froam-accordion__chevron {
+  transform: rotate(180deg);
+}
+
+.froam-accordion__trigger[aria-expanded='true'] .froam-accordion__trigger-left svg {
+  color: var(--fs-accent);
+}
+
+.froam-accordion__body {
+  overflow: hidden;
+}
+
+.froam-accordion__content {
+  padding: 0 16px 14px;
+  display: grid;
+  gap: 10px;
+}
+
+/* ─── Selection info banner ─── */
+
+.froam-selection-banner {
+  margin: 0 12px 4px;
+  padding: 10px 12px;
+  border-radius: var(--fs-radius-md);
+  border: 1px solid var(--fs-border-hover);
+  background: var(--fs-bg-active);
+  display: grid;
+  gap: 4px;
+}
+
+.froam-selection-banner__tag {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--fs-accent);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.froam-selection-banner__path {
+  font-size: 0.66rem;
+  color: var(--fs-text-tertiary);
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.froam-empty-state {
+  padding: 28px 16px;
+  display: grid;
+  gap: 8px;
+  text-align: center;
+}
+
+.froam-empty-state__icon {
+  color: var(--fs-text-tertiary);
+  margin: 0 auto 4px;
+  opacity: 0.5;
+}
+
+.froam-empty-state strong {
+  color: var(--fs-text-secondary);
+  font-size: 0.82rem;
+}
+
+.froam-empty-state span {
+  color: var(--fs-text-tertiary);
+  font-size: 0.74rem;
+  line-height: 1.5;
+}

@@ -1,0 +1,38 @@
+import { type FroamPersona } from './froamPersona';
+type ViewportMode = 'desktop' | 'tablet' | 'mobile';
+type ToolMode = 'pointer' | 'hand' | 'text' | 'frame' | 'shape' | 'move';
+type Props = {
+    viewportMode: ViewportMode;
+    onViewportChange: (mode: ViewportMode) => void;
+    activeTool: ToolMode;
+    onToolChange: (tool: ToolMode) => void;
+    canUndo: boolean;
+    canRedo: boolean;
+    onUndo: () => void;
+    onRedo: () => void;
+    onSave: () => void;
+    onSaveRepo?: () => void;
+    repoStatus?: 'clean' | 'dirty' | 'offline' | null;
+    repoDirtyCount?: number;
+    theme?: 'dark' | 'light';
+    onToggleTheme?: () => void;
+    onCommandPalette: () => void;
+    onShortcutsOverlay: () => void;
+    routeKey: string;
+    persona: FroamPersona;
+    onOpenPersonaEditor: () => void;
+    draftCount: number;
+    moveMode: boolean;
+    onToggleMoveMode: () => void;
+    zoom: number;
+    setZoom: (z: number) => void;
+    leftPanelOpen: boolean;
+    rightPanelOpen: boolean;
+    onToggleLeftPanel: () => void;
+    onToggleRightPanel: () => void;
+    onMinimize: () => void;
+    onClose: () => void;
+};
+export default function FroamToolbar({ viewportMode, onViewportChange, activeTool, onToolChange, canUndo, canRedo, onUndo, onRedo, onSave, onSaveRepo, repoStatus, repoDirtyCount, theme, onToggleTheme, onCommandPalette, onShortcutsOverlay, routeKey, persona, onOpenPersonaEditor, draftCount, moveMode, onToggleMoveMode, zoom, setZoom, leftPanelOpen, rightPanelOpen, onToggleLeftPanel, onToggleRightPanel, onMinimize, onClose, }: Props): import("react").JSX.Element;
+export type { ToolMode };
+//# sourceMappingURL=FroamToolbar.d.ts.map

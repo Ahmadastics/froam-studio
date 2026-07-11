@@ -1,0 +1,7 @@
+/* ===============================================================
+   FROAM STUDIO v3 — full editor stylesheet
+   Modular editor chrome (styles/) + companion panel styles.
+   =============================================================== */
+@import './editor/styles/index.css';
+@import './editor/FroamVersionPanel.css';
+@import './editor/FroamSitePlanner.css';

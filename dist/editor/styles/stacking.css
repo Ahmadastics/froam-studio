@@ -1,0 +1,159 @@
+/* ===============================================================
+   FROAM STUDIO — Panel z-index — always above device shell
+   =============================================================== */
+
+.froam-studio,
+.global-chef-button,
+.fs-toast,
+.fs-command-palette,
+.fs-measure,
+.froam-selection-handoff {
+  z-index: 1300 !important;
+}
+
+.froam-selection-handoff {
+  position: fixed;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 200px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid rgba(var(--fs-accent-control-rgb), 0.34);
+  border-radius: 7px;
+  background:
+    linear-gradient(135deg, rgba(14, 17, 23, 0.94), rgba(25, 30, 40, 0.88)),
+    rgba(14, 17, 23, 0.92);
+  color: #f8fafc;
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  font-family: var(--fs-font);
+  font-size: 0.68rem;
+  font-weight: 760;
+  letter-spacing: 0;
+  line-height: 1;
+  pointer-events: none;
+  transform-origin: left center;
+  animation: froam-handoff-chip 520ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.froam-selection-handoff__dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--fs-accent-control);
+  box-shadow: 0 0 0 4px rgba(var(--fs-accent-control-rgb), 0.13);
+}
+
+.froam-selection-handoff__mode {
+  color: #dbeafe;
+  white-space: nowrap;
+}
+
+.froam-selection-handoff__label {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(248, 250, 252, 0.72);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes froam-handoff-chip {
+  0% {
+    opacity: 0;
+    transform: translateY(5px) scale(0.96);
+  }
+  36% {
+    opacity: 1;
+    transform: translateY(0) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Panel header is the drag handle â€” desktop & device modes */
+.froam-studio__header {
+  cursor: grab;
+  user-select: none;
+}
+
+.froam-studio__header:active {
+  cursor: grabbing;
+}
+
+.froam-studio__header button {
+  cursor: pointer;
+}
+
+/* Device mode: position is driven entirely by inline JS style.
+   Unset all CSS-side positional values so they don't fight. */
+.froam-studio.is-device-mode {
+  top: unset;
+  right: unset;
+  bottom: unset;
+  left: unset;
+}
+
+/* Kill the translateY so our JS top/left takes full control */
+.froam-studio.is-device-mode.is-open {
+  transform: scale(1);
+}
+
+/* Desktop: cap width */
+.froam-studio:not(.is-device-mode) {
+  max-width: 400px;
+}
+
+/* Mobile responsive bottom sheet */
+@media (max-width: 640px) {
+  /* Dock the panel as a full-width bottom sheet on phones */
+  .froam-studio {
+    top: auto !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    transform: translateY(14px) !important;
+  }
+  .froam-studio.is-open { transform: translateY(0) !important; }
+  .froam-studio__card {
+    max-height: 78vh !important;
+    border-radius: var(--fs-radius-xl, 22px) var(--fs-radius-xl, 22px) 0 0 !important;
+    border-bottom: none !important;
+    padding-bottom: env(safe-area-inset-bottom, 0) !important;
+  }
+  .froam-studio__card::before {
+    content: '';
+    position: sticky;
+    top: 0;
+    display: block;
+    width: 40px;
+    height: 4px;
+    margin: 8px auto 2px;
+    border-radius: 2px;
+    background: var(--fs-border-strong, rgba(255, 255, 255, 0.25));
+    z-index: 2;
+  }
+
+  /* Toolbar: scroll instead of overflow, trim decorative bits, bigger targets */
+  .froam-tb { height: 46px; padding: 0 8px; gap: 4px; }
+  .froam-tb__right {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 1;
+  }
+  .froam-tb__right::-webkit-scrollbar { display: none; }
+  .froam-tb__git-chip { display: none; }
+  .froam-tb__save-btn span { display: none; }
+  .froam-tb__save-btn { padding: 0 10px; }
+  .froam-tb__zoom-group,
+  .froam-tb__draft-count { display: none; }
+  .froam-tb__icon-btn,
+  .froam-tb__tool { min-width: 38px; min-height: 38px; }
+}

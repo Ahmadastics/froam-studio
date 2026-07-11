@@ -1,0 +1,157 @@
+/* ===============================================================
+   FROAM STUDIO — Measurement overlay · Quick actions bar · Container injection buttons · History panel
+   =============================================================== */
+
+/* ─── Measurement overlay ─── */
+
+.fs-measure {
+  position: fixed;
+  z-index: 1180;
+  pointer-events: none;
+  font-family: var(--fs-font);
+}
+
+.fs-measure__badge {
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(94, 234, 212, 0.92);
+  color: #050505;
+  font-size: 0.64rem;
+  font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Quick actions bar ─── */
+
+.froam-studio__quick-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--fs-border);
+  background: var(--fs-surface-veil);
+}
+
+.froam-studio__quick-bar .fs-pill {
+  font-size: 0.68rem;
+  min-height: 26px;
+  padding: 0 10px;
+}
+
+/* ─── Container injection buttons ─── */
+
+.fs-inject-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.fs-helper-text {
+  margin: 0;
+  color: var(--fs-text-tertiary);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.fs-inject-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border-radius: var(--fs-radius-md);
+  border: 1px dashed var(--fs-border);
+  background: transparent;
+  color: var(--fs-text-secondary);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--fs-transition-fast);
+}
+
+.fs-inject-btn.is-primary {
+  border-color: rgba(255, 108, 79, 0.34);
+  background: rgba(255, 108, 79, 0.08);
+  color: var(--fs-text-warm);
+}
+
+.fs-inject-btn:hover {
+  border-color: var(--fs-border-hover);
+  background: var(--fs-bg-hover);
+  color: var(--fs-accent);
+  border-style: solid;
+}
+
+.fs-inject-btn svg {
+  opacity: 0.7;
+}
+
+.fs-inject-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fs-inject-actions .fs-pill {
+  flex: 1 1 calc(50% - 6px);
+  justify-content: center;
+}
+
+.fs-inject-actions .fs-pill:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* ─── History panel ─── */
+
+.fs-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.fs-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--fs-radius-sm);
+  border: 1px solid var(--fs-border);
+  background: var(--fs-bg-secondary);
+  transition: border-color var(--fs-transition-fast);
+}
+
+.fs-history-item:hover {
+  border-color: var(--fs-border-hover);
+}
+
+.fs-history-meta {
+  display: grid;
+  gap: 2px;
+  overflow: hidden;
+  flex: 1;
+}
+
+.fs-history-meta span {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--fs-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fs-history-meta small {
+  font-size: 0.66rem;
+  color: var(--fs-text-tertiary);
+}

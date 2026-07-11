@@ -1,0 +1,93 @@
+/* ===============================================================
+   FROAM STUDIO — Design tokens
+   =============================================================== */
+
+:root {
+  --fs-bg-primary: rgba(10, 12, 18, 0.97);
+  --fs-bg-secondary: rgba(255, 255, 255, 0.03);
+  --fs-bg-tertiary: rgba(255, 255, 255, 0.05);
+  --fs-bg-hover: rgba(94, 234, 212, 0.08);
+  --fs-bg-active: rgba(94, 234, 212, 0.12);
+  --fs-bg-danger: rgba(255, 108, 79, 0.1);
+  --fs-surface-toolbar: linear-gradient(180deg, rgba(30, 30, 30, 0.98), rgba(24, 24, 24, 0.98));
+  --fs-surface-panel: linear-gradient(180deg, rgba(30, 30, 30, 0.98), rgba(26, 26, 26, 0.98));
+  --fs-surface-control-subtle: rgba(255, 255, 255, 0.03);
+  --fs-surface-control: rgba(255, 255, 255, 0.04);
+  --fs-surface-control-hover: rgba(255, 255, 255, 0.06);
+  --fs-surface-control-active: rgba(255, 255, 255, 0.1);
+  --fs-border: rgba(255, 255, 255, 0.07);
+  --fs-border-muted: rgba(255, 255, 255, 0.06);
+  --fs-border-strong: rgba(255, 255, 255, 0.1);
+  --fs-border-hover: rgba(94, 234, 212, 0.24);
+  --fs-border-active: rgba(94, 234, 212, 0.36);
+  --fs-border-danger: rgba(255, 108, 79, 0.22);
+  --fs-text-primary: #f0f4f8;
+  --fs-text-secondary: rgba(226, 232, 240, 0.72);
+  --fs-text-tertiary: rgba(226, 232, 240, 0.48);
+  --fs-text-accent: #5eead4;
+  --fs-text-warm: #ff9786;
+  --fs-text-danger: #ffb7aa;
+  --fs-accent: #5eead4;
+  --fs-accent-control: #4f8eff;
+  --fs-accent-control-hover: #6ba3ff;
+  --fs-accent-control-rgb: 79, 142, 255;
+  --fs-accent-control-soft: rgba(var(--fs-accent-control-rgb), 0.1);
+  --fs-accent-control-wash: rgba(var(--fs-accent-control-rgb), 0.06);
+  --fs-accent-control-border: rgba(var(--fs-accent-control-rgb), 0.24);
+  --fs-accent-control-shadow: rgba(var(--fs-accent-control-rgb), 0.3);
+  --fs-warm: #ff6c4f;
+  --fs-option-bg: #141821;
+  --fs-text-on-accent: #fff;
+  --fs-surface-header: linear-gradient(180deg, rgba(14, 17, 23, 0.98) 60%, rgba(14, 17, 23, 0));
+  --fs-surface-veil: rgba(14, 17, 23, 0.6);
+  --fs-focus-ring: 0 0 0 2px rgba(var(--fs-accent-control-rgb), 0.18);
+  --fs-radius-sm: 8px;
+  --fs-radius-md: 12px;
+  --fs-radius-lg: 16px;
+  --fs-radius-xl: 22px;
+  --fs-radius-pill: 999px;
+  --fs-transition-fast: 140ms ease;
+  --fs-transition-med: 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  --fs-transition-slow: 320ms cubic-bezier(0.4, 0, 0.2, 1);
+  --fs-shadow-panel: 0 32px 64px rgba(0, 0, 0, 0.42), 0 8px 24px rgba(0, 0, 0, 0.18);
+  --fs-shadow-card: 0 2px 8px rgba(0, 0, 0, 0.12);
+  --fs-shadow-button: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --fs-glow-accent: 0 0 0 1px rgba(94, 234, 212, 0.14) inset;
+  --fs-font: 'Inter', 'Satoshi', system-ui, -apple-system, sans-serif;
+}
+
+[data-theme='light'] {
+  --fs-bg-primary: rgba(255, 255, 255, 0.98);
+  --fs-bg-secondary: rgba(17, 24, 39, 0.035);
+  --fs-bg-tertiary: rgba(17, 24, 39, 0.055);
+  --fs-bg-hover: rgba(20, 184, 166, 0.08);
+  --fs-bg-active: rgba(20, 184, 166, 0.13);
+  --fs-bg-danger: rgba(220, 38, 38, 0.08);
+  --fs-surface-toolbar: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 248, 251, 0.96));
+  --fs-surface-panel: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 247, 250, 0.98));
+  --fs-surface-control-subtle: rgba(15, 23, 42, 0.025);
+  --fs-surface-control: rgba(15, 23, 42, 0.04);
+  --fs-surface-control-hover: rgba(15, 23, 42, 0.075);
+  --fs-surface-control-active: rgba(15, 23, 42, 0.1);
+  --fs-border: rgba(15, 23, 42, 0.1);
+  --fs-border-muted: rgba(15, 23, 42, 0.08);
+  --fs-border-strong: rgba(15, 23, 42, 0.14);
+  --fs-border-hover: rgba(20, 184, 166, 0.34);
+  --fs-border-active: rgba(20, 184, 166, 0.5);
+  --fs-border-danger: rgba(220, 38, 38, 0.24);
+  --fs-text-primary: #101827;
+  --fs-text-secondary: rgba(15, 23, 42, 0.72);
+  --fs-text-tertiary: rgba(15, 23, 42, 0.5);
+  --fs-text-accent: #0f766e;
+  --fs-text-warm: #c2410c;
+  --fs-text-danger: #b91c1c;
+  --fs-accent: #0f766e;
+  --fs-warm: #dc2626;
+  --fs-option-bg: #ffffff;
+  --fs-surface-header: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 60%, rgba(255, 255, 255, 0));
+  --fs-surface-veil: rgba(246, 248, 251, 0.72);
+  --fs-shadow-panel: 0 24px 64px rgba(15, 23, 42, 0.14), 0 8px 24px rgba(15, 23, 42, 0.08);
+  --fs-shadow-card: 0 2px 8px rgba(15, 23, 42, 0.08);
+  --fs-shadow-button: 0 1px 3px rgba(15, 23, 42, 0.12);
+  --fs-glow-accent: 0 0 0 1px rgba(20, 184, 166, 0.18) inset;
+}

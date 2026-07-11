@@ -1,0 +1,110 @@
+/* ===============================================================
+   FROAM STUDIO — FROAM v5: Figma-like Two-Panel Layout
+   =============================================================== */
+
+/* ─── WRAPPER: full-frame layout when editor is active ─── */
+.froam-figma-layout {
+  position: fixed;
+  inset: 0;
+  z-index: 1188;
+  display: grid;
+  grid-template-rows: 48px 1fr;
+  grid-template-columns: 240px 1fr 300px;
+  grid-template-areas:
+    "toolbar toolbar toolbar"
+    "layers  canvas  design";
+  font-family: var(--fs-font);
+  font-size: 0.82rem;
+  color: var(--fs-text-primary);
+  -webkit-font-smoothing: antialiased;
+  pointer-events: none;
+}
+
+.froam-figma-layout.is-planning {
+  grid-template-columns: minmax(320px, 420px) 1fr 300px;
+}
+
+.froam-figma-layout.is-left-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr) 300px;
+}
+
+.froam-figma-layout.is-right-collapsed {
+  grid-template-columns: 240px minmax(0, 1fr) 0;
+}
+
+.froam-figma-layout.is-planning.is-right-collapsed {
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr) 0;
+}
+
+.froam-figma-layout.is-left-collapsed.is-right-collapsed,
+.froam-figma-layout.is-planning.is-left-collapsed.is-right-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr) 0;
+}
+
+.froam-figma-layout > * {
+  pointer-events: auto;
+}
+
+.froam-figma-left {
+  grid-area: layers;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  background: linear-gradient(180deg, rgba(30, 30, 30, 0.99), rgba(21, 21, 23, 0.99));
+}
+
+.froam-figma-left__tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 8px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.froam-figma-left__tabs button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fs-text-tertiary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.froam-figma-left__tabs button:hover,
+.froam-figma-left__tabs button.is-active {
+  border-color: rgba(94, 234, 212, 0.18);
+  background: rgba(94, 234, 212, 0.09);
+  color: var(--fs-accent);
+}
+
+.froam-figma-left__body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(94, 234, 212, 0.2) transparent;
+}
+
+.froam-figma-left__body > .froam-lp {
+  grid-area: auto;
+  min-height: 100%;
+  margin: -10px;
+  border-right: 0;
+}
+
+/* The canvas area is transparent / pass-through */
+.froam-figma-layout__canvas {
+  grid-area: canvas;
+  pointer-events: none;
+}

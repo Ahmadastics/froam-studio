@@ -1,0 +1,86 @@
+{
+  "name": "froam-studio",
+  "version": "3.1.0",
+  "description": "Froam Studio — Figma-style visual editor for ANY project (Vite, Next, static HTML, anything that serves a page). Every edit compiles to committable files in your repo.",
+  "author": "Ahmad Modibbo <ahmadnuhu14@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ahmadastics/froam-studio.git"
+  },
+  "homepage": "https://github.com/Ahmadastics/froam-studio#readme",
+  "bugs": {
+    "url": "https://github.com/Ahmadastics/froam-studio/issues"
+  },
+  "keywords": [
+    "froam",
+    "visual-editor",
+    "design-tool",
+    "figma-like",
+    "no-code",
+    "page-editor",
+    "vite-plugin",
+    "react"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "type": "module",
+  "sideEffects": [
+    "*.css",
+    "**/*.css"
+  ],
+  "files": [
+    "dist",
+    "bin",
+    "lib",
+    "vite-plugin.mjs",
+    "vite-plugin.d.ts",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./css": {
+      "types": "./dist/css.d.ts",
+      "import": "./dist/froam-studio.css",
+      "default": "./dist/froam-studio.css"
+    },
+    "./gate-css": {
+      "types": "./dist/gate-css.d.ts",
+      "import": "./dist/gate-css.css",
+      "default": "./dist/gate-css.css"
+    },
+    "./vite": {
+      "types": "./vite-plugin.d.ts",
+      "import": "./vite-plugin.mjs"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.json && node scripts/fix-js-extensions.mjs && node scripts/copy-assets.mjs && node scripts/build-standalone.mjs",
+    "build:standalone": "node scripts/build-standalone.mjs",
+    "clean": "node scripts/clean.mjs"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "dependencies": {
+    "framer-motion": "^12.38.0",
+    "html-to-image": "^1.11.13",
+    "lucide-react": "^1.7.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "esbuild": "^0.27.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "~5.9.3"
+  },
+  "bin": {
+    "froam": "./bin/froam.mjs"
+  }
+}

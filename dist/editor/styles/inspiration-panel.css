@@ -1,0 +1,273 @@
+/* ===============================================================
+   FROAM STUDIO — Froam Inspiration Panel
+   =============================================================== */
+
+.fs-inspiration {
+  display: grid;
+  gap: 0;
+}
+
+.fs-inspiration__dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px 12px;
+  border-radius: var(--fs-radius-md);
+  border: 1.5px dashed rgba(94, 234, 212, 0.28);
+  background: rgba(94, 234, 212, 0.04);
+  color: var(--fs-text-tertiary);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--fs-transition-fast);
+  text-align: center;
+}
+
+.fs-inspiration__dropzone:hover,
+.fs-inspiration__dropzone.is-over {
+  border-color: rgba(94, 234, 212, 0.55);
+  background: rgba(94, 234, 212, 0.09);
+  color: var(--fs-accent);
+}
+
+.fs-inspiration__dropzone svg {
+  opacity: 0.6;
+}
+
+.fs-inspiration__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.fs-inspiration__item {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--fs-radius-md);
+  border: 1px solid var(--fs-border);
+  background: var(--fs-bg-secondary);
+  overflow: hidden;
+  transition: border-color var(--fs-transition-fast);
+}
+
+.fs-inspiration__item:hover {
+  border-color: var(--fs-border-hover);
+}
+
+.fs-inspiration__img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  cursor: zoom-in;
+  display: block;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.fs-inspiration__item-bar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 6px;
+  border-top: 1px solid var(--fs-border);
+}
+
+.fs-inspiration__label {
+  flex: 1;
+  font-size: 0.66rem;
+  color: var(--fs-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+  min-width: 0;
+}
+
+.fs-inspiration__label:hover {
+  color: var(--fs-text-secondary);
+}
+
+/* Lightbox */
+.fs-inspiration__lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(16px);
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  animation: fs-fade-in 150ms ease;
+  cursor: zoom-out;
+}
+
+.fs-inspiration__lightbox-close {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(14, 17, 23, 0.9);
+  color: var(--fs-text-secondary);
+  cursor: pointer;
+  transition: all var(--fs-transition-fast);
+  z-index: 10000;
+}
+
+.fs-inspiration__lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--fs-text-primary);
+}
+
+.fs-inspiration__lightbox-img {
+  max-width: min(90vw, 1200px);
+  max-height: 85vh;
+  border-radius: var(--fs-radius-lg);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6);
+  object-fit: contain;
+  cursor: default;
+}
+
+.fs-inspiration__lightbox-label {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  border-radius: var(--fs-radius-pill);
+  background: rgba(14, 17, 23, 0.9);
+  border: 1px solid var(--fs-border);
+  color: var(--fs-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ── Design Tokens ───────────────────────────────────────────── */
+.fs-tokens-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fs-token {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: var(--fs-surface-raised);
+  border: 1px solid var(--fs-border);
+  border-radius: 6px;
+  font-size: 0.72rem;
+}
+
+.fs-token__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.fs-token__name {
+  font-weight: 600;
+  color: var(--fs-text-primary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fs-token__value {
+  color: var(--fs-text-tertiary);
+  font-family: var(--fs-font-mono, monospace);
+  font-size: 0.68rem;
+  flex-shrink: 0;
+}
+
+.fs-token__apply {
+  padding: 2px 7px !important;
+  font-size: 0.66rem !important;
+  flex-shrink: 0;
+}
+
+/* ── Align & Distribute ─────────────────────────────────────── */
+.fs-align-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+}
+
+.fs-align-grid .fs-pill {
+  justify-content: center;
+  gap: 4px;
+  font-size: 0.7rem;
+}
+
+/* ── Asset Manager ──────────────────────────────────────────── */
+.fs-assets-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.fs-asset-item {
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--fs-border);
+  cursor: pointer;
+  background: var(--fs-surface-raised);
+}
+
+.fs-asset-item__thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+  transition: opacity 0.15s;
+}
+
+.fs-asset-item:hover .fs-asset-item__thumb {
+  opacity: 0.75;
+}
+
+.fs-asset-item__name {
+  display: block;
+  font-size: 0.64rem;
+  color: var(--fs-text-tertiary);
+  padding: 3px 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fs-asset-item__remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.fs-asset-item:hover .fs-asset-item__remove {
+  opacity: 1;
+}

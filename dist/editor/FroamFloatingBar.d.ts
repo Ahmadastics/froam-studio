@@ -1,0 +1,41 @@
+type FloatingAction = 'bold' | 'italic' | 'underline' | 'strike' | 'align-left' | 'align-center' | 'align-right' | 'align-justify' | 'color' | 'bg-color' | 'clear-bg' | 'image' | 'duplicate' | 'merge' | 'unmerge' | 'delete';
+type SelectionPatch = Record<string, string | number>;
+type Props = {
+    targetRect: DOMRect | null;
+    visible: boolean;
+    label: string;
+    fontFamily: string;
+    fontSize: number;
+    fontWeight: string;
+    lineHeight: number;
+    letterSpacing: number;
+    wordSpacing: number;
+    textTransform: string;
+    isBold?: boolean;
+    isItalic?: boolean;
+    isUnderline?: boolean;
+    isStrike?: boolean;
+    textAlign?: string;
+    color: string;
+    background: string;
+    width: string;
+    height: string;
+    display: string;
+    flexDirection: string;
+    justifyContent: string;
+    alignItems: string;
+    gap: number;
+    padding: number;
+    radius: number;
+    overflow: string;
+    fontOptions: Array<{
+        label: string;
+        value: string;
+    }>;
+    selectionCount: number;
+    onAction: (action: FloatingAction, value?: string) => void;
+    onStyle: (styles: Record<string, string>, selectionPatch?: SelectionPatch, label?: string) => void;
+};
+export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, wordSpacing, textTransform, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, width, height, display, flexDirection, justifyContent, alignItems, gap, padding, radius, overflow, fontOptions, selectionCount, onAction, onStyle, }: Props): import("react").JSX.Element | null;
+export {};
+//# sourceMappingURL=FroamFloatingBar.d.ts.map

@@ -1,0 +1,26 @@
+/* ===============================================================
+   FROAM STUDIO v3 — editor stylesheet
+   Ordered module imports — cascade order matters, do not reorder.
+   =============================================================== */
+@import './tokens.css';
+@import './trigger-button.css';
+@import './panel.css';
+@import './controls.css';
+@import './layers-panel.css';
+@import './command-palette.css';
+@import './gradient-builder.css';
+@import './toast.css';
+@import './widgets.css';
+@import './editing-mode.css';
+@import './stacking.css';
+@import './canvas-tools.css';
+@import './shape-library.css';
+@import './export.css';
+@import './animator.css';
+@import './figma-layout.css';
+@import './toolbar.css';
+@import './left-panel.css';
+@import './design-panel.css';
+@import './responsive.css';
+@import './inspiration-panel.css';
+@import './polish.css';

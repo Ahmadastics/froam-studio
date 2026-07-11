@@ -1,0 +1,382 @@
+/* ===============================================================
+   FROAM STUDIO — Unified input system · Grid layouts · Pill buttons · Toolbar — segmented button groups · Box model editor
+   =============================================================== */
+
+/* ─── Unified input system ─── */
+
+.fs-field {
+  display: grid;
+  gap: 5px;
+}
+
+.fs-field__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--fs-text-secondary);
+  letter-spacing: 0.01em;
+}
+
+.fs-field__label svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.fs-input,
+.fs-select,
+.fs-textarea {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: var(--fs-radius-sm);
+  border: 1px solid var(--fs-border);
+  background: var(--fs-bg-secondary);
+  color: var(--fs-text-primary);
+  font: inherit;
+  font-size: 0.78rem;
+  transition: border-color var(--fs-transition-fast), box-shadow var(--fs-transition-fast);
+  outline: none;
+}
+
+.fs-input:focus,
+.fs-select:focus,
+.fs-textarea:focus {
+  border-color: var(--fs-border-active);
+  box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.1);
+}
+
+.fs-input::placeholder { color: var(--fs-text-tertiary); }
+
+.fs-textarea {
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.fs-select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(226,232,240,0.48)' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+
+.fs-select option {
+  background: var(--fs-option-bg);
+  color: var(--fs-text-primary);
+}
+
+.fs-color-input {
+  width: 100%;
+  height: 32px;
+  padding: 3px;
+  border-radius: var(--fs-radius-sm);
+  border: 1px solid var(--fs-border);
+  background: var(--fs-bg-secondary);
+  cursor: pointer;
+  transition: border-color var(--fs-transition-fast);
+}
+
+.fs-color-input:hover {
+  border-color: var(--fs-border-hover);
+}
+
+.fs-range {
+  width: 100%;
+  height: 4px;
+  appearance: none;
+  background: var(--fs-border);
+  border-radius: var(--fs-radius-pill);
+  outline: none;
+  cursor: pointer;
+}
+
+.fs-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--fs-accent);
+  border: 2px solid rgba(10, 12, 18, 0.9);
+  box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.2);
+  cursor: grab;
+  transition: box-shadow var(--fs-transition-fast);
+}
+
+.fs-range::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 4px rgba(94, 234, 212, 0.2);
+}
+
+.fs-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--fs-accent);
+  border: 2px solid rgba(10, 12, 18, 0.9);
+  cursor: grab;
+}
+
+.fs-range-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fs-range-value {
+  min-width: 32px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--fs-text-tertiary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Grid layouts ─── */
+
+.fs-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.fs-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.fs-grid-4 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.fs-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.fs-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fs-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ─── Pill buttons ─── */
+
+.fs-pill {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-radius: var(--fs-radius-pill);
+  border: 1px solid var(--fs-border);
+  background: var(--fs-bg-tertiary);
+  color: var(--fs-text-primary);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--fs-transition-fast);
+  white-space: nowrap;
+}
+
+.fs-pill:hover,
+.fs-pill:focus-visible {
+  border-color: var(--fs-border-hover);
+  background: var(--fs-bg-hover);
+  outline: none;
+}
+
+.fs-pill:active {
+  transform: scale(0.96);
+}
+
+.fs-pill.is-accent {
+  color: #d9fff7;
+  border-color: rgba(94, 234, 212, 0.2);
+  background: rgba(94, 234, 212, 0.08);
+}
+
+.fs-pill.is-accent:hover {
+  background: rgba(94, 234, 212, 0.14);
+  border-color: rgba(94, 234, 212, 0.3);
+}
+
+.fs-pill.is-danger {
+  color: var(--fs-text-danger);
+  border-color: var(--fs-border-danger);
+  background: var(--fs-bg-danger);
+}
+
+.fs-pill.is-danger:hover {
+  background: rgba(255, 108, 79, 0.16);
+}
+
+.fs-pill:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.fs-pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ─── Toolbar — segmented button groups ─── */
+
+.fs-toolbar {
+  display: flex;
+  gap: 2px;
+  background: var(--fs-bg-secondary);
+  border: 1px solid var(--fs-border);
+  border-radius: var(--fs-radius-md);
+  padding: 3px;
+}
+
+.fs-toolbar__btn {
+  width: 32px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--fs-radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--fs-text-secondary);
+  cursor: pointer;
+  transition: all var(--fs-transition-fast);
+}
+
+.fs-toolbar__btn:hover {
+  color: var(--fs-text-primary);
+  background: var(--fs-bg-tertiary);
+}
+
+.fs-toolbar__btn.is-active {
+  color: var(--fs-accent);
+  background: var(--fs-bg-active);
+}
+
+/* ─── Box model editor ─── */
+
+.fs-boxmodel {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2.2 / 1;
+  display: grid;
+  place-items: center;
+  border-radius: var(--fs-radius-md);
+  border: 1px dashed rgba(255, 108, 79, 0.3);
+  background: rgba(255, 108, 79, 0.04);
+}
+
+.fs-boxmodel::before {
+  content: 'margin';
+  position: absolute;
+  top: 3px;
+  left: 6px;
+  font-size: 0.58rem;
+  color: rgba(255, 108, 79, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.fs-boxmodel__padding {
+  width: calc(100% - 48px);
+  height: calc(100% - 36px);
+  display: grid;
+  place-items: center;
+  border-radius: var(--fs-radius-sm);
+  border: 1px dashed rgba(94, 234, 212, 0.3);
+  background: rgba(94, 234, 212, 0.04);
+  position: relative;
+}
+
+.fs-boxmodel__padding::before {
+  content: 'padding';
+  position: absolute;
+  top: 2px;
+  left: 5px;
+  font-size: 0.58rem;
+  color: rgba(94, 234, 212, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.fs-boxmodel__content {
+  width: calc(100% - 40px);
+  height: calc(100% - 28px);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  display: grid;
+  place-items: center;
+  font-size: 0.64rem;
+  color: var(--fs-text-tertiary);
+}
+
+.fs-boxmodel__input {
+  position: absolute;
+  width: 36px;
+  height: 20px;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--fs-text-primary);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--fs-border);
+  border-radius: 4px;
+  outline: none;
+  padding: 0;
+}
+
+.fs-boxmodel__input:focus {
+  border-color: var(--fs-border-active);
+}
+
+/* margin inputs */
+.fs-boxmodel__input.is-mt { top: 3px; left: 50%; transform: translateX(-50%); }
+.fs-boxmodel__input.is-mr { right: 3px; top: 50%; transform: translateY(-50%); }
+.fs-boxmodel__input.is-mb { bottom: 3px; left: 50%; transform: translateX(-50%); }
+.fs-boxmodel__input.is-ml { left: 3px; top: 50%; transform: translateY(-50%); }
+
+/* padding inputs */
+.fs-boxmodel__padding .fs-boxmodel__input.is-pt { top: 2px; left: 50%; transform: translateX(-50%); }
+.fs-boxmodel__padding .fs-boxmodel__input.is-pr { right: 2px; top: 50%; transform: translateY(-50%); }
+.fs-boxmodel__padding .fs-boxmodel__input.is-pb { bottom: 2px; left: 50%; transform: translateX(-50%); }
+.fs-boxmodel__padding .fs-boxmodel__input.is-pl { left: 2px; top: 50%; transform: translateY(-50%); }
+
+.fs-boxmodel__link-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--fs-text-tertiary);
+  cursor: pointer;
+  font-size: 0.6rem;
+}
+
+.fs-boxmodel__link-btn.is-linked {
+  color: var(--fs-accent);
+}

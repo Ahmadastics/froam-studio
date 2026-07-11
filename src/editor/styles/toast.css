@@ -1,0 +1,39 @@
+/* ===============================================================
+   FROAM STUDIO — Toast notification
+   =============================================================== */
+
+.fs-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  z-index: 1400;
+  padding: 10px 20px;
+  border-radius: var(--fs-radius-pill);
+  border: 1px solid var(--fs-border-hover);
+  background: var(--fs-surface-panel);
+  backdrop-filter: blur(16px);
+  color: var(--fs-text-primary);
+  font-family: var(--fs-font);
+  font-size: 0.78rem;
+  font-weight: 600;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--fs-transition-med), transform var(--fs-transition-med);
+  white-space: nowrap;
+}
+
+.fs-toast.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.fs-toast svg {
+  color: var(--fs-accent);
+  flex-shrink: 0;
+}

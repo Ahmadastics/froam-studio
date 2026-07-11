@@ -1,0 +1,1 @@
+{"version":3,"file":"GlobalChefEditor.d.ts","sourceRoot":"","sources":["../../src/editor/GlobalChefEditor.tsx"],"names":[],"mappings":"AA44CA,MAAM,MAAM,qBAAqB,GAAG;IAClC,WAAW,CAAC,EAAE,OAAO,CAAA;IACrB,QAAQ,CAAC,EAAE,MAAM,CAAA;CAClB,CAAA;AAED,MAAM,CAAC,OAAO,UAAU,gBAAgB,CAAC,EAAE,WAAmB,EAAE,QAAQ,EAAE,gBAAgB,EAAE,EAAE,qBAAqB,sCAm2JlH"}

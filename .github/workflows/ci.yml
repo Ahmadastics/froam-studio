@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Verify packed contents include the built editor
+        run: |
+          npm pack --dry-run 2>&1 | tee pack.log
+          grep -q "dist/standalone/froam-editor.js" pack.log
+      - name: Smoke-test the CLI
+        run: |
+          node bin/froam.mjs version
+          mkdir -p /tmp/froam-smoke && cd /tmp/froam-smoke
+          echo '<!doctype html><html><head></head><body><h1>Hi</h1></body></html>' > index.html
+          node "$GITHUB_WORKSPACE/bin/froam.mjs" init
+          node "$GITHUB_WORKSPACE/bin/froam.mjs" build
+          node "$GITHUB_WORKSPACE/bin/froam.mjs" doctor

@@ -1,0 +1,66 @@
+/* ===============================================================
+   FROAM STUDIO — Froam Export Styles
+   =============================================================== */
+
+.fs-export-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 12px;
+  text-align: center;
+  border: 1px dashed var(--fs-border);
+  border-radius: var(--fs-radius-md);
+  background: rgba(255, 255, 255, 0.01);
+}
+.fs-export {
+  display: grid;
+  gap: 12px;
+}
+.fs-export__section {
+  display: grid;
+  gap: 8px;
+}
+.fs-export__section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--fs-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.fs-export__preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--fs-radius-md);
+  background: var(--fs-bg-secondary);
+  border: 1px solid var(--fs-border);
+}
+.fs-fullpage-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fs-fullpage-summary span {
+  padding: 3px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--fs-border);
+  background: var(--fs-bg-secondary);
+  color: var(--fs-text-tertiary);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+.fs-export-note {
+  color: var(--fs-text-tertiary);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+html[data-froam-capturing-full-page='true'] [data-chef-editor-root='true'] {
+  display: none !important;
+}
