@@ -250,7 +250,7 @@ function draftBlueprintFromPrompt(prompt: string): BlueprintDraft {
   if (wantsTrust) {
     sectionMap['hero-03'] = {
       label: '1. Trust promise',
-      intent: 'Open with why Run\'Am is safe enough to trust with real errands, money, and deliveries.',
+      intent: 'Open with why the product is safe enough to trust with real money, data, or deliveries.',
       layout: 'Large confident statement with a compact proof note beside it.',
       think: 'What fear does the visitor need you to remove immediately?',
     }
@@ -271,9 +271,9 @@ function draftBlueprintFromPrompt(prompt: string): BlueprintDraft {
   if (wantsRunner) {
     sectionMap['hero-02'] = {
       label: '1. Runner invitation',
-      intent: 'Make reliable people feel that becoming a Run\'Am runner is dignified, flexible, and worth applying for.',
-      layout: 'Strong copy next to a human runner image or app screen.',
-      think: 'Why should a serious runner choose Run\'Am?',
+      intent: 'Make reliable people feel that joining is dignified, flexible, and worth applying for.',
+      layout: 'Strong copy next to a human image or app screen.',
+      think: 'Why should a serious applicant choose you?',
     }
     sectionMap['features-03'] = {
       label: '4. How runners earn',
@@ -292,7 +292,7 @@ function draftBlueprintFromPrompt(prompt: string): BlueprintDraft {
   if (wantsApp) {
     sectionMap['features-02'] = {
       label: wantsTrust ? '5. Product protections' : '5. App experience',
-      intent: 'Show the app features that make Run\'Am feel controlled and reliable.',
+      intent: 'Show the app features that make the product feel controlled and reliable.',
       layout: 'Bento grid with tracking, wallet/escrow, chat, proof, and rating moments.',
       think: 'Which app moment should be visually biggest?',
     }
@@ -321,7 +321,7 @@ function simpleLandingSections(blueprintDraft?: BlueprintDraft) {
 
 function createDefaultPlan(): SitePlan {
   return {
-    projectName: 'Run\'Am website',
+    projectName: 'My website',
     selectedPageId: 'home',
     favorites: [],
     pages: [

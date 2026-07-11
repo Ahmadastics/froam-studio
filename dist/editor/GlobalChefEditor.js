@@ -2571,7 +2571,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 viewportMode,
                 store: routeSnapshot,
             });
-            showToast('Published to Run\'Am');
+            showToast('Published');
         }
         catch (error) {
             const message = error instanceof Error ? error.message : '';
@@ -3837,7 +3837,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
     /* ─── Command palette ─── */
     const paletteCommands = [
-        { id: 'save', label: 'Save to Run\'Am', shortcut: 'Ctrl+S', icon: _jsx(Save, { size: 15 }), action: saveToRunam },
+        { id: 'save', label: 'Save draft', shortcut: 'Ctrl+S', icon: _jsx(Save, { size: 15 }), action: saveToRunam },
         { id: 'save-repo', label: 'Save to Repo (git-ready)', shortcut: 'Ctrl+Shift+S', icon: _jsx(GitCommit, { size: 15 }), action: () => { void saveToRepo(); } },
         { id: 'versions', label: 'Versions', icon: _jsx(GitCommit, { size: 15 }), action: () => { setOpenSections((p) => ({ ...p, versions: !p.versions })); } },
         { id: 'undo', label: 'Undo', shortcut: 'Ctrl+Z', icon: _jsx(Undo2, { size: 15 }), action: undo },

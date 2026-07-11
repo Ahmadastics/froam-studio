@@ -3019,7 +3019,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         viewportMode,
         store: routeSnapshot,
       })
-      showToast('Published to Run\'Am')
+      showToast('Published')
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : ''
       showToast(message.includes('restricted') || message.includes('token') ? 'Saved locally. Admin sign-in needed to publish.' : 'Saved locally. Publish server unavailable.')
@@ -4282,7 +4282,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   /* ─── Command palette ─── */
   const paletteCommands: PaletteCommand[] = [
-    { id: 'save', label: 'Save to Run\'Am', shortcut: 'Ctrl+S', icon: <Save size={15} />, action: saveToRunam },
+    { id: 'save', label: 'Save draft', shortcut: 'Ctrl+S', icon: <Save size={15} />, action: saveToRunam },
     { id: 'save-repo', label: 'Save to Repo (git-ready)', shortcut: 'Ctrl+Shift+S', icon: <GitCommit size={15} />, action: () => { void saveToRepo() } },
     { id: 'versions', label: 'Versions', icon: <GitCommit size={15} />, action: () => { setOpenSections((p) => ({ ...p, versions: !p.versions })) } },
     { id: 'undo', label: 'Undo', shortcut: 'Ctrl+Z', icon: <Undo2 size={15} />, action: undo },
