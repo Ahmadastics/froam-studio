@@ -1,132 +1,219 @@
 /* ===============================================================
    FROAM STUDIO — Floating trigger button
+   Code-drawn orb: rotating conic ring, glass core, F monogram,
+   hover hint pill. No image assets.
    =============================================================== */
 
 .global-chef-button {
   position: fixed;
   z-index: 1200;
   isolation: isolate;
-  width: 72px;
-  height: 72px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--fs-radius-pill);
-  background: transparent;
-  box-shadow: none;
-  cursor: grab;
-  transition: transform var(--fs-transition-fast), width var(--fs-transition-med), height var(--fs-transition-med), opacity var(--fs-transition-med);
-}
-
-.global-chef-button::before,
-.global-chef-button::after {
-  content: '';
-  position: absolute;
-  border-radius: var(--fs-radius-pill);
-  pointer-events: none;
-  transition: transform var(--fs-transition-med), opacity var(--fs-transition-med), box-shadow var(--fs-transition-med);
-}
-
-.global-chef-button::before {
-  inset: 8px;
-  z-index: -2;
-  background:
-    radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.26), transparent 30%),
-    radial-gradient(circle at 72% 74%, rgba(255, 108, 79, 0.16), transparent 40%),
-    radial-gradient(circle at 50% 50%, rgba(14, 17, 23, 0.95), rgba(8, 10, 14, 0.92) 68%, transparent 78%);
-  backdrop-filter: blur(16px);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-.global-chef-button::after {
-  inset: 14px;
-  z-index: -1;
-  background:
-    radial-gradient(circle at 26% 28%, rgba(94, 234, 212, 0.2), transparent 50%),
-    radial-gradient(circle at 74% 72%, rgba(255, 108, 79, 0.16), transparent 44%);
-  opacity: 0.6;
-  filter: blur(10px);
-}
-
-.global-chef-button:hover::before,
-.global-chef-button.is-active::before {
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.32), var(--fs-glow-accent);
-}
-
-.global-chef-button:hover::after,
-.global-chef-button.is-active::after {
-  opacity: 1;
-  transform: scale(1.08);
-}
-
-.global-chef-button img {
   width: 64px;
   height: 64px;
-  object-fit: contain;
-  pointer-events: none;
-  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.24)) drop-shadow(0 2px 6px rgba(255, 255, 255, 0.06));
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--fs-radius-pill);
+  background: transparent;
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    width var(--fs-transition-med),
+    height var(--fs-transition-med),
+    transform var(--fs-transition-fast),
+    opacity var(--fs-transition-med);
 }
 
-.global-chef-button:active { cursor: grabbing; }
+.global-chef-button:hover { transform: scale(1.05); }
+.global-chef-button:active { cursor: grabbing; transform: scale(0.97); }
 
+.global-chef-button:focus-visible {
+  outline: 2px solid var(--fs-accent);
+  outline-offset: 4px;
+}
+
+.global-chef-button > span { pointer-events: none; }
+
+/* ── Halo: soft blurred duplicate of the ring behind everything ── */
+.global-chef-button__halo {
+  position: absolute;
+  inset: -2px;
+  z-index: -2;
+  border-radius: inherit;
+  background: conic-gradient(#5eead4, #38bdf8 30%, #ff6c4f 58%, #fbbf24 80%, #5eead4);
+  filter: blur(8px);
+  opacity: 0.4;
+  animation: froam-orb-spin 7s linear infinite;
+  transition: opacity var(--fs-transition-med);
+}
+
+.global-chef-button:hover .global-chef-button__halo,
+.global-chef-button.is-active .global-chef-button__halo { opacity: 0.7; }
+
+/* ── Ring: the crisp rotating conic band ── */
+.global-chef-button__ring {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: conic-gradient(#5eead4, #38bdf8 30%, #ff6c4f 58%, #fbbf24 80%, #5eead4);
+  animation: froam-orb-spin 7s linear infinite;
+}
+
+.global-chef-button:hover .global-chef-button__halo,
+.global-chef-button:hover .global-chef-button__ring {
+  animation-duration: 2.8s;
+}
+
+@keyframes froam-orb-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Core: dark glass disc with sheen sweep ── */
+.global-chef-button__core {
+  position: absolute;
+  inset: 3px;
+  border-radius: inherit;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 120% at 30% 18%, rgba(255, 255, 255, 0.16), transparent 44%),
+    linear-gradient(160deg, #131824, #0a0d14 72%);
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.45);
+}
+
+.global-chef-button__core::after {
+  content: '';
+  position: absolute;
+  top: -30%;
+  left: -80%;
+  width: 55%;
+  height: 160%;
+  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  transform: skewX(-18deg);
+  animation: froam-orb-sheen 5.5s ease-in-out infinite;
+}
+
+@keyframes froam-orb-sheen {
+  0%, 64% { left: -80%; }
+  82%, 100% { left: 160%; }
+}
+
+/* ── F monogram / persona avatar ── */
+.global-chef-button__mark {
+  width: 46%;
+  height: 46%;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
+}
+
+.global-chef-button__avatar {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+/* ── Hover hint pill ── */
+.global-chef-button__hint {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: var(--fs-radius-pill);
+  background: rgba(10, 13, 20, 0.94);
+  border: 1px solid rgba(94, 234, 212, 0.28);
+  color: #eef4f8;
+  font-family: var(--fs-font);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transition: opacity var(--fs-transition-fast), transform var(--fs-transition-fast);
+}
+
+.global-chef-button__hint kbd {
+  font-family: var(--fs-font);
+  font-size: 10px;
+  font-weight: 700;
+  color: #5eead4;
+  background: rgba(94, 234, 212, 0.12);
+  border: 1px solid rgba(94, 234, 212, 0.24);
+  border-radius: 5px;
+  padding: 2px 5px;
+}
+
+.global-chef-button:hover .global-chef-button__hint,
+.global-chef-button:focus-visible .global-chef-button__hint {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+.global-chef-button.is-active .global-chef-button__hint { display: none; }
+
+/* ── Open / minimized states ── */
 .global-chef-button.is-active {
   width: 52px;
   height: 52px;
-  transition: width var(--fs-transition-med), height var(--fs-transition-med), transform var(--fs-transition-med), opacity var(--fs-transition-med);
-}
-
-.global-chef-button.is-active img {
-  width: 44px;
-  height: 44px;
-}
-
-.global-chef-button.is-active::before {
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.32), var(--fs-glow-accent);
-}
-
-.global-chef-button.is-active::after {
-  opacity: 1;
-  transform: scale(1.08);
 }
 
 .global-chef-button.is-studio-open {
   width: 44px;
   height: 44px;
-  opacity: 0.7;
-  transition: width var(--fs-transition-med), height var(--fs-transition-med), transform var(--fs-transition-med), opacity var(--fs-transition-med);
+  opacity: 0.78;
 }
 
 .global-chef-button.is-studio-open:hover {
   opacity: 1;
-  transform: scale(1.12);
+  transform: scale(1.1);
 }
 
-.global-chef-button.is-studio-open img {
-  width: 36px;
-  height: 36px;
-}
+.global-chef-button.is-active .global-chef-button__core { inset: 2.5px; }
 
-/* Active dot indicator */
+/* ── Live dot indicator ── */
 .global-chef-button__dot {
   position: absolute;
-  bottom: 8px;
-  right: 8px;
-  width: 10px;
-  height: 10px;
+  bottom: 2px;
+  right: 2px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   background: #5eead4;
+  border: 2px solid #0a0d14;
   box-shadow: 0 0 8px 2px rgba(94, 234, 212, 0.5);
   animation: froam-dot-pulse 2s ease-in-out infinite;
-  pointer-events: none;
 }
 
 .global-chef-button.is-studio-open .global-chef-button__dot {
-  width: 8px;
-  height: 8px;
-  bottom: 5px;
-  right: 5px;
+  width: 9px;
+  height: 9px;
+  bottom: 1px;
+  right: 1px;
 }
 
 @keyframes froam-dot-pulse {
   0%, 100% { box-shadow: 0 0 8px 2px rgba(94, 234, 212, 0.5); opacity: 1; }
   50% { box-shadow: 0 0 14px 4px rgba(94, 234, 212, 0.3); opacity: 0.75; }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .global-chef-button__halo,
+  .global-chef-button__ring,
+  .global-chef-button__core::after,
+  .global-chef-button__dot {
+    animation: none;
+  }
 }

@@ -1,9 +1,15 @@
 # Froam Studio
 
+[![CI](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-14b8a0.svg)](LICENSE)
+[![Node >= 18](https://img.shields.io/badge/node-%3E%3D18-5eead4.svg)](package.json)
+
 Your own visual web editor — Figma-style editing on top of **any live website**,
 with **Repo Mode**: every visual edit compiles to real files in your git repo,
 so `git push` ships your design to production. No database, no runtime API
 dependency, no drift.
+
+![Froam Studio — toolbar, site planner, design panel and first-open quick tips over a live page](docs/froam-editor.png)
 
 **Froam works with any project.** Vite, Next.js, Nuxt, SvelteKit,
 Astro, Rails, Django, PHP, WordPress themes, plain HTML — if it serves a page,
@@ -91,6 +97,7 @@ froam dev              universal editor bridge
     --serve [dir]        serve a static folder with the editor injected
     --port <n>           bridge port (default 4600)
     --open               open the browser once the bridge is up
+    --host [addr]        expose on your local network (open the site on your phone)
 froam build            recompile design.json → generated.css + runtime.js (CI-friendly)
 froam status           design summary, artifact freshness, git state
 froam doctor           health-check the whole setup

@@ -14,6 +14,7 @@
  *   froam version          print the installed froam-studio version
  */
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -47,6 +48,16 @@ function openBrowser(url) {
     else if (process.platform === 'darwin') execFileSync('open', [url], { stdio: 'ignore' })
     else execFileSync('xdg-open', [url], { stdio: 'ignore' })
   } catch { /* opening the browser is best-effort */ }
+}
+
+function lanAddresses() {
+  const addresses = []
+  for (const nets of Object.values(os.networkInterfaces())) {
+    for (const net of nets ?? []) {
+      if (net.family === 'IPv4' && !net.internal) addresses.push(net.address)
+    }
+  }
+  return addresses
 }
 
 const cwd = process.cwd()
@@ -312,18 +323,27 @@ function dev(flags) {
     fail(error.message)
   })
 
-  server.listen(port, () => {
+  const exposeHost = flags.host === true ? '0.0.0.0' : typeof flags.host === 'string' ? flags.host : null
+
+  server.listen(port, exposeHost ?? '127.0.0.1', () => {
     log(`${teal('◆')} ${bold('Froam Bridge')} ${dim('v3')}`)
     log()
     if (appTarget) {
       log(`  ${bold('mode')}     proxy → ${teal(appTarget.origin)} ${dim('(editor injected into every page)')}`)
-      log(`  ${bold('open')}     ${teal(`http://localhost:${port}`)}`)
+      log(`  ${bold('local')}    ${teal(`http://localhost:${port}`)}`)
     } else if (serveDir) {
       log(`  ${bold('mode')}     static → ${relDir(serveDir)}/ ${dim('(editor injected into every .html)')}`)
-      log(`  ${bold('open')}     ${teal(`http://localhost:${port}`)}`)
+      log(`  ${bold('local')}    ${teal(`http://localhost:${port}`)}`)
     } else {
       log(`  ${bold('mode')}     bridge only ${dim('— add this tag to your dev page:')}`)
       log(`           ${dim(`<script src="http://localhost:${port}/froam.js" defer></script>`)}`)
+    }
+    if (exposeHost) {
+      for (const address of lanAddresses()) {
+        log(`  ${bold('network')}  ${teal(`http://${address}:${port}`)} ${dim('← open on your phone (same Wi-Fi)')}`)
+      }
+    } else if (appTarget || serveDir) {
+      log(`  ${dim('network')}  ${dim('add --host to expose on your local network')}`)
     }
     log(`  ${bold('repo')}     ${relDir(froamDir)}/ ${dim('← Save to Repo (Ctrl+Shift+S) writes here')}`)
     log()
@@ -461,6 +481,7 @@ function help() {
   log(`      ${dim('--serve [dir]')}      serve a static folder with the editor injected`)
   log(`      ${dim('--port <n>')}         bridge port (default 4600)`)
   log(`      ${dim('--open')}             open the browser once the bridge is up`)
+  log(`      ${dim('--host [addr]')}      expose on your local network (phone testing)`)
   log(`  ${teal('build')}              recompile design.json → generated.css + runtime.js`)
   log(`  ${teal('status')}             design summary, artifact freshness, git state`)
   log(`  ${teal('doctor')}             health-check the setup`)

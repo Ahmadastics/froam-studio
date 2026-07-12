@@ -75,7 +75,6 @@ import {
   Timer,
 } from 'lucide-react'
 import FroamSectionBoundary from './FroamSectionBoundary'
-import froamChef from '../assets/froam-button.webp'
 import { apiGetFresh, apiPost } from '../lib/api'
 import { bridgeUrl } from '../lib/bridge'
 import FroamResizeHandles from './FroamResizeHandles'
@@ -1349,6 +1348,36 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
     <div className={`fs-toast ${visible ? 'is-visible' : ''}`} data-chef-editor-root="true">
       <Zap size={14} aria-hidden="true" />
       {message}
+    </div>
+  )
+}
+
+const WELCOME_TIPS_KEY = 'froam:welcome-tips-dismissed:v1'
+
+function FroamWelcomeTips({ open }: { open: boolean }) {
+  const [dismissed, setDismissed] = useState(() => {
+    try { return window.localStorage.getItem(WELCOME_TIPS_KEY) === '1' } catch { return true }
+  })
+  if (!open || dismissed) return null
+  const dismiss = () => {
+    setDismissed(true)
+    try { window.localStorage.setItem(WELCOME_TIPS_KEY, '1') } catch { /* storage unavailable */ }
+  }
+  return (
+    <div className="fs-welcome-tips" data-chef-editor-root="true" role="note" aria-label="Froam quick tips">
+      <div className="fs-welcome-tips__title">
+        <Sparkles size={13} aria-hidden="true" />
+        <span>Welcome to Froam</span>
+        <button type="button" className="fs-welcome-tips__close" onClick={dismiss} aria-label="Dismiss tips">
+          <X size={12} aria-hidden="true" />
+        </button>
+      </div>
+      <ul className="fs-welcome-tips__list">
+        <li><b>Click any element</b> on the page to select and restyle it</li>
+        <li><kbd>Ctrl+K</kbd> opens the command palette</li>
+        <li><kbd>Ctrl+Shift+S</kbd> saves the design to your repo, git-ready</li>
+      </ul>
+      <button type="button" className="fs-welcome-tips__cta" onClick={dismiss}>Got it</button>
     </div>
   )
 }
@@ -4515,12 +4544,26 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         aria-label={showPanel ? `Toggle ${persona.name} Studio` : `Open ${persona.name} Studio`}
         title={showPanel && !studioMinimized ? 'Minimize (Ctrl+.)' : showPanel ? 'Restore (Ctrl+.)' : `Open ${persona.name} (Ctrl+.)`}
       >
-        <img
-          src={persona.imageUrl || froamChef}
-          alt=""
-          aria-hidden="true"
-          className={persona.imageUrl ? 'is-avatar' : ''}
-        />
+        <span className="global-chef-button__halo" aria-hidden="true" />
+        <span className="global-chef-button__ring" aria-hidden="true" />
+        <span className="global-chef-button__core" aria-hidden="true">
+          {persona.imageUrl ? (
+            <img src={persona.imageUrl} alt="" className="global-chef-button__avatar" />
+          ) : (
+            <svg className="global-chef-button__mark" viewBox="0 0 24 24" aria-hidden="true">
+              <defs>
+                <linearGradient id="froam-mark-grad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stopColor="#f0fdfa" />
+                  <stop offset="1" stopColor="#5eead4" />
+                </linearGradient>
+              </defs>
+              <path fill="url(#froam-mark-grad)" d="M7.2 21V3h10.6v3.3h-6.9v4.3h6.2v3.3h-6.2V21Z" />
+            </svg>
+          )}
+        </span>
+        <span className="global-chef-button__hint" aria-hidden="true">
+          Edit this page <kbd>Ctrl+.</kbd>
+        </span>
         {showPanel && <span className="global-chef-button__dot" />}
       </button>
 
@@ -4539,6 +4582,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
       {/* Toast */}
       <Toast message={toastMsg} visible={toastVisible} />
+
+      {/* One-time quick tips on first open */}
+      <FroamWelcomeTips open={showPanel && !studioMinimized} />
 
       {/* Command palette */}
       {commandPaletteOpen && (

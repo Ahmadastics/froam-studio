@@ -2,6 +2,24 @@
 
 All notable changes to froam-studio are documented here.
 
+## 3.2.0 — 2026-07-12
+
+### Added
+- `froam dev --host [addr]` — expose the bridge on your local network and
+  print the LAN URLs, so you can open the edited site on a phone over the
+  same Wi-Fi. The bridge now binds to localhost by default (safer); `--host`
+  opts into network exposure.
+- First-open quick tips: a one-time dismissible card in the editor showing
+  the three moves that matter — click to select, `Ctrl+K` palette,
+  `Ctrl+Shift+S` save to repo.
+
+### Changed
+- The floating trigger button is completely redesigned: a code-drawn orb
+  with a rotating teal→coral conic ring, glass core, F monogram, sheen
+  sweep, and a hover hint pill with the `Ctrl+.` shortcut. The old image
+  asset is gone from the button (custom persona avatars still supported);
+  everything animates with `prefers-reduced-motion` respected.
+
 ## 3.1.0 — 2026-07-11
 
 First standalone release. Froam Studio now lives in its own repository and

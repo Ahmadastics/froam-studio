@@ -4,7 +4,6 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlignCenter, AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignLeft, AlignRight, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, Bold, Box, ChevronDown, ClipboardCheck, Clock, Code, Command, Copy, Download, Eraser, Eye, EyeOff, FileImage, FileText, GitCommit, Grip, ImagePlus, Italic, Keyboard, Layers, LayoutGrid, Link, Minus, Monitor, MousePointer, Smartphone, Tablet, MousePointer2, Move, Paintbrush, Palette, PencilLine, Plus, Redo2, RotateCw, Save, Search, SlidersHorizontal, Sparkles, Square, SquareDashedBottom, Strikethrough, Type, Underline, Undo2, Unlink, Variable, Maximize2, X, Zap, Coins, AlignCenterHorizontal, AlignCenterVertical, Timer, } from 'lucide-react';
 import FroamSectionBoundary from './FroamSectionBoundary.js';
-import froamChef from '../assets/froam-button.webp';
 import { apiGetFresh, apiPost } from '../lib/api.js';
 import { bridgeUrl } from '../lib/bridge.js';
 import FroamResizeHandles from './FroamResizeHandles.js';
@@ -1033,6 +1032,27 @@ function AccordionSection({ id, icon, title, isOpen, onToggle, children, }) {
 }
 function Toast({ message, visible }) {
     return (_jsxs("div", { className: `fs-toast ${visible ? 'is-visible' : ''}`, "data-chef-editor-root": "true", children: [_jsx(Zap, { size: 14, "aria-hidden": "true" }), message] }));
+}
+const WELCOME_TIPS_KEY = 'froam:welcome-tips-dismissed:v1';
+function FroamWelcomeTips({ open }) {
+    const [dismissed, setDismissed] = useState(() => {
+        try {
+            return window.localStorage.getItem(WELCOME_TIPS_KEY) === '1';
+        }
+        catch {
+            return true;
+        }
+    });
+    if (!open || dismissed)
+        return null;
+    const dismiss = () => {
+        setDismissed(true);
+        try {
+            window.localStorage.setItem(WELCOME_TIPS_KEY, '1');
+        }
+        catch { /* storage unavailable */ }
+    };
+    return (_jsxs("div", { className: "fs-welcome-tips", "data-chef-editor-root": "true", role: "note", "aria-label": "Froam quick tips", children: [_jsxs("div", { className: "fs-welcome-tips__title", children: [_jsx(Sparkles, { size: 13, "aria-hidden": "true" }), _jsx("span", { children: "Welcome to Froam" }), _jsx("button", { type: "button", className: "fs-welcome-tips__close", onClick: dismiss, "aria-label": "Dismiss tips", children: _jsx(X, { size: 12, "aria-hidden": "true" }) })] }), _jsxs("ul", { className: "fs-welcome-tips__list", children: [_jsxs("li", { children: [_jsx("b", { children: "Click any element" }), " on the page to select and restyle it"] }), _jsxs("li", { children: [_jsx("kbd", { children: "Ctrl+K" }), " opens the command palette"] }), _jsxs("li", { children: [_jsx("kbd", { children: "Ctrl+Shift+S" }), " saves the design to your repo, git-ready"] })] }), _jsx("button", { type: "button", className: "fs-welcome-tips__cta", onClick: dismiss, children: "Got it" })] }));
 }
 function MeasurementOverlay({ rect }) {
     if (!rect)
@@ -4070,7 +4090,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     'global-chef-button',
                     showPanel ? 'is-active' : '',
                     showPanel && !studioMinimized ? 'is-studio-open' : '',
-                ].filter(Boolean).join(' '), "data-chef-editor-root": "true", type: "button", style: { left: buttonPosition.x, top: buttonPosition.y }, onPointerDown: handleButtonPointerDown, onPointerMove: handleButtonPointerMove, onPointerUp: handleButtonPointerUp, onPointerCancel: handleButtonPointerUp, onContextMenu: handleFroamContextMenu, "aria-label": showPanel ? `Toggle ${persona.name} Studio` : `Open ${persona.name} Studio`, title: showPanel && !studioMinimized ? 'Minimize (Ctrl+.)' : showPanel ? 'Restore (Ctrl+.)' : `Open ${persona.name} (Ctrl+.)`, children: [_jsx("img", { src: persona.imageUrl || froamChef, alt: "", "aria-hidden": "true", className: persona.imageUrl ? 'is-avatar' : '' }), showPanel && _jsx("span", { className: "global-chef-button__dot" })] }), showPanel && _jsx(MeasurementOverlay, { rect: measureRect }), showPanel && selection && (_jsx(SelectionHandoffOverlay, { rect: selectionRect, label: selection.label, mode: selectionHandoffMode, count: selections.length, pulseKey: selectionHandoffKey }, selectionHandoffKey)), _jsx(Toast, { message: toastMsg, visible: toastVisible }), commandPaletteOpen && (_jsx("div", { className: "fs-command-palette", "data-chef-editor-root": "true", onClick: (e) => { if (e.target === e.currentTarget) {
+                ].filter(Boolean).join(' '), "data-chef-editor-root": "true", type: "button", style: { left: buttonPosition.x, top: buttonPosition.y }, onPointerDown: handleButtonPointerDown, onPointerMove: handleButtonPointerMove, onPointerUp: handleButtonPointerUp, onPointerCancel: handleButtonPointerUp, onContextMenu: handleFroamContextMenu, "aria-label": showPanel ? `Toggle ${persona.name} Studio` : `Open ${persona.name} Studio`, title: showPanel && !studioMinimized ? 'Minimize (Ctrl+.)' : showPanel ? 'Restore (Ctrl+.)' : `Open ${persona.name} (Ctrl+.)`, children: [_jsx("span", { className: "global-chef-button__halo", "aria-hidden": "true" }), _jsx("span", { className: "global-chef-button__ring", "aria-hidden": "true" }), _jsx("span", { className: "global-chef-button__core", "aria-hidden": "true", children: persona.imageUrl ? (_jsx("img", { src: persona.imageUrl, alt: "", className: "global-chef-button__avatar" })) : (_jsxs("svg", { className: "global-chef-button__mark", viewBox: "0 0 24 24", "aria-hidden": "true", children: [_jsx("defs", { children: _jsxs("linearGradient", { id: "froam-mark-grad", x1: "0", y1: "0", x2: "1", y2: "1", children: [_jsx("stop", { offset: "0", stopColor: "#f0fdfa" }), _jsx("stop", { offset: "1", stopColor: "#5eead4" })] }) }), _jsx("path", { fill: "url(#froam-mark-grad)", d: "M7.2 21V3h10.6v3.3h-6.9v4.3h6.2v3.3h-6.2V21Z" })] })) }), _jsxs("span", { className: "global-chef-button__hint", "aria-hidden": "true", children: ["Edit this page ", _jsx("kbd", { children: "Ctrl+." })] }), showPanel && _jsx("span", { className: "global-chef-button__dot" })] }), showPanel && _jsx(MeasurementOverlay, { rect: measureRect }), showPanel && selection && (_jsx(SelectionHandoffOverlay, { rect: selectionRect, label: selection.label, mode: selectionHandoffMode, count: selections.length, pulseKey: selectionHandoffKey }, selectionHandoffKey)), _jsx(Toast, { message: toastMsg, visible: toastVisible }), _jsx(FroamWelcomeTips, { open: showPanel && !studioMinimized }), commandPaletteOpen && (_jsx("div", { className: "fs-command-palette", "data-chef-editor-root": "true", onClick: (e) => { if (e.target === e.currentTarget) {
                     setCommandPaletteOpen(false);
                     setCommandSearch('');
                 } }, children: _jsxs("div", { className: "fs-command-palette__card", "data-chef-editor-root": "true", children: [_jsx("input", { className: "fs-command-palette__input", type: "text", value: commandSearch, placeholder: "Type a command\u2026", autoFocus: true, onChange: (e) => { setCommandSearch(e.target.value); setCommandFocusIndex(0); }, onKeyDown: (e) => {
