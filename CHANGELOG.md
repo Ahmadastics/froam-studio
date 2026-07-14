@@ -2,6 +2,17 @@
 
 All notable changes to froam-studio are documented here.
 
+## 3.3.0 — 2026-07-14
+
+### Added
+- **Page scan.** The first time the editor opens on a project, Froam runs a
+  quick laser sweep down the page that outlines every element it maps —
+  headings, media, actions and containers, each colour-coded — with a live
+  HUD counting them. It's a show, but the numbers are real: they come from
+  the actual DOM. Runs once (remembered in `localStorage`), is skippable
+  with a click, and can be replayed any time from the command palette
+  (**Scan page**). Honors `prefers-reduced-motion`.
+
 ## 3.2.0 — 2026-07-12
 
 ### Added

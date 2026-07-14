@@ -114,6 +114,9 @@ Project settings live in `froam.config.json` (written by `froam init`).
 - Layers, smart guides, resize handles, shape library, animator, versions panel,
   site planner, PNG/SVG/JPEG export, per-viewport editing (desktop/tablet/mobile)
 - Dark & light editor themes, draggable panels, mobile bottom-sheet layout
+- **Page scan** on first open — a laser sweep that maps every element on the
+  page (real DOM counts, colour-coded), skippable and replayable from the
+  palette (**Scan page**)
 
 ## Config
 

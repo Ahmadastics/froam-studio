@@ -55,6 +55,7 @@ import {
   Redo2,
   RotateCw,
   Save,
+  ScanLine,
   Search,
   SlidersHorizontal,
   Sparkles,
@@ -1382,6 +1383,207 @@ function FroamWelcomeTips({ open }: { open: boolean }) {
   )
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Froam Scan — one-time laser sweep that maps the page's real DOM.
+   Auto-runs the first time the editor opens on a project, and can be
+   replayed from the command palette. Purely visual, but the counts
+   are real: it reads actual headings, media, actions and containers.
+   ═══════════════════════════════════════════════════════════════ */
+const SCAN_DONE_KEY = 'froam:scan-done:v1'
+
+type ScanCategory = 'heading' | 'media' | 'action' | 'container' | 'text'
+
+interface ScanTarget {
+  top: number
+  left: number
+  width: number
+  height: number
+  category: ScanCategory
+}
+
+const SCAN_CATEGORY_COLOR: Record<ScanCategory, string> = {
+  heading: '#5eead4',
+  media: '#ff8168',
+  action: '#fbbf24',
+  container: 'rgba(125, 211, 235, 0.75)',
+  text: 'rgba(190, 205, 220, 0.6)',
+}
+
+function scanCategoryOf(el: Element): ScanCategory | null {
+  const tag = el.tagName.toLowerCase()
+  if (/^h[1-6]$/.test(tag)) return 'heading'
+  if (tag === 'img' || tag === 'svg' || tag === 'picture' || tag === 'video' || tag === 'canvas') return 'media'
+  if (tag === 'button' || tag === 'a' || tag === 'input' || tag === 'select' || tag === 'textarea') return 'action'
+  if (tag === 'p' || tag === 'li' || tag === 'blockquote' || tag === 'span') return 'text'
+  if (['section', 'header', 'footer', 'main', 'article', 'nav', 'aside', 'form', 'ul', 'ol', 'div'].includes(tag)) return 'container'
+  return null
+}
+
+function collectScanTargets(): ScanTarget[] {
+  const root = getRoot()
+  if (!root) return []
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const selector = 'h1,h2,h3,h4,h5,h6,p,img,svg,picture,video,canvas,button,a,input,select,textarea,section,header,footer,main,article,nav,aside,form,ul,ol,li,blockquote,div,span'
+  const nodes = root.querySelectorAll(selector)
+  const targets: ScanTarget[] = []
+  for (let i = 0; i < nodes.length; i += 1) {
+    const el = nodes[i]
+    if (el.closest('[data-chef-editor-root]')) continue
+    const category = scanCategoryOf(el)
+    if (!category) continue
+    const r = el.getBoundingClientRect()
+    if (r.width < 18 || r.height < 12) continue
+    if (r.bottom < 4 || r.top > vh - 4 || r.right < 4 || r.left > vw - 4) continue
+    if ((category === 'container' || category === 'text') && (r.width < 48 || r.height < 24)) continue
+    targets.push({ top: r.top, left: r.left, width: r.width, height: r.height, category })
+    if (targets.length >= 130) break
+  }
+  targets.sort((a, b) => a.top - b.top)
+  return targets
+}
+
+function FroamScan({ active, onDone }: { active: boolean; onDone: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const hudRef = useRef<HTMLDivElement | null>(null)
+  const rafRef = useRef(0)
+  const doneRef = useRef(onDone)
+  doneRef.current = onDone
+
+  useEffect(() => {
+    if (!active) return undefined
+    const canvas = canvasRef.current
+    const ctx = canvas?.getContext('2d')
+    if (!canvas || !ctx) { doneRef.current(); return undefined }
+
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    canvas.width = Math.round(vw * dpr)
+    canvas.height = Math.round(vh * dpr)
+    ctx.scale(dpr, dpr)
+
+    const targets = collectScanTargets()
+    const SWEEP = reduce ? 0 : 1300
+    const HOLD = reduce ? 620 : 420
+    const FADE = 380
+    const START_DELAY = reduce ? 0 : 150
+    const trail = 130
+    const total = START_DELAY + SWEEP + HOLD + FADE
+    const start = performance.now()
+    let skipped = false
+
+    const drawTarget = (x: number, y: number, w: number, h: number, color: string, alpha: number) => {
+      const s = Math.max(4, Math.min(11, w / 2, h / 2))
+      ctx.fillStyle = color
+      ctx.globalAlpha = alpha * 0.05
+      ctx.fillRect(x, y, w, h)
+      ctx.strokeStyle = color
+      ctx.lineWidth = 1
+      ctx.globalAlpha = alpha * 0.3
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1)
+      ctx.globalAlpha = alpha
+      ctx.lineWidth = 1.75
+      ctx.beginPath()
+      ctx.moveTo(x, y + s); ctx.lineTo(x, y); ctx.lineTo(x + s, y)
+      ctx.moveTo(x + w - s, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + s)
+      ctx.moveTo(x + w, y + h - s); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - s, y + h)
+      ctx.moveTo(x + s, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - s)
+      ctx.stroke()
+      ctx.globalAlpha = 1
+    }
+
+    const frame = (now: number) => {
+      const t = skipped ? total : now - start
+      ctx.clearRect(0, 0, vw, vh)
+
+      const sweepT = SWEEP === 0 ? 1 : Math.max(0, Math.min(1, (t - START_DELAY) / SWEEP))
+      const scanY = -trail + (vh + trail) * sweepT
+
+      let backdrop = 1
+      const fadeStart = START_DELAY + SWEEP + HOLD
+      if (t < 260) backdrop = Math.max(0, t / 260)
+      else if (t >= fadeStart) backdrop = Math.max(0, 1 - (t - fadeStart) / FADE)
+
+      ctx.globalAlpha = 0.42 * backdrop
+      const grad = ctx.createLinearGradient(0, 0, 0, vh)
+      grad.addColorStop(0, 'rgba(6,10,16,0.92)')
+      grad.addColorStop(1, 'rgba(4,7,12,0.97)')
+      ctx.fillStyle = grad
+      ctx.fillRect(0, 0, vw, vh)
+      ctx.globalAlpha = 1
+
+      let crossed = 0
+      const seen: Record<ScanCategory, number> = { heading: 0, media: 0, action: 0, container: 0, text: 0 }
+      for (const tg of targets) {
+        if (tg.top > scanY) continue
+        crossed += 1
+        seen[tg.category] += 1
+        const since = Math.max(0, Math.min(1, (scanY - tg.top) / 60))
+        drawTarget(tg.left, tg.top, tg.width, tg.height, SCAN_CATEGORY_COLOR[tg.category], (0.35 + 0.65 * since) * backdrop)
+      }
+
+      if (!reduce && t >= START_DELAY && t <= START_DELAY + SWEEP) {
+        const trailGrad = ctx.createLinearGradient(0, scanY - trail, 0, scanY)
+        trailGrad.addColorStop(0, 'rgba(94,234,212,0)')
+        trailGrad.addColorStop(1, 'rgba(94,234,212,0.18)')
+        ctx.fillStyle = trailGrad
+        ctx.fillRect(0, scanY - trail, vw, trail)
+        ctx.strokeStyle = 'rgba(150,255,238,0.95)'
+        ctx.lineWidth = 2
+        ctx.shadowColor = 'rgba(94,234,212,0.9)'
+        ctx.shadowBlur = 16
+        ctx.beginPath()
+        ctx.moveTo(0, scanY)
+        ctx.lineTo(vw, scanY)
+        ctx.stroke()
+        ctx.shadowBlur = 0
+      }
+
+      const hud = hudRef.current
+      if (hud) {
+        hud.style.opacity = String(backdrop)
+        const countEl = hud.querySelector('[data-scan-count]')
+        const labelEl = hud.querySelector('[data-scan-label]')
+        const breakEl = hud.querySelector('[data-scan-break]')
+        if (countEl) countEl.textContent = String(crossed)
+        if (labelEl) labelEl.textContent = t >= START_DELAY + SWEEP ? 'elements mapped' : 'scanning…'
+        if (breakEl) breakEl.textContent = `${seen.heading} headings · ${seen.media} media · ${seen.action} actions · ${seen.container} containers · ${seen.text} text`
+      }
+
+      if (t >= total) {
+        ctx.clearRect(0, 0, vw, vh)
+        doneRef.current()
+        return
+      }
+      rafRef.current = requestAnimationFrame(frame)
+    }
+
+    const skip = () => { skipped = true }
+    canvas.addEventListener('pointerdown', skip)
+    rafRef.current = requestAnimationFrame(frame)
+
+    return () => {
+      cancelAnimationFrame(rafRef.current)
+      canvas.removeEventListener('pointerdown', skip)
+    }
+  }, [active])
+
+  if (!active) return null
+
+  return (
+    <div className="fs-scan" data-chef-editor-root="true" aria-hidden="true">
+      <canvas ref={canvasRef} className="fs-scan__canvas" />
+      <div ref={hudRef} className="fs-scan__hud">
+        <span className="fs-scan__count"><b data-scan-count>0</b> <span data-scan-label>scanning…</span></span>
+        <span className="fs-scan__break" data-scan-break />
+        <span className="fs-scan__skip">click to skip</span>
+      </div>
+    </div>
+  )
+}
+
 function MeasurementOverlay({ rect }: { rect: DOMRect | null }) {
   if (!rect) return null
   const w = Math.round(rect.width)
@@ -1520,6 +1722,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [leftPanelOpen, setLeftPanelOpen] = useState(true)
   const [rightPanelOpen, setRightPanelOpen] = useState(true)
   const [studioMinimized, setStudioMinimized] = useState(false)
+  const [scanActive, setScanActive] = useState(false)
+  const [tipsReady, setTipsReady] = useState(() => {
+    try { return window.localStorage.getItem(SCAN_DONE_KEY) === '1' } catch { return true }
+  })
   const [commandSearch, setCommandSearch] = useState('')
   const [commandFocusIndex, setCommandFocusIndex] = useState(0)
   const [inlineEditing, setInlineEditing] = useState(false)
@@ -1631,6 +1837,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const draftCount = useMemo(() => countRenderableDrafts(routeDrafts), [routeDrafts])
   const hasRouteDrafts = useMemo(() => draftCount > 0, [draftCount])
   const showPanel = panelOpen || active
+
+  /* First time the editor opens on a project: run the one-time scan. */
+  useEffect(() => {
+    if (!showPanel || studioMinimized) return undefined
+    let alreadyScanned = true
+    try { alreadyScanned = window.localStorage.getItem(SCAN_DONE_KEY) === '1' } catch { alreadyScanned = true }
+    if (alreadyScanned) return undefined
+    try { window.localStorage.setItem(SCAN_DONE_KEY, '1') } catch { /* storage unavailable */ }
+    const id = window.setTimeout(() => setScanActive(true), 180)
+    return () => window.clearTimeout(id)
+  }, [showPanel, studioMinimized])
 
   useEffect(() => {
     if (!pendingDraftPaintResumeRef.current) return
@@ -4313,6 +4530,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const paletteCommands: PaletteCommand[] = [
     { id: 'save', label: 'Save draft', shortcut: 'Ctrl+S', icon: <Save size={15} />, action: saveToRunam },
     { id: 'save-repo', label: 'Save to Repo (git-ready)', shortcut: 'Ctrl+Shift+S', icon: <GitCommit size={15} />, action: () => { void saveToRepo() } },
+    { id: 'scan', label: 'Scan page', icon: <ScanLine size={15} />, action: () => setScanActive(true) },
     { id: 'versions', label: 'Versions', icon: <GitCommit size={15} />, action: () => { setOpenSections((p) => ({ ...p, versions: !p.versions })) } },
     { id: 'undo', label: 'Undo', shortcut: 'Ctrl+Z', icon: <Undo2 size={15} />, action: undo },
     { id: 'redo', label: 'Redo', shortcut: 'Ctrl+Y', icon: <Redo2 size={15} />, action: redo },
@@ -4583,8 +4801,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       {/* Toast */}
       <Toast message={toastMsg} visible={toastVisible} />
 
-      {/* One-time quick tips on first open */}
-      <FroamWelcomeTips open={showPanel && !studioMinimized} />
+      {/* One-time quick tips — held back until the first-open scan finishes */}
+      <FroamWelcomeTips open={showPanel && !studioMinimized && tipsReady && !scanActive} />
+
+      {/* One-time laser scan of the page's real DOM (also replayable via palette) */}
+      <FroamScan active={scanActive} onDone={() => { setScanActive(false); setTipsReady(true) }} />
 
       {/* Command palette */}
       {commandPaletteOpen && (

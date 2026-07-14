@@ -1,0 +1,77 @@
+/* ===============================================================
+   FROAM STUDIO — Page scan overlay (laser sweep + live HUD)
+   =============================================================== */
+
+.fs-scan {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  cursor: pointer;
+}
+
+.fs-scan__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.fs-scan__hud {
+  position: fixed;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 24px;
+  border-radius: var(--fs-radius-lg);
+  background: rgba(8, 11, 17, 0.86);
+  border: 1px solid rgba(94, 234, 212, 0.3);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(94, 234, 212, 0.06);
+  font-family: var(--fs-font);
+  text-align: center;
+  pointer-events: none;
+  max-width: min(460px, calc(100vw - 32px));
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.fs-scan__count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.72);
+}
+
+.fs-scan__count b {
+  font-size: 23px;
+  font-weight: 800;
+  color: #5eead4;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.fs-scan__break {
+  font-size: 11px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color: rgba(226, 232, 240, 0.5);
+  letter-spacing: 0.01em;
+  min-height: 14px;
+  line-height: 1.5;
+  text-wrap: balance;
+}
+
+.fs-scan__skip {
+  margin-top: 3px;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.35);
+}
