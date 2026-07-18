@@ -54,7 +54,7 @@ export default function FroamContextMenu({
   useEffect(() => {
     if (!position) return
 
-    function handleClick(e: MouseEvent) {
+    function handleClick(e: MouseEvent | TouchEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         onClose()
       }
@@ -64,9 +64,11 @@ export default function FroamContextMenu({
     }
 
     window.addEventListener('mousedown', handleClick, true)
+    window.addEventListener('touchstart', handleClick, { capture: true, passive: true })
     window.addEventListener('keydown', handleKey, true)
     return () => {
       window.removeEventListener('mousedown', handleClick, true)
+      window.removeEventListener('touchstart', handleClick, true)
       window.removeEventListener('keydown', handleKey, true)
     }
   }, [position, onClose])

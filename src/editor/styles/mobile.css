@@ -1,0 +1,313 @@
+/* ===============================================================
+   FROAM STUDIO v4 — PHONE-FIRST EDITING
+   Mobile chrome (bottom sheet, drawer, slim toolbar) keyed off the
+   .is-mobile layout class; touch behaviors keyed off (pointer: coarse)
+   and the html[data-froam-touch] attribute set while editing on touch.
+   Loaded last — overrides earlier modules by design.
+   =============================================================== */
+
+/* ─── Touch affordances while the editor is active ─── */
+
+html[data-froam-touch] {
+  -webkit-touch-callout: none;
+}
+
+html[data-froam-touch] body {
+  /* kills double-tap zoom so double-tap reaches dblclick → inline text editing */
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html[data-froam-touch] [contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* ─── Context menu: finger-sized targets, no keyboard hints ─── */
+
+@media (pointer: coarse) {
+  .froam-context-menu {
+    min-width: 248px;
+  }
+  .froam-context-menu__item {
+    min-height: 44px;
+    font-size: 0.88rem;
+  }
+  .froam-context-menu__item kbd {
+    display: none;
+  }
+}
+
+/* ─── Resize handles: bigger visuals to match the bigger hit boxes ─── */
+
+@media (pointer: coarse) {
+  .froam-resize-handle {
+    width: 26px !important;
+    height: 26px !important;
+    border-radius: 9px;
+    border-width: 2px;
+  }
+}
+
+/* ─── Toolbar touch targets ─── */
+
+@media (pointer: coarse) {
+  .froam-tb__icon-btn,
+  .froam-tb__tool,
+  .froam-tb__vp-btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
+
+/* ─── v4: floating bar docks above the bottom sheet, in thumb reach ─── */
+@media (max-width: 768px) {
+  .froam-floating-bar.is-docked {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    top: auto !important;
+    bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    width: auto !important;
+    max-width: none !important;
+    max-height: min(60vh, 480px);
+    display: flex;
+    flex-direction: column-reverse;
+    z-index: 1245;
+    animation: froam-dock-in 200ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  @keyframes froam-dock-in {
+    from {
+      transform: translateY(12px);
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  .froam-floating-bar.is-docked .froam-floating-bar__primary {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 2px;
+  }
+
+  .froam-floating-bar.is-docked .froam-floating-bar__primary::-webkit-scrollbar {
+    display: none;
+  }
+
+  .froam-floating-bar.is-docked .froam-floating-bar__primary > * {
+    flex-shrink: 0;
+  }
+
+  .froam-floating-bar.is-docked .froam-floating-bar__identity {
+    display: none;
+  }
+
+  .froam-floating-bar.is-docked .froam-floating-bar__btn,
+  .froam-floating-bar.is-docked .froam-floating-bar__color-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .froam-floating-bar.is-docked .froam-floating-bar__edit-text {
+    width: auto;
+    min-width: 38px;
+  }
+
+  .froam-floating-bar.is-docked .froam-floating-bar__advanced,
+  .froam-floating-bar.is-docked .froam-floating-bar__pop {
+    max-height: 44vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .froam-floating-bar.is-docked .froam-floating-bar__pop {
+    max-width: none;
+  }
+}
+
+/* ─── Mobile layout: single column, the page IS the canvas ─── */
+
+.froam-figma-layout.is-mobile,
+.froam-figma-layout.is-mobile.is-planning,
+.froam-figma-layout.is-mobile.is-left-collapsed,
+.froam-figma-layout.is-mobile.is-right-collapsed,
+.froam-figma-layout.is-mobile.is-left-collapsed.is-right-collapsed {
+  grid-template-rows: 48px 1fr;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    'toolbar'
+    'canvas';
+}
+
+/* Toolbar: condensed, horizontally scrollable, no desktop-only widgets */
+.froam-figma-layout.is-mobile .froam-tb {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  gap: 6px;
+  padding: 0 8px;
+}
+
+.froam-figma-layout.is-mobile .froam-tb::-webkit-scrollbar {
+  display: none;
+}
+
+.froam-figma-layout.is-mobile .froam-tb > *,
+.froam-figma-layout.is-mobile .froam-tb__left,
+.froam-figma-layout.is-mobile .froam-tb__right {
+  flex-shrink: 0;
+}
+
+.froam-figma-layout.is-mobile .froam-tb__center {
+  flex: 0 0 auto;
+}
+
+.froam-figma-layout.is-mobile .froam-tb__desktop-only,
+.froam-figma-layout.is-mobile .froam-tb__sep {
+  display: none;
+}
+
+/* Left panel (Plan / Layers) becomes a slide-over drawer */
+.froam-figma-layout.is-mobile .froam-figma-left {
+  position: fixed;
+  top: 48px;
+  left: 0;
+  bottom: 0;
+  width: min(85vw, 340px);
+  z-index: 1240;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 24px 0 48px rgba(0, 0, 0, 0.35);
+  animation: froam-drawer-in 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes froam-drawer-in {
+  from {
+    transform: translateX(-24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* ─── Bottom sheet (design panel host) ─── */
+
+.froam-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1250;
+  display: flex;
+  flex-direction: column;
+  height: 84px;
+  background: var(--fs-surface-panel);
+  border-top: 1px solid var(--fs-border-muted);
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.4);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  transition: height 240ms cubic-bezier(0.3, 0, 0, 1);
+}
+
+.froam-sheet.is-dragging {
+  transition: none;
+}
+
+.froam-sheet--half {
+  height: 46vh;
+  height: 46dvh;
+}
+
+.froam-sheet--full {
+  height: calc(100vh - 56px);
+  height: calc(100dvh - 56px);
+}
+
+.froam-sheet__header {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 16px 10px;
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.froam-sheet.is-dragging .froam-sheet__header {
+  cursor: grabbing;
+}
+
+.froam-sheet__grabber {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.4);
+}
+
+.froam-sheet__titlebar {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.froam-sheet__title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--fs-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.froam-sheet__subtitle {
+  font-size: 0.72rem;
+  color: var(--fs-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Body hosts the design panel, which scrolls internally */
+.froam-sheet__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.froam-sheet--peek .froam-sheet__body {
+  visibility: hidden;
+}
+
+.froam-sheet .froam-dp {
+  flex: 1;
+  min-height: 0;
+  border-left: 0;
+  background: transparent;
+}
+
+/* iOS zooms the page when a focused input's font-size is under 16px */
+@media (pointer: coarse) {
+  .froam-sheet input,
+  .froam-sheet select,
+  .froam-sheet textarea {
+    font-size: 16px !important;
+  }
+}

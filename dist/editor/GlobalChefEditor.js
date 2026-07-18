@@ -9,6 +9,8 @@ import { bridgeUrl } from '../lib/bridge.js';
 import FroamResizeHandles from './FroamResizeHandles.js';
 import FroamFloatingBar from './FroamFloatingBar.js';
 import FroamContextMenu from './FroamContextMenu.js';
+import FroamBottomSheet from './FroamBottomSheet.js';
+import { COARSE_POINTER_QUERY, MOBILE_UI_QUERY, matchesMedia, useMediaQuery } from './froamMedia.js';
 import FroamExport from './FroamExport.js';
 import FroamShortcutOverlay from './FroamShortcutOverlay.js';
 import FroamSmartGuides from './FroamSmartGuides.js';
@@ -1328,7 +1330,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     });
     const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
     const [leftWorkspaceMode, setLeftWorkspaceMode] = useState('plan');
-    const [leftPanelOpen, setLeftPanelOpen] = useState(true);
+    // v4: phone-first editing — compact chrome on small viewports, touch behaviors on coarse pointers
+    const isMobileUI = useMediaQuery(MOBILE_UI_QUERY);
+    const isTouchDevice = useMediaQuery(COARSE_POINTER_QUERY);
+    const [sheetDetent, setSheetDetent] = useState('peek');
+    const [leftPanelOpen, setLeftPanelOpen] = useState(() => !matchesMedia(MOBILE_UI_QUERY));
     const [rightPanelOpen, setRightPanelOpen] = useState(true);
     const [studioMinimized, setStudioMinimized] = useState(false);
     const [scanActive, setScanActive] = useState(false);
@@ -1867,6 +1873,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             observer.disconnect();
         };
     }, [hasRouteDrafts, routeDrafts, viewportStoreKey]);
+    /* ─── v4: touch affordances while editing on a coarse pointer ─── */
+    useEffect(() => {
+        if (!showPanel || !isTouchDevice)
+            return;
+        // touch-action: manipulation + user-select rules live in mobile.css under this attribute
+        document.documentElement.setAttribute('data-froam-touch', 'true');
+        return () => document.documentElement.removeAttribute('data-froam-touch');
+    }, [showPanel, isTouchDevice]);
     /* ─── Click / hover handlers ─── */
     useEffect(() => {
         if (!showPanel)
@@ -2019,11 +2033,69 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             }
             setContextMenuPos({ x: event.clientX, y: event.clientY });
         }
+        /* ─── v4: long-press = right-click on touch ───
+           iOS Safari never fires contextmenu for touches; Android fires it but
+           we want consistent timing + haptics, so we recognize it ourselves.
+           A duplicate native contextmenu just re-sets the same state. */
+        const LONG_PRESS_MS = 450;
+        const LONG_PRESS_SLOP = 10;
+        let longPressTimer = 0;
+        let longPressOrigin = null;
+        let longPressFired = false;
+        function cancelLongPress() {
+            window.clearTimeout(longPressTimer);
+            longPressOrigin = null;
+        }
+        function handleTouchStart(event) {
+            if (event.touches.length !== 1) {
+                cancelLongPress();
+                return;
+            }
+            const touch = event.touches[0];
+            const target = resolveTarget(event.target);
+            if (!target)
+                return;
+            longPressOrigin = { x: touch.clientX, y: touch.clientY };
+            longPressFired = false;
+            window.clearTimeout(longPressTimer);
+            longPressTimer = window.setTimeout(() => {
+                longPressFired = true;
+                longPressOrigin = null;
+                const path = getElementPath(target, rootElement);
+                if (!selectionsRef.current.some((sel) => sel.path === path)) {
+                    updateSelectionsState([buildSelection(target, path)]);
+                }
+                setContextMenuPos({ x: touch.clientX, y: touch.clientY });
+                if ('vibrate' in navigator)
+                    navigator.vibrate?.(8);
+            }, LONG_PRESS_MS);
+        }
+        function handleTouchMove(event) {
+            if (!longPressOrigin)
+                return;
+            const touch = event.touches[0];
+            if (Math.hypot(touch.clientX - longPressOrigin.x, touch.clientY - longPressOrigin.y) > LONG_PRESS_SLOP) {
+                cancelLongPress();
+            }
+        }
+        function handleTouchEnd(event) {
+            cancelLongPress();
+            if (longPressFired) {
+                // Swallow the synthetic click so it can't immediately dismiss the menu
+                if (event.cancelable)
+                    event.preventDefault();
+                longPressFired = false;
+            }
+        }
         document.addEventListener('mouseover', handlePointerOver, { capture: true, passive: true });
         document.addEventListener('mouseout', handlePointerLeave, { capture: true, passive: true });
         document.addEventListener('click', handleClick, true);
         document.addEventListener('dblclick', handleDblClick, true);
         document.addEventListener('contextmenu', handleContextMenu, true);
+        document.addEventListener('touchstart', handleTouchStart, { capture: true, passive: true });
+        document.addEventListener('touchmove', handleTouchMove, { capture: true, passive: true });
+        document.addEventListener('touchend', handleTouchEnd, { capture: true, passive: false });
+        document.addEventListener('touchcancel', cancelLongPress, { capture: true, passive: true });
         return () => {
             cancelAnimationFrame(hoverFrame);
             document.removeEventListener('mouseover', handlePointerOver, true);
@@ -2031,6 +2103,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             document.removeEventListener('click', handleClick, true);
             document.removeEventListener('dblclick', handleDblClick, true);
             document.removeEventListener('contextmenu', handleContextMenu, true);
+            document.removeEventListener('touchstart', handleTouchStart, true);
+            document.removeEventListener('touchmove', handleTouchMove, true);
+            document.removeEventListener('touchend', handleTouchEnd, true);
+            document.removeEventListener('touchcancel', cancelLongPress, true);
+            cancelLongPress();
             clearHover();
         };
     }, [showPanel, routeKey, viewportStoreKey, inlineEditing, showToast]);
@@ -2112,11 +2189,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         document.addEventListener('pointerdown', handleMoveDown, true);
         document.addEventListener('pointermove', handleMoveMove, true);
         document.addEventListener('pointerup', handleMoveUp, true);
+        // v4: while the Move tool is armed, touch drags must move elements — not scroll the page
+        const previousBodyTouchAction = document.body.style.touchAction;
+        document.body.style.touchAction = 'none';
         return () => {
             moveDragRef.current?.target.removeAttribute('data-froam-moving');
             document.removeEventListener('pointerdown', handleMoveDown, true);
             document.removeEventListener('pointermove', handleMoveMove, true);
             document.removeEventListener('pointerup', handleMoveUp, true);
+            document.body.style.touchAction = previousBodyTouchAction;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showPanel, moveMode, viewportStoreKey]);
@@ -2910,6 +2991,34 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         const sel = buildSelection(element, path);
         updateSelectionsState([sel]);
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    /* v4: selection walker — precise selection without precise fingers */
+    function walkSelection(direction) {
+        const root = getRoot();
+        if (!root || !selection)
+            return;
+        const current = findElementByPath(root, selection.path);
+        if (!current)
+            return;
+        const step = (from) => {
+            switch (direction) {
+                case 'parent': return from.parentElement;
+                case 'prev': return from.previousElementSibling;
+                case 'next': return from.nextElementSibling;
+                case 'child': return from.firstElementChild;
+            }
+        };
+        let next = step(current);
+        while (next && next !== root && root.contains(next) && (shouldSkipElement(next) || next.closest('[data-chef-editor-root="true"]'))) {
+            next = step(next);
+        }
+        if (!next || next === root || !root.contains(next)) {
+            showToast(direction === 'parent' ? 'Top of the page' : direction === 'child' ? 'No children' : 'No sibling there');
+            return;
+        }
+        selectInsertedElement(next);
+        if ('vibrate' in navigator)
+            navigator.vibrate?.(4);
     }
     function getStructureTarget() {
         const root = getRoot();
@@ -4333,6 +4442,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 }
                             } }), _jsxs("ul", { className: "fs-command-palette__list", children: [filteredCommands.map((cmd, idx) => (_jsxs("li", { className: `fs-command-palette__item ${idx === commandFocusIndex ? 'is-focused' : ''}`, onClick: () => executePaletteCommand(cmd), onMouseEnter: () => setCommandFocusIndex(idx), children: [cmd.icon, _jsx("span", { className: "fs-command-palette__item-label", children: cmd.label }), cmd.shortcut && _jsx("span", { className: "fs-command-palette__item-shortcut", children: cmd.shortcut })] }, cmd.id))), filteredCommands.length === 0 && (_jsx("li", { className: "fs-command-palette__item", style: { justifyContent: 'center', color: 'var(--fs-text-tertiary)' }, children: "No commands found" }))] })] }) })), showPanel && !studioMinimized && (_jsxs("div", { className: [
                     'froam-figma-layout',
+                    isMobileUI ? 'is-mobile' : '',
                     leftWorkspaceMode === 'plan' ? 'is-planning' : '',
                     leftPanelOpen ? '' : 'is-left-collapsed',
                     rightPanelOpen ? '' : 'is-right-collapsed',
@@ -4361,7 +4471,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 setActive(false);
                                 setStudioMinimized(false);
                             } }) }), leftPanelOpen && _jsxs("div", { className: "froam-figma-left", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-figma-left__tabs", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: leftWorkspaceMode === 'plan' ? 'is-active' : '', onClick: () => setLeftWorkspaceMode('plan'), children: [_jsx(LayoutGrid, { size: 13 }), " Plan"] }), _jsxs("button", { type: "button", className: leftWorkspaceMode === 'layers' ? 'is-active' : '', onClick: () => setLeftWorkspaceMode('layers'), children: [_jsx(Layers, { size: 13 }), " Layers"] })] }), _jsx("div", { className: "froam-figma-left__body", "data-chef-editor-root": "true", children: leftWorkspaceMode === 'plan' ? (_jsx(FroamSectionBoundary, { name: "SitePlanner", children: _jsx(FroamSitePlanner, { routeKey: routeKey, onInsertComponent: insertLibraryComponent, onInsertBlankFrame: insertBlankFrame, onBuildPage: buildLibraryPage, onToast: showToast }) })) : (_jsx(FroamSectionBoundary, { name: "LayersPanel", children: _jsx(FroamLayersPanel, { layers: layers, selectedPath: selection?.path ?? null, selections: selections, onSelectLayer: selectLayerNode, onToggleVisibility: toggleLayerVisibility, onRefresh: () => { const root = getRoot(); if (root)
-                                            setLayers(collectLayers(root)); }, routeKey: routeKey }) })) })] }), _jsx("div", { className: "froam-figma-layout__canvas", "data-chef-editor-root": "true" }), rightPanelOpen && (_jsx(FroamSectionBoundary, { name: "DesignPanel", children: _jsx(FroamDesignPanel, { selection: selection, selectionRect: selectionRect, onApplyStyle: applyStyle, onUpdateDraft: updateDraft, onOpenImageUpload: openSelectedImageUpload, onClearImage: clearAppliedImage, onClearSelectionDraft: actionsRef.current.clearSelectionDraft, marginLinked: marginLinked, paddingLinked: paddingLinked, radiusLinked: radiusLinked, onToggleMarginLinked: () => setMarginLinked((value) => !value), onTogglePaddingLinked: () => setPaddingLinked((value) => !value), onToggleRadiusLinked: () => setRadiusLinked((value) => !value), onApplySizePreset: applySizePreset, onBuildTransformString: buildTransformString, fontOptions: fontOptions }) }))] })), showPanel && studioMinimized && (_jsxs("div", { className: "froam-mini-dock", "data-chef-editor-root": "true", role: "toolbar", "aria-label": `Minimized ${persona.name} Studio`, children: [_jsxs("button", { type: "button", className: "froam-mini-dock__status froam-mini-dock__persona", onClick: openPersonaEditor, title: "Edit studio profile", children: [persona.imageUrl ? (_jsx("img", { className: "froam-mini-dock__avatar", src: persona.imageUrl, alt: "", "aria-hidden": "true" })) : (_jsx("span", { className: "froam-mini-dock__dot" })), _jsx("span", { children: persona.name }), _jsx("small", { children: "editing" })] }), _jsx("button", { type: "button", className: "froam-mini-dock__button", onClick: actionsRef.current.saveToRunam, title: "Save changes", "aria-label": `Save ${persona.name} changes`, children: _jsx(Save, { size: 15 }) }), _jsxs("button", { type: "button", className: "froam-mini-dock__button froam-mini-dock__button--primary", onClick: () => setStudioMinimized(false), title: `Restore ${persona.name} Studio`, "aria-label": `Restore ${persona.name} Studio`, children: [_jsx(Maximize2, { size: 15 }), _jsx("span", { children: "Restore" })] }), _jsx("button", { type: "button", className: "froam-mini-dock__button", onClick: () => {
+                                            setLayers(collectLayers(root)); }, routeKey: routeKey }) })) })] }), _jsx("div", { className: "froam-figma-layout__canvas", "data-chef-editor-root": "true" }), rightPanelOpen && (() => {
+                        const designPanel = (_jsx(FroamSectionBoundary, { name: "DesignPanel", children: _jsx(FroamDesignPanel, { selection: selection, selectionRect: selectionRect, onApplyStyle: applyStyle, onUpdateDraft: updateDraft, onOpenImageUpload: openSelectedImageUpload, onClearImage: clearAppliedImage, onClearSelectionDraft: actionsRef.current.clearSelectionDraft, marginLinked: marginLinked, paddingLinked: paddingLinked, radiusLinked: radiusLinked, onToggleMarginLinked: () => setMarginLinked((value) => !value), onTogglePaddingLinked: () => setPaddingLinked((value) => !value), onToggleRadiusLinked: () => setRadiusLinked((value) => !value), onApplySizePreset: applySizePreset, onBuildTransformString: buildTransformString, fontOptions: fontOptions }) }));
+                        if (!isMobileUI)
+                            return designPanel;
+                        return (_jsx(FroamBottomSheet, { detent: sheetDetent, onDetentChange: setSheetDetent, title: selection?.label ?? 'Design', subtitle: selection ? 'Tap for style controls' : 'Tap any element to start', children: designPanel }));
+                    })()] })), showPanel && studioMinimized && (_jsxs("div", { className: "froam-mini-dock", "data-chef-editor-root": "true", role: "toolbar", "aria-label": `Minimized ${persona.name} Studio`, children: [_jsxs("button", { type: "button", className: "froam-mini-dock__status froam-mini-dock__persona", onClick: openPersonaEditor, title: "Edit studio profile", children: [persona.imageUrl ? (_jsx("img", { className: "froam-mini-dock__avatar", src: persona.imageUrl, alt: "", "aria-hidden": "true" })) : (_jsx("span", { className: "froam-mini-dock__dot" })), _jsx("span", { children: persona.name }), _jsx("small", { children: "editing" })] }), _jsx("button", { type: "button", className: "froam-mini-dock__button", onClick: actionsRef.current.saveToRunam, title: "Save changes", "aria-label": `Save ${persona.name} changes`, children: _jsx(Save, { size: 15 }) }), _jsxs("button", { type: "button", className: "froam-mini-dock__button froam-mini-dock__button--primary", onClick: () => setStudioMinimized(false), title: `Restore ${persona.name} Studio`, "aria-label": `Restore ${persona.name} Studio`, children: [_jsx(Maximize2, { size: 15 }), _jsx("span", { children: "Restore" })] }), _jsx("button", { type: "button", className: "froam-mini-dock__button", onClick: () => {
                             setPanelOpen(false);
                             setActive(false);
                             setStudioMinimized(false);
@@ -4632,7 +4747,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         applyStyle(finalStyles, nextSelection, 'Resized element');
                     }
                     setSelectionRect(target.getBoundingClientRect());
-                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && (_jsx(FroamFloatingBar, { targetRect: selectionRect, visible: !!selectionRect, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, fontOptions: fontOptions, selectionCount: selections.length, onStyle: (styles, selectionPatch, label) => {
+                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: undoStack.length > 0, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, fontOptions: fontOptions, selectionCount: selections.length, onStyle: (styles, selectionPatch, label) => {
                     applyStyle(styles, selectionPatch, label);
                     const root = getRoot();
                     const target = root ? findElementByPath(root, selection.path) : null;
@@ -4704,6 +4819,20 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         case 'delete':
                             clearSelectionDraft();
                             break;
+                        case 'undo':
+                            actionsRef.current.undo();
+                            break;
+                        case 'edit-text': {
+                            // Route through the dblclick pipeline so contentEditable setup + blur/text sync stay in one place
+                            const root = getRoot();
+                            if (!root)
+                                break;
+                            const target = findElementByPath(root, selection.path);
+                            if (!target)
+                                break;
+                            target.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+                            break;
+                        }
                     }
                 } })), _jsx(FroamContextMenu, { position: contextMenuPos, elementLabel: selection?.label, isHidden: false, hasClipboard: !!clipboardStyles, onAction: (action) => {
                     switch (action) {

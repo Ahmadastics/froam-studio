@@ -1,7 +1,11 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { COARSE_POINTER_QUERY, useMediaQuery } from './froamMedia.js';
+/* Touch needs finger-sized targets; mobile.css scales the visual dot to match */
 const HANDLE_SIZE = 8;
 const EDGE_SIZE = 6;
+const HANDLE_SIZE_TOUCH = 26;
+const EDGE_SIZE_TOUCH = 18;
 const CURSORS = {
     n: 'ns-resize',
     ne: 'nesw-resize',
@@ -12,9 +16,9 @@ const CURSORS = {
     w: 'ew-resize',
     nw: 'nwse-resize',
 };
-function getHandlePositions(rect) {
+function getHandlePositions(rect, handleSize) {
     const { left: l, top: t, width: w, height: h } = rect;
-    const half = HANDLE_SIZE / 2;
+    const half = handleSize / 2;
     return {
         nw: { x: l - half, y: t - half },
         n: { x: l + w / 2 - half, y: t - half },
@@ -26,24 +30,25 @@ function getHandlePositions(rect) {
         w: { x: l - half, y: t + h / 2 - half },
     };
 }
-function getEdgeSegments(rect) {
+function getEdgeSegments(rect, handleSize, edgeSize) {
     const { left: l, top: t, width: w, height: h } = rect;
-    const edgeHalf = EDGE_SIZE / 2;
-    const inset = HANDLE_SIZE + 4;
+    const edgeHalf = edgeSize / 2;
+    const inset = handleSize + 4;
     return [
         // top edge
-        { dir: 'n', x: l + inset, y: t - edgeHalf, w: w - inset * 2, h: EDGE_SIZE, cursor: 'ns-resize' },
+        { dir: 'n', x: l + inset, y: t - edgeHalf, w: w - inset * 2, h: edgeSize, cursor: 'ns-resize' },
         // right edge
-        { dir: 'e', x: l + w - edgeHalf, y: t + inset, w: EDGE_SIZE, h: h - inset * 2, cursor: 'ew-resize' },
+        { dir: 'e', x: l + w - edgeHalf, y: t + inset, w: edgeSize, h: h - inset * 2, cursor: 'ew-resize' },
         // bottom edge
-        { dir: 's', x: l + inset, y: t + h - edgeHalf, w: w - inset * 2, h: EDGE_SIZE, cursor: 'ns-resize' },
+        { dir: 's', x: l + inset, y: t + h - edgeHalf, w: w - inset * 2, h: edgeSize, cursor: 'ns-resize' },
         // left edge
-        { dir: 'w', x: l - edgeHalf, y: t + inset, w: EDGE_SIZE, h: h - inset * 2, cursor: 'ew-resize' },
+        { dir: 'w', x: l - edgeHalf, y: t + inset, w: edgeSize, h: h - inset * 2, cursor: 'ew-resize' },
     ];
 }
 export default function FroamResizeHandles({ targetRect, onResizeStart, onResize, onResizeEnd, visible }) {
     const dragRef = useRef(null);
     const [activeCursor, setActiveCursor] = useState(null);
+    const coarsePointer = useMediaQuery(COARSE_POINTER_QUERY);
     const emitResize = useCallback((clientX, clientY, preserveAspectRatio, resizeFromCenter) => {
         if (!dragRef.current)
             return;
@@ -131,8 +136,10 @@ export default function FroamResizeHandles({ targetRect, onResizeStart, onResize
     }, [activeCursor, emitResize, finishResize]);
     if (!visible || !targetRect)
         return null;
-    const handles = getHandlePositions(targetRect);
-    const edges = getEdgeSegments(targetRect);
+    const handleSize = coarsePointer ? HANDLE_SIZE_TOUCH : HANDLE_SIZE;
+    const edgeSize = coarsePointer ? EDGE_SIZE_TOUCH : EDGE_SIZE;
+    const handles = getHandlePositions(targetRect, handleSize);
+    const edges = getEdgeSegments(targetRect, handleSize, edgeSize);
     return (_jsxs(_Fragment, { children: [edges.map((edge) => (_jsx("div", { className: "froam-resize-edge", "data-chef-editor-root": "true", style: {
                     position: 'fixed',
                     left: edge.x,
@@ -141,14 +148,16 @@ export default function FroamResizeHandles({ targetRect, onResizeStart, onResize
                     height: edge.h,
                     cursor: edge.cursor,
                     zIndex: 1305,
+                    touchAction: 'none',
                 }, onPointerDown: (e) => handlePointerDown(edge.dir, e), onPointerMove: handlePointerMove, onPointerUp: handlePointerUp, onPointerCancel: handlePointerUp }, edge.dir))), Object.entries(handles).map(([dir, pos]) => (_jsx("div", { className: `froam-resize-handle froam-resize-handle--${dir}`, "data-chef-editor-root": "true", style: {
                     position: 'fixed',
                     left: pos.x,
                     top: pos.y,
-                    width: HANDLE_SIZE,
-                    height: HANDLE_SIZE,
+                    width: handleSize,
+                    height: handleSize,
                     cursor: CURSORS[dir],
                     zIndex: 1306,
+                    touchAction: 'none',
                 }, onPointerDown: (e) => handlePointerDown(dir, e), onPointerMove: handlePointerMove, onPointerUp: handlePointerUp, onPointerCancel: handlePointerUp }, dir))), _jsx("div", { className: "froam-selection-outline", "data-chef-editor-root": "true", style: {
                     position: 'fixed',
                     left: targetRect.left - 1,

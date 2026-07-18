@@ -17,9 +17,11 @@ export default function FroamContextMenu({ position, elementLabel, isHidden, has
                 onClose();
         }
         window.addEventListener('mousedown', handleClick, true);
+        window.addEventListener('touchstart', handleClick, { capture: true, passive: true });
         window.addEventListener('keydown', handleKey, true);
         return () => {
             window.removeEventListener('mousedown', handleClick, true);
+            window.removeEventListener('touchstart', handleClick, true);
             window.removeEventListener('keydown', handleKey, true);
         };
     }, [position, onClose]);

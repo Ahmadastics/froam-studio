@@ -2,6 +2,55 @@
 
 All notable changes to froam-studio are documented here.
 
+## 4.0.0 — 2026-07-18
+
+**Froam v4: phone-first editing.** People have wanted to edit their sites
+from their phones for decades; v4 makes the editor genuinely usable on
+touch. Pair it with `froam dev --host` (v3.2) and you can fix your mobile
+layout on the actual device where mobile bugs live, with every edit still
+compiling to committable files on your machine.
+
+### Added
+- **Touch canvas (Phase 1).** The canvas is no longer hidden below 640px —
+  on a phone, the page itself is the canvas. Long-press any element for
+  the context menu (own recognizer with a 450ms hold, 10px slop and
+  haptics — iOS Safari never fires `contextmenu` for touches). Move-tool
+  drags lock page scrolling (`touch-action`) so elements move instead of
+  the page. Double-tap-to-zoom is disabled while editing so double-tap
+  reaches inline text editing. Resize handles grow to 26px on coarse
+  pointers, with `touch-action: none` so resizing never scrolls.
+- **Mobile chrome (Phase 2).** Below 768px the layout collapses to
+  toolbar + full-bleed canvas. The design panel moves into a swipeable
+  bottom sheet with peek / half / full detents (drag the grabber, or tap
+  it to cycle); the Plan/Layers panel becomes a slide-over drawer; the
+  toolbar condenses to touch-sized essentials and scrolls horizontally.
+- **Selection walker.** Parent / previous / next / first-child steppers
+  on the contextual bar — tap near the element you want, then walk the
+  DOM to it. Ends the fat-finger selection problem, on desktop too.
+- **Scrub to adjust.** Press any numeric control (font size in the bar,
+  plus Line/Tracking/Words/Width/Height/Padding/Radius/Gap fields) and
+  drag horizontally to change it, with haptic ticks per step. Plain taps
+  still focus the input — scrubbing engages after a 6px slop.
+- **Page palette.** A pipette button that reads the colors the page
+  already uses (computed styles, ranked by frequency), and offers them as
+  one-tap chips with a Fill/Text switch. Text mode marks chips that pass
+  WCAG 4.5:1 contrast against the current fill.
+- **Quick looks.** One-tap style recipes on the contextual bar: Lift,
+  Glass, Outline, Pill, Pop (uses the page's own accent color) and
+  Reset look.
+- **Aa — one-tap text editing.** A dedicated button that starts inline
+  copy editing without double-tapping; the bar hides while the keyboard
+  is up.
+- **Thumb dock.** On mobile the contextual bar docks above the bottom
+  sheet in thumb reach (with an Undo button), horizontally scrollable,
+  and auto-hides while the sheet is expanded.
+
+### Changed
+- Narrow desktop windows (≤900px) now slim the side panels instead of
+  hiding the canvas and left panel entirely.
+- The floating contextual bar's popovers render in-flow (they were
+  clipped by the bar's own scroll container).
+
 ## 3.3.0 — 2026-07-14
 
 ### Added

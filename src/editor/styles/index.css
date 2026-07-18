@@ -1,6 +1,7 @@
 /* ===============================================================
-   FROAM STUDIO v3 — editor stylesheet
+   FROAM STUDIO v4 — editor stylesheet
    Ordered module imports — cascade order matters, do not reorder.
+   mobile.css is last on purpose: phone-first overrides win.
    =============================================================== */
 @import './tokens.css';
 @import './trigger-button.css';
@@ -26,3 +27,4 @@
 @import './responsive.css';
 @import './inspiration-panel.css';
 @import './polish.css';
+@import './mobile.css';

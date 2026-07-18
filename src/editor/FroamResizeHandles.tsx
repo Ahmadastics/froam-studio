@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { COARSE_POINTER_QUERY, useMediaQuery } from './froamMedia'
 
 type HandleDirection = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw'
 
@@ -20,8 +21,11 @@ type Props = {
   visible: boolean
 }
 
+/* Touch needs finger-sized targets; mobile.css scales the visual dot to match */
 const HANDLE_SIZE = 8
 const EDGE_SIZE = 6
+const HANDLE_SIZE_TOUCH = 26
+const EDGE_SIZE_TOUCH = 18
 
 const CURSORS: Record<HandleDirection, string> = {
   n: 'ns-resize',
@@ -34,9 +38,9 @@ const CURSORS: Record<HandleDirection, string> = {
   nw: 'nwse-resize',
 }
 
-function getHandlePositions(rect: DOMRect) {
+function getHandlePositions(rect: DOMRect, handleSize: number) {
   const { left: l, top: t, width: w, height: h } = rect
-  const half = HANDLE_SIZE / 2
+  const half = handleSize / 2
   return {
     nw: { x: l - half, y: t - half },
     n: { x: l + w / 2 - half, y: t - half },
@@ -49,25 +53,26 @@ function getHandlePositions(rect: DOMRect) {
   }
 }
 
-function getEdgeSegments(rect: DOMRect) {
+function getEdgeSegments(rect: DOMRect, handleSize: number, edgeSize: number) {
   const { left: l, top: t, width: w, height: h } = rect
-  const edgeHalf = EDGE_SIZE / 2
-  const inset = HANDLE_SIZE + 4
+  const edgeHalf = edgeSize / 2
+  const inset = handleSize + 4
   return [
     // top edge
-    { dir: 'n' as HandleDirection, x: l + inset, y: t - edgeHalf, w: w - inset * 2, h: EDGE_SIZE, cursor: 'ns-resize' },
+    { dir: 'n' as HandleDirection, x: l + inset, y: t - edgeHalf, w: w - inset * 2, h: edgeSize, cursor: 'ns-resize' },
     // right edge
-    { dir: 'e' as HandleDirection, x: l + w - edgeHalf, y: t + inset, w: EDGE_SIZE, h: h - inset * 2, cursor: 'ew-resize' },
+    { dir: 'e' as HandleDirection, x: l + w - edgeHalf, y: t + inset, w: edgeSize, h: h - inset * 2, cursor: 'ew-resize' },
     // bottom edge
-    { dir: 's' as HandleDirection, x: l + inset, y: t + h - edgeHalf, w: w - inset * 2, h: EDGE_SIZE, cursor: 'ns-resize' },
+    { dir: 's' as HandleDirection, x: l + inset, y: t + h - edgeHalf, w: w - inset * 2, h: edgeSize, cursor: 'ns-resize' },
     // left edge
-    { dir: 'w' as HandleDirection, x: l - edgeHalf, y: t + inset, w: EDGE_SIZE, h: h - inset * 2, cursor: 'ew-resize' },
+    { dir: 'w' as HandleDirection, x: l - edgeHalf, y: t + inset, w: edgeSize, h: h - inset * 2, cursor: 'ew-resize' },
   ]
 }
 
 export default function FroamResizeHandles({ targetRect, onResizeStart, onResize, onResizeEnd, visible }: Props) {
   const dragRef = useRef<{ direction: HandleDirection; startX: number; startY: number } | null>(null)
   const [activeCursor, setActiveCursor] = useState<string | null>(null)
+  const coarsePointer = useMediaQuery(COARSE_POINTER_QUERY)
 
   const emitResize = useCallback(
     (clientX: number, clientY: number, preserveAspectRatio: boolean, resizeFromCenter: boolean) => {
@@ -169,8 +174,10 @@ export default function FroamResizeHandles({ targetRect, onResizeStart, onResize
 
   if (!visible || !targetRect) return null
 
-  const handles = getHandlePositions(targetRect)
-  const edges = getEdgeSegments(targetRect)
+  const handleSize = coarsePointer ? HANDLE_SIZE_TOUCH : HANDLE_SIZE
+  const edgeSize = coarsePointer ? EDGE_SIZE_TOUCH : EDGE_SIZE
+  const handles = getHandlePositions(targetRect, handleSize)
+  const edges = getEdgeSegments(targetRect, handleSize, edgeSize)
 
   return (
     <>
@@ -188,6 +195,7 @@ export default function FroamResizeHandles({ targetRect, onResizeStart, onResize
             height: edge.h,
             cursor: edge.cursor,
             zIndex: 1305,
+            touchAction: 'none',
           }}
           onPointerDown={(e) => handlePointerDown(edge.dir, e)}
           onPointerMove={handlePointerMove}
@@ -206,10 +214,11 @@ export default function FroamResizeHandles({ targetRect, onResizeStart, onResize
             position: 'fixed',
             left: pos.x,
             top: pos.y,
-            width: HANDLE_SIZE,
-            height: HANDLE_SIZE,
+            width: handleSize,
+            height: handleSize,
             cursor: CURSORS[dir],
             zIndex: 1306,
+            touchAction: 'none',
           }}
           onPointerDown={(e) => handlePointerDown(dir, e)}
           onPointerMove={handlePointerMove}

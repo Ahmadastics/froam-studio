@@ -145,7 +145,7 @@ export default function FroamToolbar({
           <span className="froam-tb__logo">{persona.name}</span>
         </button>
         <div className="froam-tb__sep" />
-        <span className="froam-tb__route">{routeKey}</span>
+        <span className="froam-tb__route froam-tb__desktop-only">{routeKey}</span>
       </div>
 
       {/* Center: Tools */}
@@ -245,8 +245,8 @@ export default function FroamToolbar({
 
         <div className="froam-tb__sep" />
 
-        {/* Viewport switcher */}
-        <div className="froam-tb__viewport-group">
+        {/* Viewport switcher — pointless on an actual phone */}
+        <div className="froam-tb__viewport-group froam-tb__desktop-only">
           <button
             type="button"
             className={`froam-tb__vp-btn ${viewportMode === 'desktop' ? 'is-active' : ''}`}
@@ -279,7 +279,7 @@ export default function FroamToolbar({
         <div className="froam-tb__sep" />
 
         {/* Zoom */}
-        <div className="froam-tb__zoom-group" data-chef-editor-root="true">
+        <div className="froam-tb__zoom-group froam-tb__desktop-only" data-chef-editor-root="true">
           <button type="button" className="froam-tb__icon-btn" onClick={() => setZoom(Math.max(0.2, zoom - 0.1))} title="Zoom out" data-chef-editor-root="true">
             <Minus size={13} />
           </button>
@@ -304,7 +304,7 @@ export default function FroamToolbar({
         <button type="button" className="froam-tb__icon-btn" onClick={onCommandPalette} title="Command palette (Ctrl+K)" data-chef-editor-root="true">
           <Command size={14} />
         </button>
-        <button type="button" className="froam-tb__icon-btn" onClick={onShortcutsOverlay} title="Keyboard shortcuts (?)" data-chef-editor-root="true">
+        <button type="button" className="froam-tb__icon-btn froam-tb__desktop-only" onClick={onShortcutsOverlay} title="Keyboard shortcuts (?)" data-chef-editor-root="true">
           <Keyboard size={14} />
         </button>
 

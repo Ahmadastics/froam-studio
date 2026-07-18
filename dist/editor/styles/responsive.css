@@ -1,5 +1,7 @@
 /* ===============================================================
-   FROAM STUDIO — Old sidebar: hide when Figma mode is active · Mobile responsive: collapse to single panel
+   FROAM STUDIO — Old sidebar: hide when Figma mode is active · Narrow
+   viewports: slim the side panels. The canvas is NEVER hidden — phones
+   get the .is-mobile layout (see mobile.css) instead.
    =============================================================== */
 
 /* ─── Old sidebar: hide when Figma mode is active ─── */
@@ -8,37 +10,25 @@
   display: none !important;
 }
 
-/* ─── Mobile responsive: collapse to single panel ─── */
+/* ─── Narrow desktop / tablet: slim panels, keep everything visible ─── */
 
 @media (max-width: 900px) {
-  .froam-figma-layout {
-    grid-template-columns: 1fr 260px;
-    grid-template-rows: 48px 1fr;
-    grid-template-areas:
-      "toolbar toolbar"
-      "canvas  design";
+  .froam-figma-layout:not(.is-mobile) {
+    grid-template-columns: 200px minmax(0, 1fr) 260px;
   }
-  .froam-figma-layout.is-planning {
-    grid-template-columns: 1fr 260px;
+  .froam-figma-layout.is-planning:not(.is-mobile) {
+    grid-template-columns: minmax(240px, 300px) minmax(0, 1fr) 260px;
   }
-  .froam-figma-left { display: none; }
-  .froam-figma-layout__canvas { display: none; }
-}
-
-@media (max-width: 640px) {
-  .froam-figma-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: 48px 1fr;
-    grid-template-areas:
-      "toolbar"
-      "design";
+  .froam-figma-layout.is-left-collapsed:not(.is-mobile),
+  .froam-figma-layout.is-planning.is-left-collapsed:not(.is-mobile) {
+    grid-template-columns: 0 minmax(0, 1fr) 260px;
   }
-  .froam-figma-layout.is-planning {
-    grid-template-columns: 1fr;
+  .froam-figma-layout.is-right-collapsed:not(.is-mobile),
+  .froam-figma-layout.is-planning.is-right-collapsed:not(.is-mobile) {
+    grid-template-columns: 200px minmax(0, 1fr) 0;
   }
-  .froam-figma-left { display: none; }
-  .froam-figma-layout__canvas { display: none; }
-  .froam-dp {
-    max-height: calc(100vh - 48px);
+  .froam-figma-layout.is-left-collapsed.is-right-collapsed:not(.is-mobile),
+  .froam-figma-layout.is-planning.is-left-collapsed.is-right-collapsed:not(.is-mobile) {
+    grid-template-columns: 0 minmax(0, 1fr) 0;
   }
 }

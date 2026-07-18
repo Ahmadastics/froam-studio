@@ -15,6 +15,31 @@ dependency, no drift.
 Astro, Rails, Django, PHP, WordPress themes, plain HTML — if it serves a page,
 Froam can edit it.
 
+## 📱 v4: edit from your phone
+
+Froam v4 is phone-first. Open your dev site on your phone
+(`froam dev --host` + the LAN URL) and edit the mobile layout **on the
+device where mobile bugs actually live** — every change still compiles to
+committable files on your machine.
+
+- **Touch canvas** — tap to select, long-press for the context menu (with
+  haptics), drag to move with the Move tool, finger-sized resize handles.
+  The page itself is the canvas; nothing is hidden on small screens.
+- **Bottom sheet** — the design panel lives in a swipeable sheet with
+  peek / half / full detents, so the page stays visible while you tune it.
+- **Thumb dock** — the contextual bar docks above the sheet, in reach.
+- **Selection walker** — parent / sibling / child steppers: tap *near* the
+  thing you want, then walk to it. No more fat-finger misses.
+- **Scrub to adjust** — press any number (font size, padding, radius,
+  gap…) and drag sideways to change it, with haptic ticks. No phone
+  keyboard round-trips.
+- **Page palette** — Froam reads the colors your site already uses and
+  offers them as one-tap chips (with a contrast check for text).
+- **Quick looks** — one-tap style recipes: Lift, Glass, Outline, Pill,
+  Pop, Reset.
+- **Aa** — one tap to edit copy inline; the bar gets out of the keyboard's
+  way.
+
 ## Install
 
 ```bash

@@ -81,6 +81,8 @@ import { bridgeUrl } from '../lib/bridge'
 import FroamResizeHandles from './FroamResizeHandles'
 import FroamFloatingBar from './FroamFloatingBar'
 import FroamContextMenu from './FroamContextMenu'
+import FroamBottomSheet, { type SheetDetent } from './FroamBottomSheet'
+import { COARSE_POINTER_QUERY, MOBILE_UI_QUERY, matchesMedia, useMediaQuery } from './froamMedia'
 import FroamExport from './FroamExport'
 import FroamShortcutOverlay from './FroamShortcutOverlay'
 import FroamSmartGuides, { type AlignmentGuide } from './FroamSmartGuides'
@@ -1719,7 +1721,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   })
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [leftWorkspaceMode, setLeftWorkspaceMode] = useState<'plan' | 'layers'>('plan')
-  const [leftPanelOpen, setLeftPanelOpen] = useState(true)
+  // v4: phone-first editing — compact chrome on small viewports, touch behaviors on coarse pointers
+  const isMobileUI = useMediaQuery(MOBILE_UI_QUERY)
+  const isTouchDevice = useMediaQuery(COARSE_POINTER_QUERY)
+  const [sheetDetent, setSheetDetent] = useState<SheetDetent>('peek')
+  const [leftPanelOpen, setLeftPanelOpen] = useState(() => !matchesMedia(MOBILE_UI_QUERY))
   const [rightPanelOpen, setRightPanelOpen] = useState(true)
   const [studioMinimized, setStudioMinimized] = useState(false)
   const [scanActive, setScanActive] = useState(false)
@@ -2279,6 +2285,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
   }, [hasRouteDrafts, routeDrafts, viewportStoreKey])
 
+  /* ─── v4: touch affordances while editing on a coarse pointer ─── */
+  useEffect(() => {
+    if (!showPanel || !isTouchDevice) return
+    // touch-action: manipulation + user-select rules live in mobile.css under this attribute
+    document.documentElement.setAttribute('data-froam-touch', 'true')
+    return () => document.documentElement.removeAttribute('data-froam-touch')
+  }, [showPanel, isTouchDevice])
+
   /* ─── Click / hover handlers ─── */
   useEffect(() => {
     if (!showPanel) return
@@ -2433,11 +2447,70 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       setContextMenuPos({ x: event.clientX, y: event.clientY })
     }
 
+    /* ─── v4: long-press = right-click on touch ───
+       iOS Safari never fires contextmenu for touches; Android fires it but
+       we want consistent timing + haptics, so we recognize it ourselves.
+       A duplicate native contextmenu just re-sets the same state. */
+    const LONG_PRESS_MS = 450
+    const LONG_PRESS_SLOP = 10
+    let longPressTimer = 0
+    let longPressOrigin: { x: number; y: number } | null = null
+    let longPressFired = false
+
+    function cancelLongPress() {
+      window.clearTimeout(longPressTimer)
+      longPressOrigin = null
+    }
+
+    function handleTouchStart(event: TouchEvent) {
+      if (event.touches.length !== 1) {
+        cancelLongPress()
+        return
+      }
+      const touch = event.touches[0]
+      const target = resolveTarget(event.target)
+      if (!target) return
+      longPressOrigin = { x: touch.clientX, y: touch.clientY }
+      longPressFired = false
+      window.clearTimeout(longPressTimer)
+      longPressTimer = window.setTimeout(() => {
+        longPressFired = true
+        longPressOrigin = null
+        const path = getElementPath(target, rootElement)
+        if (!selectionsRef.current.some((sel) => sel.path === path)) {
+          updateSelectionsState([buildSelection(target, path)])
+        }
+        setContextMenuPos({ x: touch.clientX, y: touch.clientY })
+        if ('vibrate' in navigator) navigator.vibrate?.(8)
+      }, LONG_PRESS_MS)
+    }
+
+    function handleTouchMove(event: TouchEvent) {
+      if (!longPressOrigin) return
+      const touch = event.touches[0]
+      if (Math.hypot(touch.clientX - longPressOrigin.x, touch.clientY - longPressOrigin.y) > LONG_PRESS_SLOP) {
+        cancelLongPress()
+      }
+    }
+
+    function handleTouchEnd(event: TouchEvent) {
+      cancelLongPress()
+      if (longPressFired) {
+        // Swallow the synthetic click so it can't immediately dismiss the menu
+        if (event.cancelable) event.preventDefault()
+        longPressFired = false
+      }
+    }
+
     document.addEventListener('mouseover', handlePointerOver, { capture: true, passive: true })
     document.addEventListener('mouseout', handlePointerLeave, { capture: true, passive: true })
     document.addEventListener('click', handleClick, true)
     document.addEventListener('dblclick', handleDblClick, true)
     document.addEventListener('contextmenu', handleContextMenu, true)
+    document.addEventListener('touchstart', handleTouchStart, { capture: true, passive: true })
+    document.addEventListener('touchmove', handleTouchMove, { capture: true, passive: true })
+    document.addEventListener('touchend', handleTouchEnd, { capture: true, passive: false })
+    document.addEventListener('touchcancel', cancelLongPress, { capture: true, passive: true })
 
     return () => {
       cancelAnimationFrame(hoverFrame)
@@ -2446,6 +2519,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       document.removeEventListener('click', handleClick, true)
       document.removeEventListener('dblclick', handleDblClick, true)
       document.removeEventListener('contextmenu', handleContextMenu, true)
+      document.removeEventListener('touchstart', handleTouchStart, true)
+      document.removeEventListener('touchmove', handleTouchMove, true)
+      document.removeEventListener('touchend', handleTouchEnd, true)
+      document.removeEventListener('touchcancel', cancelLongPress, true)
+      cancelLongPress()
       clearHover()
     }
   }, [showPanel, routeKey, viewportStoreKey, inlineEditing, showToast])
@@ -2525,11 +2603,16 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     document.addEventListener('pointermove', handleMoveMove, true)
     document.addEventListener('pointerup', handleMoveUp, true)
 
+    // v4: while the Move tool is armed, touch drags must move elements — not scroll the page
+    const previousBodyTouchAction = document.body.style.touchAction
+    document.body.style.touchAction = 'none'
+
     return () => {
       moveDragRef.current?.target.removeAttribute('data-froam-moving')
       document.removeEventListener('pointerdown', handleMoveDown, true)
       document.removeEventListener('pointermove', handleMoveMove, true)
       document.removeEventListener('pointerup', handleMoveUp, true)
+      document.body.style.touchAction = previousBodyTouchAction
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showPanel, moveMode, viewportStoreKey])
@@ -3360,6 +3443,32 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const sel = buildSelection(element, path)
     updateSelectionsState([sel])
     element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
+  /* v4: selection walker — precise selection without precise fingers */
+  function walkSelection(direction: 'parent' | 'prev' | 'next' | 'child') {
+    const root = getRoot()
+    if (!root || !selection) return
+    const current = findElementByPath(root, selection.path)
+    if (!current) return
+    const step = (from: HTMLElement): HTMLElement | null => {
+      switch (direction) {
+        case 'parent': return from.parentElement
+        case 'prev': return from.previousElementSibling as HTMLElement | null
+        case 'next': return from.nextElementSibling as HTMLElement | null
+        case 'child': return from.firstElementChild as HTMLElement | null
+      }
+    }
+    let next = step(current)
+    while (next && next !== root && root.contains(next) && (shouldSkipElement(next) || next.closest('[data-chef-editor-root="true"]'))) {
+      next = step(next)
+    }
+    if (!next || next === root || !root.contains(next)) {
+      showToast(direction === 'parent' ? 'Top of the page' : direction === 'child' ? 'No children' : 'No sibling there')
+      return
+    }
+    selectInsertedElement(next)
+    if ('vibrate' in navigator) navigator.vibrate?.(4)
   }
 
   function getStructureTarget() {
@@ -4857,6 +4966,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         <div
           className={[
             'froam-figma-layout',
+            isMobileUI ? 'is-mobile' : '',
             leftWorkspaceMode === 'plan' ? 'is-planning' : '',
             leftPanelOpen ? '' : 'is-left-collapsed',
             rightPanelOpen ? '' : 'is-right-collapsed',
@@ -4965,28 +5075,41 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             </div>
           </div>}
           <div className="froam-figma-layout__canvas" data-chef-editor-root="true" />
-          {rightPanelOpen && (
-            <FroamSectionBoundary name="DesignPanel">
-              <FroamDesignPanel
-                selection={selection}
-                selectionRect={selectionRect}
-                onApplyStyle={applyStyle}
-                onUpdateDraft={updateDraft}
-                onOpenImageUpload={openSelectedImageUpload}
-                onClearImage={clearAppliedImage}
-                onClearSelectionDraft={actionsRef.current.clearSelectionDraft}
-                marginLinked={marginLinked}
-                paddingLinked={paddingLinked}
-                radiusLinked={radiusLinked}
-                onToggleMarginLinked={() => setMarginLinked((value) => !value)}
-                onTogglePaddingLinked={() => setPaddingLinked((value) => !value)}
-                onToggleRadiusLinked={() => setRadiusLinked((value) => !value)}
-                onApplySizePreset={applySizePreset}
-                onBuildTransformString={buildTransformString}
-                fontOptions={fontOptions}
-              />
-            </FroamSectionBoundary>
-          )}
+          {rightPanelOpen && (() => {
+            const designPanel = (
+              <FroamSectionBoundary name="DesignPanel">
+                <FroamDesignPanel
+                  selection={selection}
+                  selectionRect={selectionRect}
+                  onApplyStyle={applyStyle}
+                  onUpdateDraft={updateDraft}
+                  onOpenImageUpload={openSelectedImageUpload}
+                  onClearImage={clearAppliedImage}
+                  onClearSelectionDraft={actionsRef.current.clearSelectionDraft}
+                  marginLinked={marginLinked}
+                  paddingLinked={paddingLinked}
+                  radiusLinked={radiusLinked}
+                  onToggleMarginLinked={() => setMarginLinked((value) => !value)}
+                  onTogglePaddingLinked={() => setPaddingLinked((value) => !value)}
+                  onToggleRadiusLinked={() => setRadiusLinked((value) => !value)}
+                  onApplySizePreset={applySizePreset}
+                  onBuildTransformString={buildTransformString}
+                  fontOptions={fontOptions}
+                />
+              </FroamSectionBoundary>
+            )
+            if (!isMobileUI) return designPanel
+            return (
+              <FroamBottomSheet
+                detent={sheetDetent}
+                onDetentChange={setSheetDetent}
+                title={selection?.label ?? 'Design'}
+                subtitle={selection ? 'Tap for style controls' : 'Tap any element to start'}
+              >
+                {designPanel}
+              </FroamBottomSheet>
+            )
+          })()}
         </div>
       )}
 
@@ -6485,11 +6608,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         onClearImage={clearPersonaImage}
       />
 
-      {/* v4: Floating toolbar */}
-      {showPanel && selection && !inlineEditing && !isResizing && (
+      {/* v4: Floating toolbar — docked above the bottom sheet on mobile */}
+      {showPanel && selection && !inlineEditing && !isResizing && (!isMobileUI || sheetDetent === 'peek') && (
         <FroamFloatingBar
           targetRect={selectionRect}
           visible={!!selectionRect}
+          docked={isMobileUI}
+          canUndo={undoStack.length > 0}
+          onWalk={walkSelection}
           label={selection.label}
           fontFamily={selection.fontFamily}
           fontSize={selection.fontSize}
@@ -6555,6 +6681,16 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 break
               }
               case 'delete': clearSelectionDraft(); break
+              case 'undo': actionsRef.current.undo(); break
+              case 'edit-text': {
+                // Route through the dblclick pipeline so contentEditable setup + blur/text sync stay in one place
+                const root = getRoot()
+                if (!root) break
+                const target = findElementByPath(root, selection.path)
+                if (!target) break
+                target.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+                break
+              }
             }
           }}
         />
