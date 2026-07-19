@@ -1,24 +1,31 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   AlignCenter,
   AlignJustify,
   AlignLeft,
   AlignRight,
+  Blend,
   Bold,
+  BringToFront,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Combine,
+  Contrast,
   Copy,
   CornerLeftUp,
   CornerRightDown,
   Eraser,
+  Eye,
+  EyeOff,
   Grid2X2,
   ImagePlus,
   Italic,
+  Layers,
   LayoutTemplate,
   Maximize,
   Palette,
+  SendToBack,
   Pipette,
   RectangleHorizontal,
   Rows3,
@@ -50,6 +57,9 @@ type FloatingAction =
   | 'delete'
   | 'edit-text'
   | 'undo'
+  | 'toggle-hidden'
+  | 'bring-front'
+  | 'send-back'
 
 type WalkDirection = 'parent' | 'prev' | 'next' | 'child'
 
@@ -83,6 +93,10 @@ type Props = {
   padding: number
   radius: number
   overflow: string
+  opacity: number
+  isHidden?: boolean
+  mixBlendMode: string
+  zIndex: number
   fontOptions: Array<{ label: string; value: string }>
   selectionCount: number
   docked?: boolean
@@ -161,7 +175,7 @@ function normalizeToHex(value: string): string | null {
   return `#${toHex(match[1])}${toHex(match[2])}${toHex(match[3])}`
 }
 
-function collectPagePalette(): string[] {
+export function collectPagePalette(): string[] {
   // Scan the whole page, not just the froam root — brand colors live in headers/footers too
   const counts = new Map<string, number>()
   const elements = document.body.querySelectorAll<HTMLElement>('*')
@@ -327,6 +341,10 @@ export default function FroamFloatingBar({
   padding,
   radius,
   overflow,
+  opacity,
+  isHidden = false,
+  mixBlendMode,
+  zIndex,
   fontOptions,
   selectionCount,
   docked = false,
@@ -347,6 +365,15 @@ export default function FroamFloatingBar({
     const next = Math.min(400, Math.max(6, Math.round(fontSize) + steps))
     onStyle({ fontSize: `${next}px` }, { fontSize: next }, 'Changed font size')
   }, 8)
+
+  // v4.1: opacity scrub — accumulate in a ref so fast drags don't lose steps to render lag
+  const opacityRef = useRef(opacity)
+  useEffect(() => { opacityRef.current = opacity }, [opacity])
+  const opacityScrub = useScrub((steps) => {
+    const next = Math.min(1, Math.max(0, Math.round((opacityRef.current + steps * 0.02) * 100) / 100))
+    opacityRef.current = next
+    onStyle({ opacity: String(next) }, { opacity: next }, 'Changed opacity')
+  }, 6)
 
   useLayoutEffect(() => {
     if (docked || !visible || !targetRect || !barRef.current) return
@@ -578,6 +605,29 @@ export default function FroamFloatingBar({
           <Eraser size={13} />
         </button>
 
+        <span className="froam-floating-bar__sep" />
+
+        {/* v4.1: opacity scrub — drag the % to fade any element */}
+        <div
+          className="froam-floating-bar__opacity"
+          title="Opacity — drag to fade"
+          {...opacityScrub}
+          style={{ touchAction: 'none' }}
+        >
+          <Contrast size={13} />
+          <span>{Math.round(opacity * 100)}%</span>
+        </div>
+
+        {/* v4.1: show / hide any element */}
+        <button
+          type="button"
+          className={`froam-floating-bar__btn ${isHidden ? 'is-active' : ''}`}
+          title={isHidden ? 'Show element' : 'Hide element'}
+          onClick={() => onAction('toggle-hidden')}
+        >
+          {isHidden ? <EyeOff size={13} /> : <Eye size={13} />}
+        </button>
+
         {docked && (
           <>
             <span className="froam-floating-bar__sep" />
@@ -736,6 +786,38 @@ export default function FroamFloatingBar({
                   <option value="scroll">Scroll</option>
                 </select>
               </label>
+            </div>
+          </section>
+
+          <section>
+            <header><Layers size={13} /> Depth &amp; blend</header>
+            <div className="froam-floating-bar__fields">
+              <NumericField label="Z-index" value={zIndex} min={-999} max={9999} onChange={(next) => onStyle({ zIndex: String(next) }, { zIndex: next }, 'Changed z-index')} />
+              <label className="froam-floating-bar__field">
+                <span>Blend</span>
+                <select value={mixBlendMode} onChange={(event) => onStyle({ mixBlendMode: event.target.value }, { mixBlendMode: event.target.value }, 'Changed blend mode')}>
+                  <option value="normal">Normal</option>
+                  <option value="multiply">Multiply</option>
+                  <option value="screen">Screen</option>
+                  <option value="overlay">Overlay</option>
+                  <option value="darken">Darken</option>
+                  <option value="lighten">Lighten</option>
+                  <option value="color-dodge">Color dodge</option>
+                  <option value="color-burn">Color burn</option>
+                  <option value="hard-light">Hard light</option>
+                  <option value="soft-light">Soft light</option>
+                  <option value="difference">Difference</option>
+                  <option value="exclusion">Exclusion</option>
+                  <option value="hue">Hue</option>
+                  <option value="saturation">Saturation</option>
+                  <option value="color">Color</option>
+                  <option value="luminosity">Luminosity</option>
+                </select>
+              </label>
+            </div>
+            <div className="froam-floating-bar__preset-row">
+              <button type="button" onClick={() => onAction('bring-front')}><BringToFront size={12} /> Front</button>
+              <button type="button" onClick={() => onAction('send-back')}><SendToBack size={12} /> Back</button>
             </div>
           </section>
 

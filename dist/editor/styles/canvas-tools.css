@@ -994,3 +994,38 @@ body.froam-drag-active * {
   width: 30px;
   height: 20px;
 }
+
+/* ─── v4.1: opacity scrub chip ─── */
+
+.froam-floating-bar__opacity {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.72);
+  cursor: ew-resize;
+  font-size: 0.72rem;
+  font-weight: 600;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.froam-floating-bar__opacity:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f0f4f8;
+}
+
+.froam-floating-bar__opacity span {
+  min-width: 30px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (pointer: coarse) {
+  .froam-floating-bar.is-docked .froam-floating-bar__opacity {
+    height: 38px;
+  }
+}

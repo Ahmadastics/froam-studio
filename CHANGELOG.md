@@ -2,6 +2,47 @@
 
 All notable changes to froam-studio are documented here.
 
+## 4.5.0 — 2026-07-19
+
+**The Blueprint, and See-Through controls.** Two things: the first scan now
+recreates the page as an engineering drawing, and visibility/opacity/depth
+become first-class, thumb-reachable controls.
+
+### Added
+- **Blueprint (`FroamBlueprint`).** When the first-open scan finishes it
+  transitions into a full schematic of the site: drafting-blue grid paper,
+  a wireframe recreation of every element at true *document* scale (the whole
+  page, not just the viewport), category-coded strokes that draw themselves
+  in like a pen plotter, part labels with live dimensions, and — on wide
+  sheets — callout leader lines out to a gutter naming the primary headline,
+  navigation, hero media, primary action and footer. A spec card carries the
+  site's own colour palette (from the page-palette scanner) and fonts; a
+  bottom-right title block carries the page title, route, date and per-category
+  element counts. **Tap any part to close the sheet and select that element
+  in the editor** — a navigable x-ray. Auto-opens once after the first scan
+  (`froam:blueprint-seen:v1`), replayable anytime from the command palette
+  (**Blueprint**, drafting-compass icon). Honours `prefers-reduced-motion`
+  (everything renders already-drawn) and adapts on mobile.
+- **See-Through — opacity.** An opacity chip on the contextual bar: press and
+  drag the `%` to fade any element (text, box, container, image), with a live
+  read-out and haptic ticks. Accumulates in a ref so fast drags don't lose
+  steps to render lag.
+- **See-Through — show / hide.** A one-tap eye toggle on the bar. Hiding sets
+  `display:none` but remembers the prior display so Show restores the layout;
+  the element stays in the Layers panel (and the DOM) to bring back, and the
+  whole thing is undoable.
+- **Blend modes.** Full `mix-blend-mode` picker (multiply / screen / overlay /
+  darken / lighten / dodge / burn / hard- & soft-light / difference /
+  exclusion / hue / saturation / colour / luminosity) in the expanded panel.
+- **Depth.** A z-index field plus **Bring to front** / **Send to back** on the
+  contextual bar's Depth & blend section.
+
+### Fixed
+- The Layers-panel visibility eye wrote `display` straight to the DOM, so
+  hiding an element there didn't persist to the draft store or ship to the
+  repo — now routed through the store (persisted + undoable), matching the
+  contextual-bar eye.
+
 ## 4.0.0 — 2026-07-18
 
 **Froam v4: phone-first editing.** People have wanted to edit their sites

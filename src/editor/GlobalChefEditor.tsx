@@ -55,6 +55,7 @@ import {
   Redo2,
   RotateCw,
   Save,
+  DraftingCompass,
   ScanLine,
   Search,
   SlidersHorizontal,
@@ -82,6 +83,7 @@ import FroamResizeHandles from './FroamResizeHandles'
 import FroamFloatingBar from './FroamFloatingBar'
 import FroamContextMenu from './FroamContextMenu'
 import FroamBottomSheet, { type SheetDetent } from './FroamBottomSheet'
+import FroamBlueprint from './FroamBlueprint'
 import { COARSE_POINTER_QUERY, MOBILE_UI_QUERY, matchesMedia, useMediaQuery } from './froamMedia'
 import FroamExport from './FroamExport'
 import FroamShortcutOverlay from './FroamShortcutOverlay'
@@ -1392,6 +1394,7 @@ function FroamWelcomeTips({ open }: { open: boolean }) {
    are real: it reads actual headings, media, actions and containers.
    ═══════════════════════════════════════════════════════════════ */
 const SCAN_DONE_KEY = 'froam:scan-done:v1'
+const BLUEPRINT_SEEN_KEY = 'froam:blueprint-seen:v1'
 
 type ScanCategory = 'heading' | 'media' | 'action' | 'container' | 'text'
 
@@ -1729,6 +1732,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [rightPanelOpen, setRightPanelOpen] = useState(true)
   const [studioMinimized, setStudioMinimized] = useState(false)
   const [scanActive, setScanActive] = useState(false)
+  const [blueprintOpen, setBlueprintOpen] = useState(false)
   const [tipsReady, setTipsReady] = useState(() => {
     try { return window.localStorage.getItem(SCAN_DONE_KEY) === '1' } catch { return true }
   })
@@ -1759,6 +1763,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   // Drag-to-move mode
   const [moveMode, setMoveMode] = useState(false)
   const moveDragRef = useRef<{ startX: number; startY: number; origTop: number; origLeft: number; target: HTMLElement; path: string } | null>(null)
+
+  // v4.1: remember an element's display before hiding, so Show restores its layout
+  const hiddenPrevDisplayRef = useRef<Record<string, string>>({})
 
   // Undo/redo
   const [undoStack, setUndoStack] = useState<EditorStore[]>([])
@@ -4187,13 +4194,40 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     window.requestAnimationFrame(() => setSelectionRect(target.getBoundingClientRect()))
   }
 
+  // v4.1: write a style to a specific path's draft (persists + undoable), without changing selection.
+  function persistPathStyle(target: HTMLElement, path: string, styles: Record<string, string>, label: string) {
+    const beforeSnapshot: EditorStore = JSON.parse(JSON.stringify(storeRef.current))
+    const nextStore = { ...storeRef.current }
+    const routeStore = { ...(nextStore[viewportStoreKey] ?? {}) }
+    const currentDraft = routeStore[path] ?? {}
+    const nextDraft = sanitizeDraftForElement(target, {
+      ...currentDraft,
+      styles: { ...(currentDraft.styles ?? {}), ...styles },
+    })
+    applyDraft(target, nextDraft)
+    routeStore[path] = nextDraft
+    nextStore[viewportStoreKey] = routeStore
+    storeRef.current = nextStore
+    setStore(nextStore)
+    saveStore(nextStore)
+    commitToUndoStack(beforeSnapshot)
+    pushHistory(label, nextStore)
+  }
+
   function toggleLayerVisibility(node: LayerNode) {
     const root = getRoot()
     if (!root) return
     const target = findElementByPath(root, node.path)
     if (!target) return
     const isHidden = window.getComputedStyle(target).display === 'none'
-    target.style.display = isHidden ? '' : 'none'
+    if (isHidden) {
+      const prior = hiddenPrevDisplayRef.current[node.path] || ''
+      persistPathStyle(target, node.path, { display: prior }, 'Show element')
+    } else {
+      const current = window.getComputedStyle(target).display
+      hiddenPrevDisplayRef.current[node.path] = current === 'none' ? '' : current
+      persistPathStyle(target, node.path, { display: 'none' }, 'Hide element')
+    }
     // Refresh layers
     setLayers(collectLayers(root))
   }
@@ -4640,6 +4674,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     { id: 'save', label: 'Save draft', shortcut: 'Ctrl+S', icon: <Save size={15} />, action: saveToRunam },
     { id: 'save-repo', label: 'Save to Repo (git-ready)', shortcut: 'Ctrl+Shift+S', icon: <GitCommit size={15} />, action: () => { void saveToRepo() } },
     { id: 'scan', label: 'Scan page', icon: <ScanLine size={15} />, action: () => setScanActive(true) },
+    { id: 'blueprint', label: 'Blueprint', icon: <DraftingCompass size={15} />, action: () => setBlueprintOpen(true) },
     { id: 'versions', label: 'Versions', icon: <GitCommit size={15} />, action: () => { setOpenSections((p) => ({ ...p, versions: !p.versions })) } },
     { id: 'undo', label: 'Undo', shortcut: 'Ctrl+Z', icon: <Undo2 size={15} />, action: undo },
     { id: 'redo', label: 'Redo', shortcut: 'Ctrl+Y', icon: <Redo2 size={15} />, action: redo },
@@ -4914,7 +4949,30 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       <FroamWelcomeTips open={showPanel && !studioMinimized && tipsReady && !scanActive} />
 
       {/* One-time laser scan of the page's real DOM (also replayable via palette) */}
-      <FroamScan active={scanActive} onDone={() => { setScanActive(false); setTipsReady(true) }} />
+      <FroamScan
+        active={scanActive}
+        onDone={() => {
+          setScanActive(false)
+          setTipsReady(true)
+          // v4.5: the first scan doesn't just count the page — it drafts it
+          try {
+            if (!window.localStorage.getItem(BLUEPRINT_SEEN_KEY)) {
+              window.localStorage.setItem(BLUEPRINT_SEEN_KEY, '1')
+              setBlueprintOpen(true)
+            }
+          } catch { /* storage unavailable */ }
+        }}
+      />
+      <FroamBlueprint
+        open={blueprintOpen}
+        onClose={() => setBlueprintOpen(false)}
+        routeKey={routeKey}
+        getRootEl={getRoot}
+        onJumpToElement={(el) => {
+          setBlueprintOpen(false)
+          selectInsertedElement(el)
+        }}
+      />
 
       {/* Command palette */}
       {commandPaletteOpen && (
@@ -6641,6 +6699,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           padding={selection.paddingTop}
           radius={selection.borderRadiusTL}
           overflow={selection.overflow}
+          opacity={selection.opacity}
+          isHidden={selection.display === 'none'}
+          mixBlendMode={selection.mixBlendMode}
+          zIndex={selection.zIndex}
           fontOptions={fontOptions}
           selectionCount={selections.length}
           onStyle={(styles, selectionPatch, label) => {
@@ -6662,6 +6724,19 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               case 'color': if (value) applyStyle({ color: value }, { color: value }); break
               case 'bg-color': if (value) applyStyle({ backgroundColor: value }, { background: value }); break
               case 'clear-bg': applyStyle({ backgroundColor: 'transparent' }, { background: '#ffffff' }, 'Cleared fill'); break
+              case 'toggle-hidden': {
+                if (selection.display === 'none') {
+                  const prior = hiddenPrevDisplayRef.current[selection.path] || ''
+                  applyStyle({ display: prior }, { display: prior || 'block' }, 'Show element')
+                } else {
+                  hiddenPrevDisplayRef.current[selection.path] = selection.display
+                  applyStyle({ display: 'none' }, { display: 'none' }, 'Hide element')
+                  showToast('Hidden — bring it back from the Layers panel')
+                }
+                break
+              }
+              case 'bring-front': applyStyle({ zIndex: '999' }, { zIndex: 999 }, 'Brought to front'); break
+              case 'send-back': applyStyle({ zIndex: '0' }, { zIndex: 0 }, 'Sent to back'); break
               case 'image': actionsRef.current.openSelectedImageUpload(); break
               case 'merge': groupSelected(); break
               case 'unmerge': ungroupSelected(); break

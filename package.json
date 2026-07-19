@@ -1,6 +1,6 @@
 {
   "name": "froam-studio",
-  "version": "4.0.0",
+  "version": "4.5.0",
   "description": "Froam Studio — Figma-style visual editor for ANY project (Vite, Next, static HTML, anything that serves a page). Every edit compiles to committable files in your repo.",
   "author": "Ahmad Modibbo <ahmadnuhu14@gmail.com>",
   "license": "MIT",

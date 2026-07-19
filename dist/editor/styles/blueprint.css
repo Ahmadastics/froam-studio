@@ -1,0 +1,281 @@
+/* ===============================================================
+   FROAM STUDIO v4.5 — BLUEPRINT (fs-bp)
+   Engineering-drawing recreation of the page: blueprint paper,
+   grid, stroke-drawn wireframes, callouts, title block.
+   =============================================================== */
+
+.fs-bp {
+  position: fixed;
+  inset: 0;
+  z-index: 1332;
+  background: #0c1c52;
+  font-family: var(--fs-font);
+  animation: fs-bp-in 320ms ease;
+}
+
+@keyframes fs-bp-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.fs-bp__scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(160, 190, 255, 0.35) transparent;
+}
+
+.fs-bp__sheet {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.fs-bp__paper {
+  fill: #10246b;
+}
+
+.fs-bp__frame {
+  fill: none;
+  stroke: rgba(220, 235, 255, 0.9);
+  stroke-width: 2;
+}
+
+/* ─── wireframe elements: stroke-draw-in ─── */
+
+.fs-bp__el {
+  fill: currentColor;
+  fill-opacity: 0.04;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-opacity: 0.85;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: fs-bp-draw 700ms ease forwards;
+  cursor: pointer;
+  transition: fill-opacity 120ms ease;
+}
+
+.fs-bp__el--container {
+  stroke-opacity: 0.45;
+  fill-opacity: 0.015;
+}
+
+.fs-bp__el--text {
+  stroke-opacity: 0.3;
+  fill-opacity: 0.01;
+}
+
+.fs-bp__el:hover {
+  fill-opacity: 0.16;
+  stroke-opacity: 1;
+}
+
+@keyframes fs-bp-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+.fs-bp__frame {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: fs-bp-draw 1100ms ease forwards;
+}
+
+/* ─── labels, dimensions, callouts ─── */
+
+.fs-bp__tag {
+  fill: rgba(205, 224, 255, 0.75);
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  font-size: 11px;
+  opacity: 0;
+  animation: fs-bp-fade 400ms ease forwards;
+  pointer-events: none;
+}
+
+.fs-bp__callout {
+  opacity: 0;
+  animation: fs-bp-fade 480ms ease forwards;
+  pointer-events: none;
+}
+
+.fs-bp__callout-title {
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.fs-bp__callout-sub {
+  fill: rgba(205, 224, 255, 0.6);
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  font-size: 12px;
+}
+
+@keyframes fs-bp-fade {
+  to { opacity: 1; }
+}
+
+/* ─── spec card (top left) ─── */
+
+.fs-bp__spec {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  max-width: 240px;
+  padding: 12px 14px;
+  border: 1px solid rgba(190, 214, 255, 0.4);
+  border-radius: 4px;
+  background: rgba(9, 20, 60, 0.88);
+  backdrop-filter: blur(6px);
+  color: rgba(220, 235, 255, 0.92);
+}
+
+.fs-bp__spec-title {
+  margin: 0 0 8px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: rgba(160, 195, 255, 0.85);
+}
+
+.fs-bp__swatches {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.fs-bp__swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.fs-bp__spec-line {
+  margin: 3px 0 0;
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  font-size: 0.66rem;
+  color: rgba(205, 224, 255, 0.75);
+}
+
+/* ─── title block (bottom right) ─── */
+
+.fs-bp__titleblock {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  min-width: 230px;
+  max-width: min(320px, calc(100vw - 28px));
+  padding: 12px 16px;
+  border: 1.5px solid rgba(220, 235, 255, 0.75);
+  border-radius: 2px;
+  background: rgba(9, 20, 60, 0.92);
+  backdrop-filter: blur(6px);
+  color: #eaf2ff;
+}
+
+.fs-bp__brand {
+  margin: 0;
+  font-size: 0.94rem;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 0.05em;
+}
+
+.fs-bp__site {
+  margin: 4px 0 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: rgba(220, 235, 255, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fs-bp__meta {
+  margin: 2px 0 8px;
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  font-size: 0.62rem;
+  color: rgba(170, 200, 255, 0.7);
+}
+
+.fs-bp__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(190, 214, 255, 0.25);
+}
+
+.fs-bp__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: rgba(215, 230, 255, 0.85);
+}
+
+.fs-bp__count i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.fs-bp__hint {
+  margin: 9px 0 0;
+  font-size: 0.64rem;
+  color: #7df3e1;
+  font-weight: 600;
+}
+
+/* ─── close ─── */
+
+.fs-bp__close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(190, 214, 255, 0.5);
+  border-radius: 4px;
+  background: rgba(9, 20, 60, 0.9);
+  color: #eaf2ff;
+  cursor: pointer;
+}
+
+.fs-bp__close:hover {
+  background: rgba(30, 50, 110, 0.95);
+}
+
+/* ─── mobile: cards shrink, spec collapses ─── */
+
+@media (max-width: 640px) {
+  .fs-bp__spec {
+    max-width: 170px;
+    padding: 9px 10px;
+  }
+  .fs-bp__titleblock {
+    min-width: 0;
+    padding: 9px 12px;
+  }
+}
+
+/* ─── reduced motion: everything appears drawn ─── */
+
+.fs-bp--static .fs-bp__el,
+.fs-bp--static .fs-bp__frame {
+  stroke-dashoffset: 0;
+  animation: none;
+}
+
+.fs-bp--static .fs-bp__tag,
+.fs-bp--static .fs-bp__callout {
+  opacity: 1;
+  animation: none;
+}

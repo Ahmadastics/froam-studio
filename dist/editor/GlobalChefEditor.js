@@ -2,7 +2,7 @@ import { jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment } from "react/jsx-run
 import { useCallback, useEffect, useMemo, useRef, useState, } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlignCenter, AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignLeft, AlignRight, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, Bold, Box, ChevronDown, ClipboardCheck, Clock, Code, Command, Copy, Download, Eraser, Eye, EyeOff, FileImage, FileText, GitCommit, Grip, ImagePlus, Italic, Keyboard, Layers, LayoutGrid, Link, Minus, Monitor, MousePointer, Smartphone, Tablet, MousePointer2, Move, Paintbrush, Palette, PencilLine, Plus, Redo2, RotateCw, Save, ScanLine, Search, SlidersHorizontal, Sparkles, Square, SquareDashedBottom, Strikethrough, Type, Underline, Undo2, Unlink, Variable, Maximize2, X, Zap, Coins, AlignCenterHorizontal, AlignCenterVertical, Timer, } from 'lucide-react';
+import { AlignCenter, AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignLeft, AlignRight, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, Bold, Box, ChevronDown, ClipboardCheck, Clock, Code, Command, Copy, Download, Eraser, Eye, EyeOff, FileImage, FileText, GitCommit, Grip, ImagePlus, Italic, Keyboard, Layers, LayoutGrid, Link, Minus, Monitor, MousePointer, Smartphone, Tablet, MousePointer2, Move, Paintbrush, Palette, PencilLine, Plus, Redo2, RotateCw, Save, DraftingCompass, ScanLine, Search, SlidersHorizontal, Sparkles, Square, SquareDashedBottom, Strikethrough, Type, Underline, Undo2, Unlink, Variable, Maximize2, X, Zap, Coins, AlignCenterHorizontal, AlignCenterVertical, Timer, } from 'lucide-react';
 import FroamSectionBoundary from './FroamSectionBoundary.js';
 import { apiGetFresh, apiPost } from '../lib/api.js';
 import { bridgeUrl } from '../lib/bridge.js';
@@ -10,6 +10,7 @@ import FroamResizeHandles from './FroamResizeHandles.js';
 import FroamFloatingBar from './FroamFloatingBar.js';
 import FroamContextMenu from './FroamContextMenu.js';
 import FroamBottomSheet from './FroamBottomSheet.js';
+import FroamBlueprint from './FroamBlueprint.js';
 import { COARSE_POINTER_QUERY, MOBILE_UI_QUERY, matchesMedia, useMediaQuery } from './froamMedia.js';
 import FroamExport from './FroamExport.js';
 import FroamShortcutOverlay from './FroamShortcutOverlay.js';
@@ -1063,6 +1064,7 @@ function FroamWelcomeTips({ open }) {
    are real: it reads actual headings, media, actions and containers.
    ═══════════════════════════════════════════════════════════════ */
 const SCAN_DONE_KEY = 'froam:scan-done:v1';
+const BLUEPRINT_SEEN_KEY = 'froam:blueprint-seen:v1';
 const SCAN_CATEGORY_COLOR = {
     heading: '#5eead4',
     media: '#ff8168',
@@ -1338,6 +1340,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [rightPanelOpen, setRightPanelOpen] = useState(true);
     const [studioMinimized, setStudioMinimized] = useState(false);
     const [scanActive, setScanActive] = useState(false);
+    const [blueprintOpen, setBlueprintOpen] = useState(false);
     const [tipsReady, setTipsReady] = useState(() => {
         try {
             return window.localStorage.getItem(SCAN_DONE_KEY) === '1';
@@ -1363,6 +1366,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     // Drag-to-move mode
     const [moveMode, setMoveMode] = useState(false);
     const moveDragRef = useRef(null);
+    // v4.1: remember an element's display before hiding, so Show restores its layout
+    const hiddenPrevDisplayRef = useRef({});
     // Undo/redo
     const [undoStack, setUndoStack] = useState([]);
     const [redoStack, setRedoStack] = useState([]);
@@ -3698,6 +3703,25 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
         window.requestAnimationFrame(() => setSelectionRect(target.getBoundingClientRect()));
     }
+    // v4.1: write a style to a specific path's draft (persists + undoable), without changing selection.
+    function persistPathStyle(target, path, styles, label) {
+        const beforeSnapshot = JSON.parse(JSON.stringify(storeRef.current));
+        const nextStore = { ...storeRef.current };
+        const routeStore = { ...(nextStore[viewportStoreKey] ?? {}) };
+        const currentDraft = routeStore[path] ?? {};
+        const nextDraft = sanitizeDraftForElement(target, {
+            ...currentDraft,
+            styles: { ...(currentDraft.styles ?? {}), ...styles },
+        });
+        applyDraft(target, nextDraft);
+        routeStore[path] = nextDraft;
+        nextStore[viewportStoreKey] = routeStore;
+        storeRef.current = nextStore;
+        setStore(nextStore);
+        saveStore(nextStore);
+        commitToUndoStack(beforeSnapshot);
+        pushHistory(label, nextStore);
+    }
     function toggleLayerVisibility(node) {
         const root = getRoot();
         if (!root)
@@ -3706,7 +3730,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         if (!target)
             return;
         const isHidden = window.getComputedStyle(target).display === 'none';
-        target.style.display = isHidden ? '' : 'none';
+        if (isHidden) {
+            const prior = hiddenPrevDisplayRef.current[node.path] || '';
+            persistPathStyle(target, node.path, { display: prior }, 'Show element');
+        }
+        else {
+            const current = window.getComputedStyle(target).display;
+            hiddenPrevDisplayRef.current[node.path] = current === 'none' ? '' : current;
+            persistPathStyle(target, node.path, { display: 'none' }, 'Hide element');
+        }
         // Refresh layers
         setLayers(collectLayers(root));
     }
@@ -4190,6 +4222,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         { id: 'save', label: 'Save draft', shortcut: 'Ctrl+S', icon: _jsx(Save, { size: 15 }), action: saveToRunam },
         { id: 'save-repo', label: 'Save to Repo (git-ready)', shortcut: 'Ctrl+Shift+S', icon: _jsx(GitCommit, { size: 15 }), action: () => { void saveToRepo(); } },
         { id: 'scan', label: 'Scan page', icon: _jsx(ScanLine, { size: 15 }), action: () => setScanActive(true) },
+        { id: 'blueprint', label: 'Blueprint', icon: _jsx(DraftingCompass, { size: 15 }), action: () => setBlueprintOpen(true) },
         { id: 'versions', label: 'Versions', icon: _jsx(GitCommit, { size: 15 }), action: () => { setOpenSections((p) => ({ ...p, versions: !p.versions })); } },
         { id: 'undo', label: 'Undo', shortcut: 'Ctrl+Z', icon: _jsx(Undo2, { size: 15 }), action: undo },
         { id: 'redo', label: 'Redo', shortcut: 'Ctrl+Y', icon: _jsx(Redo2, { size: 15 }), action: redo },
@@ -4421,7 +4454,21 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     'global-chef-button',
                     showPanel ? 'is-active' : '',
                     showPanel && !studioMinimized ? 'is-studio-open' : '',
-                ].filter(Boolean).join(' '), "data-chef-editor-root": "true", type: "button", style: { left: buttonPosition.x, top: buttonPosition.y }, onPointerDown: handleButtonPointerDown, onPointerMove: handleButtonPointerMove, onPointerUp: handleButtonPointerUp, onPointerCancel: handleButtonPointerUp, onContextMenu: handleFroamContextMenu, "aria-label": showPanel ? `Toggle ${persona.name} Studio` : `Open ${persona.name} Studio`, title: showPanel && !studioMinimized ? 'Minimize (Ctrl+.)' : showPanel ? 'Restore (Ctrl+.)' : `Open ${persona.name} (Ctrl+.)`, children: [_jsx("span", { className: "global-chef-button__halo", "aria-hidden": "true" }), _jsx("span", { className: "global-chef-button__ring", "aria-hidden": "true" }), _jsx("span", { className: "global-chef-button__core", "aria-hidden": "true", children: persona.imageUrl ? (_jsx("img", { src: persona.imageUrl, alt: "", className: "global-chef-button__avatar" })) : (_jsxs("svg", { className: "global-chef-button__mark", viewBox: "0 0 24 24", "aria-hidden": "true", children: [_jsx("defs", { children: _jsxs("linearGradient", { id: "froam-mark-grad", x1: "0", y1: "0", x2: "1", y2: "1", children: [_jsx("stop", { offset: "0", stopColor: "#f0fdfa" }), _jsx("stop", { offset: "1", stopColor: "#5eead4" })] }) }), _jsx("path", { fill: "url(#froam-mark-grad)", d: "M7.2 21V3h10.6v3.3h-6.9v4.3h6.2v3.3h-6.2V21Z" })] })) }), _jsxs("span", { className: "global-chef-button__hint", "aria-hidden": "true", children: ["Edit this page ", _jsx("kbd", { children: "Ctrl+." })] }), showPanel && _jsx("span", { className: "global-chef-button__dot" })] }), showPanel && _jsx(MeasurementOverlay, { rect: measureRect }), showPanel && selection && (_jsx(SelectionHandoffOverlay, { rect: selectionRect, label: selection.label, mode: selectionHandoffMode, count: selections.length, pulseKey: selectionHandoffKey }, selectionHandoffKey)), _jsx(Toast, { message: toastMsg, visible: toastVisible }), _jsx(FroamWelcomeTips, { open: showPanel && !studioMinimized && tipsReady && !scanActive }), _jsx(FroamScan, { active: scanActive, onDone: () => { setScanActive(false); setTipsReady(true); } }), commandPaletteOpen && (_jsx("div", { className: "fs-command-palette", "data-chef-editor-root": "true", onClick: (e) => { if (e.target === e.currentTarget) {
+                ].filter(Boolean).join(' '), "data-chef-editor-root": "true", type: "button", style: { left: buttonPosition.x, top: buttonPosition.y }, onPointerDown: handleButtonPointerDown, onPointerMove: handleButtonPointerMove, onPointerUp: handleButtonPointerUp, onPointerCancel: handleButtonPointerUp, onContextMenu: handleFroamContextMenu, "aria-label": showPanel ? `Toggle ${persona.name} Studio` : `Open ${persona.name} Studio`, title: showPanel && !studioMinimized ? 'Minimize (Ctrl+.)' : showPanel ? 'Restore (Ctrl+.)' : `Open ${persona.name} (Ctrl+.)`, children: [_jsx("span", { className: "global-chef-button__halo", "aria-hidden": "true" }), _jsx("span", { className: "global-chef-button__ring", "aria-hidden": "true" }), _jsx("span", { className: "global-chef-button__core", "aria-hidden": "true", children: persona.imageUrl ? (_jsx("img", { src: persona.imageUrl, alt: "", className: "global-chef-button__avatar" })) : (_jsxs("svg", { className: "global-chef-button__mark", viewBox: "0 0 24 24", "aria-hidden": "true", children: [_jsx("defs", { children: _jsxs("linearGradient", { id: "froam-mark-grad", x1: "0", y1: "0", x2: "1", y2: "1", children: [_jsx("stop", { offset: "0", stopColor: "#f0fdfa" }), _jsx("stop", { offset: "1", stopColor: "#5eead4" })] }) }), _jsx("path", { fill: "url(#froam-mark-grad)", d: "M7.2 21V3h10.6v3.3h-6.9v4.3h6.2v3.3h-6.2V21Z" })] })) }), _jsxs("span", { className: "global-chef-button__hint", "aria-hidden": "true", children: ["Edit this page ", _jsx("kbd", { children: "Ctrl+." })] }), showPanel && _jsx("span", { className: "global-chef-button__dot" })] }), showPanel && _jsx(MeasurementOverlay, { rect: measureRect }), showPanel && selection && (_jsx(SelectionHandoffOverlay, { rect: selectionRect, label: selection.label, mode: selectionHandoffMode, count: selections.length, pulseKey: selectionHandoffKey }, selectionHandoffKey)), _jsx(Toast, { message: toastMsg, visible: toastVisible }), _jsx(FroamWelcomeTips, { open: showPanel && !studioMinimized && tipsReady && !scanActive }), _jsx(FroamScan, { active: scanActive, onDone: () => {
+                    setScanActive(false);
+                    setTipsReady(true);
+                    // v4.5: the first scan doesn't just count the page — it drafts it
+                    try {
+                        if (!window.localStorage.getItem(BLUEPRINT_SEEN_KEY)) {
+                            window.localStorage.setItem(BLUEPRINT_SEEN_KEY, '1');
+                            setBlueprintOpen(true);
+                        }
+                    }
+                    catch { /* storage unavailable */ }
+                } }), _jsx(FroamBlueprint, { open: blueprintOpen, onClose: () => setBlueprintOpen(false), routeKey: routeKey, getRootEl: getRoot, onJumpToElement: (el) => {
+                    setBlueprintOpen(false);
+                    selectInsertedElement(el);
+                } }), commandPaletteOpen && (_jsx("div", { className: "fs-command-palette", "data-chef-editor-root": "true", onClick: (e) => { if (e.target === e.currentTarget) {
                     setCommandPaletteOpen(false);
                     setCommandSearch('');
                 } }, children: _jsxs("div", { className: "fs-command-palette__card", "data-chef-editor-root": "true", children: [_jsx("input", { className: "fs-command-palette__input", type: "text", value: commandSearch, placeholder: "Type a command\u2026", autoFocus: true, onChange: (e) => { setCommandSearch(e.target.value); setCommandFocusIndex(0); }, onKeyDown: (e) => {
@@ -4747,7 +4794,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         applyStyle(finalStyles, nextSelection, 'Resized element');
                     }
                     setSelectionRect(target.getBoundingClientRect());
-                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: undoStack.length > 0, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, fontOptions: fontOptions, selectionCount: selections.length, onStyle: (styles, selectionPatch, label) => {
+                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: undoStack.length > 0, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, opacity: selection.opacity, isHidden: selection.display === 'none', mixBlendMode: selection.mixBlendMode, zIndex: selection.zIndex, fontOptions: fontOptions, selectionCount: selections.length, onStyle: (styles, selectionPatch, label) => {
                     applyStyle(styles, selectionPatch, label);
                     const root = getRoot();
                     const target = root ? findElementByPath(root, selection.path) : null;
@@ -4789,6 +4836,24 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                             break;
                         case 'clear-bg':
                             applyStyle({ backgroundColor: 'transparent' }, { background: '#ffffff' }, 'Cleared fill');
+                            break;
+                        case 'toggle-hidden': {
+                            if (selection.display === 'none') {
+                                const prior = hiddenPrevDisplayRef.current[selection.path] || '';
+                                applyStyle({ display: prior }, { display: prior || 'block' }, 'Show element');
+                            }
+                            else {
+                                hiddenPrevDisplayRef.current[selection.path] = selection.display;
+                                applyStyle({ display: 'none' }, { display: 'none' }, 'Hide element');
+                                showToast('Hidden — bring it back from the Layers panel');
+                            }
+                            break;
+                        }
+                        case 'bring-front':
+                            applyStyle({ zIndex: '999' }, { zIndex: 999 }, 'Brought to front');
+                            break;
+                        case 'send-back':
+                            applyStyle({ zIndex: '0' }, { zIndex: 0 }, 'Sent to back');
                             break;
                         case 'image':
                             actionsRef.current.openSelectedImageUpload();

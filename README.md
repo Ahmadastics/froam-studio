@@ -15,6 +15,27 @@ dependency, no drift.
 Astro, Rails, Django, PHP, WordPress themes, plain HTML — if it serves a page,
 Froam can edit it.
 
+## 📐 v4.5: the Blueprint
+
+The first time Froam opens on a project, the page scan doesn't just count
+what it finds — it **drafts it**. The scan resolves into a full engineering
+blueprint of the site: drafting-blue grid paper, a wireframe recreation of
+every element at true document scale, strokes that draw themselves in,
+part labels with dimensions, callout leader lines to the key parts
+(headline, nav, hero media, primary action, footer), a spec card with the
+site's own palette and fonts, and a title block. **Tap any part to jump
+straight to that element in the editor** — it's a navigable x-ray of your
+site. Summon it anytime from the command palette ("Blueprint").
+
+## 🫥 v4.5: See-Through — visibility, opacity & depth
+
+- **Opacity** — drag the `◐ %` chip on the contextual bar to fade any
+  element: text, box, container, image.
+- **Show / hide** — one-tap eye toggle; hidden elements stay in the Layers
+  panel to bring back, and it's fully undoable.
+- **Blend modes** — multiply, screen, overlay, and the rest.
+- **Depth** — z-index control plus Bring-to-front / Send-to-back.
+
 ## 📱 v4: edit from your phone
 
 Froam v4 is phone-first. Open your dev site on your phone
