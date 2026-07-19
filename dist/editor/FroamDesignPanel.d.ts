@@ -99,7 +99,9 @@ type Props = {
         label: string;
         value: string;
     }[];
+    getRootEl: () => HTMLElement | null;
+    onOpenBlueprint: () => void;
 };
-export default function FroamDesignPanel({ selection, selectionRect, onApplyStyle, onUpdateDraft, onOpenImageUpload, onClearImage, onClearSelectionDraft, marginLinked, paddingLinked, radiusLinked, onToggleMarginLinked, onTogglePaddingLinked, onToggleRadiusLinked, onApplySizePreset, onBuildTransformString, fontOptions, }: Props): import("react").JSX.Element;
+export default function FroamDesignPanel({ selection, selectionRect, onApplyStyle, onUpdateDraft, onOpenImageUpload, onClearImage, onClearSelectionDraft, marginLinked, paddingLinked, radiusLinked, onToggleMarginLinked, onTogglePaddingLinked, onToggleRadiusLinked, onApplySizePreset, onBuildTransformString, fontOptions, getRootEl, onOpenBlueprint, }: Props): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=FroamDesignPanel.d.ts.map

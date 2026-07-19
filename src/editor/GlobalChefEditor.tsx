@@ -5153,6 +5153,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   onApplySizePreset={applySizePreset}
                   onBuildTransformString={buildTransformString}
                   fontOptions={fontOptions}
+                  getRootEl={getRoot}
+                  onOpenBlueprint={() => setBlueprintOpen(true)}
                 />
               </FroamSectionBoundary>
             )

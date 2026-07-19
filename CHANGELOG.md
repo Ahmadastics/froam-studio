@@ -2,6 +2,26 @@
 
 All notable changes to froam-studio are documented here.
 
+## 4.5.1 — 2026-07-19
+
+**The Blueprint gets a home.** The right-panel **Prototype** tab was a dead
+placeholder; it now holds the Blueprint as a persistent, full-page picture.
+
+### Added
+- **Prototype tab = Blueprint.** Clicking **Prototype** in the design panel
+  shows a live, scaled-down picture of the *entire* page (true document
+  height, not just the viewport), with a category legend, the page's colour
+  swatches, and page dimensions. Click the picture or **Open** to launch the
+  full interactive blueprint. It's there anytime — no need to wait for the
+  first-scan reveal.
+- Extracted `computeBlueprintData()` and a reusable `<BlueprintSheet>`
+  (`mode="full" | "mini"`) so the overlay and the tab thumbnail draw from one
+  source of truth.
+
+### Changed
+- The Design / Prototype tabs are now real, switchable buttons (they were
+  inert `<span>`s that always showed Design).
+
 ## 4.5.0 — 2026-07-19
 
 **The Blueprint, and See-Through controls.** Two things: the first scan now

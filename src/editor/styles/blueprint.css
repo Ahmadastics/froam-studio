@@ -279,3 +279,120 @@
   opacity: 1;
   animation: none;
 }
+
+/* ─── Prototype tab: the blueprint picture inside the design panel ─── */
+
+.froam-dp__proto {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  overflow-y: auto;
+}
+
+.froam-dp__proto--empty {
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 44px 20px;
+  text-align: center;
+  color: var(--fs-text-muted, #94a3b8);
+  font-size: 0.8rem;
+}
+
+.froam-dp__proto-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.froam-dp__proto-title strong {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--fs-text, #e8eef6);
+}
+
+.froam-dp__proto-title small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.66rem;
+  color: var(--fs-text-muted, #8ea0b5);
+  font-variant-numeric: tabular-nums;
+}
+
+.froam-dp__proto-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(160, 190, 255, 0.35);
+  background: rgba(30, 50, 110, 0.35);
+  color: #cfe0ff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.froam-dp__proto-open:hover {
+  background: rgba(40, 66, 130, 0.6);
+}
+
+.froam-dp__proto-frame {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  border-radius: 8px;
+  background: #0c1c52;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(160, 190, 255, 0.25);
+  max-height: 440px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.froam-dp__proto-frame:hover {
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(160, 190, 255, 0.55);
+}
+
+.fs-bp__sheet--mini {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.froam-dp__proto-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.froam-dp__proto-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--fs-text-muted, #9db0c6);
+}
+
+.froam-dp__proto-chip i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.froam-dp__proto-swatches {
+  display: flex;
+  gap: 5px;
+}
+
+.froam-dp__proto-swatches span {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}

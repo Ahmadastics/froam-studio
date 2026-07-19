@@ -6,6 +6,10 @@
    dimension labels, callout leader lines to the key parts, and a
    title block with the site's specs. Tap any part to jump straight
    to that element in the editor.
+
+   The data computer (`computeBlueprintData`) and the SVG renderer
+   (`BlueprintSheet`) are exported so the design panel's Prototype tab
+   can show the same full-page picture as a persistent thumbnail.
    =============================================================== */
 import { useEffect, useMemo, useRef } from 'react'
 import { X } from 'lucide-react'
@@ -42,6 +46,20 @@ export type BlueprintNode = {
 type Callout = {
   node: BlueprintNode
   title: string
+}
+
+export type BlueprintData = {
+  nodes: BlueprintNode[]
+  docWidth: number
+  docHeight: number
+  counts: Record<BlueprintCategory, number>
+  callouts: Callout[]
+  gutter: number
+  palette: string[]
+  fonts: string[]
+  title: string
+  stamp: string
+  reduceMotion: boolean
 }
 
 function categoryOf(el: Element): BlueprintCategory | null {
@@ -122,6 +140,129 @@ function collectFonts(root: HTMLElement): string[] {
   return [...fonts]
 }
 
+/** Scan the live page and produce the full blueprint dataset (or null if empty). */
+export function computeBlueprintData(root: HTMLElement | null): BlueprintData | null {
+  if (!root) return null
+  const nodes = collectBlueprintNodes(root)
+  if (nodes.length === 0) return null
+  const docWidth = Math.max(window.innerWidth, ...nodes.map((n) => n.x + n.w))
+  const docHeight = Math.max(document.documentElement.scrollHeight, ...nodes.map((n) => n.y + n.h))
+  const counts: Record<BlueprintCategory, number> = { heading: 0, media: 0, action: 0, container: 0, text: 0 }
+  for (const n of nodes) counts[n.category] += 1
+  const wideSheet = docWidth >= 900
+  return {
+    nodes,
+    docWidth,
+    docHeight,
+    counts,
+    callouts: wideSheet ? pickCallouts(nodes) : [],
+    gutter: wideSheet ? Math.round(docWidth * 0.24) : 0,
+    palette: collectPagePalette().slice(0, 6),
+    fonts: collectFonts(root),
+    title: (document.title || 'Untitled page').slice(0, 44),
+    stamp: new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }),
+    reduceMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+  }
+}
+
+export const BLUEPRINT_CATEGORY_COLOR = CATEGORY_COLOR
+export const BLUEPRINT_CATEGORY_LABEL = CATEGORY_LABEL
+
+/**
+ * The drawn sheet itself: blueprint paper, grid, and a stroke-drawn wireframe
+ * of every element at true document scale. `mode="full"` adds labels, callouts
+ * and click-to-select; `mode="mini"` is the compact full-page picture used in
+ * the Prototype tab (whole sheet handles the click via its parent).
+ */
+export function BlueprintSheet({
+  data,
+  mode = 'full',
+  onJumpToElement,
+}: {
+  data: BlueprintData
+  mode?: 'full' | 'mini'
+  onJumpToElement?: (element: HTMLElement) => void
+}) {
+  const { nodes, docWidth, docHeight, callouts, gutter } = data
+  const full = mode === 'full'
+  const sheetWidth = docWidth + (full ? gutter : 0)
+  const labelled = full ? nodes.filter((n) => n.w * n.h > 14000 || n.category === 'heading').slice(0, 60) : []
+
+  return (
+    <svg
+      className={`fs-bp__sheet ${full ? '' : 'fs-bp__sheet--mini'}`}
+      viewBox={`0 0 ${sheetWidth} ${docHeight}`}
+      xmlns="http://www.w3.org/2000/svg"
+      data-chef-editor-root="true"
+    >
+      <defs>
+        <pattern id="fs-bp-grid-minor" width="40" height="40" patternUnits="userSpaceOnUse">
+          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(160, 190, 255, 0.10)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+        </pattern>
+        <pattern id="fs-bp-grid-major" width="200" height="200" patternUnits="userSpaceOnUse">
+          <rect width="200" height="200" fill="url(#fs-bp-grid-minor)" />
+          <path d="M 200 0 L 0 0 0 200" fill="none" stroke="rgba(160, 190, 255, 0.22)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+        </pattern>
+      </defs>
+
+      <rect x="0" y="0" width={sheetWidth} height={docHeight} className="fs-bp__paper" />
+      <rect x="0" y="0" width={sheetWidth} height={docHeight} fill="url(#fs-bp-grid-major)" />
+
+      {/* page frame — the drawn artifact's outline */}
+      <rect x="1" y="1" width={docWidth - 2} height={docHeight - 2} className="fs-bp__frame" vectorEffect="non-scaling-stroke" pathLength={100} />
+
+      {/* wireframe recreation of every element */}
+      {nodes.map((node, index) => (
+        <rect
+          key={index}
+          x={node.x}
+          y={node.y}
+          width={node.w}
+          height={node.h}
+          className={`fs-bp__el fs-bp__el--${node.category}`}
+          style={{ animationDelay: `${Math.min(index * 14, 2100)}ms`, color: CATEGORY_COLOR[node.category], pointerEvents: full ? 'auto' : 'none' }}
+          vectorEffect="non-scaling-stroke"
+          pathLength={100}
+          onClick={full ? () => onJumpToElement?.(node.el) : undefined}
+        >
+          {full && <title>{`${node.label} — ${Math.round(node.w)} × ${Math.round(node.h)}`}</title>}
+        </rect>
+      ))}
+
+      {/* labels + dimensions on the bigger parts (full only) */}
+      {labelled.map((node, index) => (
+        <text
+          key={`label-${index}`}
+          x={node.x + 6}
+          y={node.y + 14}
+          className="fs-bp__tag"
+          style={{ animationDelay: `${1200 + Math.min(index * 30, 900)}ms` }}
+        >
+          {node.label} · {Math.round(node.w)}×{Math.round(node.h)}
+        </text>
+      ))}
+
+      {/* callout leader lines into the right gutter (full only) */}
+      {full && callouts.map((callout, index) => {
+        const anchorX = callout.node.x + callout.node.w
+        const anchorY = callout.node.y + Math.min(callout.node.h / 2, 120)
+        const gutterX = docWidth + gutter * 0.22
+        const textY = anchorY
+        return (
+          <g key={`callout-${index}`} className="fs-bp__callout" style={{ animationDelay: `${1500 + index * 160}ms` }}>
+            <circle cx={anchorX} cy={anchorY} r="5" fill="none" stroke={CATEGORY_COLOR[callout.node.category]} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+            <line x1={anchorX + 5} y1={anchorY} x2={gutterX} y2={textY} stroke={CATEGORY_COLOR[callout.node.category]} strokeWidth="1" strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
+            <text x={gutterX + 10} y={textY - 6} className="fs-bp__callout-title" fill={CATEGORY_COLOR[callout.node.category]}>{callout.title}</text>
+            <text x={gutterX + 10} y={textY + 12} className="fs-bp__callout-sub">
+              {callout.node.label} · {Math.round(callout.node.w)}×{Math.round(callout.node.h)}
+            </text>
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
 type Props = {
   open: boolean
   onClose: () => void
@@ -133,31 +274,7 @@ type Props = {
 export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJumpToElement }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const data = useMemo(() => {
-    if (!open) return null
-    const root = getRootEl()
-    if (!root) return null
-    const nodes = collectBlueprintNodes(root)
-    if (nodes.length === 0) return null
-    const docWidth = Math.max(window.innerWidth, ...nodes.map((n) => n.x + n.w))
-    const docHeight = Math.max(document.documentElement.scrollHeight, ...nodes.map((n) => n.y + n.h))
-    const counts: Record<BlueprintCategory, number> = { heading: 0, media: 0, action: 0, container: 0, text: 0 }
-    for (const n of nodes) counts[n.category] += 1
-    const wideSheet = docWidth >= 900
-    return {
-      nodes,
-      docWidth,
-      docHeight,
-      counts,
-      callouts: wideSheet ? pickCallouts(nodes) : [],
-      gutter: wideSheet ? Math.round(docWidth * 0.24) : 0,
-      palette: collectPagePalette().slice(0, 6),
-      fonts: collectFonts(root),
-      title: (document.title || 'Untitled page').slice(0, 44),
-      stamp: new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }),
-      reduceMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
-    }
-  }, [open, getRootEl])
+  const data = useMemo(() => (open ? computeBlueprintData(getRootEl()) : null), [open, getRootEl])
 
   // Escape closes; lock page scroll behind the sheet
   useEffect(() => {
@@ -175,84 +292,12 @@ export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJ
 
   if (!open || !data) return null
 
-  const { nodes, docWidth, docHeight, counts, callouts, gutter, palette, fonts, title, stamp, reduceMotion } = data
-  const sheetWidth = docWidth + gutter
-  const labelled = nodes.filter((n) => n.w * n.h > 14000 || n.category === 'heading').slice(0, 60)
+  const { counts, palette, fonts, docWidth, docHeight, title, stamp, reduceMotion } = data
 
   return (
     <div className={`fs-bp ${reduceMotion ? 'fs-bp--static' : ''}`} data-chef-editor-root="true" role="dialog" aria-label="Page blueprint">
       <div ref={scrollRef} className="fs-bp__scroll" data-chef-editor-root="true">
-        <svg
-          className="fs-bp__sheet"
-          viewBox={`0 0 ${sheetWidth} ${docHeight}`}
-          xmlns="http://www.w3.org/2000/svg"
-          data-chef-editor-root="true"
-        >
-          <defs>
-            <pattern id="fs-bp-grid-minor" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(160, 190, 255, 0.10)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-            </pattern>
-            <pattern id="fs-bp-grid-major" width="200" height="200" patternUnits="userSpaceOnUse">
-              <rect width="200" height="200" fill="url(#fs-bp-grid-minor)" />
-              <path d="M 200 0 L 0 0 0 200" fill="none" stroke="rgba(160, 190, 255, 0.22)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-            </pattern>
-          </defs>
-
-          <rect x="0" y="0" width={sheetWidth} height={docHeight} className="fs-bp__paper" />
-          <rect x="0" y="0" width={sheetWidth} height={docHeight} fill="url(#fs-bp-grid-major)" />
-
-          {/* page frame — the drawn artifact's outline */}
-          <rect x="1" y="1" width={docWidth - 2} height={docHeight - 2} className="fs-bp__frame" vectorEffect="non-scaling-stroke" pathLength={100} />
-
-          {/* wireframe recreation of every element */}
-          {nodes.map((node, index) => (
-            <rect
-              key={index}
-              x={node.x}
-              y={node.y}
-              width={node.w}
-              height={node.h}
-              className={`fs-bp__el fs-bp__el--${node.category}`}
-              style={{ animationDelay: `${Math.min(index * 14, 2100)}ms`, color: CATEGORY_COLOR[node.category] }}
-              vectorEffect="non-scaling-stroke"
-              pathLength={100}
-              onClick={() => onJumpToElement(node.el)}
-            >
-              <title>{`${node.label} — ${Math.round(node.w)} × ${Math.round(node.h)}`}</title>
-            </rect>
-          ))}
-
-          {/* labels + dimensions on the bigger parts */}
-          {labelled.map((node, index) => (
-            <text
-              key={`label-${index}`}
-              x={node.x + 6}
-              y={node.y + 14}
-              className="fs-bp__tag"
-              style={{ animationDelay: `${1200 + Math.min(index * 30, 900)}ms` }}
-            >
-              {node.label} · {Math.round(node.w)}×{Math.round(node.h)}
-            </text>
-          ))}
-
-          {/* callout leader lines into the right gutter */}
-          {callouts.map((callout, index) => {
-            const anchorX = callout.node.x + callout.node.w
-            const anchorY = callout.node.y + Math.min(callout.node.h / 2, 120)
-            const gutterX = docWidth + gutter * 0.22
-            const textY = anchorY
-            return (
-              <g key={`callout-${index}`} className="fs-bp__callout" style={{ animationDelay: `${1500 + index * 160}ms` }}>
-                <circle cx={anchorX} cy={anchorY} r="5" fill="none" stroke={CATEGORY_COLOR[callout.node.category]} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-                <line x1={anchorX + 5} y1={anchorY} x2={gutterX} y2={textY} stroke={CATEGORY_COLOR[callout.node.category]} strokeWidth="1" strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
-                <text x={gutterX + 10} y={textY - 6} className="fs-bp__callout-title" fill={CATEGORY_COLOR[callout.node.category]}>{callout.title}</text>
-                <text x={gutterX + 10} y={textY + 12} className="fs-bp__callout-sub">
-                  {callout.node.label} · {Math.round(callout.node.w)}×{Math.round(callout.node.h)}
-                </text>
-              </g>
-            )
-          })}
-        </svg>
+        <BlueprintSheet data={data} mode="full" onJumpToElement={onJumpToElement} />
       </div>
 
       {/* spec card — palette, type, page metrics */}

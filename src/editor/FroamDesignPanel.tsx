@@ -1,14 +1,16 @@
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import {
   AlignCenter,
   AlignLeft,
   AlignRight,
   Bold,
   ChevronDown,
+  DraftingCompass,
   Eraser,
   ImagePlus,
   Italic,
   Link,
+  Maximize2,
   Palette,
   PencilLine,
   RotateCw,
@@ -21,6 +23,7 @@ import {
   Unlink,
   X,
 } from 'lucide-react'
+import { computeBlueprintData, BlueprintSheet, BLUEPRINT_CATEGORY_COLOR, BLUEPRINT_CATEGORY_LABEL } from './FroamBlueprint'
 
 /* ═══════════════════════════════════════════════════════════════
    Types
@@ -112,6 +115,9 @@ type Props = {
   onBuildTransformString: (vals: Partial<{ rotate: number; scaleX: number; scaleY: number; skewX: number; skewY: number; translateX: number; translateY: number }>) => string
   // Font options
   fontOptions: { label: string; value: string }[]
+  // v4.5 Blueprint (Prototype tab)
+  getRootEl: () => HTMLElement | null
+  onOpenBlueprint: () => void
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -179,6 +185,68 @@ const paletteGroups = [
 ]
 
 /* ═══════════════════════════════════════════════════════════════
+   Prototype tab — the Blueprint lives here (v4.5)
+   ═══════════════════════════════════════════════════════════════ */
+function DesignPanelTabs({ tab, onTab }: { tab: 'design' | 'prototype'; onTab: (next: 'design' | 'prototype') => void }) {
+  return (
+    <div className="froam-dp__header" data-chef-editor-root="true">
+      <button type="button" className={`froam-dp__tab ${tab === 'design' ? 'is-active' : ''}`} onClick={() => onTab('design')} data-chef-editor-root="true">Design</button>
+      <button type="button" className={`froam-dp__tab ${tab === 'prototype' ? 'is-active' : ''}`} onClick={() => onTab('prototype')} data-chef-editor-root="true">Prototype</button>
+    </div>
+  )
+}
+
+function BlueprintTabView({ getRootEl, onOpen }: { getRootEl: () => HTMLElement | null; onOpen: () => void }) {
+  // Recomputed each time the Prototype tab mounts, so the picture always
+  // reflects the current page — the full prototype, top to bottom.
+  const data = useMemo(() => computeBlueprintData(getRootEl()), [getRootEl])
+
+  if (!data) {
+    return (
+      <div className="froam-dp__proto froam-dp__proto--empty" data-chef-editor-root="true">
+        <DraftingCompass size={30} style={{ opacity: 0.35 }} />
+        <span>No page to map yet — open a page to draft its blueprint.</span>
+      </div>
+    )
+  }
+
+  const activeCats = (Object.keys(data.counts) as (keyof typeof data.counts)[]).filter((c) => data.counts[c] > 0)
+
+  return (
+    <div className="froam-dp__proto" data-chef-editor-root="true">
+      <div className="froam-dp__proto-head">
+        <div className="froam-dp__proto-title">
+          <strong>{data.title}</strong>
+          <small>{Math.round(data.docWidth)} × {Math.round(data.docHeight)}px · {data.nodes.length} parts</small>
+        </div>
+        <button type="button" className="froam-dp__proto-open" onClick={onOpen} title="Open full blueprint" data-chef-editor-root="true">
+          <Maximize2 size={13} /> Open
+        </button>
+      </div>
+
+      <button type="button" className="froam-dp__proto-frame" onClick={onOpen} title="Open full blueprint" data-chef-editor-root="true">
+        <BlueprintSheet data={data} mode="mini" />
+      </button>
+
+      <div className="froam-dp__proto-legend">
+        {activeCats.map((c) => (
+          <span key={c} className="froam-dp__proto-chip">
+            <i style={{ background: BLUEPRINT_CATEGORY_COLOR[c] }} />
+            {data.counts[c]} {BLUEPRINT_CATEGORY_LABEL[c]}
+          </span>
+        ))}
+      </div>
+
+      {data.palette.length > 0 && (
+        <div className="froam-dp__proto-swatches">
+          {data.palette.map((hex) => <span key={hex} style={{ background: hex }} title={hex} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
    Component
    ═══════════════════════════════════════════════════════════════ */
 export default function FroamDesignPanel({
@@ -198,7 +266,10 @@ export default function FroamDesignPanel({
   onApplySizePreset,
   onBuildTransformString,
   fontOptions,
+  getRootEl,
+  onOpenBlueprint,
 }: Props) {
+  const [tab, setTab] = useState<'design' | 'prototype'>('design')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     position: true,
     layout: true,
@@ -235,14 +306,15 @@ export default function FroamDesignPanel({
   if (!selection) {
     return (
       <div className="froam-dp" data-chef-editor-root="true">
-        <div className="froam-dp__header" data-chef-editor-root="true">
-          <span className="froam-dp__tab is-active">Design</span>
-          <span className="froam-dp__tab">Prototype</span>
-        </div>
-        <div className="froam-dp__empty">
-          <Square size={32} style={{ opacity: 0.2 }} />
-          <span>Select an element on the canvas to inspect and edit its design properties.</span>
-        </div>
+        <DesignPanelTabs tab={tab} onTab={setTab} />
+        {tab === 'prototype' ? (
+          <BlueprintTabView getRootEl={getRootEl} onOpen={onOpenBlueprint} />
+        ) : (
+          <div className="froam-dp__empty">
+            <Square size={32} style={{ opacity: 0.2 }} />
+            <span>Select an element on the canvas to inspect and edit its design properties.</span>
+          </div>
+        )}
       </div>
     )
   }
@@ -270,11 +342,12 @@ export default function FroamDesignPanel({
   return (
     <div className="froam-dp" data-chef-editor-root="true">
       {/* Tabs */}
-      <div className="froam-dp__header" data-chef-editor-root="true">
-        <span className="froam-dp__tab is-active">Design</span>
-        <span className="froam-dp__tab">Prototype</span>
-      </div>
+      <DesignPanelTabs tab={tab} onTab={setTab} />
 
+      {tab === 'prototype' ? (
+        <BlueprintTabView getRootEl={getRootEl} onOpen={onOpenBlueprint} />
+      ) : (
+      <>
       {/* Selection info */}
       <div className="froam-dp__selection-info" data-chef-editor-root="true">
         <span className="froam-dp__sel-tag">{s.label}</span>
@@ -877,6 +950,8 @@ export default function FroamDesignPanel({
         </SectionHeader>
 
       </div>
+      </>
+      )}
     </div>
   )
 }
