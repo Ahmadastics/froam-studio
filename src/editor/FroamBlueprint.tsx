@@ -11,8 +11,8 @@
    (`BlueprintSheet`) are exported so the design panel's Prototype tab
    can show the same full-page picture as a persistent thumbnail.
    =============================================================== */
-import { useEffect, useMemo, useRef } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Box, PenLine, X } from 'lucide-react'
 import { collectPagePalette } from './FroamFloatingBar'
 
 type BlueprintCategory = 'heading' | 'media' | 'action' | 'container' | 'text'
@@ -41,6 +41,8 @@ export type BlueprintNode = {
   h: number
   category: BlueprintCategory
   label: string
+  /** DOM nesting depth, normalised so the shallowest captured node is 0 (drives the 3D lift). */
+  depth: number
 }
 
 type Callout = {
@@ -60,6 +62,8 @@ export type BlueprintData = {
   title: string
   stamp: string
   reduceMotion: boolean
+  /** Deepest normalised nesting level across all nodes (0 = flat page). */
+  maxDepth: number
 }
 
 function categoryOf(el: Element): BlueprintCategory | null {
@@ -76,6 +80,16 @@ function shortLabel(el: HTMLElement): string {
   const tag = el.tagName.toLowerCase()
   const cls = typeof el.className === 'string' ? el.className.split(' ').filter(Boolean)[0] : ''
   return cls ? `${tag}.${cls}` : tag
+}
+
+function domDepth(el: HTMLElement, root: HTMLElement): number {
+  let depth = 0
+  let node: HTMLElement | null = el.parentElement
+  while (node && node !== root) {
+    depth += 1
+    node = node.parentElement
+  }
+  return depth
 }
 
 function collectBlueprintNodes(root: HTMLElement): BlueprintNode[] {
@@ -99,10 +113,13 @@ function collectBlueprintNodes(root: HTMLElement): BlueprintNode[] {
       h: r.height,
       category,
       label: shortLabel(el),
+      depth: domDepth(el, root),
     })
     if (nodes.length >= 420) break
   }
   nodes.sort((a, b) => a.y - b.y || a.x - b.x)
+  const minDepth = nodes.reduce((min, n) => Math.min(min, n.depth), Infinity)
+  if (Number.isFinite(minDepth) && minDepth > 0) for (const n of nodes) n.depth -= minDepth
   return nodes
 }
 
@@ -162,6 +179,7 @@ export function computeBlueprintData(root: HTMLElement | null): BlueprintData | 
     title: (document.title || 'Untitled page').slice(0, 44),
     stamp: new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }),
     reduceMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+    maxDepth: nodes.reduce((max, n) => Math.max(max, n.depth), 0),
   }
 }
 
@@ -263,6 +281,132 @@ export function BlueprintSheet({
   )
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
+}
+
+type Orbit = { rotX: number; rotZ: number; zoom: number }
+
+/**
+ * The 3D sheet: the same live-scanned wireframe, but every element becomes a
+ * plane lifted off the paper by its DOM nesting depth — an exploded x-ray of
+ * the page's structure. Drag orbits, wheel zooms, double-tap resets, and
+ * tapping a plane jumps to that element in the editor (same as 2D).
+ */
+function BlueprintStage3D({
+  data,
+  onJumpToElement,
+}: {
+  data: BlueprintData
+  onJumpToElement?: (element: HTMLElement) => void
+}) {
+  const { nodes, docWidth, docHeight, reduceMotion } = data
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const fitRef = useRef(0.1)
+  const dragRef = useRef<{ x: number; y: number } | null>(null)
+  const movedRef = useRef(0)
+  const [orbit, setOrbit] = useState<Orbit | null>(null)
+
+  // Fit the whole sheet into view once we know the stage size, then orbit from there.
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const fit = Math.max(
+      Math.min((el.clientWidth * 0.62) / docWidth, (el.clientHeight * 1.05) / docHeight),
+      0.03,
+    )
+    fitRef.current = fit
+    setOrbit({ rotX: 57, rotZ: 0, zoom: fit })
+  }, [docWidth, docHeight])
+
+  // Wheel zoom needs a non-passive listener to swallow the scroll.
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      setOrbit((v) => {
+        if (!v) return v
+        const zoom = Math.min(Math.max(v.zoom * Math.exp(-event.deltaY * 0.0012), fitRef.current * 0.35), fitRef.current * 8)
+        return { ...v, zoom }
+      })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  if (!orbit) return <div ref={wrapRef} className="fs-bp__stage-wrap" data-chef-editor-root="true" />
+
+  const liftPer = 30 / orbit.zoom // constant on-screen lift per nesting level
+
+  return (
+    <div
+      ref={wrapRef}
+      className="fs-bp__stage-wrap"
+      data-chef-editor-root="true"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return
+        dragRef.current = { x: e.clientX, y: e.clientY }
+        movedRef.current = 0
+        try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId) } catch { /* synthetic pointer */ }
+      }}
+      onPointerMove={(e) => {
+        const from = dragRef.current
+        if (!from) return
+        const dx = e.clientX - from.x
+        const dy = e.clientY - from.y
+        dragRef.current = { x: e.clientX, y: e.clientY }
+        movedRef.current += Math.abs(dx) + Math.abs(dy)
+        setOrbit((v) => v && ({
+          ...v,
+          rotZ: v.rotZ + dx * 0.35,
+          rotX: Math.min(Math.max(v.rotX - dy * 0.35, 8), 88),
+        }))
+      }}
+      onPointerUp={(e) => {
+        dragRef.current = null
+        try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId) } catch { /* synthetic pointer */ }
+      }}
+      onPointerCancel={() => { dragRef.current = null }}
+      onDoubleClick={() => setOrbit({ rotX: 57, rotZ: 0, zoom: fitRef.current })}
+    >
+      <div
+        className="fs-bp__stage"
+        style={{
+          width: docWidth,
+          height: docHeight,
+          transform: `translate(-50%, -50%) scale(${orbit.zoom}) rotateX(${orbit.rotX}deg) rotateZ(${orbit.rotZ}deg)`,
+        }}
+      >
+        {/* the paper itself stays at z=0 as the floor */}
+        <div className="fs-bp__floor" />
+        {nodes.map((node, index) => (
+          <div
+            key={index}
+            className={`fs-bp__plane ${reduceMotion ? '' : 'fs-bp__plane--rise'}`}
+            style={{
+              left: node.x,
+              top: node.y,
+              width: node.w,
+              height: node.h,
+              transform: `translateZ(${node.depth * liftPer}px)`,
+              borderColor: hexToRgba(CATEGORY_COLOR[node.category], node.category === 'container' ? 0.5 : 0.9),
+              background: hexToRgba(CATEGORY_COLOR[node.category], node.category === 'container' ? 0.03 : 0.07),
+              animationDelay: reduceMotion ? undefined : `${Math.min(node.depth * 90, 1400)}ms`,
+            }}
+            title={`${node.label} — ${Math.round(node.w)} × ${Math.round(node.h)} · L${node.depth}`}
+            onClick={() => {
+              // a drag that ends on a plane shouldn't count as a tap
+              if (movedRef.current < 8) onJumpToElement?.(node.el)
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 type Props = {
   open: boolean
   onClose: () => void
@@ -273,6 +417,7 @@ type Props = {
 
 export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJumpToElement }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [threeD, setThreeD] = useState(false)
 
   const data = useMemo(() => (open ? computeBlueprintData(getRootEl()) : null), [open, getRootEl])
 
@@ -292,13 +437,17 @@ export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJ
 
   if (!open || !data) return null
 
-  const { counts, palette, fonts, docWidth, docHeight, title, stamp, reduceMotion } = data
+  const { counts, palette, fonts, docWidth, docHeight, title, stamp, reduceMotion, maxDepth } = data
 
   return (
     <div className={`fs-bp ${reduceMotion ? 'fs-bp--static' : ''}`} data-chef-editor-root="true" role="dialog" aria-label="Page blueprint">
-      <div ref={scrollRef} className="fs-bp__scroll" data-chef-editor-root="true">
-        <BlueprintSheet data={data} mode="full" onJumpToElement={onJumpToElement} />
-      </div>
+      {threeD ? (
+        <BlueprintStage3D data={data} onJumpToElement={onJumpToElement} />
+      ) : (
+        <div ref={scrollRef} className="fs-bp__scroll" data-chef-editor-root="true">
+          <BlueprintSheet data={data} mode="full" onJumpToElement={onJumpToElement} />
+        </div>
+      )}
 
       {/* spec card — palette, type, page metrics */}
       <div className="fs-bp__spec" data-chef-editor-root="true">
@@ -310,6 +459,7 @@ export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJ
         </div>
         <p className="fs-bp__spec-line">{fonts.join(' · ') || 'System type'}</p>
         <p className="fs-bp__spec-line">{Math.round(docWidth)} × {Math.round(docHeight)}px sheet</p>
+        {threeD && <p className="fs-bp__spec-line">{maxDepth + 1} depth levels</p>}
       </div>
 
       {/* title block — bottom right, like a real drawing sheet */}
@@ -325,8 +475,21 @@ export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJ
             </span>
           ))}
         </div>
-        <p className="fs-bp__hint">Tap any part to edit it</p>
+        <p className="fs-bp__hint">
+          {threeD ? 'Drag to orbit · Scroll to zoom · Tap a part to edit' : 'Tap any part to edit it'}
+        </p>
       </div>
+
+      <button
+        type="button"
+        className={`fs-bp__mode ${threeD ? 'fs-bp__mode--3d' : ''}`}
+        onClick={() => setThreeD((v) => !v)}
+        aria-label={threeD ? 'Switch to 2D blueprint' : 'Switch to 3D blueprint'}
+        data-chef-editor-root="true"
+      >
+        {threeD ? <PenLine size={14} /> : <Box size={14} />}
+        {threeD ? '2D' : '3D'}
+      </button>
 
       <button type="button" className="fs-bp__close" onClick={onClose} aria-label="Close blueprint" data-chef-editor-root="true">
         <X size={16} />

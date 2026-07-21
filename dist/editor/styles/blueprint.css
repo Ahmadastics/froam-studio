@@ -232,6 +232,95 @@
   font-weight: 600;
 }
 
+/* ─── 3D stage: exploded depth view ─── */
+
+.fs-bp__stage-wrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  perspective: 1600px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.fs-bp__stage-wrap:active {
+  cursor: grabbing;
+}
+
+.fs-bp__stage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.fs-bp__floor {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg, rgba(160, 190, 255, 0.16) 0 1px, transparent 1px 200px),
+    repeating-linear-gradient(90deg, rgba(160, 190, 255, 0.16) 0 1px, transparent 1px 200px),
+    repeating-linear-gradient(0deg, rgba(160, 190, 255, 0.07) 0 1px, transparent 1px 40px),
+    repeating-linear-gradient(90deg, rgba(160, 190, 255, 0.07) 0 1px, transparent 1px 40px),
+    #10246b;
+  outline: 2px solid rgba(220, 235, 255, 0.9);
+  pointer-events: none;
+}
+
+.fs-bp__plane {
+  position: absolute;
+  border: 1px solid;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  backface-visibility: visible;
+  transition: filter 120ms ease;
+}
+
+.fs-bp__plane:hover {
+  filter: brightness(1.8);
+}
+
+.fs-bp__plane--rise {
+  opacity: 0;
+  animation: fs-bp3d-rise 480ms ease forwards;
+}
+
+@keyframes fs-bp3d-rise {
+  to { opacity: 1; }
+}
+
+/* ─── 2D / 3D mode toggle ─── */
+
+.fs-bp__mode {
+  position: absolute;
+  top: 14px;
+  right: 60px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 13px;
+  border: 1px solid rgba(190, 214, 255, 0.5);
+  border-radius: 4px;
+  background: rgba(9, 20, 60, 0.9);
+  color: #eaf2ff;
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.fs-bp__mode:hover {
+  background: rgba(30, 50, 110, 0.95);
+}
+
+.fs-bp__mode--3d {
+  border-color: #7df3e1;
+  color: #7df3e1;
+}
+
 /* ─── close ─── */
 
 .fs-bp__close {

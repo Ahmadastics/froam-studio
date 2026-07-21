@@ -12,8 +12,8 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
    (`BlueprintSheet`) are exported so the design panel's Prototype tab
    can show the same full-page picture as a persistent thumbnail.
    =============================================================== */
-import { useEffect, useMemo, useRef } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Box, PenLine, X } from 'lucide-react';
 import { collectPagePalette } from './FroamFloatingBar.js';
 const CATEGORY_COLOR = {
     heading: '#7df3e1',
@@ -48,6 +48,15 @@ function shortLabel(el) {
     const cls = typeof el.className === 'string' ? el.className.split(' ').filter(Boolean)[0] : '';
     return cls ? `${tag}.${cls}` : tag;
 }
+function domDepth(el, root) {
+    let depth = 0;
+    let node = el.parentElement;
+    while (node && node !== root) {
+        depth += 1;
+        node = node.parentElement;
+    }
+    return depth;
+}
 function collectBlueprintNodes(root) {
     const selector = 'h1,h2,h3,h4,h5,h6,p,img,svg,picture,video,canvas,button,a,input,select,textarea,section,header,footer,main,article,nav,aside,form,ul,ol,li,blockquote,div';
     const elements = root.querySelectorAll(selector);
@@ -73,11 +82,16 @@ function collectBlueprintNodes(root) {
             h: r.height,
             category,
             label: shortLabel(el),
+            depth: domDepth(el, root),
         });
         if (nodes.length >= 420)
             break;
     }
     nodes.sort((a, b) => a.y - b.y || a.x - b.x);
+    const minDepth = nodes.reduce((min, n) => Math.min(min, n.depth), Infinity);
+    if (Number.isFinite(minDepth) && minDepth > 0)
+        for (const n of nodes)
+            n.depth -= minDepth;
     return nodes;
 }
 function pickCallouts(nodes) {
@@ -135,6 +149,7 @@ export function computeBlueprintData(root) {
         title: (document.title || 'Untitled page').slice(0, 44),
         stamp: new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }),
         reduceMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+        maxDepth: nodes.reduce((max, n) => Math.max(max, n.depth), 0),
     };
 }
 export const BLUEPRINT_CATEGORY_COLOR = CATEGORY_COLOR;
@@ -158,8 +173,102 @@ export function BlueprintSheet({ data, mode = 'full', onJumpToElement, }) {
                 return (_jsxs("g", { className: "fs-bp__callout", style: { animationDelay: `${1500 + index * 160}ms` }, children: [_jsx("circle", { cx: anchorX, cy: anchorY, r: "5", fill: "none", stroke: CATEGORY_COLOR[callout.node.category], strokeWidth: "1.5", vectorEffect: "non-scaling-stroke" }), _jsx("line", { x1: anchorX + 5, y1: anchorY, x2: gutterX, y2: textY, stroke: CATEGORY_COLOR[callout.node.category], strokeWidth: "1", strokeDasharray: "6 4", vectorEffect: "non-scaling-stroke" }), _jsx("text", { x: gutterX + 10, y: textY - 6, className: "fs-bp__callout-title", fill: CATEGORY_COLOR[callout.node.category], children: callout.title }), _jsxs("text", { x: gutterX + 10, y: textY + 12, className: "fs-bp__callout-sub", children: [callout.node.label, " \u00B7 ", Math.round(callout.node.w), "\u00D7", Math.round(callout.node.h)] })] }, `callout-${index}`));
             })] }));
 }
+function hexToRgba(hex, alpha) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+/**
+ * The 3D sheet: the same live-scanned wireframe, but every element becomes a
+ * plane lifted off the paper by its DOM nesting depth — an exploded x-ray of
+ * the page's structure. Drag orbits, wheel zooms, double-tap resets, and
+ * tapping a plane jumps to that element in the editor (same as 2D).
+ */
+function BlueprintStage3D({ data, onJumpToElement, }) {
+    const { nodes, docWidth, docHeight, reduceMotion } = data;
+    const wrapRef = useRef(null);
+    const fitRef = useRef(0.1);
+    const dragRef = useRef(null);
+    const movedRef = useRef(0);
+    const [orbit, setOrbit] = useState(null);
+    // Fit the whole sheet into view once we know the stage size, then orbit from there.
+    useEffect(() => {
+        const el = wrapRef.current;
+        if (!el)
+            return;
+        const fit = Math.max(Math.min((el.clientWidth * 0.62) / docWidth, (el.clientHeight * 1.05) / docHeight), 0.03);
+        fitRef.current = fit;
+        setOrbit({ rotX: 57, rotZ: 0, zoom: fit });
+    }, [docWidth, docHeight]);
+    // Wheel zoom needs a non-passive listener to swallow the scroll.
+    useEffect(() => {
+        const el = wrapRef.current;
+        if (!el)
+            return;
+        const onWheel = (event) => {
+            event.preventDefault();
+            setOrbit((v) => {
+                if (!v)
+                    return v;
+                const zoom = Math.min(Math.max(v.zoom * Math.exp(-event.deltaY * 0.0012), fitRef.current * 0.35), fitRef.current * 8);
+                return { ...v, zoom };
+            });
+        };
+        el.addEventListener('wheel', onWheel, { passive: false });
+        return () => el.removeEventListener('wheel', onWheel);
+    }, []);
+    if (!orbit)
+        return _jsx("div", { ref: wrapRef, className: "fs-bp__stage-wrap", "data-chef-editor-root": "true" });
+    const liftPer = 30 / orbit.zoom; // constant on-screen lift per nesting level
+    return (_jsx("div", { ref: wrapRef, className: "fs-bp__stage-wrap", "data-chef-editor-root": "true", onPointerDown: (e) => {
+            if (e.button !== 0)
+                return;
+            dragRef.current = { x: e.clientX, y: e.clientY };
+            movedRef.current = 0;
+            try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+            }
+            catch { /* synthetic pointer */ }
+        }, onPointerMove: (e) => {
+            const from = dragRef.current;
+            if (!from)
+                return;
+            const dx = e.clientX - from.x;
+            const dy = e.clientY - from.y;
+            dragRef.current = { x: e.clientX, y: e.clientY };
+            movedRef.current += Math.abs(dx) + Math.abs(dy);
+            setOrbit((v) => v && ({
+                ...v,
+                rotZ: v.rotZ + dx * 0.35,
+                rotX: Math.min(Math.max(v.rotX - dy * 0.35, 8), 88),
+            }));
+        }, onPointerUp: (e) => {
+            dragRef.current = null;
+            try {
+                e.currentTarget.releasePointerCapture(e.pointerId);
+            }
+            catch { /* synthetic pointer */ }
+        }, onPointerCancel: () => { dragRef.current = null; }, onDoubleClick: () => setOrbit({ rotX: 57, rotZ: 0, zoom: fitRef.current }), children: _jsxs("div", { className: "fs-bp__stage", style: {
+                width: docWidth,
+                height: docHeight,
+                transform: `translate(-50%, -50%) scale(${orbit.zoom}) rotateX(${orbit.rotX}deg) rotateZ(${orbit.rotZ}deg)`,
+            }, children: [_jsx("div", { className: "fs-bp__floor" }), nodes.map((node, index) => (_jsx("div", { className: `fs-bp__plane ${reduceMotion ? '' : 'fs-bp__plane--rise'}`, style: {
+                        left: node.x,
+                        top: node.y,
+                        width: node.w,
+                        height: node.h,
+                        transform: `translateZ(${node.depth * liftPer}px)`,
+                        borderColor: hexToRgba(CATEGORY_COLOR[node.category], node.category === 'container' ? 0.5 : 0.9),
+                        background: hexToRgba(CATEGORY_COLOR[node.category], node.category === 'container' ? 0.03 : 0.07),
+                        animationDelay: reduceMotion ? undefined : `${Math.min(node.depth * 90, 1400)}ms`,
+                    }, title: `${node.label} — ${Math.round(node.w)} × ${Math.round(node.h)} · L${node.depth}`, onClick: () => {
+                        // a drag that ends on a plane shouldn't count as a tap
+                        if (movedRef.current < 8)
+                            onJumpToElement?.(node.el);
+                    } }, index)))] }) }));
+}
 export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJumpToElement }) {
     const scrollRef = useRef(null);
+    const [threeD, setThreeD] = useState(false);
     const data = useMemo(() => (open ? computeBlueprintData(getRootEl()) : null), [open, getRootEl]);
     // Escape closes; lock page scroll behind the sheet
     useEffect(() => {
@@ -178,7 +287,7 @@ export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJ
     }, [open, onClose]);
     if (!open || !data)
         return null;
-    const { counts, palette, fonts, docWidth, docHeight, title, stamp, reduceMotion } = data;
-    return (_jsxs("div", { className: `fs-bp ${reduceMotion ? 'fs-bp--static' : ''}`, "data-chef-editor-root": "true", role: "dialog", "aria-label": "Page blueprint", children: [_jsx("div", { ref: scrollRef, className: "fs-bp__scroll", "data-chef-editor-root": "true", children: _jsx(BlueprintSheet, { data: data, mode: "full", onJumpToElement: onJumpToElement }) }), _jsxs("div", { className: "fs-bp__spec", "data-chef-editor-root": "true", children: [_jsx("p", { className: "fs-bp__spec-title", children: "SPECIFICATIONS" }), _jsx("div", { className: "fs-bp__swatches", children: palette.map((hex) => (_jsx("span", { className: "fs-bp__swatch", style: { background: hex }, title: hex }, hex))) }), _jsx("p", { className: "fs-bp__spec-line", children: fonts.join(' · ') || 'System type' }), _jsxs("p", { className: "fs-bp__spec-line", children: [Math.round(docWidth), " \u00D7 ", Math.round(docHeight), "px sheet"] })] }), _jsxs("div", { className: "fs-bp__titleblock", "data-chef-editor-root": "true", children: [_jsx("p", { className: "fs-bp__brand", children: "FROAM BLUEPRINT" }), _jsx("p", { className: "fs-bp__site", children: title }), _jsxs("p", { className: "fs-bp__meta", children: [routeKey, " \u00B7 ", stamp] }), _jsx("div", { className: "fs-bp__counts", children: Object.keys(counts).filter((c) => counts[c] > 0).map((c) => (_jsxs("span", { className: "fs-bp__count", children: [_jsx("i", { style: { background: CATEGORY_COLOR[c] } }), counts[c], " ", CATEGORY_LABEL[c]] }, c))) }), _jsx("p", { className: "fs-bp__hint", children: "Tap any part to edit it" })] }), _jsx("button", { type: "button", className: "fs-bp__close", onClick: onClose, "aria-label": "Close blueprint", "data-chef-editor-root": "true", children: _jsx(X, { size: 16 }) })] }));
+    const { counts, palette, fonts, docWidth, docHeight, title, stamp, reduceMotion, maxDepth } = data;
+    return (_jsxs("div", { className: `fs-bp ${reduceMotion ? 'fs-bp--static' : ''}`, "data-chef-editor-root": "true", role: "dialog", "aria-label": "Page blueprint", children: [threeD ? (_jsx(BlueprintStage3D, { data: data, onJumpToElement: onJumpToElement })) : (_jsx("div", { ref: scrollRef, className: "fs-bp__scroll", "data-chef-editor-root": "true", children: _jsx(BlueprintSheet, { data: data, mode: "full", onJumpToElement: onJumpToElement }) })), _jsxs("div", { className: "fs-bp__spec", "data-chef-editor-root": "true", children: [_jsx("p", { className: "fs-bp__spec-title", children: "SPECIFICATIONS" }), _jsx("div", { className: "fs-bp__swatches", children: palette.map((hex) => (_jsx("span", { className: "fs-bp__swatch", style: { background: hex }, title: hex }, hex))) }), _jsx("p", { className: "fs-bp__spec-line", children: fonts.join(' · ') || 'System type' }), _jsxs("p", { className: "fs-bp__spec-line", children: [Math.round(docWidth), " \u00D7 ", Math.round(docHeight), "px sheet"] }), threeD && _jsxs("p", { className: "fs-bp__spec-line", children: [maxDepth + 1, " depth levels"] })] }), _jsxs("div", { className: "fs-bp__titleblock", "data-chef-editor-root": "true", children: [_jsx("p", { className: "fs-bp__brand", children: "FROAM BLUEPRINT" }), _jsx("p", { className: "fs-bp__site", children: title }), _jsxs("p", { className: "fs-bp__meta", children: [routeKey, " \u00B7 ", stamp] }), _jsx("div", { className: "fs-bp__counts", children: Object.keys(counts).filter((c) => counts[c] > 0).map((c) => (_jsxs("span", { className: "fs-bp__count", children: [_jsx("i", { style: { background: CATEGORY_COLOR[c] } }), counts[c], " ", CATEGORY_LABEL[c]] }, c))) }), _jsx("p", { className: "fs-bp__hint", children: threeD ? 'Drag to orbit · Scroll to zoom · Tap a part to edit' : 'Tap any part to edit it' })] }), _jsxs("button", { type: "button", className: `fs-bp__mode ${threeD ? 'fs-bp__mode--3d' : ''}`, onClick: () => setThreeD((v) => !v), "aria-label": threeD ? 'Switch to 2D blueprint' : 'Switch to 3D blueprint', "data-chef-editor-root": "true", children: [threeD ? _jsx(PenLine, { size: 14 }) : _jsx(Box, { size: 14 }), threeD ? '2D' : '3D'] }), _jsx("button", { type: "button", className: "fs-bp__close", onClick: onClose, "aria-label": "Close blueprint", "data-chef-editor-root": "true", children: _jsx(X, { size: 16 }) })] }));
 }
 //# sourceMappingURL=FroamBlueprint.js.map

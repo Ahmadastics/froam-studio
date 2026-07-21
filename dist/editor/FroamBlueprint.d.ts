@@ -7,6 +7,8 @@ export type BlueprintNode = {
     h: number;
     category: BlueprintCategory;
     label: string;
+    /** DOM nesting depth, normalised so the shallowest captured node is 0 (drives the 3D lift). */
+    depth: number;
 };
 type Callout = {
     node: BlueprintNode;
@@ -24,6 +26,8 @@ export type BlueprintData = {
     title: string;
     stamp: string;
     reduceMotion: boolean;
+    /** Deepest normalised nesting level across all nodes (0 = flat page). */
+    maxDepth: number;
 };
 /** Scan the live page and produce the full blueprint dataset (or null if empty). */
 export declare function computeBlueprintData(root: HTMLElement | null): BlueprintData | null;

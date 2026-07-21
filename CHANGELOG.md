@@ -2,6 +2,25 @@
 
 All notable changes to froam-studio are documented here.
 
+## 4.6.0 — 2026-07-21
+
+**The Blueprint goes 3D.** The scan already recreates the edited page —
+every change, the images, the new fonts, the moved elements — but a flat
+sheet can't show *structure*. The new 3D mode can.
+
+### Added
+- **3D Blueprint.** A **3D** toggle in the blueprint overlay (next to close)
+  lifts every scanned element off the paper by its DOM nesting depth — an
+  exploded x-ray of the page where you can *see* what's nested inside what.
+  Same category colours, same live scan (reopen after any edit and the 3D
+  sheet redraws the current page), same tap-a-part-to-edit jump. Drag to
+  orbit, scroll to zoom, double-tap to reset the view. Planes rise level by
+  level on entry; `prefers-reduced-motion` renders them already risen. The
+  spec card gains a **depth levels** line while in 3D.
+- `BlueprintNode.depth` and `BlueprintData.maxDepth`: the scan now records
+  each element's normalised DOM nesting depth, so any consumer of
+  `computeBlueprintData()` can reason about structure, not just layout.
+
 ## 4.5.1 — 2026-07-19
 
 **The Blueprint gets a home.** The right-panel **Prototype** tab was a dead
