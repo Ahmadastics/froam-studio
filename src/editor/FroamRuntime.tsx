@@ -6,7 +6,8 @@ import {
   type FroamStudioConfig,
 } from '../config'
 import { apiGetFresh } from '../lib/api'
-import { useFroamRouteKey } from '../routing'
+import { collectStoreFontFamilies, ensureFontLinks } from './fontSources'
+import { normalizeFroamRouteKey, useFroamRouteKey } from '../routing'
 import { isFroamPersonaPath } from './froamPersona'
 
 type ElementDraft = {
@@ -348,7 +349,10 @@ export default function FroamRuntime({
     }
 
     // Repo Mode: a committed local design wins over the published API.
+    // Legacy designs may store keys with trailing slashes — match on the
+    // normalized form so a slash never hides a shipped design.
     const localRoute = design?.routes?.[routeKey]
+      ?? Object.entries(design?.routes ?? {}).find(([key]) => normalizeFroamRouteKey(key) === routeKey)?.[1]
     if (localRoute && Object.prototype.hasOwnProperty.call(localRoute, viewportMode)) {
       setPublishedStore(localRoute[viewportMode] ?? null)
       return
@@ -371,6 +375,12 @@ export default function FroamRuntime({
       cancelled = true
     }
   }, [design, endpoint, isRuntimeRoute, routeKey, viewportMode])
+
+  /* Fonts the design references must actually load with it. */
+  useEffect(() => {
+    if (!isRuntimeRoute || !publishedStore) return
+    ensureFontLinks(collectStoreFontFamilies(publishedStore))
+  }, [publishedStore, isRuntimeRoute])
 
   useEffect(() => {
     const root = getRoot()

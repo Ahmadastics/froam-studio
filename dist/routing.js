@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react';
 const NAVIGATION_EVENT = 'froam-studio:navigation';
 let historyPatched = false;
+/**
+ * One canonical form for route keys so a design edited at `/page`,
+ * `/page/` or `/page/index.html` applies at ALL of them — servers
+ * disagree about trailing slashes, the design must not care.
+ * KEEP IN SYNC with normalizeRouteKey in lib/codegen.mjs.
+ */
+export function normalizeFroamRouteKey(value) {
+    let p = String(value || '/').split('?')[0].split('#')[0];
+    p = p.replace(/\/index\.html?$/i, '/');
+    p = p.replace(/\/+$/, '');
+    return p || '/';
+}
 function readBrowserRoute() {
     if (typeof window === 'undefined')
         return '/';
-    return window.location.pathname || '/';
+    return normalizeFroamRouteKey(window.location.pathname);
 }
 function dispatchNavigationEvent() {
     window.dispatchEvent(new Event(NAVIGATION_EVENT));
@@ -25,13 +37,13 @@ function patchHistoryNavigation() {
     patch('replaceState');
 }
 export function getCurrentRouteKey(explicitRouteKey) {
-    return explicitRouteKey || readBrowserRoute();
+    return explicitRouteKey ? normalizeFroamRouteKey(explicitRouteKey) : readBrowserRoute();
 }
 export function useFroamRouteKey(explicitRouteKey) {
     const [routeKey, setRouteKey] = useState(() => getCurrentRouteKey(explicitRouteKey));
     useEffect(() => {
         if (explicitRouteKey) {
-            setRouteKey(explicitRouteKey);
+            setRouteKey(normalizeFroamRouteKey(explicitRouteKey));
             return undefined;
         }
         patchHistoryNavigation();

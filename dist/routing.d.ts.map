@@ -1,1 +1,1 @@
-{"version":3,"file":"routing.d.ts","sourceRoot":"","sources":["../src/routing.ts"],"names":[],"mappings":"AA+BA,wBAAgB,kBAAkB,CAAC,gBAAgB,CAAC,EAAE,MAAM,UAE3D;AAED,wBAAgB,gBAAgB,CAAC,gBAAgB,CAAC,EAAE,MAAM,UAuBzD"}
+{"version":3,"file":"routing.d.ts","sourceRoot":"","sources":["../src/routing.ts"],"names":[],"mappings":"AAKA;;;;;GAKG;AACH,wBAAgB,sBAAsB,CAAC,KAAK,EAAE,MAAM,GAAG,IAAI,GAAG,SAAS,GAAG,MAAM,CAK/E;AA4BD,wBAAgB,kBAAkB,CAAC,gBAAgB,CAAC,EAAE,MAAM,UAE3D;AAED,wBAAgB,gBAAgB,CAAC,gBAAgB,CAAC,EAAE,MAAM,UAuBzD"}

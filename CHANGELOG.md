@@ -2,6 +2,32 @@
 
 All notable changes to froam-studio are documented here.
 
+## 4.7.0 — 2026-07-21
+
+**Perfect fidelity.** The whole point of Froam is that what you design is
+what ships. Two silent gaps broke that promise; both are closed, verified
+end-to-end (edit → Save to Repo → plain production page, no editor code).
+
+### Fixed
+- **Fonts now actually ship with the design.** The font picker offered 23
+  families but nothing ever loaded them — pick Poppins on a site that
+  doesn't bundle it and both the preview and production silently fell back
+  to a system font. Now every layer loads exactly the fonts the design
+  references (draft styles *and* inline styles inside injected blocks):
+  `froam.generated.css` gets `@import` lines (Google Fonts + Fontshare
+  sources with correct per-family weights), and the editor + React
+  `<FroamRuntime/>` inject matching `<link data-froam-fonts>` tags live.
+  New shared source map: `src/editor/fontSources.ts` (TS) mirrored in
+  `lib/codegen.mjs` (CLI/bridge).
+- **Trailing slashes can no longer hide a shipped design.** Route keys were
+  raw `location.pathname`, so a design saved at `/page` never applied at
+  `/page/` or `/page/index.html` (and vice versa) — servers disagree about
+  trailing slashes, and the design silently vanished. One canonical
+  `normalizeRouteKey` now runs everywhere: the editor's route hook, the
+  React runtime (with a legacy-key fallback for committed designs), the
+  vanilla runtime, `mergeSave`, `migrateDesign` (normalizes + merges legacy
+  keys on load), and the `data-froam-route` scope in generated CSS.
+
 ## 4.6.0 — 2026-07-21
 
 **The Blueprint goes 3D.** The scan already recreates the edited page —

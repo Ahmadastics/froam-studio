@@ -26,6 +26,7 @@ import FroamInspirationPanel from './FroamInspirationPanel.js';
 import FroamShapeLibrary from './FroamShapeLibrary.js';
 import FroamPersonaEditor from './FroamPersonaEditor.js';
 import { getFroamRootElement } from '../config.js';
+import { collectStoreFontFamilies, ensureFontLinks } from './fontSources.js';
 import { useFroamRouteKey } from '../routing.js';
 import { DEFAULT_FROAM_PERSONA, FROAM_PERSONA_PATH, PERSONA_STORAGE_KEY, readFroamPersonaDraft, sanitizeFroamPersona, isFroamPersonaPath, } from './froamPersona.js';
 const cursorOptions = ['auto', 'default', 'pointer', 'grab', 'grabbing', 'text', 'crosshair', 'move', 'not-allowed', 'wait', 'zoom-in', 'zoom-out', 'none'];
@@ -1451,6 +1452,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const draftCount = useMemo(() => countRenderableDrafts(routeDrafts), [routeDrafts]);
     const hasRouteDrafts = useMemo(() => draftCount > 0, [draftCount]);
     const showPanel = panelOpen || active;
+    /* Fonts the drafts reference must actually load, or the preview lies. */
+    useEffect(() => {
+        ensureFontLinks(collectStoreFontFamilies(routeDrafts));
+    }, [routeDrafts]);
     /* First time the editor opens on a project: run the one-time scan. */
     useEffect(() => {
         if (!showPanel || studioMinimized)

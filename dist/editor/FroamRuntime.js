@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { configureFroamStudio, getFroamRootElement, getFroamStudioConfig, } from '../config.js';
 import { apiGetFresh } from '../lib/api.js';
-import { useFroamRouteKey } from '../routing.js';
+import { collectStoreFontFamilies, ensureFontLinks } from './fontSources.js';
+import { normalizeFroamRouteKey, useFroamRouteKey } from '../routing.js';
 import { isFroamPersonaPath } from './froamPersona.js';
 const CANVAS_KEY = '__froam_canvas__';
 const INJECTION_KEY = '__froam_injection__';
@@ -276,7 +277,10 @@ export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true
             return;
         }
         // Repo Mode: a committed local design wins over the published API.
-        const localRoute = design?.routes?.[routeKey];
+        // Legacy designs may store keys with trailing slashes — match on the
+        // normalized form so a slash never hides a shipped design.
+        const localRoute = design?.routes?.[routeKey]
+            ?? Object.entries(design?.routes ?? {}).find(([key]) => normalizeFroamRouteKey(key) === routeKey)?.[1];
         if (localRoute && Object.prototype.hasOwnProperty.call(localRoute, viewportMode)) {
             setPublishedStore(localRoute[viewportMode] ?? null);
             return;
@@ -298,6 +302,12 @@ export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true
             cancelled = true;
         };
     }, [design, endpoint, isRuntimeRoute, routeKey, viewportMode]);
+    /* Fonts the design references must actually load with it. */
+    useEffect(() => {
+        if (!isRuntimeRoute || !publishedStore)
+            return;
+        ensureFontLinks(collectStoreFontFamilies(publishedStore));
+    }, [publishedStore, isRuntimeRoute]);
     useEffect(() => {
         const root = getRoot();
         restoreRuntimeSnapshots(appliedSnapshotsRef.current);

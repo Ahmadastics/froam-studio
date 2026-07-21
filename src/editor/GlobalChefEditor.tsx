@@ -104,6 +104,7 @@ import FroamInspirationPanel from './FroamInspirationPanel'
 import FroamShapeLibrary from './FroamShapeLibrary'
 import FroamPersonaEditor from './FroamPersonaEditor'
 import { getFroamRootElement } from '../config'
+import { collectStoreFontFamilies, ensureFontLinks } from './fontSources'
 import { useFroamRouteKey } from '../routing'
 import {
   DEFAULT_FROAM_PERSONA,
@@ -1850,6 +1851,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const draftCount = useMemo(() => countRenderableDrafts(routeDrafts), [routeDrafts])
   const hasRouteDrafts = useMemo(() => draftCount > 0, [draftCount])
   const showPanel = panelOpen || active
+
+  /* Fonts the drafts reference must actually load, or the preview lies. */
+  useEffect(() => {
+    ensureFontLinks(collectStoreFontFamilies(routeDrafts))
+  }, [routeDrafts])
 
   /* First time the editor opens on a project: run the one-time scan. */
   useEffect(() => {
