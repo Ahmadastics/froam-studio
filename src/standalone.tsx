@@ -95,8 +95,10 @@ function StandaloneApp({ origin, initialOpen }: { origin: string; initialOpen: b
 
   return (
     <StrictMode>
-      <FroamRuntime design={design} routes="*" />
-      <FroamGate enabled initialOpen={initialOpen} localRoutes="*" />
+      {/* apiBaseUrl = bridge origin so publish + published-designs hit the
+          bridge's /api/froam/published even in script-tag mode. */}
+      <FroamRuntime apiBaseUrl={origin} design={design} routes="*" />
+      <FroamGate apiBaseUrl={origin} enabled initialOpen={initialOpen} localRoutes="*" />
     </StrictMode>
   )
 }

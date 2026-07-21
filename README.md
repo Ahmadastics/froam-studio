@@ -134,6 +134,46 @@ Mount `FroamRuntime` exactly once and unconditionally. Gate the editor
 (`FroamGate`) behind an env flag and/or `ownerEmails`. `froam init` wires
 `froamStudio()` into your vite.config automatically.
 
+## Publish — live designs across devices, no deploy
+
+Froam has two ways to ship a design. **Save to Repo** bakes it into your
+build (git-ready, versioned, permanent). **Publish** pushes it to a tiny
+API so every device sees it on the next refresh — edit on your laptop,
+refresh on your phone, no commit, no build.
+
+Through `froam dev` this works out of the box: publishes land in
+`froam/froam.published.json` next to your design, and any device that
+loads the page through the bridge (`--host` for your phone on the same
+Wi-Fi) picks them up.
+
+For production, mount the same two-endpoint contract on your backend:
+
+```js
+import { createFroamPublishApi } from 'froam-studio/server'
+
+const froamApi = createFroamPublishApi({
+  file: 'froam/froam.published.json',
+  authorize: async (req) => isAdmin(req),   // gate who can publish
+})
+app.use('/api/froam', (req, res, next) => {
+  froamApi(req, res).then((handled) => { if (!handled) next() })
+})
+```
+
+Then point the editor + runtime at it (`apiBaseUrl`). The contract, if
+you'd rather implement it against your own database:
+
+```
+GET  /api/froam/published?routeKey=/&viewportMode=desktop
+  -> { success: true, design: { routeKey, viewportMode, store, publishedAt } | null }
+POST /api/froam/published        { routeKey, viewportMode, store }
+  -> { success: true, design: { routeKey, viewportMode, publishedAt } }
+```
+
+Committed repo designs win over published ones for the same route, so the
+workflow is: publish to see it everywhere now → Save to Repo when it's
+final.
+
 ## CLI
 
 ```

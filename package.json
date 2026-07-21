@@ -1,6 +1,6 @@
 {
   "name": "froam-studio",
-  "version": "4.7.0",
+  "version": "4.8.0",
   "description": "Froam Studio — Figma-style visual editor for ANY project (Vite, Next, static HTML, anything that serves a page). Every edit compiles to committable files in your repo.",
   "author": "Ahmad Modibbo <ahmadnuhu14@gmail.com>",
   "license": "MIT",
@@ -36,6 +36,7 @@
     "lib",
     "vite-plugin.mjs",
     "vite-plugin.d.ts",
+    "server.d.ts",
     "README.md"
   ],
   "exports": {
@@ -56,6 +57,10 @@
     "./vite": {
       "types": "./vite-plugin.d.ts",
       "import": "./vite-plugin.mjs"
+    },
+    "./server": {
+      "types": "./server.d.ts",
+      "import": "./lib/publish-store.mjs"
     }
   },
   "scripts": {

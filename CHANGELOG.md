@@ -2,6 +2,31 @@
 
 All notable changes to froam-studio are documented here.
 
+## 4.8.0 — 2026-07-21
+
+**Publish, everywhere.** The publish path (edit on one device, refresh on
+another — no commit, no build) used to require a custom backend. Now it's
+a first-class part of Froam.
+
+### Added
+- **The bridge is a publish backend.** `froam dev` now serves
+  `GET/POST /api/froam/published` itself (all modes, including `--app`
+  proxy), persisting to `froam/froam.published.json` next to your design.
+  Publish from the laptop, refresh on the phone (`--host`) — it's live.
+  Previously the bridge refused publishes with a 501.
+- **`froam-studio/server`** — `createFroamPublishApi({ file, authorize })`,
+  a dependency-free Node handler (plain http or Express) so ANY backend can
+  mount the same two-endpoint contract for production. Route keys are
+  normalized with the same rule as everywhere else.
+- README: "Publish — live designs across devices, no deploy" section
+  documenting the flow and the endpoint contract for custom backends.
+
+### Changed
+- Standalone editor (script-tag / bridge mode) now passes the bridge origin
+  as `apiBaseUrl` to both `FroamRuntime` and `FroamGate`, so published
+  designs load and publishes land on the bridge even when the page is
+  served by a different dev server.
+
 ## 4.7.0 — 2026-07-21
 
 **Perfect fidelity.** The whole point of Froam is that what you design is
