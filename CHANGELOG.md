@@ -2,6 +2,35 @@
 
 All notable changes to froam-studio are documented here.
 
+## 4.9.0 — 2026-07-25
+
+**Quick Looks becomes a gallery.** The one-tap style recipes on the
+contextual bar (the `✦` button) went from 6 to 40, organized into eight
+browsable groups so a design that needs a shape, a shadow, or a fill is one
+tap away — the popover now scrolls when the ideas outrun the screen.
+
+### Added
+- **34 new looks**, grouped for browsing:
+  - **Depth** — Lift, Float, Soft (neumorphic), Inset, Ring, Glow
+  - **Surface** — Glass, Frost, Ink, Paper, Slate, Tint
+  - **Shape** — Pill, Slab, Squircle, Blob, Bevel, Tag, Arch, Leaf
+  - **Line** — Outline, Hairline, Dashed, Double, Underline
+  - **Accent** — Pop, Gradient, Sunset, Aurora, Ocean, Candy, Mesh
+  - **Type** — Grad Text, Eyebrow, Display, Marker, Quiet
+  - **Bold** — Sticker, Brutal, Comic, Retro
+- **Accent-aware recipes.** Ring, Glow, Tint, Dashed, Double, Underline,
+  Pop, Gradient, Grad Text, Marker and Retro derive their shades from the
+  page's own picked accent via `color-mix`, so a look fits whatever palette
+  it lands on.
+- Grouped, scrollable Quick Looks popover with per-group labels
+  (`froam-floating-bar__looks-scroll` / `__looks-section` / `__looks-label`).
+
+### Changed
+- **Reset look** is now thorough — besides shadow, border and backdrop, it
+  clears gradients (`background-image`), clip-paths, text-clip
+  (`-webkit-text-fill-color`, `background-clip`), filters, text-shadow and
+  blend modes, so it fully undoes any of the new looks in one tap.
+
 ## 4.8.0 — 2026-07-21
 
 **Publish, everywhere.** The publish path (edit on one device, refresh on

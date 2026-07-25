@@ -226,22 +226,80 @@ function pickAccent(palette: string[]): string {
 }
 
 /* ─── v4: quick looks — one-tap style recipes ─── */
+/* v4.8: expanded from 6 → 40+ recipes, grouped for browsing. Every look's
+   `styles` is applied live via setProperty (camelCase → kebab) and compiles
+   verbatim to froam.generated.css, so anything valid here ships. Looks are
+   accent-aware: `accent` is the site's own picked accent, and color-mix
+   derives shades from it so recipes fit whatever palette they land on. */
+const LOOK_GROUPS = ['Depth', 'Surface', 'Shape', 'Line', 'Accent', 'Type', 'Bold', 'Reset'] as const
+type LookGroup = (typeof LOOK_GROUPS)[number]
+
 type Look = {
   name: string
+  group: LookGroup
   swatch: CSSProperties
   styles: (accent: string) => Record<string, string>
   patch?: SelectionPatch
 }
 
+// Uniform corner-radius patch so the editor's own radius controls stay in sync.
+const corners = (n: number): SelectionPatch => ({ borderRadiusTL: n, borderRadiusTR: n, borderRadiusBR: n, borderRadiusBL: n })
+
 const LOOKS: Look[] = [
+  /* ─── Depth — shadows & elevation ─── */
   {
     name: 'Lift',
+    group: 'Depth',
     swatch: { background: '#1f2937', boxShadow: '0 4px 10px rgba(0,0,0,0.55)', borderRadius: 6 },
     styles: () => ({ boxShadow: '0 14px 34px rgba(0, 0, 0, 0.22)', borderRadius: '16px' }),
-    patch: { borderRadiusTL: 16, borderRadiusTR: 16, borderRadiusBR: 16, borderRadiusBL: 16 },
+    patch: corners(16),
   },
   {
+    name: 'Float',
+    group: 'Depth',
+    swatch: { background: '#1f2937', boxShadow: '0 8px 12px -4px rgba(0,0,0,0.8)', borderRadius: 8 },
+    styles: () => ({ boxShadow: '0 30px 60px -24px rgba(0, 0, 0, 0.5)', borderRadius: '20px' }),
+    patch: corners(20),
+  },
+  {
+    name: 'Soft',
+    group: 'Depth',
+    swatch: { background: '#e8ecf3', boxShadow: '3px 3px 6px rgba(163,177,198,0.7), -3px -3px 6px #ffffff', borderRadius: 8 },
+    styles: () => ({
+      background: '#e8ecf3',
+      color: '#334155',
+      border: 'none',
+      boxShadow: '10px 10px 22px rgba(163, 177, 198, 0.55), -10px -10px 22px rgba(255, 255, 255, 0.9)',
+      borderRadius: '20px',
+    }),
+    patch: corners(20),
+  },
+  {
+    name: 'Inset',
+    group: 'Depth',
+    swatch: { background: '#1f2937', boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.7)', borderRadius: 6 },
+    styles: () => ({ boxShadow: 'inset 0 2px 10px rgba(0, 0, 0, 0.28)', borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Ring',
+    group: 'Depth',
+    swatch: { background: '#1f2937', boxShadow: '0 0 0 3px rgba(20,184,166,0.5)', borderRadius: 6 },
+    styles: (accent) => ({ boxShadow: `0 0 0 3px color-mix(in srgb, ${accent} 40%, transparent)`, borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Glow',
+    group: 'Depth',
+    swatch: { background: '#1f2937', boxShadow: '0 0 10px 2px rgba(20,184,166,0.7)', borderRadius: 6 },
+    styles: (accent) => ({ boxShadow: `0 0 26px color-mix(in srgb, ${accent} 55%, transparent)`, borderRadius: '14px' }),
+    patch: corners(14),
+  },
+
+  /* ─── Surface — fills & materials ─── */
+  {
     name: 'Glass',
+    group: 'Surface',
     swatch: { background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6 },
     styles: () => ({
       background: 'rgba(255, 255, 255, 0.08)',
@@ -249,29 +307,295 @@ const LOOKS: Look[] = [
       border: '1px solid rgba(255, 255, 255, 0.18)',
       borderRadius: '16px',
     }),
-    patch: { borderRadiusTL: 16, borderRadiusTR: 16, borderRadiusBR: 16, borderRadiusBL: 16 },
+    patch: corners(16),
   },
   {
-    name: 'Outline',
-    swatch: { background: 'transparent', border: '1.5px solid currentColor', borderRadius: 6 },
-    styles: () => ({ background: 'transparent', border: '1.5px solid currentColor', borderRadius: '12px' }),
+    name: 'Frost',
+    group: 'Surface',
+    swatch: { background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.8)', borderRadius: 6 },
+    styles: () => ({
+      background: 'rgba(255, 255, 255, 0.6)',
+      backdropFilter: 'blur(10px)',
+      border: '1px solid rgba(255, 255, 255, 0.7)',
+      color: '#0b0f14',
+      borderRadius: '16px',
+    }),
+    patch: corners(16),
   },
+  {
+    name: 'Ink',
+    group: 'Surface',
+    swatch: { background: '#0b0f14', borderRadius: 6 },
+    styles: () => ({ background: '#0b0f14', color: '#ffffff', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Paper',
+    group: 'Surface',
+    swatch: { background: '#faf7f0', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 6 },
+    styles: () => ({ background: '#faf7f0', color: '#1f2430', border: '1px solid rgba(0, 0, 0, 0.06)', borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Slate',
+    group: 'Surface',
+    swatch: { background: '#1e293b', borderRadius: 6 },
+    styles: () => ({ background: '#1e293b', color: '#e2e8f0', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Tint',
+    group: 'Surface',
+    swatch: { background: 'rgba(20,184,166,0.22)', border: '1px solid rgba(20,184,166,0.5)', borderRadius: 6 },
+    styles: (accent) => ({ background: `color-mix(in srgb, ${accent} 14%, transparent)`, color: accent, borderRadius: '12px' }),
+    patch: corners(12),
+  },
+
+  /* ─── Shape — corners & geometry ─── */
   {
     name: 'Pill',
+    group: 'Shape',
     swatch: { background: '#334155', borderRadius: 999 },
     styles: () => ({ borderRadius: '999px', paddingTop: '10px', paddingBottom: '10px', paddingLeft: '20px', paddingRight: '20px' }),
-    patch: { borderRadiusTL: 999, borderRadiusTR: 999, borderRadiusBR: 999, borderRadiusBL: 999 },
+    patch: corners(999),
   },
+  {
+    name: 'Slab',
+    group: 'Shape',
+    swatch: { background: '#334155', borderRadius: 0 },
+    styles: () => ({ borderRadius: '0px' }),
+    patch: corners(0),
+  },
+  {
+    name: 'Squircle',
+    group: 'Shape',
+    swatch: { background: '#334155', borderRadius: 10 },
+    styles: () => ({ borderRadius: '28px' }),
+    patch: corners(28),
+  },
+  {
+    name: 'Blob',
+    group: 'Shape',
+    swatch: { background: '#334155', borderRadius: '42% 58% 63% 37% / 41% 44% 56% 59%' },
+    styles: () => ({ borderRadius: '42% 58% 63% 37% / 41% 44% 56% 59%' }),
+  },
+  {
+    name: 'Bevel',
+    group: 'Shape',
+    swatch: { background: '#334155', clipPath: 'polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px)' },
+    styles: () => ({ clipPath: 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)' }),
+  },
+  {
+    name: 'Tag',
+    group: 'Shape',
+    swatch: { background: '#334155', clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%)' },
+    styles: () => ({ clipPath: 'polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%)' }),
+  },
+  {
+    name: 'Arch',
+    group: 'Shape',
+    swatch: { background: '#334155', borderRadius: '12px 12px 3px 3px' },
+    styles: () => ({ borderRadius: '999px 999px 12px 12px' }),
+    patch: { borderRadiusTL: 999, borderRadiusTR: 999, borderRadiusBR: 12, borderRadiusBL: 12 },
+  },
+  {
+    name: 'Leaf',
+    group: 'Shape',
+    swatch: { background: '#334155', borderRadius: '2px 12px 2px 12px' },
+    styles: () => ({ borderRadius: '4px 32px 4px 32px' }),
+    patch: { borderRadiusTL: 4, borderRadiusTR: 32, borderRadiusBR: 4, borderRadiusBL: 32 },
+  },
+
+  /* ─── Line — borders & rules ─── */
+  {
+    name: 'Outline',
+    group: 'Line',
+    swatch: { background: 'transparent', border: '1.5px solid currentColor', borderRadius: 6 },
+    styles: () => ({ background: 'transparent', border: '1.5px solid currentColor', borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Hairline',
+    group: 'Line',
+    swatch: { background: 'transparent', border: '1px solid rgba(148,163,184,0.6)', borderRadius: 6 },
+    styles: () => ({ background: 'transparent', border: '1px solid rgba(128, 128, 128, 0.35)', borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Dashed',
+    group: 'Line',
+    swatch: { background: 'transparent', border: '1.5px dashed #14b8a6', borderRadius: 6 },
+    styles: (accent) => ({ background: 'transparent', border: `2px dashed ${accent}`, borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Double',
+    group: 'Line',
+    swatch: { background: 'transparent', border: '3px double #14b8a6', borderRadius: 5 },
+    styles: (accent) => ({ background: 'transparent', border: `3px double ${accent}`, borderRadius: '10px' }),
+    patch: corners(10),
+  },
+  {
+    name: 'Underline',
+    group: 'Line',
+    swatch: { background: 'transparent', borderBottom: '3px solid #14b8a6', borderRadius: 0 },
+    styles: (accent) => ({ borderBottom: `3px solid ${accent}`, paddingBottom: '4px' }),
+  },
+
+  /* ─── Accent — colour & gradients ─── */
   {
     name: 'Pop',
+    group: 'Accent',
     swatch: { background: 'var(--fs-accent, #14b8a6)', borderRadius: 6 },
     styles: (accent) => ({ background: accent, color: '#ffffff', fontWeight: '700', borderRadius: '12px' }),
-    patch: { fontWeight: '700' },
+    patch: { ...corners(12), fontWeight: '700' },
   },
   {
+    name: 'Gradient',
+    group: 'Accent',
+    swatch: { background: 'linear-gradient(135deg,#14b8a6,#0f766e)', borderRadius: 6 },
+    styles: (accent) => ({
+      background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 55%, #000))`,
+      color: '#ffffff',
+      fontWeight: '600',
+      border: 'none',
+      borderRadius: '12px',
+    }),
+    patch: { ...corners(12), fontWeight: '600' },
+  },
+  {
+    name: 'Sunset',
+    group: 'Accent',
+    swatch: { background: 'linear-gradient(135deg,#ff8a00,#ff2d75)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(135deg, #ff8a00, #ff2d75)', color: '#ffffff', border: 'none', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Aurora',
+    group: 'Accent',
+    swatch: { background: 'linear-gradient(120deg,#6ee7b7,#3b82f6,#a855f7)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(120deg, #6ee7b7, #3b82f6, #a855f7)', color: '#ffffff', border: 'none', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Ocean',
+    group: 'Accent',
+    swatch: { background: 'linear-gradient(160deg,#0ea5e9,#2563eb)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(160deg, #0ea5e9, #2563eb)', color: '#ffffff', border: 'none', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Candy',
+    group: 'Accent',
+    swatch: { background: 'linear-gradient(135deg,#f472b6,#a78bfa)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(135deg, #f472b6, #a78bfa)', color: '#ffffff', border: 'none', borderRadius: '16px' }),
+    patch: corners(16),
+  },
+  {
+    name: 'Mesh',
+    group: 'Accent',
+    swatch: { background: 'radial-gradient(at 20% 20%,#a78bfa,transparent 60%),radial-gradient(at 80% 30%,#f472b6,transparent 55%),#0b1220', borderRadius: 6 },
+    styles: () => ({
+      background: 'radial-gradient(at 18% 20%, rgba(167, 139, 250, 0.55), transparent 55%), radial-gradient(at 82% 12%, rgba(244, 114, 182, 0.5), transparent 50%), radial-gradient(at 60% 92%, rgba(56, 189, 248, 0.5), transparent 55%), #0b1220',
+      color: '#ffffff',
+      border: 'none',
+      borderRadius: '16px',
+    }),
+    patch: corners(16),
+  },
+
+  /* ─── Type — text treatments ─── */
+  {
+    name: 'Grad Text',
+    group: 'Type',
+    swatch: { background: 'linear-gradient(120deg,#22d3ee,#a78bfa,#f472b6)', borderRadius: 6 },
+    styles: (accent) => ({
+      backgroundImage: `linear-gradient(120deg, ${accent}, color-mix(in srgb, ${accent} 45%, #7c3aed))`,
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      color: accent,
+      fontWeight: '800',
+    }),
+    patch: { fontWeight: '800' },
+  },
+  {
+    name: 'Eyebrow',
+    group: 'Type',
+    swatch: { background: 'repeating-linear-gradient(90deg,#94a3b8 0 4px,transparent 4px 7px)', borderRadius: 2 },
+    styles: (accent) => ({ textTransform: 'uppercase', letterSpacing: '0.18em', fontWeight: '600', fontSize: '0.78em', color: accent }),
+    patch: { fontWeight: '600' },
+  },
+  {
+    name: 'Display',
+    group: 'Type',
+    swatch: { background: '#cbd5e1', borderRadius: 3 },
+    styles: () => ({ fontWeight: '800', letterSpacing: '-0.02em', lineHeight: '1.03' }),
+    patch: { fontWeight: '800' },
+  },
+  {
+    name: 'Marker',
+    group: 'Type',
+    swatch: { background: 'rgba(20,184,166,0.4)', borderRadius: 3 },
+    styles: (accent) => ({ background: `color-mix(in srgb, ${accent} 32%, transparent)`, paddingLeft: '4px', paddingRight: '4px', borderRadius: '4px' }),
+  },
+  {
+    name: 'Quiet',
+    group: 'Type',
+    swatch: { background: 'rgba(148,163,184,0.35)', borderRadius: 4 },
+    styles: () => ({ opacity: '0.6', fontWeight: '400' }),
+    patch: { opacity: 0.6 },
+  },
+
+  /* ─── Bold — brutalist & sticker ─── */
+  {
+    name: 'Sticker',
+    group: 'Bold',
+    swatch: { background: '#f472b6', border: '2px solid #fff', boxShadow: '0 3px 7px rgba(0,0,0,0.4)', borderRadius: 6 },
+    styles: () => ({ background: '#ffffff', color: '#0b0f14', border: '4px solid #ffffff', boxShadow: '0 6px 18px rgba(0, 0, 0, 0.28)', borderRadius: '16px' }),
+    patch: corners(16),
+  },
+  {
+    name: 'Brutal',
+    group: 'Bold',
+    swatch: { background: '#fde047', border: '1.5px solid #000', boxShadow: '3px 3px 0 #000', borderRadius: 0 },
+    styles: () => ({ background: '#ffffff', color: '#0b0f14', border: '2px solid #0b0f14', boxShadow: '6px 6px 0 #0b0f14', borderRadius: '0px', fontWeight: '700' }),
+    patch: { ...corners(0), fontWeight: '700' },
+  },
+  {
+    name: 'Comic',
+    group: 'Bold',
+    swatch: { background: '#fff', border: '1.5px solid #000', boxShadow: '2.5px 2.5px 0 rgba(0,0,0,0.9)', borderRadius: 5 },
+    styles: () => ({ background: '#ffffff', color: '#0b0f14', border: '3px solid #0b0f14', boxShadow: '5px 5px 0 rgba(11, 15, 20, 0.9)', borderRadius: '14px', fontWeight: '700' }),
+    patch: { ...corners(14), fontWeight: '700' },
+  },
+  {
+    name: 'Retro',
+    group: 'Bold',
+    swatch: { background: '#fff', border: '1.5px solid #0b0f14', boxShadow: '3px 3px 0 #14b8a6', borderRadius: 4 },
+    styles: (accent) => ({ background: '#ffffff', color: '#0b0f14', border: '2px solid #0b0f14', boxShadow: `5px 5px 0 ${accent}`, borderRadius: '10px' }),
+    patch: corners(10),
+  },
+
+  /* ─── Reset ─── */
+  {
     name: 'Reset look',
+    group: 'Reset',
     swatch: { background: 'transparent', border: '1px dashed rgba(255,255,255,0.35)', borderRadius: 6 },
-    styles: () => ({ boxShadow: 'none', border: 'none', backdropFilter: 'none' }),
+    styles: () => ({
+      boxShadow: 'none',
+      border: 'none',
+      backdropFilter: 'none',
+      backgroundImage: 'none',
+      background: 'transparent',
+      clipPath: 'none',
+      filter: 'none',
+      textShadow: 'none',
+      WebkitTextFillColor: 'currentColor',
+      WebkitBackgroundClip: 'border-box',
+      backgroundClip: 'border-box',
+      mixBlendMode: 'normal',
+    }),
   },
 ]
 
@@ -687,17 +1011,28 @@ export default function FroamFloatingBar({
       )}
 
       {openPop === 'looks' && (
-        <div className="froam-floating-bar__pop" data-chef-editor-root="true">
+        <div className="froam-floating-bar__pop froam-floating-bar__pop--looks" data-chef-editor-root="true">
           <div className="froam-floating-bar__pop-head">
             <span>Quick looks</span>
           </div>
-          <div className="froam-floating-bar__looks">
-            {LOOKS.map((look) => (
-              <button key={look.name} type="button" onClick={() => applyLook(look)}>
-                <i style={look.swatch} />
-                <span>{look.name}</span>
-              </button>
-            ))}
+          <div className="froam-floating-bar__looks-scroll">
+            {LOOK_GROUPS.map((group) => {
+              const looks = LOOKS.filter((look) => look.group === group)
+              if (looks.length === 0) return null
+              return (
+                <div key={group} className="froam-floating-bar__looks-section">
+                  <div className="froam-floating-bar__looks-label">{group}</div>
+                  <div className="froam-floating-bar__looks">
+                    {looks.map((look) => (
+                      <button key={look.name} type="button" onClick={() => applyLook(look)}>
+                        <i style={look.swatch} />
+                        <span>{look.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

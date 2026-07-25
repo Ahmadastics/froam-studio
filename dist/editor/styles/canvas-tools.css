@@ -995,6 +995,43 @@ body.froam-drag-active * {
   height: 20px;
 }
 
+/* v4.8: grouped, scrollable quick-looks gallery */
+.froam-floating-bar__pop--looks {
+  max-width: min(340px, calc(100vw - 32px));
+}
+
+.froam-floating-bar__looks-scroll {
+  max-height: min(46vh, 380px);
+  overflow-y: auto;
+  margin: 0 -6px;
+  padding: 0 6px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.froam-floating-bar__looks-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.froam-floating-bar__looks-scroll::-webkit-scrollbar-thumb {
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.froam-floating-bar__looks-section + .froam-floating-bar__looks-section {
+  margin-top: 12px;
+}
+
+.froam-floating-bar__looks-label {
+  margin: 0 0 6px 2px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.4);
+}
+
 /* ─── v4.1: opacity scrub chip ─── */
 
 .froam-floating-bar__opacity {
