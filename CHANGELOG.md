@@ -2,15 +2,42 @@
 
 All notable changes to froam-studio are documented here.
 
+## 4.9.1 — 2026-07-25
+
+**Quick Looks, second wave.** 29 more one-tap recipes (6 → 71 total) and
+two new groups, so the gallery covers texture and text effects too.
+
+### Added
+- **29 new looks**, in ten groups now:
+  - **Texture** *(new group)* — Stripes, Dots, Grid, Spotlight
+  - **Effect** *(new group)* — Hollow (text outline via `-webkit-text-stroke`),
+    Invert (`mix-blend-mode: difference`), Echo (offset text shadow)
+  - **Depth** — Layered (stacked shadow), Halo (soft accent ring)
+  - **Surface** — Sheen (top-light), Cream (warm card)
+  - **Shape** — Chamfer (octagon), Ticket (side notches), Chevron, Diamond
+  - **Line** — Edge (gradient border via `border-image`), Dotted, Quote
+    (left bar), Rule (top bar)
+  - **Accent** — Conic, Duotone (hard split), Gold, Fire
+  - **Type** — Serif, Mono (both patch the font-family control), Neon (glow),
+    Emboss (letterpress)
+  - **Bold** — Punch (chunky uppercase button), Frame (inset keyline)
+- More accent-aware recipes: Halo, Stripes, Dots, Grid, Spotlight, Edge,
+  Dotted, Quote, Rule, Duotone, Neon, Hollow, Echo and Punch all derive
+  their shades from the page's picked accent via `color-mix`.
+
+### Changed
+- **Reset look** now also clears `border-image`, `-webkit-text-stroke`,
+  `text-transform` and `letter-spacing`, so it undoes any wave-two look too.
+
 ## 4.9.0 — 2026-07-25
 
 **Quick Looks becomes a gallery.** The one-tap style recipes on the
-contextual bar (the `✦` button) went from 6 to 40, organized into eight
+contextual bar (the `✦` button) went from 6 to 42, organized into eight
 browsable groups so a design that needs a shape, a shadow, or a fill is one
 tap away — the popover now scrolls when the ideas outrun the screen.
 
 ### Added
-- **34 new looks**, grouped for browsing:
+- **36 new looks**, grouped for browsing:
   - **Depth** — Lift, Float, Soft (neumorphic), Inset, Ring, Glow
   - **Surface** — Glass, Frost, Ink, Paper, Slate, Tint
   - **Shape** — Pill, Slab, Squircle, Blob, Bevel, Tag, Arch, Leaf

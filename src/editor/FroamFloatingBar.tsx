@@ -231,7 +231,7 @@ function pickAccent(palette: string[]): string {
    verbatim to froam.generated.css, so anything valid here ships. Looks are
    accent-aware: `accent` is the site's own picked accent, and color-mix
    derives shades from it so recipes fit whatever palette they land on. */
-const LOOK_GROUPS = ['Depth', 'Surface', 'Shape', 'Line', 'Accent', 'Type', 'Bold', 'Reset'] as const
+const LOOK_GROUPS = ['Depth', 'Surface', 'Texture', 'Shape', 'Line', 'Accent', 'Type', 'Effect', 'Bold', 'Reset'] as const
 type LookGroup = (typeof LOOK_GROUPS)[number]
 
 type Look = {
@@ -577,6 +577,237 @@ const LOOKS: Look[] = [
     patch: corners(10),
   },
 
+  /* ─── v4.9.1: second wave. Grouped by `group` (render order follows
+     LOOK_GROUPS), so physical position here doesn't affect where they land. ─── */
+
+  // Depth
+  {
+    name: 'Layered',
+    group: 'Depth',
+    swatch: { background: '#1f2937', boxShadow: '0 1px 1px rgba(0,0,0,.5),0 3px 3px rgba(0,0,0,.4)', borderRadius: 6 },
+    styles: () => ({ boxShadow: '0 1px 1px rgba(0,0,0,.06), 0 2px 2px rgba(0,0,0,.06), 0 4px 4px rgba(0,0,0,.06), 0 8px 8px rgba(0,0,0,.06), 0 16px 16px rgba(0,0,0,.06)', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Halo',
+    group: 'Depth',
+    swatch: { background: '#1f2937', boxShadow: '0 0 0 5px rgba(20,184,166,0.25)', borderRadius: 6 },
+    styles: (accent) => ({ boxShadow: `0 0 0 6px color-mix(in srgb, ${accent} 16%, transparent)`, borderRadius: '14px' }),
+    patch: corners(14),
+  },
+
+  // Surface
+  {
+    name: 'Sheen',
+    group: 'Surface',
+    swatch: { background: 'linear-gradient(180deg,rgba(255,255,255,0.35),rgba(255,255,255,0) 45%),#1f2937', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0) 42%), #1f2937', color: '#f8fafc', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Cream',
+    group: 'Surface',
+    swatch: { background: '#fff7ed', border: '1px solid rgba(124,45,18,0.2)', borderRadius: 6 },
+    styles: () => ({ background: '#fff7ed', color: '#7c2d12', border: '1px solid rgba(124, 45, 18, 0.12)', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+
+  // Texture
+  {
+    name: 'Stripes',
+    group: 'Texture',
+    swatch: { background: 'repeating-linear-gradient(45deg,rgba(20,184,166,0.4) 0 3px,#fff 3px 6px)', borderRadius: 6 },
+    styles: (accent) => ({ background: `repeating-linear-gradient(45deg, color-mix(in srgb, ${accent} 12%, transparent) 0 10px, transparent 10px 20px), #ffffff`, color: '#0b0f14', borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Dots',
+    group: 'Texture',
+    swatch: { background: 'radial-gradient(rgba(20,184,166,0.6) 1px,#fff 1.1px) 0 0/5px 5px', borderRadius: 6 },
+    styles: (accent) => ({ background: `radial-gradient(color-mix(in srgb, ${accent} 26%, transparent) 1.5px, transparent 1.6px) 0 0 / 12px 12px, #ffffff`, color: '#0b0f14', borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Grid',
+    group: 'Texture',
+    swatch: { background: 'linear-gradient(rgba(20,184,166,0.5) 1px,transparent 1px) 0 0/6px 6px,linear-gradient(90deg,rgba(20,184,166,0.5) 1px,transparent 1px) 0 0/6px 6px,#0b1220', borderRadius: 6 },
+    styles: (accent) => ({ background: `linear-gradient(color-mix(in srgb, ${accent} 20%, transparent) 1px, transparent 1px) 0 0 / 16px 16px, linear-gradient(90deg, color-mix(in srgb, ${accent} 20%, transparent) 1px, transparent 1px) 0 0 / 16px 16px, #0b1220`, color: '#e2e8f0', borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Spotlight',
+    group: 'Texture',
+    swatch: { background: 'radial-gradient(120% 90% at 50% -10%,rgba(20,184,166,0.6),transparent 62%),#0b1220', borderRadius: 6 },
+    styles: (accent) => ({ background: `radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, ${accent} 34%, transparent), transparent 62%), #0b1220`, color: '#f8fafc', borderRadius: '16px' }),
+    patch: corners(16),
+  },
+
+  // Shape
+  {
+    name: 'Chamfer',
+    group: 'Shape',
+    swatch: { background: '#334155', clipPath: 'polygon(6px 0,calc(100% - 6px) 0,100% 6px,100% calc(100% - 6px),calc(100% - 6px) 100%,6px 100%,0 calc(100% - 6px),0 6px)' },
+    styles: () => ({ clipPath: 'polygon(14px 0, calc(100% - 14px) 0, 100% 14px, 100% calc(100% - 14px), calc(100% - 14px) 100%, 14px 100%, 0 calc(100% - 14px), 0 14px)' }),
+  },
+  {
+    name: 'Ticket',
+    group: 'Shape',
+    swatch: { background: '#334155', clipPath: 'polygon(0 0,100% 0,100% 38%,90% 50%,100% 62%,100% 100%,0 100%,0 62%,10% 50%,0 38%)' },
+    styles: () => ({ clipPath: 'polygon(0 0, 100% 0, 100% 38%, 96% 50%, 100% 62%, 100% 100%, 0 100%, 0 62%, 4% 50%, 0 38%)' }),
+  },
+  {
+    name: 'Chevron',
+    group: 'Shape',
+    swatch: { background: '#334155', clipPath: 'polygon(0 0,78% 0,100% 50%,78% 100%,0 100%,22% 50%)' },
+    styles: () => ({ clipPath: 'polygon(0 0, 78% 0, 100% 50%, 78% 100%, 0 100%, 22% 50%)' }),
+  },
+  {
+    name: 'Diamond',
+    group: 'Shape',
+    swatch: { background: '#334155', clipPath: 'polygon(50% 0,100% 50%,50% 100%,0 50%)' },
+    styles: () => ({ clipPath: 'polygon(50% 0, 100% 50%, 50% 100%, 0 50%)' }),
+  },
+
+  // Line
+  {
+    name: 'Edge',
+    group: 'Line',
+    swatch: { background: 'transparent', border: '2px solid transparent', borderImage: 'linear-gradient(135deg,#14b8a6,#7c3aed) 1', borderRadius: 0 },
+    styles: (accent) => ({
+      background: 'transparent',
+      borderStyle: 'solid',
+      borderWidth: '3px',
+      borderImage: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 45%, #7c3aed)) 1`,
+      borderRadius: '0px',
+    }),
+  },
+  {
+    name: 'Dotted',
+    group: 'Line',
+    swatch: { background: 'transparent', border: '2px dotted #14b8a6', borderRadius: 6 },
+    styles: (accent) => ({ background: 'transparent', border: `3px dotted ${accent}`, borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Quote',
+    group: 'Line',
+    swatch: { background: 'transparent', borderLeft: '4px solid #14b8a6', borderRadius: 0 },
+    styles: (accent) => ({ background: 'transparent', borderLeft: `4px solid ${accent}`, paddingLeft: '14px', borderRadius: '0px' }),
+  },
+  {
+    name: 'Rule',
+    group: 'Line',
+    swatch: { background: 'transparent', borderTop: '3px solid #14b8a6', borderRadius: 0 },
+    styles: (accent) => ({ background: 'transparent', borderTop: `3px solid ${accent}`, paddingTop: '12px', borderRadius: '0px' }),
+  },
+
+  // Accent
+  {
+    name: 'Conic',
+    group: 'Accent',
+    swatch: { background: 'conic-gradient(from 210deg,#f472b6,#a78bfa,#38bdf8,#34d399,#f472b6)', borderRadius: 6 },
+    styles: () => ({ background: 'conic-gradient(from 210deg, #f472b6, #a78bfa, #38bdf8, #34d399, #f472b6)', color: '#0b0f14', border: 'none', borderRadius: '16px' }),
+    patch: corners(16),
+  },
+  {
+    name: 'Duotone',
+    group: 'Accent',
+    swatch: { background: 'linear-gradient(135deg,#14b8a6 0 50%,#0a5c50 50% 100%)', borderRadius: 6 },
+    styles: (accent) => ({ background: `linear-gradient(135deg, ${accent} 0 50%, color-mix(in srgb, ${accent} 45%, #000) 50% 100%)`, color: '#ffffff', border: 'none', borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Gold',
+    group: 'Accent',
+    swatch: { background: 'linear-gradient(135deg,#fde047,#f59e0b)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(135deg, #fde047, #f59e0b)', color: '#3b2f0b', border: 'none', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Fire',
+    group: 'Accent',
+    swatch: { background: 'linear-gradient(135deg,#f97316,#ef4444,#b91c1c)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(135deg, #f97316, #ef4444, #b91c1c)', color: '#ffffff', border: 'none', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+
+  // Type
+  {
+    name: 'Serif',
+    group: 'Type',
+    swatch: { background: '#cbd5e1', borderRadius: 3 },
+    styles: () => ({ fontFamily: 'Georgia, "Times New Roman", serif', letterSpacing: '0' }),
+    patch: { fontFamily: 'Georgia, "Times New Roman", serif' },
+  },
+  {
+    name: 'Mono',
+    group: 'Type',
+    swatch: { background: '#94a3b8', borderRadius: 3 },
+    styles: () => ({ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', letterSpacing: '0' }),
+    patch: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+  },
+  {
+    name: 'Neon',
+    group: 'Type',
+    swatch: { background: '#0b1220', boxShadow: '0 0 8px 1px rgba(20,184,166,0.9)', borderRadius: 6 },
+    styles: (accent) => ({ color: accent, textShadow: `0 0 7px color-mix(in srgb, ${accent} 80%, transparent), 0 0 16px color-mix(in srgb, ${accent} 60%, transparent)`, fontWeight: '700' }),
+    patch: { fontWeight: '700' },
+  },
+  {
+    name: 'Emboss',
+    group: 'Type',
+    swatch: { background: '#e2e8f0', boxShadow: 'inset 0 1px 0 #fff', borderRadius: 4 },
+    styles: () => ({ color: '#334155', textShadow: '0 1px 0 rgba(255,255,255,0.7), 0 -1px 0 rgba(0,0,0,0.15)', fontWeight: '700' }),
+    patch: { fontWeight: '700' },
+  },
+
+  // Effect
+  {
+    name: 'Hollow',
+    group: 'Effect',
+    swatch: { background: 'transparent', border: '1.5px solid #14b8a6', borderRadius: 3 },
+    styles: (accent) => ({ color: accent, WebkitTextStrokeWidth: '1.5px', WebkitTextStrokeColor: accent, WebkitTextFillColor: 'transparent', fontWeight: '800' }),
+    patch: { fontWeight: '800' },
+  },
+  {
+    name: 'Invert',
+    group: 'Effect',
+    swatch: { background: 'linear-gradient(90deg,#111 50%,#eee 50%)', borderRadius: 4 },
+    styles: () => ({ mixBlendMode: 'difference', color: '#ffffff' }),
+  },
+  {
+    name: 'Echo',
+    group: 'Effect',
+    swatch: { background: '#e2e8f0', boxShadow: '3px 3px 0 #14b8a6', borderRadius: 3 },
+    styles: (accent) => ({ color: '#0b0f14', textShadow: `3px 3px 0 ${accent}`, fontWeight: '700' }),
+    patch: { fontWeight: '700' },
+  },
+
+  // Bold
+  {
+    name: 'Punch',
+    group: 'Bold',
+    swatch: { background: '#14b8a6', boxShadow: '0 4px 0 #0a5c50', borderRadius: 4 },
+    styles: (accent) => ({
+      background: accent,
+      color: '#ffffff',
+      fontWeight: '800',
+      textTransform: 'uppercase',
+      letterSpacing: '0.04em',
+      border: 'none',
+      borderRadius: '10px',
+      boxShadow: `0 8px 0 color-mix(in srgb, ${accent} 55%, #000)`,
+    }),
+    patch: { ...corners(10), fontWeight: '800' },
+  },
+  {
+    name: 'Frame',
+    group: 'Bold',
+    swatch: { background: '#fff', boxShadow: 'inset 0 0 0 3px #0b0f14', borderRadius: 3 },
+    styles: () => ({ background: '#ffffff', color: '#0b0f14', border: 'none', boxShadow: 'inset 0 0 0 3px #0b0f14', borderRadius: '4px' }),
+    patch: corners(4),
+  },
+
   /* ─── Reset ─── */
   {
     name: 'Reset look',
@@ -585,13 +816,17 @@ const LOOKS: Look[] = [
     styles: () => ({
       boxShadow: 'none',
       border: 'none',
+      borderImage: 'none',
       backdropFilter: 'none',
       backgroundImage: 'none',
       background: 'transparent',
       clipPath: 'none',
       filter: 'none',
       textShadow: 'none',
+      textTransform: 'none',
+      letterSpacing: 'normal',
       WebkitTextFillColor: 'currentColor',
+      WebkitTextStrokeWidth: '0',
       WebkitBackgroundClip: 'border-box',
       backgroundClip: 'border-box',
       mixBlendMode: 'normal',
