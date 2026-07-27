@@ -1,0 +1,371 @@
+/**
+ * Froam Rooms — the op log.
+ *
+ * ROADMAP.md Phase 0.2 / 0.2b. Pure and DOM-free on purpose: everything here
+ * is a function of an op array, so it can be unit-tested, replayed on a
+ * server, and shared between the editor and a room.
+ *
+ * The design store is *derived*, never mutated directly:
+ *
+ *     ops ──deriveStore──▶ EditorStore ──codegen──▶ froam.generated.css
+ *
+ * Undo is a per-actor cursor over the same log rather than a stack of store
+ * snapshots. With one actor that behaves exactly like the old undo; with two
+ * it is already correct, which is the whole point of building it now.
+ */
+import {
+  compareOps,
+  scopeKey,
+  type EditorStore,
+  type ElementDraft,
+  type FroamActorId,
+  type FroamOp,
+  type FroamOpField,
+  type FroamViewport,
+} from './types'
+
+/* ─── ids & clocks ─── */
+
+export function froamOpId() {
+  const c = globalThis.crypto
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID()
+  return `op_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+/**
+ * Lamport clock. `observe` on every incoming remote op so our next local op
+ * sorts after everything we've seen — that, not wall-clock time, is what makes
+ * ordering agree across devices.
+ */
+export function createClock(start = 0) {
+  let value = start
+  return {
+    get current() {
+      return value
+    },
+    tick() {
+      value += 1
+      return value
+    },
+    observe(remote: number) {
+      if (remote > value) value = remote
+      return value
+    },
+  }
+}
+
+export function highestClock(ops: readonly FroamOp[]) {
+  let max = 0
+  for (const op of ops) if (op.clock > max) max = op.clock
+  return max
+}
+
+/* ─── deriving the store ─── */
+
+function readField(draft: ElementDraft | undefined, field: FroamOpField): string | undefined {
+  if (!draft) return undefined
+  if (field === 'text') return draft.text
+  if (field === 'imageUrl') return draft.imageUrl
+  return draft.styles?.[field.slice(6)]
+}
+
+function writeField(draft: ElementDraft, field: FroamOpField, value: string | undefined): ElementDraft {
+  const next: ElementDraft = { ...draft }
+  if (field === 'text' || field === 'imageUrl') {
+    if (value === undefined) delete next[field]
+    else next[field] = value
+    return next
+  }
+  const prop = field.slice(6)
+  const styles = { ...(next.styles ?? {}) }
+  if (value === undefined) delete styles[prop]
+  else styles[prop] = value
+  if (Object.keys(styles).length) next.styles = styles
+  else delete next.styles
+  return next
+}
+
+function isEmptyDraft(draft: ElementDraft) {
+  return draft.text === undefined && draft.imageUrl === undefined && !draft.styles
+}
+
+/** Apply one op to a store, returning a new store. Last write wins. */
+export function applyOp(store: EditorStore, op: FroamOp): EditorStore {
+  const key = scopeKey(op.routeKey, op.viewport)
+  const scope = store[key] ?? {}
+  const nextDraft = writeField(scope[op.path] ?? {}, op.field, op.after)
+
+  const nextScope = { ...scope }
+  if (isEmptyDraft(nextDraft)) delete nextScope[op.path]
+  else nextScope[op.path] = nextDraft
+
+  const next = { ...store }
+  if (Object.keys(nextScope).length) next[key] = nextScope
+  else delete next[key]
+  return next
+}
+
+/**
+ * Fold the whole log into a design store.
+ *
+ * Undo and redo ops carry real before/after values, so they fold in like any
+ * other write — derivation never has to know what an undo *is*. That keeps
+ * this function a plain reduce, which is why it can run on a server too.
+ */
+export function deriveStore(ops: readonly FroamOp[]): EditorStore {
+  const ordered = [...ops].sort(compareOps)
+  let store: EditorStore = {}
+  for (const op of ordered) store = applyOp(store, op)
+  return store
+}
+
+/** Current value of one field, per the log. */
+export function currentValue(store: EditorStore, op: Pick<FroamOp, 'routeKey' | 'viewport' | 'path' | 'field'>) {
+  return readField(store[scopeKey(op.routeKey, op.viewport)]?.[op.path], op.field)
+}
+
+/* ─── writing ops ─── */
+
+export type EditInput = {
+  actor: FroamActorId
+  clock: number
+  routeKey: string
+  viewport: FroamViewport
+  path: string
+  field: FroamOpField
+  value: string | undefined
+  label?: string
+  batch?: string
+}
+
+/**
+ * Build an edit op against the current derived store, so `before` is what is
+ * actually on screen rather than what the caller assumed.
+ * Returns null when the value is unchanged — no-op ops would bloat the log and
+ * add dead undo steps.
+ */
+export function makeEdit(store: EditorStore, input: EditInput): FroamOp | null {
+  const before = currentValue(store, input)
+  if (before === input.value) return null
+  return {
+    id: froamOpId(),
+    kind: 'edit',
+    actor: input.actor,
+    clock: input.clock,
+    ts: Date.now(),
+    routeKey: input.routeKey,
+    viewport: input.viewport,
+    path: input.path,
+    field: input.field,
+    before,
+    after: input.value,
+    label: input.label,
+    batch: input.batch,
+  }
+}
+
+/* ─── per-actor undo ─── */
+
+type Action = { key: string; kind: FroamOp['kind']; ops: FroamOp[] }
+
+/**
+ * Group one actor's ops into undoable actions. Ops sharing a `batch` are one
+ * action, which is what keeps a colour-picker drag to a single undo step.
+ */
+function actorActions(ops: readonly FroamOp[], actor: FroamActorId): Action[] {
+  const actions: Action[] = []
+  const byKey = new Map<string, Action>()
+  for (const op of [...ops].sort(compareOps)) {
+    if (op.actor !== actor) continue
+    const key = `${op.kind}:${op.batch ?? op.id}`
+    const existing = byKey.get(key)
+    if (existing) {
+      existing.ops.push(op)
+      continue
+    }
+    const action: Action = { key: op.batch ?? op.id, kind: op.kind, ops: [op] }
+    byKey.set(key, action)
+    actions.push(action)
+  }
+  return actions
+}
+
+export type UndoCursor = {
+  undoable: Action[]
+  redoable: Action[]
+}
+
+/**
+ * Replay this actor's actions to work out what *they* can undo.
+ *
+ * Other actors' ops are skipped entirely — that is the whole difference
+ * between single-player and multiplayer undo. Ctrl+Z must never revert what
+ * the person on the other side of the page just did.
+ */
+export function undoCursor(ops: readonly FroamOp[], actor: FroamActorId): UndoCursor {
+  const undoable: Action[] = []
+  const redoable: Action[] = []
+  for (const action of actorActions(ops, actor)) {
+    if (action.kind === 'edit') {
+      undoable.push(action)
+      redoable.length = 0
+    } else if (action.kind === 'undo') {
+      const popped = undoable.pop()
+      if (popped) redoable.push(popped)
+    } else {
+      const popped = redoable.pop()
+      if (popped) undoable.push(popped)
+    }
+  }
+  return { undoable, redoable }
+}
+
+export function canUndo(ops: readonly FroamOp[], actor: FroamActorId) {
+  return undoCursor(ops, actor).undoable.length > 0
+}
+
+export function canRedo(ops: readonly FroamOp[], actor: FroamActorId) {
+  return undoCursor(ops, actor).redoable.length > 0
+}
+
+export function undoLabel(ops: readonly FroamOp[], actor: FroamActorId) {
+  const top = undoCursor(ops, actor).undoable.at(-1)
+  return top?.ops.find((op) => op.label)?.label
+}
+
+function reverse(
+  store: EditorStore,
+  action: Action,
+  kind: 'undo' | 'redo',
+  actor: FroamActorId,
+  clock: number,
+): FroamOp[] {
+  const batch = froamOpId()
+  const ts = Date.now()
+  return action.ops
+    .map((op): FroamOp | null => {
+      // Re-read the live value instead of trusting the original op: someone
+      // else may have written this field since, and an undo that restores a
+      // stale `before` would silently clobber their edit.
+      const before = currentValue(store, op)
+      const after = kind === 'undo' ? op.before : op.after
+      if (before === after) return null
+      return {
+        id: froamOpId(),
+        kind,
+        actor,
+        clock,
+        ts,
+        routeKey: op.routeKey,
+        viewport: op.viewport,
+        path: op.path,
+        field: op.field,
+        before,
+        after,
+        label: op.label,
+        batch,
+        targets: op.id,
+      }
+    })
+    .filter((op): op is FroamOp => op !== null)
+}
+
+/**
+ * The ops to append for this actor's undo, or an empty array if there is
+ * nothing to undo. Always returns at least one op when it returns any, so the
+ * cursor stays in step even if every field was already at its old value.
+ */
+export function buildUndo(ops: readonly FroamOp[], actor: FroamActorId, clock: number): FroamOp[] {
+  const action = undoCursor(ops, actor).undoable.at(-1)
+  if (!action) return []
+  const reversed = reverse(deriveStore(ops), action, 'undo', actor, clock)
+  return reversed.length ? reversed : markerOnly(action, 'undo', actor, clock)
+}
+
+export function buildRedo(ops: readonly FroamOp[], actor: FroamActorId, clock: number): FroamOp[] {
+  const action = undoCursor(ops, actor).redoable.at(-1)
+  if (!action) return []
+  const reversed = reverse(deriveStore(ops), action, 'redo', actor, clock)
+  return reversed.length ? reversed : markerOnly(action, 'redo', actor, clock)
+}
+
+/**
+ * A no-value undo still has to move the cursor, otherwise Ctrl+Z appears to do
+ * nothing forever on an action that was already reverted by someone else.
+ */
+function markerOnly(action: Action, kind: 'undo' | 'redo', actor: FroamActorId, clock: number): FroamOp[] {
+  const source = action.ops[0]
+  const value = kind === 'undo' ? source.before : source.after
+  return [
+    {
+      id: froamOpId(),
+      kind,
+      actor,
+      clock,
+      ts: Date.now(),
+      routeKey: source.routeKey,
+      viewport: source.viewport,
+      path: source.path,
+      field: source.field,
+      before: value,
+      after: value,
+      label: source.label,
+      batch: froamOpId(),
+      targets: source.id,
+    },
+  ]
+}
+
+/* ─── log maintenance ─── */
+
+/**
+ * Collapse the head of a log into a baseline of edit ops, one per live field.
+ *
+ * The log grows forever; localStorage does not. Compacting keeps the derived
+ * store identical while dropping superseded writes and spent undo pairs.
+ * Everything after `keepFrom` is preserved verbatim so recent undo history
+ * survives.
+ */
+export function compactLog(ops: readonly FroamOp[], keepRecent = 200): FroamOp[] {
+  const ordered = [...ops].sort(compareOps)
+  if (ordered.length <= keepRecent) return ordered
+
+  const head = ordered.slice(0, ordered.length - keepRecent)
+  const tail = ordered.slice(ordered.length - keepRecent)
+  const baselineStore = deriveStore(head)
+  const clock = head.length ? head[head.length - 1].clock : 0
+
+  const baseline: FroamOp[] = []
+  for (const [key, scope] of Object.entries(baselineStore)) {
+    const at = key.lastIndexOf('@@')
+    const routeKey = key.slice(0, at)
+    const viewport = key.slice(at + 2) as FroamViewport
+    for (const [path, draft] of Object.entries(scope)) {
+      const fields: Array<[FroamOpField, string | undefined]> = [
+        ['text', draft.text],
+        ['imageUrl', draft.imageUrl],
+        ...Object.entries(draft.styles ?? {}).map(
+          ([prop, value]) => [`style:${prop}`, value] as [FroamOpField, string],
+        ),
+      ]
+      for (const [field, value] of fields) {
+        if (value === undefined) continue
+        baseline.push({
+          id: froamOpId(),
+          kind: 'edit',
+          actor: 'baseline',
+          clock,
+          ts: Date.now(),
+          routeKey,
+          viewport,
+          path,
+          field,
+          before: undefined,
+          after: value,
+          label: 'Baseline',
+        })
+      }
+    }
+  }
+  return [...baseline, ...tail]
+}
