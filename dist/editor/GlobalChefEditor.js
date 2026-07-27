@@ -26,6 +26,7 @@ import FroamInspirationPanel from './FroamInspirationPanel.js';
 import FroamShapeLibrary from './FroamShapeLibrary.js';
 import FroamPersonaEditor from './FroamPersonaEditor.js';
 import { getFroamRootElement } from '../config.js';
+import { createOpLogSession } from '../collab/session.js';
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources.js';
 import { useFroamRouteKey } from '../routing.js';
 import { DEFAULT_FROAM_PERSONA, FROAM_PERSONA_PATH, PERSONA_STORAGE_KEY, readFroamPersonaDraft, sanitizeFroamPersona, isFroamPersonaPath, } from './froamPersona.js';
@@ -66,6 +67,8 @@ const VIEWPORT_MODES = [
     { id: 'tablet', label: 'Tablet', width: 768, height: 1024 },
     { id: 'mobile', label: 'Mobile', width: 390, height: 844 },
 ];
+const VIEWPORTS_AGREE = true;
+void VIEWPORTS_AGREE;
 // ID of the portal element Froam injects to host the device shell
 const DEVICE_SHELL_ID = 'froam-device-shell';
 const fontOptions = [
@@ -1373,6 +1376,18 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [undoStack, setUndoStack] = useState([]);
     const [redoStack, setRedoStack] = useState([]);
     const [history, setHistory] = useState(() => loadHistory());
+    /**
+     * The op log (v4.9.2). Every state-changing edit is recorded here as a
+     * field-level operation, alongside the store that paints the page.
+     *
+     * The store is still what renders; the log is what undo, history and — from
+     * v5 — a room read from. Keeping both for one release means the log can be
+     * proven against real editing before anything depends on it.
+     * See src/collab/ and ROADMAP.md Phase 0.
+     */
+    const opLogRef = useRef(createOpLogSession());
+    const opBatchRef = useRef(null);
+    const opBatchTimerRef = useRef(0);
     // Gradient builder
     const [gradType, setGradType] = useState('linear');
     const [gradAngle, setGradAngle] = useState(135);
@@ -1456,6 +1471,26 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     useEffect(() => {
         ensureFontLinks(collectStoreFontFamilies(routeDrafts));
     }, [routeDrafts]);
+    /*
+     * Dev seam for the op log. While the log shadows the store, this is how the
+     * two get compared against real editing — `__froamOpLog.agrees()` is the
+     * invariant that has to hold before anything is allowed to depend on it.
+     */
+    useEffect(() => {
+        const debug = {
+            session: opLogRef.current,
+            ops: () => opLogRef.current.all(),
+            derived: () => opLogRef.current.store(),
+            live: () => storeRef.current,
+            agrees: () => {
+                const derived = opLogRef.current.store()[viewportStoreKeyRef.current] ?? {};
+                const live = storeRef.current[viewportStoreKeyRef.current] ?? {};
+                return JSON.stringify(derived) === JSON.stringify(live);
+            },
+        };
+        window.__froamOpLog = debug;
+        return () => { delete window.__froamOpLog; };
+    }, []);
     /* First time the editor opens on a project: run the one-time scan. */
     useEffect(() => {
         if (!showPanel || studioMinimized)
@@ -2289,6 +2324,41 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             return;
         setLayers(collectLayers(root));
     }, [openSections.layers, showPanel, routeKey]);
+    /* ─── Op log ─── */
+    /**
+     * Ops recorded close together under the same label collapse into one undo
+     * step — a colour-picker drag is fifty ops and a single Ctrl+Z. The 400 ms
+     * window matches the existing undo debounce; a different label opens a new
+     * batch immediately, so "colour then padding" stays two steps even when it
+     * happens fast.
+     */
+    function opBatch(label) {
+        const open = opBatchRef.current;
+        const id = open && open.label === label
+            ? open.id
+            : `b_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+        opBatchRef.current = { id, label };
+        window.clearTimeout(opBatchTimerRef.current);
+        opBatchTimerRef.current = window.setTimeout(() => { opBatchRef.current = null; }, 400);
+        return id;
+    }
+    /** Record one element's draft change on the log. Never throws into the editor. */
+    function recordOp(path, prev, next, label, batch) {
+        try {
+            opLogRef.current.record({
+                routeKey,
+                viewport: viewportMode,
+                path,
+                prev,
+                next,
+                label,
+                batch: batch ?? opBatch(label),
+            });
+        }
+        catch {
+            /* The log is not load-bearing yet — never let it break an edit. */
+        }
+    }
     /* ─── History helpers ─── */
     function pushHistory(label, currentStore) {
         const entry = {
@@ -2511,6 +2581,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         const nextStore = { ...storeRef.current };
         const routeStore = { ...(nextStore[viewportStoreKey] ?? {}) };
         const targetsToUpdate = selections.length > 0 ? selections : [selection];
+        // One batch for the whole multi-selection: restyling six elements at once
+        // is one undo step, not six.
+        const batch = opBatch(historyLabel ?? 'Edit');
         targetsToUpdate.forEach((sel) => {
             const target = findElementByPath(root, sel.path);
             if (!target)
@@ -2591,6 +2664,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             applyDraft(target, nextDraft);
             syncFroamArtboardMetadata(target);
             routeStore[sel.path] = nextDraft;
+            recordOp(sel.path, currentDraft, nextDraft, historyLabel ?? 'Edit', batch);
         });
         nextStore[viewportStoreKey] = routeStore;
         storeRef.current = nextStore;
@@ -2719,6 +2793,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         const currentDraft = routeDrafts[path] ?? {};
         const nextDraft = sanitizeDraftForElement(target, updater(currentDraft));
         applyDraft(target, nextDraft);
+        recordOp(path, currentDraft, nextDraft, historyLabel ?? 'Edit');
         const nextStore = {
             ...store,
             [viewportStoreKey]: {
@@ -3719,6 +3794,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             styles: { ...(currentDraft.styles ?? {}), ...styles },
         });
         applyDraft(target, nextDraft);
+        recordOp(path, currentDraft, nextDraft, label);
         routeStore[path] = nextDraft;
         nextStore[viewportStoreKey] = routeStore;
         storeRef.current = nextStore;

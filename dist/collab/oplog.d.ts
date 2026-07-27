@@ -13,7 +13,7 @@
  * snapshots. With one actor that behaves exactly like the old undo; with two
  * it is already correct, which is the whole point of building it now.
  */
-import { type EditorStore, type FroamActorId, type FroamOp, type FroamOpField, type FroamViewport } from './types';
+import { type EditorStore, type ElementDraft, type FroamActorId, type FroamOp, type FroamOpField, type FroamViewport } from './types';
 export declare function froamOpId(): string;
 /**
  * Lamport clock. `observe` on every incoming remote op so our next local op
@@ -56,6 +56,20 @@ export type EditInput = {
  * add dead undo steps.
  */
 export declare function makeEdit(store: EditorStore, input: EditInput): FroamOp | null;
+export type FieldChange = {
+    field: FroamOpField;
+    value: string | undefined;
+};
+/**
+ * Reduce a whole-draft change to the fields that actually moved.
+ *
+ * The editor thinks in drafts ("here is the new state of this element"), the
+ * log thinks in fields ("colour became #fff"). This is the seam between them,
+ * and it is what makes concurrent edits to one element merge instead of
+ * clobber: two people restyling the same box only collide if they touch the
+ * same property.
+ */
+export declare function diffDrafts(prev: ElementDraft | undefined, next: ElementDraft | undefined): FieldChange[];
 type Action = {
     key: string;
     kind: FroamOp['kind'];

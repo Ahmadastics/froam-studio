@@ -18,11 +18,13 @@ const {
   createClock,
   currentValue,
   deriveStore,
+  diffDrafts,
   makeEdit,
   undoCursor,
   undoLabel,
 } = await import('../dist/collab/oplog.js')
 const { scopeKey } = await import('../dist/collab/types.js')
+const { createOpLogSession } = await import('../dist/collab/session.js')
 
 const tests = []
 const test = (name, fn) => tests.push([name, fn])
@@ -183,6 +185,41 @@ test('a batch undoes as one step', () => {
   assert.deepEqual(deriveStore(log), {})
 })
 
+test('a drag that rewrites one field many times undoes to before the drag', () => {
+  // The colour-picker case: one batch, one field, five values. Reversing each
+  // op in turn would land on the second-to-last value instead of the original.
+  let log = []
+  log = edit(log, 'ahmad', 1, 'hero', 'style:backgroundColor', '#start')
+  const batch = 'drag-2'
+  const drag = ['#111', '#222', '#333', '#444', '#555']
+  drag.forEach((value, i) => {
+    log = edit(log, 'ahmad', i + 2, 'hero', 'style:backgroundColor', value, { batch, label: 'Fill' })
+  })
+  assert.equal(deriveStore(log)[SCOPE].hero.styles.backgroundColor, '#555')
+
+  log = [...log, ...buildUndo(log, 'ahmad', 20)]
+  assert.equal(
+    deriveStore(log)[SCOPE].hero.styles.backgroundColor,
+    '#start',
+    'one undo must jump past the whole drag',
+  )
+
+  log = [...log, ...buildRedo(log, 'ahmad', 21)]
+  assert.equal(deriveStore(log)[SCOPE].hero.styles.backgroundColor, '#555', 'redo must restore the end of the drag')
+})
+
+test('a mixed batch collapses per field, not per op', () => {
+  let log = []
+  const batch = 'mixed'
+  log = edit(log, 'ahmad', 1, 'hero', 'style:color', '#a', { batch })
+  log = edit(log, 'ahmad', 2, 'hero', 'style:gap', '4px', { batch })
+  log = edit(log, 'ahmad', 3, 'hero', 'style:color', '#b', { batch })
+  log = edit(log, 'ahmad', 4, 'hero', 'style:color', '#c', { batch })
+
+  log = [...log, ...buildUndo(log, 'ahmad', 5)]
+  assert.deepEqual(deriveStore(log), {}, 'every field in the batch should be back to unset')
+})
+
 /* ─── the multiplayer cases ─── */
 
 test('undo is per actor: Ctrl+Z never reverts the other designer', () => {
@@ -267,6 +304,119 @@ test('applyOp does not mutate the input store', () => {
   const next = applyOp(store, op)
   assert.deepEqual(store, {})
   assert.equal(next[SCOPE].p.text, 'Hi')
+})
+
+/* ─── diffing drafts ─── */
+
+test('diffDrafts reports only the fields that moved', () => {
+  const changes = diffDrafts(
+    { text: 'a', styles: { color: '#000', gap: '4px' } },
+    { text: 'b', styles: { color: '#000', gap: '8px' } },
+  )
+  assert.deepEqual(changes.sort((x, y) => x.field.localeCompare(y.field)), [
+    { field: 'style:gap', value: '8px' },
+    { field: 'text', value: 'b' },
+  ])
+})
+
+test('diffDrafts treats a removed style as an unset', () => {
+  const changes = diffDrafts({ styles: { color: '#000' } }, { styles: {} })
+  assert.deepEqual(changes, [{ field: 'style:color', value: undefined }])
+})
+
+test('diffDrafts on identical drafts is empty', () => {
+  assert.deepEqual(diffDrafts({ text: 'a', styles: { color: '#000' } }, { text: 'a', styles: { color: '#000' } }), [])
+})
+
+/* ─── session ─── */
+
+function record(session, path, prev, next, extra = {}) {
+  return session.record({ routeKey: ROUTE, viewport: VIEW, path, prev, next, ...extra })
+}
+
+test('session records a draft change as ops', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  record(session, 'hero', {}, { text: 'Run’Am', styles: { color: '#12c877' } })
+  assert.equal(session.size(), 2)
+  assert.equal(session.store()[SCOPE].hero.text, 'Run’Am')
+  assert.equal(session.store()[SCOPE].hero.styles.color, '#12c877')
+})
+
+test('session records nothing when the draft did not move', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  record(session, 'hero', {}, { text: 'Hi' })
+  assert.deepEqual(record(session, 'hero', { text: 'Hi' }, { text: 'Hi' }), [])
+  assert.equal(session.size(), 1)
+})
+
+test('one record call is one undo step, however many fields moved', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  record(session, 'hero', {}, { styles: { color: '#111', gap: '8px', padding: '4px' } })
+  assert.equal(session.size(), 3)
+  session.undo()
+  assert.deepEqual(session.store(), {})
+  session.redo()
+  assert.equal(session.store()[SCOPE].hero.styles.gap, '8px')
+})
+
+test('the incrementally derived store always equals a full re-fold', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  let prev = {}
+  for (let i = 0; i < 60; i += 1) {
+    const next = { text: `v${i}`, styles: { color: `#${i % 9}${i % 9}${i % 9}`, gap: `${i}px` } }
+    record(session, `el-${i % 5}`, prev, next)
+    prev = next
+    if (i % 7 === 0) session.undo()
+    if (i % 11 === 0) session.redo()
+  }
+  assert.deepEqual(session.store(), deriveStore(session.all()), 'incremental store drifted from the log')
+})
+
+test('session.observe folds in a remote actor and keeps our clock ahead', () => {
+  const ahmad = createOpLogSession({ actor: 'ahmad' })
+  record(ahmad, 'hero', {}, { styles: { color: '#ahmad' } })
+
+  const zainab = createOpLogSession({ actor: 'zainab' })
+  zainab.observe(ahmad.all())
+  record(zainab, 'footer', {}, { styles: { color: '#zainab' } })
+
+  // Zainab's later edit must sort after Ahmad's, not tie with it.
+  const zainabOp = zainab.all().find((op) => op.actor === 'zainab')
+  const ahmadOp = ahmad.all()[0]
+  assert.ok(zainabOp.clock > ahmadOp.clock, 'clock did not advance past the observed op')
+
+  ahmad.observe(zainab.all().filter((op) => op.actor === 'zainab'))
+  assert.deepEqual(ahmad.store(), zainab.store(), 'the two sessions disagree about the design')
+})
+
+test('an out-of-order remote op still converges', () => {
+  const a = createOpLogSession({ actor: 'ahmad' })
+  record(a, 'hero', {}, { text: 'first' })
+  record(a, 'hero', { text: 'first' }, { text: 'second' })
+
+  const late = {
+    id: 'late-op', kind: 'edit', actor: 'zainab', clock: 1, ts: Date.now(),
+    routeKey: ROUTE, viewport: VIEW, path: 'hero', field: 'text',
+    before: undefined, after: 'late arrival',
+  }
+  a.observe([late])
+  // It sorts before Ahmad's second edit, so it must not win.
+  assert.equal(a.store()[SCOPE].hero.text, 'second')
+  assert.deepEqual(a.store(), deriveStore(a.all()))
+})
+
+test('undo in a room reverts only my own work', () => {
+  const ahmad = createOpLogSession({ actor: 'ahmad' })
+  record(ahmad, 'hero', {}, { styles: { color: '#ahmad' } })
+  ahmad.observe([{
+    id: 'z1', kind: 'edit', actor: 'zainab', clock: 50, ts: Date.now(),
+    routeKey: ROUTE, viewport: VIEW, path: 'footer', field: 'style:color',
+    before: undefined, after: '#zainab',
+  }])
+
+  ahmad.undo()
+  assert.equal(ahmad.store()[SCOPE]?.hero, undefined)
+  assert.equal(ahmad.store()[SCOPE].footer.styles.color, '#zainab')
 })
 
 /* ─── runner ─── */

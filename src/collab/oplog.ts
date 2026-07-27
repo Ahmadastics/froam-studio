@@ -164,6 +164,36 @@ export function makeEdit(store: EditorStore, input: EditInput): FroamOp | null {
   }
 }
 
+/* ─── diffing drafts into ops ─── */
+
+export type FieldChange = { field: FroamOpField; value: string | undefined }
+
+/**
+ * Reduce a whole-draft change to the fields that actually moved.
+ *
+ * The editor thinks in drafts ("here is the new state of this element"), the
+ * log thinks in fields ("colour became #fff"). This is the seam between them,
+ * and it is what makes concurrent edits to one element merge instead of
+ * clobber: two people restyling the same box only collide if they touch the
+ * same property.
+ */
+export function diffDrafts(prev: ElementDraft | undefined, next: ElementDraft | undefined): FieldChange[] {
+  const changes: FieldChange[] = []
+  const before = prev ?? {}
+  const after = next ?? {}
+
+  if (before.text !== after.text) changes.push({ field: 'text', value: after.text })
+  if (before.imageUrl !== after.imageUrl) changes.push({ field: 'imageUrl', value: after.imageUrl })
+
+  const props = new Set([...Object.keys(before.styles ?? {}), ...Object.keys(after.styles ?? {})])
+  for (const prop of props) {
+    const from = before.styles?.[prop]
+    const to = after.styles?.[prop]
+    if (from !== to) changes.push({ field: `style:${prop}`, value: to })
+  }
+  return changes
+}
+
 /* ─── per-actor undo ─── */
 
 type Action = { key: string; kind: FroamOp['kind']; ops: FroamOp[] }
@@ -233,6 +263,26 @@ export function undoLabel(ops: readonly FroamOp[], actor: FroamActorId) {
   return top?.ops.find((op) => op.label)?.label
 }
 
+/**
+ * Collapse a batch to one op per field, keeping the *outermost* values.
+ *
+ * A colour-picker drag writes the same field over and over inside one batch:
+ * #111, #222 … #555. Reversing each of those in turn would replay them
+ * backwards and land on #444 — one undo appearing to do almost nothing.
+ * Undo has to jump to the value from before the drag started, so for each
+ * field we keep the first op's `before` and the last op's `after`.
+ */
+function collapseBatch(ops: readonly FroamOp[]) {
+  const byField = new Map<string, { first: FroamOp; last: FroamOp }>()
+  for (const op of ops) {
+    const key = `${op.routeKey} ${op.viewport} ${op.path} ${op.field}`
+    const seen = byField.get(key)
+    if (seen) seen.last = op
+    else byField.set(key, { first: op, last: op })
+  }
+  return [...byField.values()]
+}
+
 function reverse(
   store: EditorStore,
   action: Action,
@@ -242,8 +292,9 @@ function reverse(
 ): FroamOp[] {
   const batch = froamOpId()
   const ts = Date.now()
-  return action.ops
-    .map((op): FroamOp | null => {
+  return collapseBatch(action.ops)
+    .map(({ first, last }): FroamOp | null => {
+      const op = kind === 'undo' ? first : last
       // Re-read the live value instead of trusting the original op: someone
       // else may have written this field since, and an undo that restores a
       // stale `before` would silently clobber their edit.
