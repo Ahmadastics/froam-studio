@@ -27,6 +27,33 @@ const {
 const { scopeKey } = await import('../dist/collab/types.js')
 const { createOpLogSession } = await import('../dist/collab/session.js')
 
+/** Minimal localStorage stand-in, with an optional byte ceiling to force quota errors. */
+function fakeStorage(limitBytes = Infinity) {
+  const map = new Map()
+  return {
+    get size() { return [...map.values()].reduce((n, v) => n + v.length, 0) },
+    getItem: (k) => (map.has(k) ? map.get(k) : null),
+    setItem: (k, v) => {
+      const others = [...map.entries()].filter(([key]) => key !== k).reduce((n, [, v2]) => n + v2.length, 0)
+      if (others + v.length > limitBytes) {
+        const err = new Error('QuotaExceededError')
+        err.name = 'QuotaExceededError'
+        throw err
+      }
+      map.set(k, v)
+    },
+    removeItem: (k) => { map.delete(k) },
+  }
+}
+
+function withStorage(store, fn) {
+  const previous = globalThis.window
+  globalThis.window = { localStorage: store }
+  try { return fn() } finally { globalThis.window = previous }
+}
+
+const { loadOpLog, saveOpLog, clearOpLog, FROAM_OPLOG_KEY } = await import('../dist/collab/persist.js')
+
 const tests = []
 const test = (name, fn) => tests.push([name, fn])
 
@@ -475,6 +502,95 @@ test('undo in a room reverts only my own work', () => {
   ahmad.undo()
   assert.equal(ahmad.store()[SCOPE]?.hero, undefined)
   assert.equal(ahmad.store()[SCOPE].footer.styles.color, '#zainab')
+})
+
+/* ─── persistence ─── */
+
+function busyLog(edits) {
+  let log = []
+  for (let i = 0; i < edits; i += 1) {
+    log = edit(log, 'ahmad', i + 1, `el-${i % 12}`, 'style:color', `#${i % 9}${i % 9}${i % 9}`)
+  }
+  return log
+}
+
+test('undo history survives a reload', () => {
+  const disk = fakeStorage()
+  let log = []
+  log = edit(log, 'ahmad', 1, 'hero', 'text', 'first')
+  log = edit(log, 'ahmad', 2, 'hero', 'text', 'second')
+  withStorage(disk, () => saveOpLog(log))
+
+  // New page, new session — as if the browser had been closed.
+  const revived = createOpLogSession({ actor: 'ahmad', ops: withStorage(disk, () => loadOpLog()) })
+  assert.equal(revived.store()[SCOPE].hero.text, 'second')
+  assert.equal(revived.canUndo(), true, 'yesterday’s work should still be undoable')
+  revived.undo()
+  assert.equal(revived.store()[SCOPE].hero.text, 'first')
+})
+
+test('a reload with no stored log starts clean', () => {
+  assert.deepEqual(withStorage(fakeStorage(), () => loadOpLog()), [])
+})
+
+test('corrupt or foreign ops are dropped, not trusted', () => {
+  const disk = fakeStorage()
+  withStorage(disk, () => {
+    disk.setItem(FROAM_OPLOG_KEY, JSON.stringify({
+      v: 1,
+      ops: [
+        { id: 'ok', kind: 'edit', actor: 'a', clock: 1, ts: 1, routeKey: '/', viewport: 'desktop', path: 'p', field: 'text', before: undefined, after: 'fine' },
+        { id: 'bad-viewport', kind: 'edit', actor: 'a', clock: 2, ts: 1, routeKey: '/', viewport: 'watch', path: 'p', field: 'text', after: 'nope' },
+        { id: 'bad-kind', kind: 'delete', actor: 'a', clock: 3, ts: 1, routeKey: '/', viewport: 'desktop', path: 'p', field: 'text', after: 'nope' },
+        { id: 'bad-clock', kind: 'edit', actor: 'a', clock: 'soon', ts: 1, routeKey: '/', viewport: 'desktop', path: 'p', field: 'text', after: 'nope' },
+        null,
+      ],
+    }))
+    const ops = loadOpLog()
+    assert.equal(ops.length, 1)
+    assert.equal(ops[0].id, 'ok')
+  })
+})
+
+test('a payload from a future version is ignored rather than misread', () => {
+  const disk = fakeStorage()
+  withStorage(disk, () => {
+    disk.setItem(FROAM_OPLOG_KEY, JSON.stringify({ v: 99, ops: [{ id: 'x' }] }))
+    assert.deepEqual(loadOpLog(), [])
+  })
+})
+
+test('under storage pressure the log sheds history but keeps the design', () => {
+  const log = busyLog(900)
+  const before = deriveStore(log)
+  const disk = fakeStorage(6_000) // tiny quota, forces the ladder down
+
+  const stored = withStorage(disk, () => saveOpLog(log))
+  assert.ok(stored.length < log.length, 'should have compacted')
+  assert.deepEqual(deriveStore(stored), before, 'the design must survive intact')
+
+  const revived = withStorage(disk, () => loadOpLog())
+  assert.deepEqual(deriveStore(revived), before, 'and must still be intact after a reload')
+})
+
+test('an impossible quota drops the log instead of throwing', () => {
+  const disk = fakeStorage(10)
+  const log = busyLog(50)
+  const stored = withStorage(disk, () => saveOpLog(log))
+  assert.ok(Array.isArray(stored), 'save must not throw')
+  assert.deepEqual(withStorage(disk, () => loadOpLog()), [], 'a log that cannot be trusted is not left behind')
+})
+
+test('saving without a window is a no-op, not a crash', () => {
+  const previous = globalThis.window
+  globalThis.window = undefined
+  try {
+    assert.deepEqual(loadOpLog(), [])
+    assert.ok(Array.isArray(saveOpLog(busyLog(3))))
+    clearOpLog()
+  } finally {
+    globalThis.window = previous
+  }
 })
 
 /* ─── runner ─── */

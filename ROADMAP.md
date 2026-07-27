@@ -1,6 +1,6 @@
 # Froam Rooms — roadmap to v6
 
-**Where we are:** v4.9.1 · **Where this goes:** v6, more than one person in a design.
+**Where we are:** v4.9.2 · **Where this goes:** v6, more than one person in a design.
 
 The v6 goal in one sentence: **two or more people open the same Froam design
 from different devices — whether that's a designer and their client, or two
@@ -129,6 +129,11 @@ one. That's a Run'Am product, not a Froam dependency.
 ---
 
 ## Phase 0 — this week, mostly no new features
+
+> **Status:** 0.1, 0.2 and 0.2b shipped in **v4.9.2** — `src/collab/` holds the
+> schema, the op log, the session and its persistence, with the editor writing
+> to all of it. 0.3 (anchor stability) and 0.4 (the two first screens) are
+> still open, and 0.3 is the one with real risk in it.
 
 ### 0.1 The schema page
 

@@ -2,6 +2,44 @@
 
 All notable changes to froam-studio are documented here.
 
+## 4.9.2 — 2026-07-27
+
+**Undo stops forgetting.** History was twenty snapshots of the entire design,
+held in memory and thrown away on refresh. It's now an append-only log of
+individual edits, so undo goes back as far as the work does — and survives a
+reload.
+
+Under the hood this is the substrate for Froam Rooms (see `ROADMAP.md`):
+recording *what changed* rather than *what everything looked like* is what
+later lets two people edit the same design without overwriting each other.
+
+### Added
+- **Undo that survives a reload.** Close the tab, come back tomorrow, Ctrl+Z
+  still walks back through yesterday's work. The log lives under
+  `froam-oplog-v1` and compacts itself when space runs short — history is
+  traded away before the design ever is.
+- **Undo depth is no longer capped.** It was twenty steps; it's now bounded
+  only by storage, because one edit costs a few hundred bytes instead of a
+  copy of the whole page's design.
+- **Labelled undo.** The toast names what it reverted — "Undone — Fill" — and
+  a colour-picker drag is still a single step.
+- **`npm test`** — 45 assertions over the op log, wired into CI.
+
+### Fixed
+- **Undoing a text edit left the typed words on screen.** The draft reverted
+  but the page didn't, because inline editing writes into the DOM rather than
+  into a style attribute. Froam now remembers the element's original copy and
+  puts it back.
+- **Edits made by inline text editing and drag-to-move weren't undoable at
+  all.** Only three of the editor's mutation paths were tracked; every store
+  change is now recorded, however it was made.
+- **A restyle across a multi-selection took one undo per element.** It's one
+  step, as it always looked like it should be.
+
+### Changed
+- Undo and redo no longer deep-copy the design on every edit, so editing a
+  large page no longer gets slower the longer you work on it.
+
 ## 4.9.1 — 2026-07-25
 
 **Quick Looks, second wave.** 29 more one-tap recipes (6 → 71 total) and

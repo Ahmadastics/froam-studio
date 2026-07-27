@@ -1,0 +1,1 @@
+{"version":3,"file":"persist.d.ts","sourceRoot":"","sources":["../../src/collab/persist.ts"],"names":[],"mappings":"AAYA,OAAO,EAAmB,KAAK,OAAO,EAAsB,MAAM,SAAS,CAAA;AAE3E,eAAO,MAAM,eAAe,mBAAmB,CAAA;AA8C/C,wBAAgB,SAAS,IAAI,OAAO,EAAE,CAYrC;AAED,wBAAgB,UAAU,SAMzB;AAED;;;;;;GAMG;AACH,wBAAgB,SAAS,CAAC,GAAG,EAAE,SAAS,OAAO,EAAE,GAAG,OAAO,EAAE,CAoB5D"}

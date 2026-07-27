@@ -106,6 +106,7 @@ import FroamPersonaEditor from './FroamPersonaEditor'
 import { getFroamRootElement } from '../config'
 import { createOpLogSession, type OpLogSession } from '../collab/session'
 import { diffStores } from '../collab/oplog'
+import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist'
 import type { FroamViewport } from '../collab/types'
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources'
 import { useFroamRouteKey } from '../routing'
@@ -395,9 +396,10 @@ function saveStore(store: EditorStore) {
   try {
     window.localStorage.setItem(STORAGE_KEY, serialized)
   } catch {
-    // History is disposable. Clear it first so a full browser store can never
-    // take down the live editor.
+    // History is disposable and the design is not. Clear both records of how
+    // the design got here before risking the design itself.
     try { window.localStorage.removeItem(HISTORY_KEY) } catch { /* ignore */ }
+    clearOpLog()
     try {
       window.localStorage.setItem(STORAGE_KEY, serialized)
     } catch {
@@ -1800,7 +1802,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     // together is what makes a remount safe: a fresh session is always born
     // knowing the design it woke up to, so no real edit can ever be mistaken
     // for the baseline.
-    const session = createOpLogSession()
+    // Last session's history first, then seed whatever the design has that the
+    // log doesn't. When the two already agree — the normal case — seeding is a
+    // no-op and yesterday's undo history survives intact. When they disagree,
+    // because the design was changed by something other than this editor, the
+    // difference lands as baseline and the log tells the truth again.
+    const session = createOpLogSession({ ops: loadOpLog() })
     session.seed(store)
     opLogRef.current = session
   }
@@ -1926,6 +1933,27 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       /* Never let bookkeeping break an edit. */
     }
   }, [store])
+
+  /*
+   * Persist the log so undo survives a reload.
+   *
+   * Debounced, because a colour drag would otherwise serialise the history on
+   * every frame. `saveOpLog` returns what actually fit, and adopting it keeps
+   * the in-memory log the same size as the stored one — storage pressure is
+   * what bounds the log, rather than an arbitrary entry count.
+   */
+  useEffect(() => {
+    const session = opLog
+    const timer = window.setTimeout(() => {
+      try {
+        const stored = saveOpLog(session.all())
+        if (stored.length !== session.size()) session.load(stored)
+      } catch {
+        /* Persistence is a nicety; editing is not. */
+      }
+    }, 600)
+    return () => window.clearTimeout(timer)
+  }, [logVersion, store, opLog])
 
   /*
    * Dev seam for the op log. While the log shadows the store, this is how the
