@@ -58,6 +58,17 @@ export type FroamActorId = string
 export const LOCAL_ACTOR: FroamActorId = 'local'
 
 /**
+ * The synthetic actor for design that was loaded rather than typed: drafts
+ * restored from storage, a published design fetched at boot, the baseline a
+ * compaction leaves behind.
+ *
+ * It exists so the log can be a complete account of the design without those
+ * ops landing in a person's undo stack — nobody expects Ctrl+Z to peel away
+ * work they did last week.
+ */
+export const BASELINE_ACTOR: FroamActorId = 'baseline'
+
+/**
  * The addressable unit of an edit. One op changes exactly one field of one
  * element, which is what makes last-write-wins per (path, field) honest:
  * two people restyling the same element don't clobber each other unless they

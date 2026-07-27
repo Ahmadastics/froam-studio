@@ -70,6 +70,22 @@ export type FieldChange = {
  * same property.
  */
 export declare function diffDrafts(prev: ElementDraft | undefined, next: ElementDraft | undefined): FieldChange[];
+export type ScopedChange = {
+    routeKey: string;
+    viewport: FroamViewport;
+    path: string;
+    field: FroamOpField;
+    value: string | undefined;
+};
+/**
+ * Diff two whole design stores.
+ *
+ * This is what lets the log be complete without instrumenting every mutation
+ * in the editor by hand. Recording at call sites gives good labels; this
+ * catches everything else — inline text edits, drag-to-move, whatever gets
+ * added next year — by watching the state transition instead of the caller.
+ */
+export declare function diffStores(prev: EditorStore, next: EditorStore): ScopedChange[];
 type Action = {
     key: string;
     kind: FroamOp['kind'];

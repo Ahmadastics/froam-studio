@@ -28,6 +28,16 @@ export function parseScopeKey(key) {
 }
 /** The local, not-yet-signed-in actor. Every op has an actor from day one. */
 export const LOCAL_ACTOR = 'local';
+/**
+ * The synthetic actor for design that was loaded rather than typed: drafts
+ * restored from storage, a published design fetched at boot, the baseline a
+ * compaction leaves behind.
+ *
+ * It exists so the log can be a complete account of the design without those
+ * ops landing in a person's undo stack — nobody expects Ctrl+Z to peel away
+ * work they did last week.
+ */
+export const BASELINE_ACTOR = 'baseline';
 /** Total order across actors. Same result on every device. */
 export function compareOps(a, b) {
     if (a.clock !== b.clock)

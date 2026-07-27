@@ -104,7 +104,8 @@ import FroamInspirationPanel from './FroamInspirationPanel'
 import FroamShapeLibrary from './FroamShapeLibrary'
 import FroamPersonaEditor from './FroamPersonaEditor'
 import { getFroamRootElement } from '../config'
-import { createOpLogSession } from '../collab/session'
+import { createOpLogSession, type OpLogSession } from '../collab/session'
+import { diffStores } from '../collab/oplog'
 import type { FroamViewport } from '../collab/types'
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources'
 import { useFroamRouteKey } from '../routing'
@@ -1779,9 +1780,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   // v4.1: remember an element's display before hiding, so Show restores its layout
   const hiddenPrevDisplayRef = useRef<Record<string, string>>({})
 
-  // Undo/redo
-  const [undoStack, setUndoStack] = useState<EditorStore[]>([])
-  const [redoStack, setRedoStack] = useState<EditorStore[]>([])
+  // Undo/redo — a cursor into the op log, not a stack of store snapshots.
+  // Bumped whenever the log moves, purely so the toolbar buttons re-render.
+  const [logVersion, setLogVersion] = useState(0)
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory())
 
   /**
@@ -1793,9 +1794,27 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
    * proven against real editing before anything depends on it.
    * See src/collab/ and ROADMAP.md Phase 0.
    */
-  const opLogRef = useRef(createOpLogSession())
+  const opLogRef = useRef<OpLogSession | null>(null)
+  if (!opLogRef.current) {
+    // Seeded at construction, not from the first effect run. Tying the two
+    // together is what makes a remount safe: a fresh session is always born
+    // knowing the design it woke up to, so no real edit can ever be mistaken
+    // for the baseline.
+    const session = createOpLogSession()
+    session.seed(store)
+    opLogRef.current = session
+  }
+  const opLog = opLogRef.current
   const opBatchRef = useRef<{ id: string; label: string } | null>(null)
   const opBatchTimerRef = useRef<number>(0)
+  /** Set by paths that load a design rather than edit one, so the ops they
+   *  produce are baseline rather than someone's undo history. */
+  const opLoadingDesignRef = useRef(false)
+  const bumpLog = useCallback(() => setLogVersion((n) => n + 1), [])
+  // Recomputed whenever the log moves. `logVersion` is the dependency that
+  // makes that happen — the session itself is a ref and can't trigger a render.
+  const canUndo = useMemo(() => opLog.canUndo(), [logVersion, store])
+  const canRedo = useMemo(() => opLog.canRedo(), [logVersion, store])
 
   // Gradient builder
   const [gradType, setGradType] = useState<'linear' | 'radial'>('linear')
@@ -1862,8 +1881,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const toastTimerRef = useRef<number>(0)
   const suspendDraftPaintingRef = useRef(false)
   const pendingDraftPaintResumeRef = useRef(false)
-  const undoDebounceRef = useRef<number>(0)
-  const pendingUndoSnapshotRef = useRef<EditorStore | null>(null)
   const loadedPublishedKeysRef = useRef<Set<string>>(new Set())
 
   const isKitchenRoute = routeKey === '/kitchen'
@@ -1882,21 +1899,50 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   }, [routeDrafts])
 
   /*
+   * Keep the log level with the store, whoever moved it.
+   *
+   * The main mutation paths record their own ops with proper labels, and this
+   * finds nothing to do after them. What it catches is every *other* way the
+   * store changes — the drafts restored at boot, a published design arriving
+   * from the bridge, inline text edits, drag-to-move — so the log is a
+   * complete account of the design rather than an account of the three places
+   * someone remembered to instrument.
+   */
+  useEffect(() => {
+    const session = opLog
+    if (!session) return
+    try {
+      if (opLoadingDesignRef.current) {
+        opLoadingDesignRef.current = false
+        session.seed(store)
+        return
+      }
+      // Ops recorded at the call site are already in the log by the time React
+      // renders. Ops found here are appended *after* it, so the undo button
+      // would stay greyed out on exactly the edits this effect exists to catch
+      // unless we ask for another render.
+      if (session.reconcile(store).length) bumpLog()
+    } catch {
+      /* Never let bookkeeping break an edit. */
+    }
+  }, [store])
+
+  /*
    * Dev seam for the op log. While the log shadows the store, this is how the
    * two get compared against real editing — `__froamOpLog.agrees()` is the
    * invariant that has to hold before anything is allowed to depend on it.
    */
   useEffect(() => {
     const debug = {
-      session: opLogRef.current,
-      ops: () => opLogRef.current.all(),
-      derived: () => opLogRef.current.store(),
+      session: opLog,
+      ops: () => opLog.all(),
+      derived: () => opLog.store(),
       live: () => storeRef.current,
-      agrees: () => {
-        const derived = opLogRef.current.store()[viewportStoreKeyRef.current] ?? {}
-        const live = storeRef.current[viewportStoreKeyRef.current] ?? {}
-        return JSON.stringify(derived) === JSON.stringify(live)
-      },
+      originals: () => originalsRef.current,
+      // Field-level, not JSON.stringify: two stores can hold identical design
+      // and still serialise differently just from key order.
+      diff: () => diffStores(opLog.store(), storeRef.current),
+      agrees: () => diffStores(opLog.store(), storeRef.current).length === 0,
     }
     ;(window as unknown as Record<string, unknown>).__froamOpLog = debug
     return () => { delete (window as unknown as Record<string, unknown>).__froamOpLog }
@@ -2284,6 +2330,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           const currentRouteDrafts = current[viewportStoreKey] ?? {}
           if (countRenderableDrafts(currentRouteDrafts) > 0) return current
           const next = { ...current, [viewportStoreKey]: stripPersonaDrafts(publishedStore) }
+          // A design that arrived, not one someone typed: the op log records it
+          // as baseline so it never turns up in a person's undo history.
+          opLoadingDesignRef.current = true
           saveStore(next)
           return next
         })
@@ -2452,6 +2501,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         textTarget.style.justifyContent = 'center'
         textTarget.style.cursor = 'text'
       }
+      // Remember the copy as it was before anyone typed. Undo can take the
+      // draft's text away, but only this can put the page's own words back.
+      const editPath = getElementPath(textTarget, rootElement)
+      const originalRoute = originalsRef.current[viewportStoreKeyRef.current] ?? {}
+      if (!originalRoute[editPath]) {
+        originalRoute[editPath] = { text: textTarget.innerText }
+        originalsRef.current[viewportStoreKeyRef.current] = originalRoute
+      }
+
       // Enable contentEditable
       textTarget.contentEditable = 'true'
       textTarget.focus()
@@ -2781,7 +2839,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     batch?: string,
   ) {
     try {
-      opLogRef.current.record({
+      opLog.record({
         routeKey,
         viewport: viewportMode,
         path,
@@ -2810,11 +2868,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     })
   }
 
-  function commitToUndoStack(currentStore: EditorStore) {
-    setUndoStack((prev) => [...prev.slice(-19), JSON.parse(JSON.stringify(currentStore))])
-    setRedoStack([])
-  }
-
   function refreshSelectedElementFromDOM() {
     window.requestAnimationFrame(() => {
       if (!selection) return
@@ -2831,32 +2884,40 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     })
   }
 
-  function undo() {
-    if (!undoStack.length) return
-    const prev = undoStack[undoStack.length - 1]
-    setRedoStack((r) => [...r, JSON.parse(JSON.stringify(store))])
-    setUndoStack((u) => u.slice(0, -1))
-    setStore(prev)
-    saveStore(prev)
-    applyStoreToDOM(prev, { clearCurrent: true })
-    refreshSelectedElementFromDOM()
-    showToast('Undone')
-  }
-
-  function redo() {
-    if (!redoStack.length) return
-    const next = redoStack[redoStack.length - 1]
-    setUndoStack((u) => [...u, JSON.parse(JSON.stringify(store))])
-    setRedoStack((r) => r.slice(0, -1))
+  /**
+   * Apply whatever the op log now says the design is.
+   *
+   * Undo and redo don't compute a new store — they append inverse ops and then
+   * take the log's word for it. The reconcile effect sees the store already
+   * matches the log and stays quiet.
+   */
+  function applyLogToStore(toast: string) {
+    const next = opLog.store()
+    storeRef.current = next
     setStore(next)
     saveStore(next)
     applyStoreToDOM(next, { clearCurrent: true })
     refreshSelectedElementFromDOM()
-    showToast('Redone')
+    bumpLog()
+    showToast(toast)
+  }
+
+  function undo() {
+    const session = opLog
+    if (!session.canUndo()) return
+    const label = session.undoLabel()
+    session.undo()
+    applyLogToStore(label ? `Undone — ${label}` : 'Undone')
+  }
+
+  function redo() {
+    const session = opLog
+    if (!session.canRedo()) return
+    session.redo()
+    applyLogToStore('Redone')
   }
 
   function restoreFromHistory(entry: HistoryEntry) {
-    commitToUndoStack(store)
     setStore(entry.store)
     saveStore(entry.store)
     applyStoreToDOM(entry.store, { clearCurrent: true })
@@ -2980,10 +3041,32 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   function applyStoreToDOM(targetStore: EditorStore, options: { clearCurrent?: boolean } = {}) {
     const root = getRoot()
     if (!root) return
-    if (options.clearCurrent) {
-      clearDraftsFromDOM(store[viewportStoreKey] ?? {})
-    }
     const routeDraftsToApply = targetStore[viewportStoreKey] ?? {}
+    if (options.clearCurrent) {
+      const previous = store[viewportStoreKey] ?? {}
+      clearDraftsFromDOM(previous)
+      // Styles live in the element's style attribute and are cleared above.
+      // Text and image swaps were written into the DOM itself, so a draft
+      // simply disappearing leaves the edited copy on screen — undo has to
+      // put the element's captured original back explicitly.
+      const originals = originalsRef.current[viewportStoreKey] ?? {}
+      Object.keys(previous).forEach((path) => {
+        if (path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path)) return
+        const original = originals[path]
+        if (!original) return
+        const wanted = routeDraftsToApply[path]
+        const restore: ElementDraft = {}
+        if (previous[path]?.text !== undefined && wanted?.text === undefined && original.text !== undefined) {
+          restore.text = original.text
+        }
+        if (previous[path]?.imageUrl !== undefined && wanted?.imageUrl === undefined && original.imageUrl) {
+          restore.imageUrl = original.imageUrl
+        }
+        if (restore.text === undefined && restore.imageUrl === undefined) return
+        const el = findElementByPath(root, path)
+        if (el) applyDraft(el, restore)
+      })
+    }
     restoreInjectedBlocks(routeDraftsToApply)
     Object.entries(routeDraftsToApply).forEach(([path, draft]) => {
       if (path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path)) return
@@ -3003,16 +3086,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const root = getRoot()
     if (!root) return
 
-    // Debounce undo commits — prevents 3 setState calls per color picker frame
-    if (!pendingUndoSnapshotRef.current) {
-      pendingUndoSnapshotRef.current = JSON.parse(JSON.stringify(storeRef.current))
-    }
-    window.clearTimeout(undoDebounceRef.current)
-    undoDebounceRef.current = window.setTimeout(() => {
-      const snapshot = pendingUndoSnapshotRef.current
-      pendingUndoSnapshotRef.current = null
-      if (snapshot) commitToUndoStack(snapshot)
-    }, 400)
+    // No snapshot to debounce any more — coalescing is the op batch below,
+    // which costs a string comparison instead of a deep copy of the design.
     const nextStore = { ...storeRef.current }
     const routeStore = { ...(nextStore[viewportStoreKey] ?? {}) }
     const targetsToUpdate = selections.length > 0 ? selections : [selection]
@@ -3146,7 +3221,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const target = findElementByPath(root, path)
     if (!target) return
 
-    const beforeSnapshot: EditorStore = JSON.parse(JSON.stringify(storeRef.current))
     const nextStore = { ...storeRef.current }
     const routeStore = { ...(nextStore[viewportStoreKey] ?? {}) }
     const currentDraft = routeStore[path] ?? {}
@@ -3156,11 +3230,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     })
     applyDraft(target, nextDraft)
     syncFroamArtboardMetadata(target)
+    recordOp(path, currentDraft, nextDraft, label)
     routeStore[path] = nextDraft
     nextStore[viewportStoreKey] = routeStore
     storeRef.current = nextStore
     setStore(nextStore)
-    commitToUndoStack(beforeSnapshot)
     pushHistory(label, nextStore)
     selectElementFromIntel(el)
   }
@@ -3262,8 +3336,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       originalsRef.current[viewportStoreKey] = originalRoute
     }
 
-    window.clearTimeout(undoDebounceRef.current)
-    undoDebounceRef.current = window.setTimeout(() => commitToUndoStack(storeRef.current), 400)
     const currentDraft = routeDrafts[path] ?? {}
     const nextDraft = sanitizeDraftForElement(target, updater(currentDraft))
     applyDraft(target, nextDraft)
@@ -4295,7 +4367,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   // v4.1: write a style to a specific path's draft (persists + undoable), without changing selection.
   function persistPathStyle(target: HTMLElement, path: string, styles: Record<string, string>, label: string) {
-    const beforeSnapshot: EditorStore = JSON.parse(JSON.stringify(storeRef.current))
     const nextStore = { ...storeRef.current }
     const routeStore = { ...(nextStore[viewportStoreKey] ?? {}) }
     const currentDraft = routeStore[path] ?? {}
@@ -4310,7 +4381,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     storeRef.current = nextStore
     setStore(nextStore)
     saveStore(nextStore)
-    commitToUndoStack(beforeSnapshot)
     pushHistory(label, nextStore)
   }
 
@@ -4546,10 +4616,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   /* ─── Refs for stable callbacks (avoids stale closures) ─── */
   const storeRef = useRef(store)
   storeRef.current = store
-  const undoStackRef = useRef(undoStack)
-  undoStackRef.current = undoStack
-  const redoStackRef = useRef(redoStack)
-  redoStackRef.current = redoStack
   const selectionRef = useRef(selection)
   selectionRef.current = selection
   const selectionsRef = useRef(selections)
@@ -5154,8 +5220,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 setActiveTool(tool)
                 setMoveMode(tool === 'move')
               }}
-              canUndo={undoStack.length > 0}
-              canRedo={redoStack.length > 0}
+              canUndo={canUndo}
+              canRedo={canRedo}
               onSave={actionsRef.current.saveToRunam}
               onSaveRepo={() => { void actionsRef.current.saveToRepo() }}
               repoStatus={repoStatus}
@@ -5375,10 +5441,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 <button type="button" className="froam-studio__icon-btn" onClick={() => setCommandPaletteOpen(true)} title="Command palette (Ctrl+K)">
                   <Command size={14} />
                 </button>
-                <button type="button" className="froam-studio__icon-btn" onClick={undo} disabled={!undoStack.length} title="Undo (Ctrl+Z)">
+                <button type="button" className="froam-studio__icon-btn" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
                   <Undo2 size={14} />
                 </button>
-                <button type="button" className="froam-studio__icon-btn" onClick={redo} disabled={!redoStack.length} title="Redo (Ctrl+Y)">
+                <button type="button" className="froam-studio__icon-btn" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)">
                   <Redo2 size={14} />
                 </button>
                 <button type="button" className="froam-studio__icon-btn" onClick={() => setShowShortcutOverlay(true)} title="Keyboard shortcuts (?)">
@@ -6349,7 +6415,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 getCurrentStore={() => collectVersionRouteDrafts() as Record<string, unknown>}
                 captureThumb={capturePageThumb}
                 onLoadVersion={(versionStore, versionName) => {
-                  commitToUndoStack(store)
+                  // No snapshot needed: the reconcile effect turns this store
+                  // swap into ops, so loading a version is undoable by itself.
                   const nextStore: EditorStore = {
                     ...store,
                     [viewportStoreKey]: versionStore as Record<string, ElementDraft>,
@@ -6774,7 +6841,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           targetRect={selectionRect}
           visible={!!selectionRect}
           docked={isMobileUI}
-          canUndo={undoStack.length > 0}
+          canUndo={canUndo}
           onWalk={walkSelection}
           label={selection.label}
           fontFamily={selection.fontFamily}

@@ -32,6 +32,29 @@ export declare function createOpLogSession(options?: {
      * steps that appear to do nothing.
      */
     record(input: RecordInput): FroamOp[];
+    /**
+     * Bring the log up to a design that arrived rather than was typed — drafts
+     * restored from storage at boot, or a published design fetched from the
+     * bridge.
+     *
+     * Recorded as the baseline actor, so the log is a complete account of the
+     * design from the first frame without those entries showing up in anyone's
+     * undo stack.
+     */
+    seed(next: EditorStore): FroamOp[];
+    /**
+     * Catch up to a store change the editor made without telling us.
+     *
+     * The three main mutation paths record ops directly, with proper labels.
+     * This is the safety net for everything else — inline text edits,
+     * drag-to-move, and any mutation added later. Recording at the call site
+     * gives better labels; recording from the state transition is what makes
+     * the log *complete*, which is the property undo and rooms depend on.
+     *
+     * A no-op when the caller already recorded: the changes are in the derived
+     * store, so the diff comes back empty.
+     */
+    reconcile(next: EditorStore, label?: string): FroamOp[];
     canUndo(): boolean;
     canRedo(): boolean;
     undoLabel(): string | undefined;

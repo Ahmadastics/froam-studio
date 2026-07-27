@@ -13,7 +13,7 @@
  * snapshots. With one actor that behaves exactly like the old undo; with two
  * it is already correct, which is the whole point of building it now.
  */
-import { compareOps, scopeKey, } from './types.js';
+import { BASELINE_ACTOR, compareOps, parseScopeKey, scopeKey, } from './types.js';
 /* ─── ids & clocks ─── */
 export function froamOpId() {
     const c = globalThis.crypto;
@@ -168,6 +168,32 @@ export function diffDrafts(prev, next) {
         const to = after.styles?.[prop];
         if (from !== to)
             changes.push({ field: `style:${prop}`, value: to });
+    }
+    return changes;
+}
+/**
+ * Diff two whole design stores.
+ *
+ * This is what lets the log be complete without instrumenting every mutation
+ * in the editor by hand. Recording at call sites gives good labels; this
+ * catches everything else — inline text edits, drag-to-move, whatever gets
+ * added next year — by watching the state transition instead of the caller.
+ */
+export function diffStores(prev, next) {
+    const changes = [];
+    const scopes = new Set([...Object.keys(prev), ...Object.keys(next)]);
+    for (const key of scopes) {
+        const scope = parseScopeKey(key);
+        if (!scope)
+            continue;
+        const before = prev[key] ?? {};
+        const after = next[key] ?? {};
+        const paths = new Set([...Object.keys(before), ...Object.keys(after)]);
+        for (const path of paths) {
+            for (const change of diffDrafts(before[path], after[path])) {
+                changes.push({ ...scope, path, field: change.field, value: change.value });
+            }
+        }
     }
     return changes;
 }
@@ -363,7 +389,7 @@ export function compactLog(ops, keepRecent = 200) {
                 baseline.push({
                     id: froamOpId(),
                     kind: 'edit',
-                    actor: 'baseline',
+                    actor: BASELINE_ACTOR,
                     clock,
                     ts: Date.now(),
                     routeKey,

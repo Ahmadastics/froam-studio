@@ -19,6 +19,7 @@ const {
   currentValue,
   deriveStore,
   diffDrafts,
+  diffStores,
   makeEdit,
   undoCursor,
   undoLabel,
@@ -269,6 +270,63 @@ test('two actors undo independently and interleaved', () => {
   const store = deriveStore(log)
   assert.equal(store[SCOPE].a.text, 'A1')
   assert.equal(store[SCOPE]?.z, undefined)
+})
+
+/* ─── seeding & reconciling ─── */
+
+test('seeding brings the log up to a design that was loaded, not typed', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  const restored = { [SCOPE]: { hero: { text: 'Saved last week', styles: { color: '#000' } } } }
+  session.seed(restored)
+  assert.deepEqual(session.store(), restored, 'derived store must match what was loaded')
+})
+
+test('seeded design is not in anyone’s undo stack', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  session.seed({ [SCOPE]: { hero: { text: 'Saved last week' } } })
+  assert.equal(session.canUndo(), false, 'Ctrl+Z must not peel away work from a previous session')
+
+  record(session, 'hero', { text: 'Saved last week' }, { text: 'Edited today' })
+  assert.equal(session.canUndo(), true)
+  session.undo()
+  assert.equal(session.store()[SCOPE].hero.text, 'Saved last week', 'undo stops at the baseline')
+  assert.equal(session.canUndo(), false)
+})
+
+test('reconcile catches a store change nobody recorded', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  // Simulates an inline text edit or a drag-to-move writing straight to the store.
+  session.reconcile({ [SCOPE]: { hero: { text: 'typed inline' } } })
+  assert.equal(session.store()[SCOPE].hero.text, 'typed inline')
+  assert.equal(session.canUndo(), true, 'an unrecorded edit is still the user’s to undo')
+})
+
+test('reconcile after an explicit record is a no-op', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  record(session, 'hero', {}, { styles: { color: '#fff' } })
+  const size = session.size()
+  // The editor's store now holds exactly what the log already knows.
+  assert.deepEqual(session.reconcile(session.store()), [])
+  assert.equal(session.size(), size, 'double-recording would double every undo step')
+})
+
+test('reconcile records a deletion', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  session.seed({ [SCOPE]: { hero: { text: 'x', styles: { color: '#000' } } } })
+  session.reconcile({})
+  assert.deepEqual(session.store(), {})
+  session.undo()
+  assert.equal(session.store()[SCOPE].hero.text, 'x', 'clearing drafts must be undoable')
+})
+
+test('diffStores sees adds, changes and removals across scopes', () => {
+  const mobile = scopeKey(ROUTE, 'mobile')
+  const changes = diffStores(
+    { [SCOPE]: { a: { text: 'keep' }, b: { text: 'drop' } } },
+    { [SCOPE]: { a: { text: 'keep' } }, [mobile]: { c: { text: 'new' } } },
+  )
+  const summary = changes.map((c) => `${c.viewport} ${c.path} ${c.field}=${c.value}`).sort()
+  assert.deepEqual(summary, ['desktop b text=undefined', 'mobile c text=new'])
 })
 
 /* ─── compaction ─── */

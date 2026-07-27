@@ -14,7 +14,9 @@
  * it is already correct, which is the whole point of building it now.
  */
 import {
+  BASELINE_ACTOR,
   compareOps,
+  parseScopeKey,
   scopeKey,
   type EditorStore,
   type ElementDraft,
@@ -190,6 +192,40 @@ export function diffDrafts(prev: ElementDraft | undefined, next: ElementDraft | 
     const from = before.styles?.[prop]
     const to = after.styles?.[prop]
     if (from !== to) changes.push({ field: `style:${prop}`, value: to })
+  }
+  return changes
+}
+
+export type ScopedChange = {
+  routeKey: string
+  viewport: FroamViewport
+  path: string
+  field: FroamOpField
+  value: string | undefined
+}
+
+/**
+ * Diff two whole design stores.
+ *
+ * This is what lets the log be complete without instrumenting every mutation
+ * in the editor by hand. Recording at call sites gives good labels; this
+ * catches everything else — inline text edits, drag-to-move, whatever gets
+ * added next year — by watching the state transition instead of the caller.
+ */
+export function diffStores(prev: EditorStore, next: EditorStore): ScopedChange[] {
+  const changes: ScopedChange[] = []
+  const scopes = new Set([...Object.keys(prev), ...Object.keys(next)])
+  for (const key of scopes) {
+    const scope = parseScopeKey(key)
+    if (!scope) continue
+    const before = prev[key] ?? {}
+    const after = next[key] ?? {}
+    const paths = new Set([...Object.keys(before), ...Object.keys(after)])
+    for (const path of paths) {
+      for (const change of diffDrafts(before[path], after[path])) {
+        changes.push({ ...scope, path, field: change.field, value: change.value })
+      }
+    }
   }
   return changes
 }
@@ -404,7 +440,7 @@ export function compactLog(ops: readonly FroamOp[], keepRecent = 200): FroamOp[]
         baseline.push({
           id: froamOpId(),
           kind: 'edit',
-          actor: 'baseline',
+          actor: BASELINE_ACTOR,
           clock,
           ts: Date.now(),
           routeKey,
