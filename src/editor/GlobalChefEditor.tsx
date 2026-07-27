@@ -107,7 +107,9 @@ import { getFroamRootElement } from '../config'
 import { createOpLogSession, type OpLogSession } from '../collab/session'
 import { diffStores } from '../collab/oplog'
 import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist'
-import type { FroamViewport } from '../collab/types'
+import { findElementByPath, getElementPath, isSafeDraftPath } from '../collab/paths'
+import { createAnchor, resolveAnchor } from '../collab/anchor'
+import type { FroamAnchor, FroamViewport } from '../collab/types'
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources'
 import { useFroamRouteKey } from '../routing'
 import {
@@ -408,10 +410,6 @@ function saveStore(store: EditorStore) {
   }
 }
 
-function isSafeDraftPath(path: string) {
-  return path.trim().length > 0 && path.includes(':')
-}
-
 function loadPersonaPreference() {
   if (typeof window === 'undefined') return DEFAULT_FROAM_PERSONA
   try {
@@ -578,41 +576,6 @@ function shouldSkipElement(element: HTMLElement) {
   if (element.id === 'root') return true
   if (element.dataset.chefEditorRoot === 'true') return true
   return false
-}
-
-function getElementPath(element: HTMLElement, root: HTMLElement) {
-  const segments: string[] = []
-  let current: HTMLElement | null = element
-  while (current && current !== root) {
-    const parent: HTMLElement | null = current.parentElement
-    if (!parent) break
-    const tag = current.tagName.toLowerCase()
-    const currentTag = current.tagName
-    const siblings = Array.from(parent.children).filter(
-      (child): child is HTMLElement => child instanceof HTMLElement && child.tagName === currentTag,
-    )
-    const index = Math.max(1, siblings.indexOf(current) + 1)
-    segments.unshift(`${tag}:${index}`)
-    current = parent
-  }
-  return segments.join('/')
-}
-
-function findElementByPath(root: HTMLElement, path: string): HTMLElement | null {
-  if (!isSafeDraftPath(path)) return null
-  const segments = path.split('/').filter(Boolean)
-  let current: HTMLElement | null = root
-  for (const segment of segments) {
-    if (!current) return null
-    const [tag, position] = segment.split(':')
-    const index = Math.max(0, Number(position) - 1)
-    const next: HTMLElement | undefined = Array.from(current.children).filter(
-      (child): child is HTMLElement => child instanceof HTMLElement && child.tagName.toLowerCase() === tag,
-    )[index]
-    if (!next) return null
-    current = next
-  }
-  return current
 }
 
 function readNumber(value: string, fallback: number) {
@@ -1881,6 +1844,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const pendingImageTargetRef = useRef<HTMLElement | null>(null)
   const pendingCanvasImageRef = useRef(false)
   const currentSelectionRef = useRef<HTMLElement | null>(null)
+  /** What the selected element *is*, so it can be found again if the page moves. */
+  const selectionAnchorRef = useRef<FroamAnchor | null>(null)
   const selectionSwitchTargetRef = useRef<HTMLElement | null>(null)
   const selectionSwitchTimerRef = useRef<number>(0)
   const currentHoverRef = useRef<HTMLElement | null>(null)
@@ -1967,6 +1932,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       derived: () => opLog.store(),
       live: () => storeRef.current,
       originals: () => originalsRef.current,
+      anchors: {
+        of: (el: HTMLElement) => { const r = getRoot(); return r ? createAnchor(el, r) : null },
+        resolve: (a: FroamAnchor) => { const r = getRoot(); return r ? resolveAnchor(a, r) : null },
+        selection: () => selectionAnchorRef.current,
+      },
       // Field-level, not JSON.stringify: two stores can hold identical design
       // and still serialise differently just from key order.
       diff: () => diffStores(opLog.store(), storeRef.current),
@@ -2896,18 +2866,48 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     })
   }
 
+  /* Keep the selection's anchor current, so a restructure has something to
+     re-find it with. Cheap: one fingerprint per selection change. */
+  useEffect(() => {
+    const root = getRoot()
+    if (!selection || !root) {
+      selectionAnchorRef.current = null
+      return
+    }
+    const element = currentSelectionRef.current ?? findElementByPath(root, selection.path)
+    selectionAnchorRef.current = element ? createAnchor(element, root) : null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection?.path])
+
   function refreshSelectedElementFromDOM() {
     window.requestAnimationFrame(() => {
       if (!selection) return
       const root = getRoot()
       if (!root) return
-      const target = findElementByPath(root, selection.path)
-      if (!target) return
-      const refreshed = buildSelection(target, selection.path)
+
+      // Re-find by anchor rather than path. Wrapping a section in a container
+      // shifts every path beneath it, and the old lookup either lost the
+      // selection or — worse — silently handed back whatever now sits in that
+      // slot. The fingerprint follows the element instead of the slot.
+      const anchor = selectionAnchorRef.current
+      const resolved = anchor
+        ? resolveAnchor(anchor, root)
+        : (() => {
+            const el = findElementByPath(root, selection.path)
+            return el ? ({ status: 'exact', element: el, path: selection.path } as const) : ({ status: 'orphaned' } as const)
+          })()
+      if (resolved.status === 'orphaned') return
+
+      const target = resolved.element
+      const path = resolved.path
+      if (resolved.status === 'recovered') {
+        selectionAnchorRef.current = createAnchor(target, root)
+      }
+      const refreshed = buildSelection(target, path)
       currentSelectionRef.current = target
       target.setAttribute('data-chef-selected', 'true')
       setSelection(refreshed)
-      setSelections((current) => current.map((item) => item.path === refreshed.path ? refreshed : item))
+      setSelections((current) => current.map((item) => item.path === selection.path ? refreshed : item))
       setSelectionRect(target.getBoundingClientRect())
     })
   }

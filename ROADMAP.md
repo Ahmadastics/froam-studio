@@ -130,10 +130,11 @@ one. That's a Run'Am product, not a Froam dependency.
 
 ## Phase 0 — this week, mostly no new features
 
-> **Status:** 0.1, 0.2 and 0.2b shipped in **v4.9.2** — `src/collab/` holds the
-> schema, the op log, the session and its persistence, with the editor writing
-> to all of it. 0.3 (anchor stability) and 0.4 (the two first screens) are
-> still open, and 0.3 is the one with real risk in it.
+> **Status:** 0.1, 0.2 and 0.2b shipped in **v4.9.2**; 0.3 landed after it.
+> `src/collab/` holds the schema, the path format, the op log, the session,
+> its persistence and the anchor resolver, with the editor writing to all of
+> it. Only 0.4 — sketching the two first screens — is still open, and that one
+> is design work rather than code.
 
 ### 0.1 The schema page
 
@@ -227,6 +228,18 @@ Minimum viable answer: store a **fingerprint** alongside the path — tag, text
 snippet, nearest stable ancestor, ordinal among siblings. On load, if the path
 misses, re-resolve by fingerprint. If that misses too, mark the comment
 *orphaned* and surface it in a list rather than losing it silently.
+
+**Shipped** in `src/collab/anchor.ts`, with one correction to the plan above:
+the path is *verified* against the fingerprint rather than merely tried first.
+A path that still resolves after a restructure is the dangerous case, not the
+happy one — it hands back a real element that is the wrong element, which is
+exactly how a comment thread silently re-attaches to someone else's paragraph.
+An exact `id` match is treated as decisive; below a 0.5 score nothing matches,
+because an honest orphan beats a confident mistake.
+
+First consumer is the editor's own selection, which now follows an element
+through a restructure instead of dropping. Comments (v5.2) and soft locks
+(v6.0) inherit it.
 
 ### 0.4 Sketch both first screens
 

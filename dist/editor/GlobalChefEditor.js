@@ -29,6 +29,8 @@ import { getFroamRootElement } from '../config.js';
 import { createOpLogSession } from '../collab/session.js';
 import { diffStores } from '../collab/oplog.js';
 import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist.js';
+import { findElementByPath, getElementPath, isSafeDraftPath } from '../collab/paths.js';
+import { createAnchor, resolveAnchor } from '../collab/anchor.js';
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources.js';
 import { useFroamRouteKey } from '../routing.js';
 import { DEFAULT_FROAM_PERSONA, FROAM_PERSONA_PATH, PERSONA_STORAGE_KEY, readFroamPersonaDraft, sanitizeFroamPersona, isFroamPersonaPath, } from './froamPersona.js';
@@ -157,9 +159,6 @@ function saveStore(store) {
             // Keep the in-memory editor usable even when persistence is unavailable.
         }
     }
-}
-function isSafeDraftPath(path) {
-    return path.trim().length > 0 && path.includes(':');
 }
 function loadPersonaPreference() {
     if (typeof window === 'undefined')
@@ -324,39 +323,6 @@ function shouldSkipElement(element) {
     if (element.dataset.chefEditorRoot === 'true')
         return true;
     return false;
-}
-function getElementPath(element, root) {
-    const segments = [];
-    let current = element;
-    while (current && current !== root) {
-        const parent = current.parentElement;
-        if (!parent)
-            break;
-        const tag = current.tagName.toLowerCase();
-        const currentTag = current.tagName;
-        const siblings = Array.from(parent.children).filter((child) => child instanceof HTMLElement && child.tagName === currentTag);
-        const index = Math.max(1, siblings.indexOf(current) + 1);
-        segments.unshift(`${tag}:${index}`);
-        current = parent;
-    }
-    return segments.join('/');
-}
-function findElementByPath(root, path) {
-    if (!isSafeDraftPath(path))
-        return null;
-    const segments = path.split('/').filter(Boolean);
-    let current = root;
-    for (const segment of segments) {
-        if (!current)
-            return null;
-        const [tag, position] = segment.split(':');
-        const index = Math.max(0, Number(position) - 1);
-        const next = Array.from(current.children).filter((child) => child instanceof HTMLElement && child.tagName.toLowerCase() === tag)[index];
-        if (!next)
-            return null;
-        current = next;
-    }
-    return current;
 }
 function readNumber(value, fallback) {
     const parsed = Number.parseFloat(value);
@@ -1474,6 +1440,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const pendingImageTargetRef = useRef(null);
     const pendingCanvasImageRef = useRef(false);
     const currentSelectionRef = useRef(null);
+    /** What the selected element *is*, so it can be found again if the page moves. */
+    const selectionAnchorRef = useRef(null);
     const selectionSwitchTargetRef = useRef(null);
     const selectionSwitchTimerRef = useRef(0);
     const currentHoverRef = useRef(null);
@@ -1560,6 +1528,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             derived: () => opLog.store(),
             live: () => storeRef.current,
             originals: () => originalsRef.current,
+            anchors: {
+                of: (el) => { const r = getRoot(); return r ? createAnchor(el, r) : null; },
+                resolve: (a) => { const r = getRoot(); return r ? resolveAnchor(a, r) : null; },
+                selection: () => selectionAnchorRef.current,
+            },
             // Field-level, not JSON.stringify: two stores can hold identical design
             // and still serialise differently just from key order.
             diff: () => diffStores(opLog.store(), storeRef.current),
@@ -2461,6 +2434,18 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             return saveHistory(next);
         });
     }
+    /* Keep the selection's anchor current, so a restructure has something to
+       re-find it with. Cheap: one fingerprint per selection change. */
+    useEffect(() => {
+        const root = getRoot();
+        if (!selection || !root) {
+            selectionAnchorRef.current = null;
+            return;
+        }
+        const element = currentSelectionRef.current ?? findElementByPath(root, selection.path);
+        selectionAnchorRef.current = element ? createAnchor(element, root) : null;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selection?.path]);
     function refreshSelectedElementFromDOM() {
         window.requestAnimationFrame(() => {
             if (!selection)
@@ -2468,14 +2453,29 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             const root = getRoot();
             if (!root)
                 return;
-            const target = findElementByPath(root, selection.path);
-            if (!target)
+            // Re-find by anchor rather than path. Wrapping a section in a container
+            // shifts every path beneath it, and the old lookup either lost the
+            // selection or — worse — silently handed back whatever now sits in that
+            // slot. The fingerprint follows the element instead of the slot.
+            const anchor = selectionAnchorRef.current;
+            const resolved = anchor
+                ? resolveAnchor(anchor, root)
+                : (() => {
+                    const el = findElementByPath(root, selection.path);
+                    return el ? { status: 'exact', element: el, path: selection.path } : { status: 'orphaned' };
+                })();
+            if (resolved.status === 'orphaned')
                 return;
-            const refreshed = buildSelection(target, selection.path);
+            const target = resolved.element;
+            const path = resolved.path;
+            if (resolved.status === 'recovered') {
+                selectionAnchorRef.current = createAnchor(target, root);
+            }
+            const refreshed = buildSelection(target, path);
             currentSelectionRef.current = target;
             target.setAttribute('data-chef-selected', 'true');
             setSelection(refreshed);
-            setSelections((current) => current.map((item) => item.path === refreshed.path ? refreshed : item));
+            setSelections((current) => current.map((item) => item.path === selection.path ? refreshed : item));
             setSelectionRect(target.getBoundingClientRect());
         });
     }

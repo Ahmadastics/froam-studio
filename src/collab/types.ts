@@ -181,9 +181,13 @@ export type FroamRoom = {
  */
 export type FroamAnchorFingerprint = {
   tag: string
-  /** First ~64 chars of trimmed text content. */
+  /** The element's own id. The strongest signal there is, when it exists. */
+  id?: string
+  /** First ~80 chars of trimmed text content. */
   text?: string
-  /** Path of the nearest ancestor that looks structurally stable. */
+  /** Id of the nearest ancestor that has one — survives edits above the element. */
+  anchorId?: string
+  /** Path from that ancestor down, or from the root when there isn't one. */
   anchorPath?: string
   /** Index among siblings of the same tag. */
   ordinal?: number

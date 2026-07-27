@@ -53,6 +53,8 @@ function withStorage(store, fn) {
 }
 
 const { loadOpLog, saveOpLog, clearOpLog, FROAM_OPLOG_KEY } = await import('../dist/collab/persist.js')
+const { scoreFingerprint, ANCHOR_MATCH_THRESHOLD } = await import('../dist/collab/anchor.js')
+const { tagOfPath } = await import('../dist/collab/paths.js')
 
 const tests = []
 const test = (name, fn) => tests.push([name, fn])
@@ -502,6 +504,67 @@ test('undo in a room reverts only my own work', () => {
   ahmad.undo()
   assert.equal(ahmad.store()[SCOPE]?.hero, undefined)
   assert.equal(ahmad.store()[SCOPE].footer.styles.color, '#zainab')
+})
+
+/* ─── anchors ─── */
+
+const HERO = {
+  tag: 'h1',
+  text: 'Run’Am — get anything moved',
+  className: 'hero__title display',
+  anchorId: 'hero',
+  anchorPath: 'h1:1',
+  ordinal: 1,
+}
+
+test('an identical element scores a perfect match', () => {
+  assert.equal(scoreFingerprint(HERO, { ...HERO }), 1)
+})
+
+test('a different tag is never a match, however much else agrees', () => {
+  assert.equal(scoreFingerprint(HERO, { ...HERO, tag: 'h2' }), 0)
+})
+
+test('the same element, moved: path and ordinal change, identity does not', () => {
+  const moved = { ...HERO, anchorPath: 'div:2/h1:1', ordinal: 3 }
+  assert.ok(scoreFingerprint(HERO, moved) >= ANCHOR_MATCH_THRESHOLD, 'a wrapped section must not orphan its own headline')
+})
+
+test('an id outweighs everything around it', () => {
+  const want = { ...HERO, id: 'page-title' }
+  const movedAndRestyled = { tag: 'h1', id: 'page-title', text: 'A totally rewritten headline', className: 'other' }
+  assert.ok(scoreFingerprint(want, movedAndRestyled) >= ANCHOR_MATCH_THRESHOLD)
+})
+
+test('a different element in the same slot is rejected', () => {
+  // The dangerous case: the path still resolves, but to a stranger.
+  const stranger = { tag: 'h1', text: 'Pricing', className: 'pricing__title', anchorId: 'pricing', anchorPath: 'h1:1', ordinal: 1 }
+  assert.ok(scoreFingerprint(HERO, stranger) < ANCHOR_MATCH_THRESHOLD, 'this is exactly the silent-detach bug')
+})
+
+test('an element with nothing distinctive cannot match on tag alone', () => {
+  assert.equal(scoreFingerprint({ tag: 'div' }, { tag: 'div' }), 0)
+})
+
+test('edited copy still matches when the rest holds', () => {
+  const lightlyEdited = { ...HERO, text: 'Run’Am — get anything moved today' }
+  assert.ok(scoreFingerprint(HERO, lightlyEdited) >= ANCHOR_MATCH_THRESHOLD)
+})
+
+test('rewritten copy on an anonymous element does orphan', () => {
+  const textOnly = { tag: 'p', text: 'The quick brown fox jumps over the lazy dog' }
+  const rewritten = { tag: 'p', text: 'Entirely unrelated sentence about shipping rates' }
+  assert.ok(scoreFingerprint(textOnly, rewritten) < ANCHOR_MATCH_THRESHOLD, 'better an honest orphan than a wrong re-attach')
+})
+
+test('scoring is scale-free: absent signals are not counted against a candidate', () => {
+  const sparse = { tag: 'button', text: 'Post a task' }
+  assert.equal(scoreFingerprint(sparse, { tag: 'button', text: 'Post a task', className: 'btn btn--primary' }), 1)
+})
+
+test('tagOfPath reads the leaf tag without a DOM', () => {
+  assert.equal(tagOfPath('div:1/section:2/h1:1'), 'h1')
+  assert.equal(tagOfPath(''), '')
 })
 
 /* ─── persistence ─── */
