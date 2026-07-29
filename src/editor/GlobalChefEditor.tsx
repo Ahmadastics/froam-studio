@@ -105,11 +105,11 @@ import FroamShapeLibrary from './FroamShapeLibrary'
 import FroamPersonaEditor from './FroamPersonaEditor'
 import { getFroamRootElement } from '../config'
 import { createOpLogSession, type OpLogSession } from '../collab/session'
-import { diffStores } from '../collab/oplog'
+import { diffStores, type FroamChange } from '../collab/oplog'
 import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist'
-import { findElementByPath, getElementPath, isSafeDraftPath } from '../collab/paths'
+import { findElementByPath, getElementPath, isSafeDraftPath, tagOfPath } from '../collab/paths'
 import { createAnchor, resolveAnchor } from '../collab/anchor'
-import type { FroamAnchor, FroamViewport } from '../collab/types'
+import { LOCAL_ACTOR, scopeKey, type FroamAnchor, type FroamViewport } from '../collab/types'
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources'
 import { useFroamRouteKey } from '../routing'
 import {
@@ -216,14 +216,6 @@ type CanvasState = {
   imageUrl?: string
 }
 
-type HistoryEntry = {
-  id: string
-  timestamp: number
-  label: string
-  routeKey: string
-  store: EditorStore
-}
-
 type GradientStop = {
   color: string
   position: number
@@ -282,9 +274,8 @@ const cursorOptions = ['auto', 'default', 'pointer', 'grab', 'grabbing', 'text',
    Constants
    ═══════════════════════════════════════════════════════════════ */
 const STORAGE_KEY = 'froam-editor-store-v1'
-const HISTORY_KEY = 'froam-history-v1'
-const MAX_HISTORY = 6
-const MAX_HISTORY_BYTES = 600_000
+/** Retired in 4.9.4 — history is the op log now. Kept only to clear it. */
+const LEGACY_HISTORY_KEY = 'froam-history-v1'
 const MAX_INLINE_ASSET_LENGTH = 40_000
 const MAX_PERSONA_IMAGE_BYTES = 400_000
 const SAVE_META_KEY = 'froam-last-save-v1'
@@ -294,9 +285,12 @@ if (typeof window !== 'undefined') {
   try {
     const legacyPairs: Array<[string, string]> = [
       ['runam-chef-editor-store-v1', STORAGE_KEY],
-      ['runam-froam-history-v1', HISTORY_KEY],
       ['runam-froam-last-save-v1', SAVE_META_KEY],
     ]
+    // Snapshot history is gone; don't leave 600 KB of it behind.
+    for (const dead of ['runam-froam-history-v1', LEGACY_HISTORY_KEY]) {
+      try { window.localStorage.removeItem(dead) } catch { /* ignore */ }
+    }
     for (const [oldKey, newKey] of legacyPairs) {
       const legacy = window.localStorage.getItem(oldKey)
       if (legacy !== null && window.localStorage.getItem(newKey) === null) {
@@ -400,7 +394,7 @@ function saveStore(store: EditorStore) {
   } catch {
     // History is disposable and the design is not. Clear both records of how
     // the design got here before risking the design itself.
-    try { window.localStorage.removeItem(HISTORY_KEY) } catch { /* ignore */ }
+    try { window.localStorage.removeItem(LEGACY_HISTORY_KEY) } catch { /* ignore */ }
     clearOpLog()
     try {
       window.localStorage.setItem(STORAGE_KEY, serialized)
@@ -472,83 +466,6 @@ function sanitizeStore(store: EditorStore): EditorStore {
   return nextStore
 }
 
-function loadHistory(): HistoryEntry[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = window.localStorage.getItem(HISTORY_KEY)
-    return raw ? (JSON.parse(raw) as HistoryEntry[]).slice(0, MAX_HISTORY) : []
-  } catch {
-    try { window.localStorage.removeItem(HISTORY_KEY) } catch { /* ignore */ }
-    return []
-  }
-}
-
-function stripLargeInlineValue(value?: string) {
-  if (!value || value.length <= MAX_INLINE_ASSET_LENGTH) return value
-  return value.startsWith('data:') || value.includes('data:image/') ? undefined : value
-}
-
-function compactHistoryStore(store: EditorStore, routeKey: string): EditorStore {
-  const routeStore = store[routeKey] ?? {}
-  const compactRoute: Record<string, ElementDraft> = {}
-
-  Object.entries(routeStore).forEach(([path, draft]) => {
-    const styles = draft.styles ? { ...draft.styles } : undefined
-    if (styles?.backgroundImage) {
-      const compactBackground = stripLargeInlineValue(styles.backgroundImage)
-      if (compactBackground) styles.backgroundImage = compactBackground
-      else delete styles.backgroundImage
-    }
-
-    let text = draft.text
-    if (isInjectionPath(path) && text && text.length > MAX_INLINE_ASSET_LENGTH) {
-      text = text.replace(/data:image\/[^"' )]+/gi, '')
-    }
-
-    compactRoute[path] = {
-      ...draft,
-      text,
-      imageUrl: stripLargeInlineValue(draft.imageUrl),
-      styles,
-    }
-  })
-
-  return { [routeKey]: compactRoute }
-}
-
-function saveHistory(history: HistoryEntry[]) {
-  const candidates = history.slice(0, MAX_HISTORY)
-  const persisted: HistoryEntry[] = []
-
-  for (const entry of candidates) {
-    const compactEntry = {
-      ...entry,
-      store: compactHistoryStore(entry.store, entry.routeKey),
-    }
-    const next = [...persisted, compactEntry]
-    if (JSON.stringify(next).length > MAX_HISTORY_BYTES) break
-    persisted.push(compactEntry)
-  }
-
-  try {
-    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(persisted))
-  } catch {
-    // If another feature consumed the remaining quota, retain progressively
-    // fewer entries. Never let optional history crash Froam.
-    while (persisted.length > 0) {
-      persisted.pop()
-      try {
-        window.localStorage.setItem(HISTORY_KEY, JSON.stringify(persisted))
-        return persisted
-      } catch {
-        // Continue shrinking.
-      }
-    }
-    try { window.localStorage.removeItem(HISTORY_KEY) } catch { /* ignore */ }
-  }
-
-  return persisted
-}
 
 function getRoot(): HTMLElement | null {
   return getFroamRootElement()
@@ -576,6 +493,34 @@ function shouldSkipElement(element: HTMLElement) {
   if (element.id === 'root') return true
   if (element.dataset.chefEditorRoot === 'true') return true
   return false
+}
+
+/* ─── Reading a change back to the person who made it ─── */
+
+/** "Fill · h1" — what changed, and on what. */
+function describeChange(change: FroamChange) {
+  const tag = tagOfPath(change.paths[0] ?? '')
+  const where = change.paths.length > 1 ? `${tag} +${change.paths.length - 1}` : tag
+  return where ? `${change.label} · ${where}` : change.label
+}
+
+function relativeTime(ts: number) {
+  const seconds = Math.max(0, Math.round((Date.now() - ts) / 1000))
+  if (seconds < 45) return 'just now'
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  return new Date(ts).toLocaleDateString()
+}
+
+/**
+ * Who and when. The local actor reads as "you" — an id is the right thing to
+ * store and the wrong thing to show someone.
+ */
+function changeByline(change: FroamChange) {
+  const who = change.actor === LOCAL_ACTOR ? 'You' : change.actor
+  return `${who} · ${relativeTime(change.ts)}`
 }
 
 function readNumber(value: string, fallback: number) {
@@ -1748,7 +1693,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   // Undo/redo — a cursor into the op log, not a stack of store snapshots.
   // Bumped whenever the log moves, purely so the toolbar buttons re-render.
   const [logVersion, setLogVersion] = useState(0)
-  const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory())
 
   /**
    * The op log (v4.9.2). Every state-changing edit is recorded here as a
@@ -1861,6 +1805,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const viewportStoreKeyRef = useRef(viewportStoreKey)
   viewportStoreKeyRef.current = viewportStoreKey
   const routeDrafts = useMemo(() => store[viewportStoreKey] ?? {}, [store, viewportStoreKey])
+  /** What people did on this route + viewport, newest first. */
+  const changeLog = useMemo(
+    () => opLog.changes(60).filter((c) => scopeKey(c.routeKey, c.viewport) === viewportStoreKey),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [logVersion, store, viewportStoreKey],
+  )
   const draftCount = useMemo(() => countRenderableDrafts(routeDrafts), [routeDrafts])
   const hasRouteDrafts = useMemo(() => draftCount > 0, [draftCount])
   const showPanel = panelOpen || active
@@ -2872,20 +2822,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
   }
 
-  /* ─── History helpers ─── */
-  function pushHistory(label: string, currentStore: EditorStore) {
-    const entry: HistoryEntry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      timestamp: Date.now(),
-      label,
-      routeKey: viewportStoreKey,
-      store: JSON.parse(JSON.stringify(currentStore)),
-    }
-    setHistory((prev) => {
-      const next = [entry, ...prev].slice(0, MAX_HISTORY)
-      return saveHistory(next)
-    })
-  }
 
   /* Keep the selection's anchor current, so a restructure has something to
      re-find it with. Cheap: one fingerprint per selection change. */
@@ -2966,12 +2902,20 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     applyLogToStore('Redone')
   }
 
-  function restoreFromHistory(entry: HistoryEntry) {
-    setStore(entry.store)
-    saveStore(entry.store)
-    applyStoreToDOM(entry.store, { clearCurrent: true })
-    refreshSelectedElementFromDOM()
-    showToast(`Restored: ${entry.label}`)
+  /**
+   * Undo one specific change from the list, wherever it sits in the history.
+   *
+   * Not the same as Ctrl+Z, which walks your own most-recent-first. This is
+   * "take back that one", and it is how undoing someone else's work will work
+   * once a room has two people in it.
+   */
+  function revertChange(change: FroamChange) {
+    const ops = opLog.revert(change.id)
+    if (!ops.length) {
+      showToast('Already undone')
+      return
+    }
+    applyLogToStore(`Undid ${describeChange(change)}`)
   }
 
   function collectVersionRouteDrafts() {
@@ -3237,7 +3181,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       setSelections((current) => current.map((s) => ({ ...s, ...nextSelection })))
     }
 
-    if (historyLabel) pushHistory(historyLabel, nextStore)
   }
 
   function applyStyle(styles: Record<string, string>, nextSel?: Partial<SelectionState>, label?: string) {
@@ -3284,7 +3227,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     nextStore[viewportStoreKey] = routeStore
     storeRef.current = nextStore
     setStore(nextStore)
-    pushHistory(label, nextStore)
     selectElementFromIntel(el)
   }
 
@@ -3401,7 +3343,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     currentSelectionRef.current = target
     target.setAttribute('data-chef-selected', 'true')
     setSelection({ ...buildSelection(target, path), ...nextSelection })
-    if (historyLabel) pushHistory(historyLabel, nextStore)
   }
 
   function clearSelectionDraft() {
@@ -4430,7 +4371,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     storeRef.current = nextStore
     setStore(nextStore)
     saveStore(nextStore)
-    pushHistory(label, nextStore)
   }
 
   function toggleLayerVisibility(node: LayerNode) {
@@ -6488,18 +6428,23 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               isOpen={openSections.history}
               onToggle={() => toggleSection('history')}
             >
-              {history.filter((e) => e.routeKey === viewportStoreKey).length === 0 ? (
-                <span style={{ color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }}>No history yet for this viewport</span>
+              {changeLog.length === 0 ? (
+                <span style={{ color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }}>Nothing changed here yet</span>
               ) : (
                 <ul className="fs-history-list">
-                  {history.filter((e) => e.routeKey === viewportStoreKey).map((entry) => (
-                    <li key={entry.id} className="fs-history-item" data-chef-editor-root="true">
+                  {changeLog.map((change) => (
+                    <li key={change.id} className="fs-history-item" data-chef-editor-root="true">
                       <div className="fs-history-meta">
-                        <span>{entry.label}</span>
-                        <small>{new Date(entry.timestamp).toLocaleTimeString()}</small>
+                        <span>{describeChange(change)}</span>
+                        <small>{changeByline(change)}</small>
                       </div>
-                      <button type="button" className="fs-pill is-accent" onClick={() => restoreFromHistory(entry)}>
-                        Restore
+                      <button
+                        type="button"
+                        className="fs-pill is-accent"
+                        title={`Undo ${describeChange(change)}`}
+                        onClick={() => revertChange(change)}
+                      >
+                        Undo
                       </button>
                     </li>
                   ))}

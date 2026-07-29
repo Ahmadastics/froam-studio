@@ -29,8 +29,9 @@ import { getFroamRootElement } from '../config.js';
 import { createOpLogSession } from '../collab/session.js';
 import { diffStores } from '../collab/oplog.js';
 import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist.js';
-import { findElementByPath, getElementPath, isSafeDraftPath } from '../collab/paths.js';
+import { findElementByPath, getElementPath, isSafeDraftPath, tagOfPath } from '../collab/paths.js';
 import { createAnchor, resolveAnchor } from '../collab/anchor.js';
+import { LOCAL_ACTOR, scopeKey } from '../collab/types.js';
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources.js';
 import { useFroamRouteKey } from '../routing.js';
 import { DEFAULT_FROAM_PERSONA, FROAM_PERSONA_PATH, PERSONA_STORAGE_KEY, readFroamPersonaDraft, sanitizeFroamPersona, isFroamPersonaPath, } from './froamPersona.js';
@@ -39,9 +40,8 @@ const cursorOptions = ['auto', 'default', 'pointer', 'grab', 'grabbing', 'text',
    Constants
    ═══════════════════════════════════════════════════════════════ */
 const STORAGE_KEY = 'froam-editor-store-v1';
-const HISTORY_KEY = 'froam-history-v1';
-const MAX_HISTORY = 6;
-const MAX_HISTORY_BYTES = 600_000;
+/** Retired in 4.9.4 — history is the op log now. Kept only to clear it. */
+const LEGACY_HISTORY_KEY = 'froam-history-v1';
 const MAX_INLINE_ASSET_LENGTH = 40_000;
 const MAX_PERSONA_IMAGE_BYTES = 400_000;
 const SAVE_META_KEY = 'froam-last-save-v1';
@@ -50,9 +50,15 @@ if (typeof window !== 'undefined') {
     try {
         const legacyPairs = [
             ['runam-chef-editor-store-v1', STORAGE_KEY],
-            ['runam-froam-history-v1', HISTORY_KEY],
             ['runam-froam-last-save-v1', SAVE_META_KEY],
         ];
+        // Snapshot history is gone; don't leave 600 KB of it behind.
+        for (const dead of ['runam-froam-history-v1', LEGACY_HISTORY_KEY]) {
+            try {
+                window.localStorage.removeItem(dead);
+            }
+            catch { /* ignore */ }
+        }
         for (const [oldKey, newKey] of legacyPairs) {
             const legacy = window.localStorage.getItem(oldKey);
             if (legacy !== null && window.localStorage.getItem(newKey) === null) {
@@ -148,7 +154,7 @@ function saveStore(store) {
         // History is disposable and the design is not. Clear both records of how
         // the design got here before risking the design itself.
         try {
-            window.localStorage.removeItem(HISTORY_KEY);
+            window.localStorage.removeItem(LEGACY_HISTORY_KEY);
         }
         catch { /* ignore */ }
         clearOpLog();
@@ -215,87 +221,6 @@ function sanitizeStore(store) {
     }
     return nextStore;
 }
-function loadHistory() {
-    if (typeof window === 'undefined')
-        return [];
-    try {
-        const raw = window.localStorage.getItem(HISTORY_KEY);
-        return raw ? JSON.parse(raw).slice(0, MAX_HISTORY) : [];
-    }
-    catch {
-        try {
-            window.localStorage.removeItem(HISTORY_KEY);
-        }
-        catch { /* ignore */ }
-        return [];
-    }
-}
-function stripLargeInlineValue(value) {
-    if (!value || value.length <= MAX_INLINE_ASSET_LENGTH)
-        return value;
-    return value.startsWith('data:') || value.includes('data:image/') ? undefined : value;
-}
-function compactHistoryStore(store, routeKey) {
-    const routeStore = store[routeKey] ?? {};
-    const compactRoute = {};
-    Object.entries(routeStore).forEach(([path, draft]) => {
-        const styles = draft.styles ? { ...draft.styles } : undefined;
-        if (styles?.backgroundImage) {
-            const compactBackground = stripLargeInlineValue(styles.backgroundImage);
-            if (compactBackground)
-                styles.backgroundImage = compactBackground;
-            else
-                delete styles.backgroundImage;
-        }
-        let text = draft.text;
-        if (isInjectionPath(path) && text && text.length > MAX_INLINE_ASSET_LENGTH) {
-            text = text.replace(/data:image\/[^"' )]+/gi, '');
-        }
-        compactRoute[path] = {
-            ...draft,
-            text,
-            imageUrl: stripLargeInlineValue(draft.imageUrl),
-            styles,
-        };
-    });
-    return { [routeKey]: compactRoute };
-}
-function saveHistory(history) {
-    const candidates = history.slice(0, MAX_HISTORY);
-    const persisted = [];
-    for (const entry of candidates) {
-        const compactEntry = {
-            ...entry,
-            store: compactHistoryStore(entry.store, entry.routeKey),
-        };
-        const next = [...persisted, compactEntry];
-        if (JSON.stringify(next).length > MAX_HISTORY_BYTES)
-            break;
-        persisted.push(compactEntry);
-    }
-    try {
-        window.localStorage.setItem(HISTORY_KEY, JSON.stringify(persisted));
-    }
-    catch {
-        // If another feature consumed the remaining quota, retain progressively
-        // fewer entries. Never let optional history crash Froam.
-        while (persisted.length > 0) {
-            persisted.pop();
-            try {
-                window.localStorage.setItem(HISTORY_KEY, JSON.stringify(persisted));
-                return persisted;
-            }
-            catch {
-                // Continue shrinking.
-            }
-        }
-        try {
-            window.localStorage.removeItem(HISTORY_KEY);
-        }
-        catch { /* ignore */ }
-    }
-    return persisted;
-}
 function getRoot() {
     return getFroamRootElement();
 }
@@ -323,6 +248,33 @@ function shouldSkipElement(element) {
     if (element.dataset.chefEditorRoot === 'true')
         return true;
     return false;
+}
+/* ─── Reading a change back to the person who made it ─── */
+/** "Fill · h1" — what changed, and on what. */
+function describeChange(change) {
+    const tag = tagOfPath(change.paths[0] ?? '');
+    const where = change.paths.length > 1 ? `${tag} +${change.paths.length - 1}` : tag;
+    return where ? `${change.label} · ${where}` : change.label;
+}
+function relativeTime(ts) {
+    const seconds = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (seconds < 45)
+        return 'just now';
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60)
+        return `${minutes}m ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24)
+        return `${hours}h ago`;
+    return new Date(ts).toLocaleDateString();
+}
+/**
+ * Who and when. The local actor reads as "you" — an id is the right thing to
+ * store and the wrong thing to show someone.
+ */
+function changeByline(change) {
+    const who = change.actor === LOCAL_ACTOR ? 'You' : change.actor;
+    return `${who} · ${relativeTime(change.ts)}`;
 }
 function readNumber(value, fallback) {
     const parsed = Number.parseFloat(value);
@@ -1344,7 +1296,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     // Undo/redo — a cursor into the op log, not a stack of store snapshots.
     // Bumped whenever the log moves, purely so the toolbar buttons re-render.
     const [logVersion, setLogVersion] = useState(0);
-    const [history, setHistory] = useState(() => loadHistory());
     /**
      * The op log (v4.9.2). Every state-changing edit is recorded here as a
      * field-level operation, alongside the store that paints the page.
@@ -1456,6 +1407,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const viewportStoreKeyRef = useRef(viewportStoreKey);
     viewportStoreKeyRef.current = viewportStoreKey;
     const routeDrafts = useMemo(() => store[viewportStoreKey] ?? {}, [store, viewportStoreKey]);
+    /** What people did on this route + viewport, newest first. */
+    const changeLog = useMemo(() => opLog.changes(60).filter((c) => scopeKey(c.routeKey, c.viewport) === viewportStoreKey), 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [logVersion, store, viewportStoreKey]);
     const draftCount = useMemo(() => countRenderableDrafts(routeDrafts), [routeDrafts]);
     const hasRouteDrafts = useMemo(() => draftCount > 0, [draftCount]);
     const showPanel = panelOpen || active;
@@ -2440,20 +2395,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             /* The log is not load-bearing yet — never let it break an edit. */
         }
     }
-    /* ─── History helpers ─── */
-    function pushHistory(label, currentStore) {
-        const entry = {
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-            timestamp: Date.now(),
-            label,
-            routeKey: viewportStoreKey,
-            store: JSON.parse(JSON.stringify(currentStore)),
-        };
-        setHistory((prev) => {
-            const next = [entry, ...prev].slice(0, MAX_HISTORY);
-            return saveHistory(next);
-        });
-    }
     /* Keep the selection's anchor current, so a restructure has something to
        re-find it with. Cheap: one fingerprint per selection change. */
     useEffect(() => {
@@ -2531,12 +2472,20 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         session.redo();
         applyLogToStore('Redone');
     }
-    function restoreFromHistory(entry) {
-        setStore(entry.store);
-        saveStore(entry.store);
-        applyStoreToDOM(entry.store, { clearCurrent: true });
-        refreshSelectedElementFromDOM();
-        showToast(`Restored: ${entry.label}`);
+    /**
+     * Undo one specific change from the list, wherever it sits in the history.
+     *
+     * Not the same as Ctrl+Z, which walks your own most-recent-first. This is
+     * "take back that one", and it is how undoing someone else's work will work
+     * once a room has two people in it.
+     */
+    function revertChange(change) {
+        const ops = opLog.revert(change.id);
+        if (!ops.length) {
+            showToast('Already undone');
+            return;
+        }
+        applyLogToStore(`Undid ${describeChange(change)}`);
     }
     function collectVersionRouteDrafts() {
         const root = getRoot();
@@ -2801,8 +2750,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             setSelection((current) => (current ? { ...current, ...nextSelection } : current));
             setSelections((current) => current.map((s) => ({ ...s, ...nextSelection })));
         }
-        if (historyLabel)
-            pushHistory(historyLabel, nextStore);
     }
     function applyStyle(styles, nextSel, label) {
         updateDraft((draft) => ({ ...draft, styles: { ...(draft.styles ?? {}), ...styles } }), nextSel, label ?? `Style: ${Object.keys(styles).join(', ')}`);
@@ -2845,7 +2792,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         nextStore[viewportStoreKey] = routeStore;
         storeRef.current = nextStore;
         setStore(nextStore);
-        pushHistory(label, nextStore);
         selectElementFromIntel(el);
     }
     function applySizePreset(preset) {
@@ -2931,8 +2877,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         currentSelectionRef.current = target;
         target.setAttribute('data-chef-selected', 'true');
         setSelection({ ...buildSelection(target, path), ...nextSelection });
-        if (historyLabel)
-            pushHistory(historyLabel, nextStore);
     }
     function clearSelectionDraft() {
         if (!selection)
@@ -3924,7 +3868,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         storeRef.current = nextStore;
         setStore(nextStore);
         saveStore(nextStore);
-        pushHistory(label, nextStore);
     }
     function toggleLayerVisibility(node) {
         const root = getRoot();
@@ -4844,7 +4787,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                     applyStoreToDOM(nextStore, { clearCurrent: true });
                                     showToast(`Loaded "${versionName}"`);
                                     toggleSection('versions');
-                                }, onClose: () => toggleSection('versions') }) }), _jsx(AccordionSection, { id: "history", icon: _jsx(Clock, { size: 14 }), title: "History", isOpen: openSections.history, onToggle: () => toggleSection('history'), children: history.filter((e) => e.routeKey === viewportStoreKey).length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "No history yet for this viewport" })) : (_jsx("ul", { className: "fs-history-list", children: history.filter((e) => e.routeKey === viewportStoreKey).map((entry) => (_jsxs("li", { className: "fs-history-item", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "fs-history-meta", children: [_jsx("span", { children: entry.label }), _jsx("small", { children: new Date(entry.timestamp).toLocaleTimeString() })] }), _jsx("button", { type: "button", className: "fs-pill is-accent", onClick: () => restoreFromHistory(entry), children: "Restore" })] }, entry.id))) })) }), _jsx(AccordionSection, { id: "inspiration", icon: _jsx(ImagePlus, { size: 14 }), title: "Inspiration Board", isOpen: openSections.inspiration, onToggle: () => toggleSection('inspiration'), children: _jsx(FroamInspirationPanel, { onToast: showToast }) }), _jsx(AccordionSection, { id: "tokens", icon: _jsx(Coins, { size: 14 }), title: "Design Tokens", isOpen: openSections.tokens, onToggle: () => toggleSection('tokens'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Named values you can apply instantly to any element. Also injected as CSS variables." }), tokens.length > 0 && (_jsx("div", { className: "fs-tokens-grid", children: tokens.map((token) => (_jsxs("div", { className: "fs-token", "data-chef-editor-root": "true", children: [token.category === 'color' && (_jsx("span", { className: "fs-token__swatch", style: { background: token.value } })), _jsx("span", { className: "fs-token__name", title: `--${token.name.replace(/\s+/g, '-').toLowerCase()}`, children: token.name }), _jsx("span", { className: "fs-token__value", children: token.value }), _jsx("button", { type: "button", className: "fs-pill fs-token__apply", onClick: () => applyTokenToSelection(token), children: "Apply" }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", onClick: () => removeToken(token.id), children: _jsx(X, { size: 10 }) })] }, token.id))) })), _jsxs("div", { className: "fs-grid-2", style: { gap: 6 }, children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Category" }), _jsxs("select", { className: "fs-select", value: newTokenCategory, onChange: (e) => setNewTokenCategory(e.target.value), children: [_jsx("option", { value: "color", children: "Color" }), _jsx("option", { value: "spacing", children: "Spacing" }), _jsx("option", { value: "font-size", children: "Font size" }), _jsx("option", { value: "radius", children: "Radius" }), _jsx("option", { value: "shadow", children: "Shadow" }), _jsx("option", { value: "other", children: "Other" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Name" }), _jsx("input", { type: "text", className: "fs-input", value: newTokenName, onChange: (e) => setNewTokenName(e.target.value), placeholder: "brand-primary" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Value" }), _jsxs("div", { style: { display: 'flex', gap: 6 }, children: [newTokenCategory === 'color' && _jsx("input", { type: "color", className: "fs-color-input", value: newTokenValue || '#000000', onChange: (e) => setNewTokenValue(e.target.value), style: { width: 36 } }), _jsx("input", { type: "text", className: "fs-input", value: newTokenValue, onChange: (e) => setNewTokenValue(e.target.value), placeholder: newTokenCategory === 'color' ? '#5eead4' : newTokenCategory === 'spacing' ? '16px' : newTokenCategory === 'radius' ? '8px' : 'value', style: { flex: 1 } })] })] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: addToken, children: [_jsx(Plus, { size: 12 }), " Add token"] })] }) }), _jsx(AccordionSection, { id: "align", icon: _jsx(AlignCenterHorizontal, { size: 14 }), title: "Align & Distribute", isOpen: openSections.align, onToggle: () => toggleSection('align'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Shift-click multiple elements, then align. Works on 2+ selected elements." }), _jsxs("div", { className: "fs-align-grid", children: [_jsxs("button", { type: "button", className: "fs-pill", title: "Align left edges", onClick: () => alignSelections('left'), children: [_jsx(AlignLeft, { size: 13 }), " Left"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Center horizontally", onClick: () => alignSelections('center-h'), children: [_jsx(AlignCenterHorizontal, { size: 13 }), " Center H"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Align right edges", onClick: () => alignSelections('right'), children: [_jsx(AlignRight, { size: 13 }), " Right"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Align top edges", onClick: () => alignSelections('top'), children: [_jsx(AlignVerticalJustifyCenter, { size: 13 }), " Top"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Center vertically", onClick: () => alignSelections('center-v'), children: [_jsx(AlignCenterVertical, { size: 13 }), " Center V"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Align bottom edges", onClick: () => alignSelections('bottom'), children: [_jsx(AlignVerticalDistributeCenter, { size: 13 }), " Bottom"] })] }), _jsxs("div", { className: "fs-pill-group", style: { marginTop: 4 }, children: [_jsxs("button", { type: "button", className: "fs-pill is-accent", title: "Distribute horizontally", onClick: () => alignSelections('distribute-h'), children: [_jsx(AlignHorizontalDistributeCenter, { size: 13 }), " Distribute H"] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", title: "Distribute vertically", onClick: () => alignSelections('distribute-v'), children: [_jsx(AlignHorizontalJustifyCenter, { size: 13 }), " Distribute V"] })] }), _jsxs("p", { style: { fontSize: '0.7rem', color: 'var(--fs-text-tertiary)', margin: 0 }, children: [selections.length, " element", selections.length !== 1 ? 's' : '', " selected"] })] }) }), _jsx(AccordionSection, { id: "transitions", icon: _jsx(Timer, { size: 14 }), title: "Transitions & Motion", isOpen: openSections.transitions, onToggle: () => toggleSection('transitions'), children: _jsxs("div", { className: "fs-stack", children: [_jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Property" }), _jsx("select", { className: "fs-select", value: transitionProp, onChange: (e) => setTransitionProp(e.target.value), children: ['all', 'opacity', 'transform', 'background-color', 'color', 'box-shadow', 'border-radius', 'width', 'height', 'padding', 'margin', 'filter'].map((p) => (_jsx("option", { value: p, children: p }, p))) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Easing" }), _jsx("select", { className: "fs-select", value: transitionEasing, onChange: (e) => setTransitionEasing(e.target.value), children: ['ease', 'ease-in', 'ease-out', 'ease-in-out', 'linear', 'cubic-bezier(0.34,1.56,0.64,1)', 'cubic-bezier(0.4,0,0.2,1)'].map((e) => (_jsx("option", { value: e, children: e.startsWith('cubic') ? 'Spring' : e }, e))) })] })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Duration (ms)" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "50", max: "2000", step: "50", value: transitionDuration, onChange: (e) => setTransitionDuration(Number(e.target.value)) }), _jsx("span", { className: "fs-range-value", children: transitionDuration })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Delay (ms)" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "0", max: "1000", step: "50", value: transitionDelay, onChange: (e) => setTransitionDelay(Number(e.target.value)) }), _jsx("span", { className: "fs-range-value", children: transitionDelay })] })] })] }), _jsxs("div", { className: "fs-pill-group", children: [_jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('all'); setTransitionDuration(200); setTransitionEasing('ease'); setTransitionDelay(0); }, children: "Fast" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('all'); setTransitionDuration(400); setTransitionEasing('ease-in-out'); setTransitionDelay(0); }, children: "Smooth" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('transform'); setTransitionDuration(600); setTransitionEasing('cubic-bezier(0.34,1.56,0.64,1)'); setTransitionDelay(0); }, children: "Spring" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('opacity'); setTransitionDuration(300); setTransitionEasing('ease'); setTransitionDelay(0); }, children: "Fade" })] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: applyTransitionToSelection, disabled: !selection, children: [_jsx(Zap, { size: 12 }), " Apply to selected"] }), selection && (_jsxs("button", { type: "button", className: "fs-pill", onClick: () => applyStyle({ transition: 'none' }), children: [_jsx(Eraser, { size: 12 }), " Remove transition"] }))] }) }), _jsx(AccordionSection, { id: "assets", icon: _jsx(FileImage, { size: 14 }), title: "Asset Manager", isOpen: openSections.assets, onToggle: () => toggleSection('assets'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Save images and apply them to any element. Drag & drop or paste a URL." }), _jsxs("div", { className: "fs-row", style: { gap: 6 }, children: [_jsx("input", { type: "text", className: "fs-input", placeholder: "Paste image URL\u2026", style: { flex: 1 }, onKeyDown: (e) => {
+                                }, onClose: () => toggleSection('versions') }) }), _jsx(AccordionSection, { id: "history", icon: _jsx(Clock, { size: 14 }), title: "History", isOpen: openSections.history, onToggle: () => toggleSection('history'), children: changeLog.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Nothing changed here yet" })) : (_jsx("ul", { className: "fs-history-list", children: changeLog.map((change) => (_jsxs("li", { className: "fs-history-item", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "fs-history-meta", children: [_jsx("span", { children: describeChange(change) }), _jsx("small", { children: changeByline(change) })] }), _jsx("button", { type: "button", className: "fs-pill is-accent", title: `Undo ${describeChange(change)}`, onClick: () => revertChange(change), children: "Undo" })] }, change.id))) })) }), _jsx(AccordionSection, { id: "inspiration", icon: _jsx(ImagePlus, { size: 14 }), title: "Inspiration Board", isOpen: openSections.inspiration, onToggle: () => toggleSection('inspiration'), children: _jsx(FroamInspirationPanel, { onToast: showToast }) }), _jsx(AccordionSection, { id: "tokens", icon: _jsx(Coins, { size: 14 }), title: "Design Tokens", isOpen: openSections.tokens, onToggle: () => toggleSection('tokens'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Named values you can apply instantly to any element. Also injected as CSS variables." }), tokens.length > 0 && (_jsx("div", { className: "fs-tokens-grid", children: tokens.map((token) => (_jsxs("div", { className: "fs-token", "data-chef-editor-root": "true", children: [token.category === 'color' && (_jsx("span", { className: "fs-token__swatch", style: { background: token.value } })), _jsx("span", { className: "fs-token__name", title: `--${token.name.replace(/\s+/g, '-').toLowerCase()}`, children: token.name }), _jsx("span", { className: "fs-token__value", children: token.value }), _jsx("button", { type: "button", className: "fs-pill fs-token__apply", onClick: () => applyTokenToSelection(token), children: "Apply" }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", onClick: () => removeToken(token.id), children: _jsx(X, { size: 10 }) })] }, token.id))) })), _jsxs("div", { className: "fs-grid-2", style: { gap: 6 }, children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Category" }), _jsxs("select", { className: "fs-select", value: newTokenCategory, onChange: (e) => setNewTokenCategory(e.target.value), children: [_jsx("option", { value: "color", children: "Color" }), _jsx("option", { value: "spacing", children: "Spacing" }), _jsx("option", { value: "font-size", children: "Font size" }), _jsx("option", { value: "radius", children: "Radius" }), _jsx("option", { value: "shadow", children: "Shadow" }), _jsx("option", { value: "other", children: "Other" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Name" }), _jsx("input", { type: "text", className: "fs-input", value: newTokenName, onChange: (e) => setNewTokenName(e.target.value), placeholder: "brand-primary" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Value" }), _jsxs("div", { style: { display: 'flex', gap: 6 }, children: [newTokenCategory === 'color' && _jsx("input", { type: "color", className: "fs-color-input", value: newTokenValue || '#000000', onChange: (e) => setNewTokenValue(e.target.value), style: { width: 36 } }), _jsx("input", { type: "text", className: "fs-input", value: newTokenValue, onChange: (e) => setNewTokenValue(e.target.value), placeholder: newTokenCategory === 'color' ? '#5eead4' : newTokenCategory === 'spacing' ? '16px' : newTokenCategory === 'radius' ? '8px' : 'value', style: { flex: 1 } })] })] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: addToken, children: [_jsx(Plus, { size: 12 }), " Add token"] })] }) }), _jsx(AccordionSection, { id: "align", icon: _jsx(AlignCenterHorizontal, { size: 14 }), title: "Align & Distribute", isOpen: openSections.align, onToggle: () => toggleSection('align'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Shift-click multiple elements, then align. Works on 2+ selected elements." }), _jsxs("div", { className: "fs-align-grid", children: [_jsxs("button", { type: "button", className: "fs-pill", title: "Align left edges", onClick: () => alignSelections('left'), children: [_jsx(AlignLeft, { size: 13 }), " Left"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Center horizontally", onClick: () => alignSelections('center-h'), children: [_jsx(AlignCenterHorizontal, { size: 13 }), " Center H"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Align right edges", onClick: () => alignSelections('right'), children: [_jsx(AlignRight, { size: 13 }), " Right"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Align top edges", onClick: () => alignSelections('top'), children: [_jsx(AlignVerticalJustifyCenter, { size: 13 }), " Top"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Center vertically", onClick: () => alignSelections('center-v'), children: [_jsx(AlignCenterVertical, { size: 13 }), " Center V"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Align bottom edges", onClick: () => alignSelections('bottom'), children: [_jsx(AlignVerticalDistributeCenter, { size: 13 }), " Bottom"] })] }), _jsxs("div", { className: "fs-pill-group", style: { marginTop: 4 }, children: [_jsxs("button", { type: "button", className: "fs-pill is-accent", title: "Distribute horizontally", onClick: () => alignSelections('distribute-h'), children: [_jsx(AlignHorizontalDistributeCenter, { size: 13 }), " Distribute H"] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", title: "Distribute vertically", onClick: () => alignSelections('distribute-v'), children: [_jsx(AlignHorizontalJustifyCenter, { size: 13 }), " Distribute V"] })] }), _jsxs("p", { style: { fontSize: '0.7rem', color: 'var(--fs-text-tertiary)', margin: 0 }, children: [selections.length, " element", selections.length !== 1 ? 's' : '', " selected"] })] }) }), _jsx(AccordionSection, { id: "transitions", icon: _jsx(Timer, { size: 14 }), title: "Transitions & Motion", isOpen: openSections.transitions, onToggle: () => toggleSection('transitions'), children: _jsxs("div", { className: "fs-stack", children: [_jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Property" }), _jsx("select", { className: "fs-select", value: transitionProp, onChange: (e) => setTransitionProp(e.target.value), children: ['all', 'opacity', 'transform', 'background-color', 'color', 'box-shadow', 'border-radius', 'width', 'height', 'padding', 'margin', 'filter'].map((p) => (_jsx("option", { value: p, children: p }, p))) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Easing" }), _jsx("select", { className: "fs-select", value: transitionEasing, onChange: (e) => setTransitionEasing(e.target.value), children: ['ease', 'ease-in', 'ease-out', 'ease-in-out', 'linear', 'cubic-bezier(0.34,1.56,0.64,1)', 'cubic-bezier(0.4,0,0.2,1)'].map((e) => (_jsx("option", { value: e, children: e.startsWith('cubic') ? 'Spring' : e }, e))) })] })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Duration (ms)" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "50", max: "2000", step: "50", value: transitionDuration, onChange: (e) => setTransitionDuration(Number(e.target.value)) }), _jsx("span", { className: "fs-range-value", children: transitionDuration })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Delay (ms)" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "0", max: "1000", step: "50", value: transitionDelay, onChange: (e) => setTransitionDelay(Number(e.target.value)) }), _jsx("span", { className: "fs-range-value", children: transitionDelay })] })] })] }), _jsxs("div", { className: "fs-pill-group", children: [_jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('all'); setTransitionDuration(200); setTransitionEasing('ease'); setTransitionDelay(0); }, children: "Fast" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('all'); setTransitionDuration(400); setTransitionEasing('ease-in-out'); setTransitionDelay(0); }, children: "Smooth" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('transform'); setTransitionDuration(600); setTransitionEasing('cubic-bezier(0.34,1.56,0.64,1)'); setTransitionDelay(0); }, children: "Spring" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('opacity'); setTransitionDuration(300); setTransitionEasing('ease'); setTransitionDelay(0); }, children: "Fade" })] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: applyTransitionToSelection, disabled: !selection, children: [_jsx(Zap, { size: 12 }), " Apply to selected"] }), selection && (_jsxs("button", { type: "button", className: "fs-pill", onClick: () => applyStyle({ transition: 'none' }), children: [_jsx(Eraser, { size: 12 }), " Remove transition"] }))] }) }), _jsx(AccordionSection, { id: "assets", icon: _jsx(FileImage, { size: 14 }), title: "Asset Manager", isOpen: openSections.assets, onToggle: () => toggleSection('assets'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Save images and apply them to any element. Drag & drop or paste a URL." }), _jsxs("div", { className: "fs-row", style: { gap: 6 }, children: [_jsx("input", { type: "text", className: "fs-input", placeholder: "Paste image URL\u2026", style: { flex: 1 }, onKeyDown: (e) => {
                                                     if (e.key === 'Enter') {
                                                         const url = e.target.value.trim();
                                                         if (url) {
