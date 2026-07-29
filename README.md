@@ -5,7 +5,7 @@
 [![Node >= 18](https://img.shields.io/badge/node-%3E%3D18-5eead4.svg)](package.json)
 
 <p align="center">
-  <img src="docs/froam-hero.jpeg" alt="Froam" width="520">
+  <img src="docs/froam-mark.svg" alt="Froam" width="460">
 </p>
 
 Your own visual web editor — Figma-style editing on top of **any live website**,
@@ -22,8 +22,15 @@ Froam can edit it.
 ## The mark
 
 Colour is a frequency. Sound is a frequency. Interaction is a frequency.
+
+<p align="center">
+  <img src="docs/froam-hero.jpeg" alt="Froam — designed for feel, built for flow, made to connect" width="420">
+</p>
+
 [A short piece on the identity](https://github.com/Ahmadastics/froam-studio/blob/main/docs/froam-demo.mp4)
-— GitHub plays it in the file view.
+— GitHub plays it in the file view. The mark at the top of this page is the
+animated version, hand-built as SVG so it moves inline: GitHub strips scripts
+from READMEs, so canvas and WebGL are off the table there.
 
 ## ✨ What's new
 
