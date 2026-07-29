@@ -4,6 +4,10 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-14b8a0.svg)](LICENSE)
 [![Node >= 18](https://img.shields.io/badge/node-%3E%3D18-5eead4.svg)](package.json)
 
+<p align="center">
+  <img src="docs/froam-hero.jpeg" alt="Froam" width="520">
+</p>
+
 Your own visual web editor — Figma-style editing on top of **any live website**,
 with **Repo Mode**: every visual edit compiles to real files in your git repo,
 so `git push` ships your design to production. No database, no runtime API
@@ -15,7 +19,38 @@ dependency, no drift.
 Astro, Rails, Django, PHP, WordPress themes, plain HTML — if it serves a page,
 Froam can edit it.
 
-## 📐 v4.5: the Blueprint
+## 🎬 In motion
+
+<video src="https://raw.githubusercontent.com/Ahmadastics/froam-studio/main/docs/froam-demo.mp4" controls width="720">
+  <a href="docs/froam-demo.mp4">Watch the Froam demo</a>
+</video>
+
+## ✨ What's new
+
+**4.9.3 — a save reaches everywhere.** Publish from a phone and it lands on
+every device *and*, with `createGitHubCommitter`, straight in your repo — no
+`froam dev` bridge on the other end. See
+[Publish straight to GitHub](#-publish-straight-to-github--no-laptop-required).
+
+**4.9.2 — undo stops forgetting.** History is an append-only log of individual
+edits instead of twenty whole-design snapshots, so undo goes back as far as the
+work does and survives a reload.
+
+**4.9 — Quick Looks becomes a gallery.** The `✦` one-tap style recipes went
+from 6 to **71**, in ten browsable groups: Depth, Surface, Texture, Effect,
+Shape, Line, Accent, Type, Bold, Reset.
+
+**4.8 — publish everywhere.** The bridge is also a publish backend, and
+`froam-studio/server` mounts the same contract on any stack.
+
+**4.7 — perfect fidelity.** Fonts ship with the design, and a trailing slash
+can no longer hide one.
+
+**4.6 — the Blueprint goes 3D.** Every scanned element becomes a plane lifted
+by its DOM depth: an exploded x-ray you can orbit, zoom, and tap to jump
+straight to the element.
+
+## 📐 the Blueprint
 
 The first time Froam opens on a project, the page scan doesn't just count
 what it finds — it **drafts it**. The scan resolves into a full engineering
@@ -25,9 +60,10 @@ part labels with dimensions, callout leader lines to the key parts
 (headline, nav, hero media, primary action, footer), a spec card with the
 site's own palette and fonts, and a title block. **Tap any part to jump
 straight to that element in the editor** — it's a navigable x-ray of your
-site. Summon it anytime from the command palette ("Blueprint").
+site. Summon it anytime from the command palette ("Blueprint"), or flip it into
+3D and orbit the page as stacked planes.
 
-## 🫥 v4.5: See-Through — visibility, opacity & depth
+## 🫥 See-Through — visibility, opacity & depth
 
 - **Opacity** — drag the `◐ %` chip on the contextual bar to fade any
   element: text, box, container, image.
@@ -36,9 +72,9 @@ site. Summon it anytime from the command palette ("Blueprint").
 - **Blend modes** — multiply, screen, overlay, and the rest.
 - **Depth** — z-index control plus Bring-to-front / Send-to-back.
 
-## 📱 v4: edit from your phone
+## 📱 Edit from your phone
 
-Froam v4 is phone-first. Open your dev site on your phone
+Froam is phone-first. Open your dev site on your phone
 (`froam dev --host` + the LAN URL) and edit the mobile layout **on the
 device where mobile bugs actually live** — every change still compiles to
 committable files on your machine.
@@ -56,8 +92,9 @@ committable files on your machine.
   keyboard round-trips.
 - **Page palette** — Froam reads the colors your site already uses and
   offers them as one-tap chips (with a contrast check for text).
-- **Quick looks** — one-tap style recipes: Lift, Glass, Outline, Pill,
-  Pop, Reset.
+- **Quick Looks** — 71 one-tap style recipes behind the `✦` button, grouped
+  into Depth, Surface, Texture, Effect, Shape, Line, Accent, Type, Bold and
+  Reset. Most derive their shades from the accent your page already uses.
 - **Aa** — one tap to edit copy inline; the bar gets out of the keyboard's
   way.
 
@@ -230,7 +267,10 @@ Project settings live in `froam.config.json` (written by `froam init`).
 
 ## Editor
 
-- `Ctrl+K` command palette · `Ctrl+S` cloud save · `Ctrl+Shift+S` **Save to Repo**
+- `Ctrl+K` command palette
+- `Ctrl+S` **Publish** — every device sees it on the next refresh
+- `Ctrl+Shift+S` **Save to Repo** — writes committable files, needs the local bridge
+- `Ctrl+Z` / `Ctrl+Y` undo & redo — unlimited, and survives a reload
 - Layers, smart guides, resize handles, shape library, animator, versions panel,
   site planner, PNG/SVG/JPEG export, per-viewport editing (desktop/tablet/mobile)
 - Dark & light editor themes, draggable panels, mobile bottom-sheet layout
