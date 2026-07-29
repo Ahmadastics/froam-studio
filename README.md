@@ -21,9 +21,9 @@ Froam can edit it.
 
 ## 🎬 In motion
 
-<video src="https://raw.githubusercontent.com/Ahmadastics/froam-studio/main/docs/froam-demo.mp4" controls width="720">
-  <a href="docs/froam-demo.mp4">Watch the Froam demo</a>
-</video>
+**▶ [Watch Froam in motion](https://github.com/Ahmadastics/froam-studio/blob/main/docs/froam-demo.mp4)**
+— 
+GitHub plays it in the file view.
 
 ## ✨ What's new
 
