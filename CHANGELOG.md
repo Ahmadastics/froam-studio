@@ -2,6 +2,37 @@
 
 All notable changes to froam-studio are documented here.
 
+## 4.9.3 — 2026-07-29
+
+**A save reaches everywhere.** Publishing already worked end to end — client,
+API and runtime — but three faults sat between pressing save and seeing it on
+another device, and the design could only reach a git repo from the one machine
+running `froam dev`. Both are fixed.
+
+### Added
+- **Publish straight to GitHub, from any device.** `createGitHubCommitter`
+  commits `froam.design.json` and its generated CSS through the GitHub Contents
+  API, so a design saved from a phone lands in the repo and whatever deploys
+  from it redeploys. Pass it to `createFroamPublishApi({ commit })` and one save
+  does both legs. Files are byte-identical to the ones the local bridge writes.
+- **`prefer` on `FroamRuntime`.** `'repo'` (default) keeps the no-runtime-API
+  promise; `'newest'` lets a design published after the last commit win, which
+  is what you want when people publish from devices that can't reach a repo.
+- `buildDesignArtifacts(design)` in the codegen — the three shipped files as
+  strings, with no filesystem.
+
+### Fixed
+- **A device that had ever been edited never received a published design
+  again.** The editor refused a publish outright if the route had any local
+  draft. It now merges per field: a local edit made after the publish is kept,
+  anything older gives way, and you're told how many changes were kept.
+- **The published-design load never completed under React StrictMode** — the
+  first mount claimed the route, the second skipped it, and the first response
+  was discarded. A mount torn down before its answer arrives now releases the
+  claim.
+- **A committed design silently beat every publish for the same route**, with
+  no feedback. See `prefer` above.
+
 ## 4.9.2 — 2026-07-27
 
 **Undo stops forgetting.** History was twenty snapshots of the entire design,

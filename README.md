@@ -170,9 +170,43 @@ POST /api/froam/published        { routeKey, viewportMode, store }
   -> { success: true, design: { routeKey, viewportMode, publishedAt } }
 ```
 
-Committed repo designs win over published ones for the same route, so the
-workflow is: publish to see it everywhere now → Save to Repo when it's
-final.
+By default committed repo designs win over published ones for the same route,
+so the workflow is: publish to see it everywhere now → Save to Repo when it's
+final. If you publish from devices that can't reach a repo, pass
+`prefer="newest"` to `FroamRuntime` and whichever is more recent wins instead —
+otherwise publishing to an already-committed route does nothing, with no
+feedback.
+
+## 🚀 Publish straight to GitHub — no laptop required
+
+**Save to Repo** goes through the local `froam dev` bridge, so it only works on
+the machine running it. Edit from your phone and there is no bridge: the design
+reaches the publish API but never reaches the repo, and a design that isn't in
+the repo isn't in the build.
+
+Give the publish API a committer and one save does both legs. The design is
+written through the GitHub Contents API, and whatever deploys from that repo —
+Vercel, Netlify, Pages — picks it up on its own. No CI, no runner, no bridge.
+
+```js
+import { createFroamPublishApi, createGitHubCommitter } from 'froam-studio/server'
+
+const froamApi = createFroamPublishApi({
+  file: 'froam/froam.published.json',
+  authorize: async (req) => isAdmin(req),
+  commit: createGitHubCommitter({
+    token: process.env.GITHUB_TOKEN,   // contents:write on the repo
+    repo: 'you/your-site',
+    branch: 'main',
+    dir: 'src/froam',
+  }),
+})
+```
+
+The commit runs *after* the publish is safely stored and can never fail the
+request, so a GitHub outage costs you a redeploy, never a design. Writes carry
+the file's current sha, so two devices can't silently overwrite each other, and
+the committed files are byte-identical to the ones the local bridge writes.
 
 ## CLI
 

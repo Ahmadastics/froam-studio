@@ -1,6 +1,6 @@
 # Froam Rooms — roadmap to v6
 
-**Where we are:** v4.9.2 · **Where this goes:** v6, more than one person in a design.
+**Where we are:** v4.9.3 · **Where this goes:** v6, more than one person in a design.
 
 The v6 goal in one sentence: **two or more people open the same Froam design
 from different devices — whether that's a designer and their client, or two

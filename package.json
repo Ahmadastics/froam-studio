@@ -1,6 +1,6 @@
 {
   "name": "froam-studio",
-  "version": "4.9.2",
+  "version": "4.9.3",
   "description": "Froam Studio — Figma-style visual editor for ANY project (Vite, Next, static HTML, anything that serves a page). Every edit compiles to committable files in your repo.",
   "author": "Ahmad Modibbo <ahmadnuhu14@gmail.com>",
   "license": "MIT",
@@ -67,7 +67,7 @@
     "build": "node scripts/clean.mjs && tsc -p tsconfig.json && node scripts/fix-js-extensions.mjs && node scripts/copy-assets.mjs && node scripts/build-standalone.mjs",
     "build:standalone": "node scripts/build-standalone.mjs",
     "clean": "node scripts/clean.mjs",
-    "test": "node scripts/test-oplog.mjs"
+    "test": "node scripts/test-oplog.mjs && node scripts/test-committer.mjs"
   },
   "peerDependencies": {
     "react": ">=18",
