@@ -2306,41 +2306,62 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   useEffect(() => {
     let cancelled = false
-    // Skip if we already attempted this key, or if there are already local drafts
+    let settled = false
     if (loadedPublishedKeysRef.current.has(viewportStoreKey)) return
-    if (countRenderableDrafts(store[viewportStoreKey] ?? {}) > 0) {
-      loadedPublishedKeysRef.current.add(viewportStoreKey)
-      return
-    }
+    // Claim the key up front so two mounts can't both fetch...
+    loadedPublishedKeysRef.current.add(viewportStoreKey)
 
     async function loadPublishedDesign() {
-      loadedPublishedKeysRef.current.add(viewportStoreKey)
       try {
         const params = new URLSearchParams({ routeKey, viewportMode })
         const response = await apiGetFresh<FroamPublishedResponse>(`/api/froam/published?${params.toString()}`)
         const publishedStore = response.design?.store
+        settled = true
         if (cancelled || !publishedStore || Object.keys(publishedStore).length === 0) return
         const publishedPersona = readFroamPersonaDraft(publishedStore)
         if (publishedPersona && !personasEqual(publishedPersona, persona)) {
           setPersona(sanitizeFroamPersona(publishedPersona))
         }
-        setStore((current) => {
-          const currentRouteDrafts = current[viewportStoreKey] ?? {}
-          if (countRenderableDrafts(currentRouteDrafts) > 0) return current
-          const next = { ...current, [viewportStoreKey]: stripPersonaDrafts(publishedStore) }
-          // A design that arrived, not one someone typed: the op log records it
-          // as baseline so it never turns up in a person's undo history.
-          opLoadingDesignRef.current = true
-          saveStore(next)
-          return next
+
+        // Merge rather than refuse. This device having *any* local draft used
+        // to block the whole route, which is why a design saved on a laptop
+        // never reached a phone that had been opened in the editor once.
+        const publishedAt = Date.parse(response.design?.publishedAt ?? response.design?.updatedAt ?? '') || 0
+        const result = opLog.adoptPublished({
+          routeKey,
+          viewport: viewportMode,
+          store: stripPersonaDrafts(publishedStore),
+          publishedAt,
         })
+        if (cancelled || !result.adopted) return
+
+        // The log is now ahead of the store; take its word for the design.
+        const next = opLog.store()
+        opLoadingDesignRef.current = true
+        storeRef.current = next
+        setStore(next)
+        saveStore(next)
+        applyStoreToDOM(next)
+        bumpLog()
+        showToast(result.kept
+          ? `Design updated — ${result.kept} newer local change${result.kept === 1 ? '' : 's'} kept`
+          : 'Design updated from your other device')
       } catch {
         // Stay usable offline or while backend is restarting.
+        settled = true
       }
     }
 
     void loadPublishedDesign()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      // ...but a mount that was torn down before its answer arrived must
+      // release the claim, or the next mount skips a fetch that never
+      // finished. React's StrictMode double-mount does exactly this, which
+      // meant the editor silently never picked up a design published from
+      // another device.
+      if (!settled) loadedPublishedKeysRef.current.delete(viewportStoreKey)
+    }
   // Intentionally exclude `store` — including it causes an infinite loop when
   // setStore fires and re-triggers this effect. We gate on the ref instead.
   // eslint-disable-next-line react-hooks/exhaustive-deps

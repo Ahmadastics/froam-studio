@@ -43,6 +43,36 @@ export declare function createOpLogSession(options?: {
      */
     seed(next: EditorStore): FroamOp[];
     /**
+     * Take in a design published from another device.
+     *
+     * The old rule was "if this device has any local drafts, ignore the
+     * publish" — which is why a phone that had been opened in the editor once
+     * would never show anything saved from a laptop again. That gate existed
+     * to protect unsaved local work, and the protection is right; the
+     * granularity was wrong. A whole route was refused because a single
+     * unrelated element had been touched.
+     *
+     * Now it merges per field, using the only clock the two devices share: a
+     * local edit made *after* the publish wins, anything older gives way. Wall
+     * clock is unsafe for ordering two edits milliseconds apart, which is why
+     * ops sort by Lamport counter — but across a sync boundary measured in
+     * minutes it is the only shared reference there is, and it is the right
+     * tool here.
+     *
+     * Adopted values are recorded as baseline: arriving design is not the
+     * user's work, so it must not land in their undo stack.
+     */
+    adoptPublished(input: {
+        routeKey: string;
+        viewport: FroamViewport;
+        store: Record<string, ElementDraft>;
+        publishedAt: number;
+    }): {
+        adopted: number;
+        kept: number;
+        ops: FroamOp[];
+    };
+    /**
      * Catch up to a store change the editor made without telling us.
      *
      * The three main mutation paths record ops directly, with proper labels.

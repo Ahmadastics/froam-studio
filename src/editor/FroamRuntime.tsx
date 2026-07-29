@@ -31,6 +31,8 @@ type FroamPublishedResponse = {
     routeKey: string
     viewportMode: ViewportMode
     store: Record<string, ElementDraft>
+    publishedAt?: string | null
+    updatedAt?: string | null
   } | null
 }
 
@@ -56,6 +58,20 @@ export type FroamRuntimeProps = Pick<FroamStudioConfig, 'apiBaseUrl' | 'fetch' |
    * apiBaseUrl is configured.
    */
   design?: FroamLocalDesign | null
+  /**
+   * Who wins when a route is both committed and published.
+   *
+   * `'repo'` (default) keeps Froam's promise of no runtime API dependency:
+   * a committed route is applied from the bundle and the API is never called.
+   * The cost is that publishing to a route you have already committed does
+   * nothing visible, with no feedback — publish silently loses.
+   *
+   * `'newest'` compares the publish time against the committed design's
+   * `updatedAt` and applies whichever is more recent, falling back to the
+   * committed design if the request fails. Costs one small GET per route.
+   * Use it when people publish from devices that can't reach a repo.
+   */
+  prefer?: 'repo' | 'newest'
 }
 
 function getRuntimeViewportMode(): ViewportMode {
@@ -293,6 +309,7 @@ export default function FroamRuntime({
   rootSelector,
   routeKey: explicitRouteKey,
   routes,
+  prefer = 'repo',
 }: FroamRuntimeProps) {
   const routeKey = useFroamRouteKey(explicitRouteKey)
   const runtimeRoutes = routes ?? getFroamStudioConfig().runtimeRoutes ?? DEFAULT_RUNTIME_ROUTES
@@ -353,8 +370,11 @@ export default function FroamRuntime({
     // normalized form so a slash never hides a shipped design.
     const localRoute = design?.routes?.[routeKey]
       ?? Object.entries(design?.routes ?? {}).find(([key]) => normalizeFroamRouteKey(key) === routeKey)?.[1]
-    if (localRoute && Object.prototype.hasOwnProperty.call(localRoute, viewportMode)) {
-      setPublishedStore(localRoute[viewportMode] ?? null)
+    const hasCommitted = !!localRoute && Object.prototype.hasOwnProperty.call(localRoute, viewportMode)
+    const committedStore = hasCommitted ? (localRoute?.[viewportMode] ?? null) : null
+
+    if (hasCommitted && prefer === 'repo') {
+      setPublishedStore(committedStore)
       return
     }
 
@@ -363,9 +383,25 @@ export default function FroamRuntime({
     async function loadPublished() {
       try {
         const response = await apiGetFresh<FroamPublishedResponse>(endpoint)
-        if (!cancelled) setPublishedStore(response.design?.store ?? null)
+        if (cancelled) return
+        const published = response.design?.store ?? null
+
+        if (!hasCommitted) {
+          setPublishedStore(published)
+          return
+        }
+
+        // prefer === 'newest': a design published after the last commit is
+        // what someone most recently meant to ship. Without this, publishing
+        // to an already-committed route does nothing and says nothing — which
+        // reads as "saving is broken" to whoever pressed the button.
+        const publishedAt = Date.parse(response.design?.publishedAt ?? response.design?.updatedAt ?? '') || 0
+        const committedAt = Date.parse(design?.updatedAt ?? '') || 0
+        setPublishedStore(published && publishedAt > committedAt ? published : committedStore)
       } catch {
-        if (!cancelled) setPublishedStore(null)
+        // Offline, or no publish backend at all: the committed design still
+        // ships, which is the whole point of Repo Mode.
+        if (!cancelled) setPublishedStore(committedStore)
       }
     }
 
@@ -374,7 +410,7 @@ export default function FroamRuntime({
     return () => {
       cancelled = true
     }
-  }, [design, endpoint, isRuntimeRoute, routeKey, viewportMode])
+  }, [design, endpoint, isRuntimeRoute, prefer, routeKey, viewportMode])
 
   /* Fonts the design references must actually load with it. */
   useEffect(() => {

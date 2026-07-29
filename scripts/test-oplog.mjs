@@ -506,6 +506,86 @@ test('undo in a room reverts only my own work', () => {
   assert.equal(ahmad.store()[SCOPE].footer.styles.color, '#zainab')
 })
 
+/* ─── receiving a design from another device ─── */
+
+function publish(session, store, publishedAt) {
+  return session.adoptPublished({ routeKey: ROUTE, viewport: VIEW, store, publishedAt })
+}
+
+test('a published design reaches a device that already has drafts', () => {
+  // The exact bug: a phone opened in the editor once would refuse every
+  // publish from the laptop, forever.
+  const session = createOpLogSession({ actor: 'ahmad' })
+  record(session, 'footer', {}, { styles: { color: '#old' } })
+
+  const result = publish(session, { hero: { styles: { color: '#fromLaptop' } } }, Date.now() + 60_000)
+  assert.equal(session.store()[SCOPE].hero.styles.color, '#fromLaptop', 'the laptop’s design must land')
+})
+
+test('a field missing from the publish is a deletion, not an omission', () => {
+  // The publish payload is the whole route, so absence is meaningful —
+  // without this, a style removed on the laptop could never disappear
+  // anywhere else.
+  const session = createOpLogSession({ actor: 'ahmad' })
+  record(session, 'footer', {}, { styles: { color: '#old' } })
+
+  publish(session, { hero: { styles: { color: '#fromLaptop' } } }, Date.now() + 60_000)
+  assert.equal(session.store()[SCOPE].footer, undefined, 'the stale draft should be gone')
+})
+
+test('a local edit made after the publish is kept', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  record(session, 'hero', {}, { styles: { color: '#mineJustNow' } })
+
+  // Publish is older than the local edit.
+  const result = publish(session, { hero: { styles: { color: '#stale' } } }, Date.now() - 60_000)
+  assert.equal(result.kept, 1)
+  assert.equal(result.adopted, 0)
+  assert.equal(session.store()[SCOPE].hero.styles.color, '#mineJustNow', 'unsaved work must not be overwritten')
+})
+
+test('the merge is per field, not per route', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  record(session, 'hero', {}, { styles: { color: '#mine' } })
+
+  const result = publish(session, {
+    hero: { styles: { color: '#theirs', backgroundColor: '#theirBg' } },
+    footer: { styles: { color: '#theirFooter' } },
+  }, Date.now() - 60_000)
+
+  const store = session.store()[SCOPE]
+  assert.equal(store.hero.styles.color, '#mine', 'my newer edit survives')
+  assert.equal(store.hero.styles.backgroundColor, '#theirBg', 'a field I never touched still arrives')
+  assert.equal(store.footer.styles.color, '#theirFooter', 'so does an element I never touched')
+  assert.equal(result.kept, 1)
+})
+
+test('an arriving design is not the user’s work to undo', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  publish(session, { hero: { styles: { color: '#fromLaptop' } } }, Date.now())
+  assert.equal(session.canUndo(), false, 'Ctrl+Z must not peel away a teammate’s published design')
+})
+
+test('baseline drafts give way to a publish', () => {
+  // Drafts restored from storage are baseline, not local work — a publish
+  // should replace them without argument.
+  const session = createOpLogSession({ actor: 'ahmad' })
+  session.seed({ [SCOPE]: { hero: { styles: { color: '#restored' } } } })
+  const result = publish(session, { hero: { styles: { color: '#published' } } }, Date.now() - 60_000)
+  assert.equal(result.adopted, 1)
+  assert.equal(session.store()[SCOPE].hero.styles.color, '#published')
+})
+
+test('republishing the same design changes nothing', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  const design = { hero: { styles: { color: '#same' } } }
+  publish(session, design, Date.now())
+  const size = session.size()
+  const again = publish(session, design, Date.now())
+  assert.equal(again.adopted, 0)
+  assert.equal(session.size(), size, 'a poll loop must not grow the log')
+})
+
 /* ─── anchors ─── */
 
 const HERO = {

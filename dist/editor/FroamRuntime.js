@@ -228,7 +228,7 @@ function applyFroamStore(store, snapshots) {
     }
     applyCanvasDraftStyles(store[CANVAS_KEY]?.styles, snapshots);
 }
-export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true, fetch, rootSelector, routeKey: explicitRouteKey, routes, }) {
+export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true, fetch, rootSelector, routeKey: explicitRouteKey, routes, prefer = 'repo', }) {
     const routeKey = useFroamRouteKey(explicitRouteKey);
     const runtimeRoutes = routes ?? getFroamStudioConfig().runtimeRoutes ?? DEFAULT_RUNTIME_ROUTES;
     const isRuntimeRoute = enabled && routeMatches(routeKey, runtimeRoutes);
@@ -281,27 +281,43 @@ export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true
         // normalized form so a slash never hides a shipped design.
         const localRoute = design?.routes?.[routeKey]
             ?? Object.entries(design?.routes ?? {}).find(([key]) => normalizeFroamRouteKey(key) === routeKey)?.[1];
-        if (localRoute && Object.prototype.hasOwnProperty.call(localRoute, viewportMode)) {
-            setPublishedStore(localRoute[viewportMode] ?? null);
+        const hasCommitted = !!localRoute && Object.prototype.hasOwnProperty.call(localRoute, viewportMode);
+        const committedStore = hasCommitted ? (localRoute?.[viewportMode] ?? null) : null;
+        if (hasCommitted && prefer === 'repo') {
+            setPublishedStore(committedStore);
             return;
         }
         let cancelled = false;
         async function loadPublished() {
             try {
                 const response = await apiGetFresh(endpoint);
-                if (!cancelled)
-                    setPublishedStore(response.design?.store ?? null);
+                if (cancelled)
+                    return;
+                const published = response.design?.store ?? null;
+                if (!hasCommitted) {
+                    setPublishedStore(published);
+                    return;
+                }
+                // prefer === 'newest': a design published after the last commit is
+                // what someone most recently meant to ship. Without this, publishing
+                // to an already-committed route does nothing and says nothing — which
+                // reads as "saving is broken" to whoever pressed the button.
+                const publishedAt = Date.parse(response.design?.publishedAt ?? response.design?.updatedAt ?? '') || 0;
+                const committedAt = Date.parse(design?.updatedAt ?? '') || 0;
+                setPublishedStore(published && publishedAt > committedAt ? published : committedStore);
             }
             catch {
+                // Offline, or no publish backend at all: the committed design still
+                // ships, which is the whole point of Repo Mode.
                 if (!cancelled)
-                    setPublishedStore(null);
+                    setPublishedStore(committedStore);
             }
         }
         void loadPublished();
         return () => {
             cancelled = true;
         };
-    }, [design, endpoint, isRuntimeRoute, routeKey, viewportMode]);
+    }, [design, endpoint, isRuntimeRoute, prefer, routeKey, viewportMode]);
     /* Fonts the design references must actually load with it. */
     useEffect(() => {
         if (!isRuntimeRoute || !publishedStore)

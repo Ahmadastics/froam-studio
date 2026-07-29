@@ -21,7 +21,21 @@ export type FroamRuntimeProps = Pick<FroamStudioConfig, 'apiBaseUrl' | 'fetch' |
      * apiBaseUrl is configured.
      */
     design?: FroamLocalDesign | null;
+    /**
+     * Who wins when a route is both committed and published.
+     *
+     * `'repo'` (default) keeps Froam's promise of no runtime API dependency:
+     * a committed route is applied from the bundle and the API is never called.
+     * The cost is that publishing to a route you have already committed does
+     * nothing visible, with no feedback — publish silently loses.
+     *
+     * `'newest'` compares the publish time against the committed design's
+     * `updatedAt` and applies whichever is more recent, falling back to the
+     * committed design if the request fails. Costs one small GET per route.
+     * Use it when people publish from devices that can't reach a repo.
+     */
+    prefer?: 'repo' | 'newest';
 };
-export default function FroamRuntime({ apiBaseUrl, design, enabled, fetch, rootSelector, routeKey: explicitRouteKey, routes, }: FroamRuntimeProps): null;
+export default function FroamRuntime({ apiBaseUrl, design, enabled, fetch, rootSelector, routeKey: explicitRouteKey, routes, prefer, }: FroamRuntimeProps): null;
 export {};
 //# sourceMappingURL=FroamRuntime.d.ts.map

@@ -11,7 +11,7 @@
  * how long the log gets.
  */
 import { applyOp, buildRedo, buildUndo, canRedo, canUndo, compactLog, createClock, deriveStore, diffDrafts, diffStores, highestClock, makeEdit, undoLabel, } from './oplog.js';
-import { BASELINE_ACTOR, compareOps, LOCAL_ACTOR, } from './types.js';
+import { BASELINE_ACTOR, compareOps, scopeKey, LOCAL_ACTOR, } from './types.js';
 export function createOpLogSession(options = {}) {
     let actor = options.actor ?? LOCAL_ACTOR;
     let log = options.ops ? [...options.ops].sort(compareOps) : [];
@@ -104,6 +104,55 @@ export function createOpLogSession(options = {}) {
          */
         seed(next) {
             return emit(diffStores(store, next), BASELINE_ACTOR, 'Loaded');
+        },
+        /**
+         * Take in a design published from another device.
+         *
+         * The old rule was "if this device has any local drafts, ignore the
+         * publish" — which is why a phone that had been opened in the editor once
+         * would never show anything saved from a laptop again. That gate existed
+         * to protect unsaved local work, and the protection is right; the
+         * granularity was wrong. A whole route was refused because a single
+         * unrelated element had been touched.
+         *
+         * Now it merges per field, using the only clock the two devices share: a
+         * local edit made *after* the publish wins, anything older gives way. Wall
+         * clock is unsafe for ordering two edits milliseconds apart, which is why
+         * ops sort by Lamport counter — but across a sync boundary measured in
+         * minutes it is the only shared reference there is, and it is the right
+         * tool here.
+         *
+         * Adopted values are recorded as baseline: arriving design is not the
+         * user's work, so it must not land in their undo stack.
+         */
+        adoptPublished(input) {
+            const scope = scopeKey(input.routeKey, input.viewport);
+            const incoming = diffStores({ [scope]: store[scope] ?? {} }, { [scope]: input.store });
+            // Newest local (non-baseline) write per field — what the person using
+            // this device has actually done since.
+            const localTouch = new Map();
+            for (const op of log) {
+                if (op.actor === BASELINE_ACTOR)
+                    continue;
+                const key = `${op.path} ${op.field}`;
+                if (scopeKey(op.routeKey, op.viewport) !== scope)
+                    continue;
+                const seen = localTouch.get(key);
+                if (seen === undefined || op.ts > seen)
+                    localTouch.set(key, op.ts);
+            }
+            const adopt = [];
+            let kept = 0;
+            for (const change of incoming) {
+                const touched = localTouch.get(`${change.path} ${change.field}`);
+                if (touched !== undefined && touched > input.publishedAt) {
+                    kept += 1;
+                    continue;
+                }
+                adopt.push(change);
+            }
+            const ops = emit(adopt, BASELINE_ACTOR, 'Published');
+            return { adopted: adopt.length, kept, ops };
         },
         /**
          * Catch up to a store change the editor made without telling us.
