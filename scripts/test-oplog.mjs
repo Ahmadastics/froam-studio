@@ -506,6 +506,110 @@ test('undo in a room reverts only my own work', () => {
   assert.equal(ahmad.store()[SCOPE].footer.styles.color, '#zainab')
 })
 
+/* ─── the change log ─── */
+
+test('the log reads back as a list of what people did', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  session.seed({ [SCOPE]: { hero: { text: 'Loaded last week' } } })
+  record(session, 'hero', {}, { styles: { color: '#111', gap: '4px' } }, { label: 'Fill' })
+  record(session, 'footer', {}, { text: 'Call us' }, { label: 'Text' })
+
+  const changes = session.changes()
+  assert.equal(changes.length, 2, 'loaded design is not something anyone did')
+  assert.equal(changes[0].label, 'Text', 'newest first')
+  assert.deepEqual(changes[1].paths, ['hero'])
+  assert.equal(changes[1].fields.length, 2, 'one row per action, not per field')
+})
+
+test('a drag is one row, not fifty', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  const batch = 'drag'
+  for (const v of ['#1', '#2', '#3', '#4', '#5']) {
+    record(session, 'hero', { styles: { color: 'x' } }, { styles: { color: v } }, { batch, label: 'Fill' })
+  }
+  assert.equal(session.changes().length, 1)
+})
+
+test('two people show up as two rows, each attributed', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  record(session, 'hero', {}, { styles: { color: '#a' } }, { label: 'Fill' })
+  session.observe([{
+    id: 'z1', kind: 'edit', actor: 'zainab', clock: 99, ts: Date.now(),
+    routeKey: ROUTE, viewport: VIEW, path: 'footer', field: 'style:color',
+    before: undefined, after: '#z', label: 'Fill', batch: 'zb',
+  }])
+  const changes = session.changes()
+  assert.deepEqual(changes.map((c) => c.actor), ['zainab', 'ahmad'])
+})
+
+test('reverting a change from the middle of history', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  record(session, 'hero', {}, { styles: { color: '#first' } }, { label: 'Fill' })
+  const target = session.changes()[0].id
+  record(session, 'footer', {}, { styles: { color: '#unrelated' } }, { label: 'Footer' })
+
+  session.revert(target)
+  const store = session.store()[SCOPE]
+  assert.equal(store?.hero, undefined, 'the reverted change is gone')
+  assert.equal(store.footer.styles.color, '#unrelated', 'later work is untouched')
+})
+
+test('a revert is a new entry, not a hole in the history', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  record(session, 'hero', {}, { styles: { color: '#a' } }, { label: 'Fill' })
+  const target = session.changes()[0].id
+  session.revert(target)
+
+  const changes = session.changes()
+  assert.equal(changes.length, 2, 'the original stays visible')
+  assert.equal(changes[0].kind, 'undo')
+  assert.match(changes[0].label, /Undid/)
+})
+
+test('reverting someone else’s change is attributed to whoever reverted it', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  session.observe([{
+    id: 'z1', kind: 'edit', actor: 'zainab', clock: 50, ts: Date.now(),
+    routeKey: ROUTE, viewport: VIEW, path: 'footer', field: 'style:color',
+    before: undefined, after: '#zainab', label: 'Fill', batch: 'zb',
+  }])
+  session.revert('zb')
+
+  const [newest] = session.changes()
+  assert.equal(newest.actor, 'ahmad', 'the record must show who took it back')
+  assert.equal(session.store()[SCOPE]?.footer, undefined)
+})
+
+test('reverting a change a later edit overwrote restores the older value', () => {
+  // The case a rewind would get wrong: the field moved on after the change.
+  const session = createOpLogSession({ actor: 'ahmad' })
+  record(session, 'hero', {}, { styles: { color: '#one' } }, { label: 'A' })
+  const first = session.changes()[0].id
+  record(session, 'hero', { styles: { color: '#one' } }, { styles: { color: '#two' } }, { label: 'B' })
+
+  session.revert(first)
+  assert.equal(
+    session.store()[SCOPE]?.hero,
+    undefined,
+    'reverting the change that introduced the field removes it, whatever came after',
+  )
+})
+
+test('reverting twice does nothing the second time', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  record(session, 'hero', {}, { styles: { color: '#a' } }, { label: 'Fill' })
+  const target = session.changes()[0].id
+  session.revert(target)
+  const size = session.size()
+  assert.deepEqual(session.revert(target), [], 'already undone')
+  assert.equal(session.size(), size, 'no dead entry in the list')
+})
+
+test('reverting an unknown change is a no-op, not a throw', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  assert.deepEqual(session.revert('does-not-exist'), [])
+})
+
 /* ─── receiving a design from another device ─── */
 
 function publish(session, store, publishedAt) {

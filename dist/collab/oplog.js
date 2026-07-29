@@ -355,6 +355,91 @@ function markerOnly(action, kind, actor, clock) {
         },
     ];
 }
+/**
+ * The log as a reverse-chronological list of changes.
+ *
+ * Baseline ops are excluded: design that was loaded rather than typed is not
+ * something anyone did, and listing it would bury the real history under a
+ * page's worth of entries nobody recognises.
+ */
+export function listChanges(ops, limit = 200) {
+    const byBatch = new Map();
+    for (const op of [...ops].sort(compareOps)) {
+        if (op.actor === BASELINE_ACTOR)
+            continue;
+        const key = `${op.actor}:${op.kind}:${op.batch ?? op.id}`;
+        const seen = byBatch.get(key);
+        if (!seen) {
+            byBatch.set(key, {
+                id: op.batch ?? op.id,
+                actor: op.actor,
+                label: op.label ?? 'Edit',
+                ts: op.ts,
+                clock: op.clock,
+                routeKey: op.routeKey,
+                viewport: op.viewport,
+                paths: [op.path],
+                fields: [op.field],
+                kind: op.kind,
+            });
+            continue;
+        }
+        if (!seen.paths.includes(op.path))
+            seen.paths.push(op.path);
+        if (!seen.fields.includes(op.field))
+            seen.fields.push(op.field);
+        if (op.ts > seen.ts)
+            seen.ts = op.ts;
+        if (op.clock > seen.clock)
+            seen.clock = op.clock;
+    }
+    return [...byBatch.values()].sort((a, b) => b.clock - a.clock).slice(0, limit);
+}
+/**
+ * Ops that undo one specific change from anywhere in the history.
+ *
+ * This is a **revert, not a rewind**. Time cannot be rewound — later edits may
+ * have touched the same fields — so it appends new ops restoring each field to
+ * the value it held before that change, and does it as the *reverting* actor.
+ * The result is always last-write-wins, always safe, and always visible in the
+ * list as its own entry. Nothing in the history is ever quietly rewritten.
+ *
+ * Returns [] when the change is already fully undone, so a double-tap on the
+ * same row is a no-op rather than a second entry that does nothing.
+ */
+export function buildRevert(ops, changeId, actor, clock) {
+    const ordered = [...ops].sort(compareOps);
+    const target = ordered.filter((op) => (op.batch ?? op.id) === changeId);
+    if (!target.length)
+        return [];
+    const store = deriveStore(ordered);
+    const batch = froamOpId();
+    const ts = Date.now();
+    return collapseBatch(target)
+        .map(({ first }) => {
+        const before = currentValue(store, first);
+        // `first.before` is what the field held before this change happened.
+        if (before === first.before)
+            return null;
+        return {
+            id: froamOpId(),
+            kind: 'undo',
+            actor,
+            clock,
+            ts,
+            routeKey: first.routeKey,
+            viewport: first.viewport,
+            path: first.path,
+            field: first.field,
+            before,
+            after: first.before,
+            label: first.label ? `Undid ${first.label}` : 'Undid a change',
+            batch,
+            targets: first.id,
+        };
+    })
+        .filter((op) => op !== null);
+}
 /* ─── log maintenance ─── */
 /**
  * Collapse the head of a log into a baseline of edit ops, one per live field.

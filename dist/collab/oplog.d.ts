@@ -13,7 +13,7 @@
  * snapshots. With one actor that behaves exactly like the old undo; with two
  * it is already correct, which is the whole point of building it now.
  */
-import { type EditorStore, type ElementDraft, type FroamActorId, type FroamOp, type FroamOpField, type FroamViewport } from './types';
+import { type EditorStore, type ElementDraft, type FroamActorId, type FroamOp, type FroamOpField, type FroamOpKind, type FroamViewport } from './types';
 export declare function froamOpId(): string;
 /**
  * Lamport clock. `observe` on every incoming remote op so our next local op
@@ -113,6 +113,50 @@ export declare function undoLabel(ops: readonly FroamOp[], actor: FroamActorId):
  */
 export declare function buildUndo(ops: readonly FroamOp[], actor: FroamActorId, clock: number): FroamOp[];
 export declare function buildRedo(ops: readonly FroamOp[], actor: FroamActorId, clock: number): FroamOp[];
+/**
+ * One thing a person did.
+ *
+ * A batch, not an op: dragging a colour picker is fifty ops and one *change*,
+ * and the list has to speak the second language. Undo as a stack can only say
+ * "the last thing"; with two people in a design you need to be able to say
+ * "that thing, the one Zainab did to the footer".
+ */
+export type FroamChange = {
+    /** The batch id — the handle for reverting it. */
+    id: string;
+    actor: FroamActorId;
+    label: string;
+    ts: number;
+    clock: number;
+    routeKey: string;
+    viewport: FroamViewport;
+    /** Elements this change touched, in the order they were first touched. */
+    paths: string[];
+    /** Fields changed, for the detail line. */
+    fields: FroamOpField[];
+    kind: FroamOpKind;
+};
+/**
+ * The log as a reverse-chronological list of changes.
+ *
+ * Baseline ops are excluded: design that was loaded rather than typed is not
+ * something anyone did, and listing it would bury the real history under a
+ * page's worth of entries nobody recognises.
+ */
+export declare function listChanges(ops: readonly FroamOp[], limit?: number): FroamChange[];
+/**
+ * Ops that undo one specific change from anywhere in the history.
+ *
+ * This is a **revert, not a rewind**. Time cannot be rewound — later edits may
+ * have touched the same fields — so it appends new ops restoring each field to
+ * the value it held before that change, and does it as the *reverting* actor.
+ * The result is always last-write-wins, always safe, and always visible in the
+ * list as its own entry. Nothing in the history is ever quietly rewritten.
+ *
+ * Returns [] when the change is already fully undone, so a double-tap on the
+ * same row is a no-op rather than a second entry that does nothing.
+ */
+export declare function buildRevert(ops: readonly FroamOp[], changeId: string, actor: FroamActorId, clock: number): FroamOp[];
 /**
  * Collapse the head of a log into a baseline of edit ops, one per live field.
  *

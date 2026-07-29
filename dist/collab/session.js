@@ -10,7 +10,7 @@
  * than re-folded on every keystroke, so recording an edit stays O(1) no matter
  * how long the log gets.
  */
-import { applyOp, buildRedo, buildUndo, canRedo, canUndo, compactLog, createClock, deriveStore, diffDrafts, diffStores, highestClock, makeEdit, undoLabel, } from './oplog.js';
+import { applyOp, buildRedo, buildRevert, buildUndo, listChanges, canRedo, canUndo, compactLog, createClock, deriveStore, diffDrafts, diffStores, highestClock, makeEdit, undoLabel, } from './oplog.js';
 import { BASELINE_ACTOR, compareOps, scopeKey, LOCAL_ACTOR, } from './types.js';
 export function createOpLogSession(options = {}) {
     let actor = options.actor ?? LOCAL_ACTOR;
@@ -168,6 +168,22 @@ export function createOpLogSession(options = {}) {
          */
         reconcile(next, label = 'Edit') {
             return emit(diffStores(store, next), actor, label);
+        },
+        /** The history as a list of what people did, newest first. */
+        changes(limit) {
+            return listChanges(log, limit);
+        },
+        /**
+         * Undo one specific change from anywhere in the history, as this actor.
+         *
+         * Distinct from `undo()`, which walks this actor's own stack. This is how
+         * you take back the thing someone did to the footer twenty edits ago —
+         * and, once rooms land, the single mechanism the 60/40 rule permits,
+         * proposes or refuses. Undoing someone else's work stays an ordinary,
+         * attributed, visible act rather than a special case.
+         */
+        revert(changeId) {
+            return [...append(buildRevert(log, changeId, actor, clock.tick()))];
         },
         canUndo() {
             return canUndo(log, actor);

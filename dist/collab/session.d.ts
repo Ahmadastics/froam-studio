@@ -85,6 +85,18 @@ export declare function createOpLogSession(options?: {
      * store, so the diff comes back empty.
      */
     reconcile(next: EditorStore, label?: string): FroamOp[];
+    /** The history as a list of what people did, newest first. */
+    changes(limit?: number): import("./oplog").FroamChange[];
+    /**
+     * Undo one specific change from anywhere in the history, as this actor.
+     *
+     * Distinct from `undo()`, which walks this actor's own stack. This is how
+     * you take back the thing someone did to the footer twenty edits ago —
+     * and, once rooms land, the single mechanism the 60/40 rule permits,
+     * proposes or refuses. Undoing someone else's work stays an ordinary,
+     * attributed, visible act rather than a special case.
+     */
+    revert(changeId: string): FroamOp[];
     canUndo(): boolean;
     canRedo(): boolean;
     undoLabel(): string | undefined;

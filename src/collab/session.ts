@@ -13,7 +13,9 @@
 import {
   applyOp,
   buildRedo,
+  buildRevert,
   buildUndo,
+  listChanges,
   canRedo,
   canUndo,
   compactLog,
@@ -223,6 +225,24 @@ export function createOpLogSession(options: { actor?: FroamActorId; ops?: readon
      */
     reconcile(next: EditorStore, label = 'Edit'): FroamOp[] {
       return emit(diffStores(store, next), actor, label)
+    },
+
+    /** The history as a list of what people did, newest first. */
+    changes(limit?: number) {
+      return listChanges(log, limit)
+    },
+
+    /**
+     * Undo one specific change from anywhere in the history, as this actor.
+     *
+     * Distinct from `undo()`, which walks this actor's own stack. This is how
+     * you take back the thing someone did to the footer twenty edits ago —
+     * and, once rooms land, the single mechanism the 60/40 rule permits,
+     * proposes or refuses. Undoing someone else's work stays an ordinary,
+     * attributed, visible act rather than a special case.
+     */
+    revert(changeId: string): FroamOp[] {
+      return [...append(buildRevert(log, changeId, actor, clock.tick()))]
     },
 
     canUndo() {

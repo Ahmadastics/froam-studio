@@ -250,6 +250,36 @@ do they see? If the answer involves explaining anything, the design is wrong.
 second, that someone else is in here — and stops them fighting over the same
 element? Sketch the presence surface before building the transport.
 
+**Done** — fig. 0.4, and the client half settled v5.1's whole shape. See below.
+
+### 0.5 The change log — every edit, named and individually undoable
+
+With two people in a design, "undo" stops meaning "the last thing" and starts
+meaning "*that* thing, the one Zainab did to the footer". A stack cannot express
+that. A list can.
+
+The log already carries everything needed — actor, label, path, timestamp,
+batch — so this is a reading of it, not new bookkeeping:
+
+- one row per action, not per op, since a batch is what a person thinks of as
+  a change;
+- **who** made it, **what** it was, **which element**, **when**;
+- undo any single row, not just the most recent.
+
+**Selective undo is a revert, not a rewind.** Undoing something from the middle
+of the history cannot rewind time — later edits may have touched the same
+field. So it appends a *new* op restoring that field to the value from before
+that change. Always safe, always last-write-wins, and it shows up in the list
+as its own entry, attributed to whoever did the reverting. Nothing is ever
+quietly rewritten.
+
+That property is what makes the 60/40 rule enforceable later: undoing someone
+else's work is an ordinary, attributed, visible act, so it can be permitted,
+proposed, or refused without inventing a second mechanism.
+
+This also retires the last snapshot in the editor — the History panel is still
+six deep-copied stores in `localStorage`.
+
 ---
 
 ## v5.0 — Identity & rooms
@@ -263,20 +293,56 @@ Plumbing only. Nothing collaborative is visible yet, in either mode.
 - Roles: `owner` / `editor` / `commenter` / `viewer`. Two of these carry weight:
   `commenter` is what lets a client in without letting them break anything, and
   a second `editor` is the switch that turns the room into Studio mode later.
+- **Editors are not equal peers — call it 60/40.** The owner outranks an invited
+  editor, and the model says so explicitly rather than pretending symmetry and
+  discovering the hierarchy during an argument:
+  - both edit freely, and every change is attributed;
+  - on a genuine conflict for the same field, the **owner's value stands**,
+    whatever the clock says;
+  - the owner can **undo anyone's** change; a guest editor can only **propose**
+    undoing someone else's, and the owner enacts it;
+  - the owner can end the session or drop an editor to commenter.
 - Identity via the existing `FroamAuthProvider` seam. Magic-link email is enough
   for the reference implementation; Froam itself stays BYO-auth.
 - Extend the publish contract with room endpoints, file-backed under
   `froam dev` exactly like `froam.published.json` is today.
 
-## v5.1 — The share link
+## v5.1 — The review session
 
-Publish a design snapshot to a token URL. Client opens the deployed site with
-`?froam-review=<token>`, `FroamRuntime` renders that snapshot read-only, editor
-chrome never loads.
+Not a static link. **One link, and presence decides what it does** — when the
+designer is in there the client follows them through the site, like sharing a
+screen except the thing on screen is the real site and the client can touch it.
+When the designer isn't, the same link is just the design, browsable, and notes
+wait for morning. Nobody picks a mode.
 
-**This alone is sellable.** Most designers currently send screenshots and PDFs.
-Ship it and get one real client using it before building anything else — the
-feedback from that one client should reorder everything below.
+See `docs/` fig. 0.4 for the drawn screens. The decisions it settled:
+
+- **The site is the hero. Froam is a bar at the bottom.** If the first thing
+  they see is a review tool, they think the review tool is what you built.
+- **Follow the route, never the viewport.** The designer is on desktop, the
+  client is holding a phone, and Froam keeps a design per viewport — pushing
+  the designer's viewport would show a layout never meant for that hand.
+- **Following breaks gently.** Scroll, tap, or open the comment sheet and it
+  pauses; Rejoin is one tap and always visible. Following is a courtesy, never
+  a cage.
+- **Navigation is narrated** — "Ahmad moved to Pricing" — because being
+  teleported with no explanation is the worst moment in any shared-screen tool.
+- **Edits arrive settled, not mid-drag.** The op batch that already collapses a
+  colour drag into one undo step is the same signal for "finished enough to
+  send", so the client sees results and never the fumbling.
+- **Comment mode is a mode.** On a phone, tap-to-comment and tap-to-navigate
+  are the same gesture; while the banner is up, taps drop a pin.
+- **No account, ever.** The link is the credential, the name is typed once.
+- **Approval never blocks on open comments.** "Approved, with two notes" is
+  real information.
+
+**Cost of the session model:** live push moves here from v5.4 — a socket,
+presence, and a route broadcast. Not new risk; publishing already reaches every
+device, so this is making it live rather than making it work. It does mean
+v5.0's rooms stop being optional, because a session has to know who is in it.
+
+Ship it and get one real client through a real review before building anything
+else. That feedback should reorder everything below.
 
 ## v5.2 — Anchored comments
 

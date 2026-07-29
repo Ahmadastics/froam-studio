@@ -23,6 +23,7 @@ import {
   type FroamActorId,
   type FroamOp,
   type FroamOpField,
+  type FroamOpKind,
   type FroamViewport,
 } from './types'
 
@@ -401,6 +402,119 @@ function markerOnly(action: Action, kind: 'undo' | 'redo', actor: FroamActorId, 
       targets: source.id,
     },
   ]
+}
+
+/* ─── reading the log as a list of changes ─── */
+
+/**
+ * One thing a person did.
+ *
+ * A batch, not an op: dragging a colour picker is fifty ops and one *change*,
+ * and the list has to speak the second language. Undo as a stack can only say
+ * "the last thing"; with two people in a design you need to be able to say
+ * "that thing, the one Zainab did to the footer".
+ */
+export type FroamChange = {
+  /** The batch id — the handle for reverting it. */
+  id: string
+  actor: FroamActorId
+  label: string
+  ts: number
+  clock: number
+  routeKey: string
+  viewport: FroamViewport
+  /** Elements this change touched, in the order they were first touched. */
+  paths: string[]
+  /** Fields changed, for the detail line. */
+  fields: FroamOpField[]
+  kind: FroamOpKind
+}
+
+/**
+ * The log as a reverse-chronological list of changes.
+ *
+ * Baseline ops are excluded: design that was loaded rather than typed is not
+ * something anyone did, and listing it would bury the real history under a
+ * page's worth of entries nobody recognises.
+ */
+export function listChanges(ops: readonly FroamOp[], limit = 200): FroamChange[] {
+  const byBatch = new Map<string, FroamChange>()
+  for (const op of [...ops].sort(compareOps)) {
+    if (op.actor === BASELINE_ACTOR) continue
+    const key = `${op.actor}:${op.kind}:${op.batch ?? op.id}`
+    const seen = byBatch.get(key)
+    if (!seen) {
+      byBatch.set(key, {
+        id: op.batch ?? op.id,
+        actor: op.actor,
+        label: op.label ?? 'Edit',
+        ts: op.ts,
+        clock: op.clock,
+        routeKey: op.routeKey,
+        viewport: op.viewport,
+        paths: [op.path],
+        fields: [op.field],
+        kind: op.kind,
+      })
+      continue
+    }
+    if (!seen.paths.includes(op.path)) seen.paths.push(op.path)
+    if (!seen.fields.includes(op.field)) seen.fields.push(op.field)
+    if (op.ts > seen.ts) seen.ts = op.ts
+    if (op.clock > seen.clock) seen.clock = op.clock
+  }
+  return [...byBatch.values()].sort((a, b) => b.clock - a.clock).slice(0, limit)
+}
+
+/**
+ * Ops that undo one specific change from anywhere in the history.
+ *
+ * This is a **revert, not a rewind**. Time cannot be rewound — later edits may
+ * have touched the same fields — so it appends new ops restoring each field to
+ * the value it held before that change, and does it as the *reverting* actor.
+ * The result is always last-write-wins, always safe, and always visible in the
+ * list as its own entry. Nothing in the history is ever quietly rewritten.
+ *
+ * Returns [] when the change is already fully undone, so a double-tap on the
+ * same row is a no-op rather than a second entry that does nothing.
+ */
+export function buildRevert(
+  ops: readonly FroamOp[],
+  changeId: string,
+  actor: FroamActorId,
+  clock: number,
+): FroamOp[] {
+  const ordered = [...ops].sort(compareOps)
+  const target = ordered.filter((op) => (op.batch ?? op.id) === changeId)
+  if (!target.length) return []
+
+  const store = deriveStore(ordered)
+  const batch = froamOpId()
+  const ts = Date.now()
+
+  return collapseBatch(target)
+    .map(({ first }): FroamOp | null => {
+      const before = currentValue(store, first)
+      // `first.before` is what the field held before this change happened.
+      if (before === first.before) return null
+      return {
+        id: froamOpId(),
+        kind: 'undo',
+        actor,
+        clock,
+        ts,
+        routeKey: first.routeKey,
+        viewport: first.viewport,
+        path: first.path,
+        field: first.field,
+        before,
+        after: first.before,
+        label: first.label ? `Undid ${first.label}` : 'Undid a change',
+        batch,
+        targets: first.id,
+      }
+    })
+    .filter((op): op is FroamOp => op !== null)
 }
 
 /* ─── log maintenance ─── */
