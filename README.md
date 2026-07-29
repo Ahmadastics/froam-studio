@@ -19,11 +19,11 @@ dependency, no drift.
 Astro, Rails, Django, PHP, WordPress themes, plain HTML — if it serves a page,
 Froam can edit it.
 
-## 🎬 In motion
+## The mark
 
-**▶ [Watch Froam in motion](https://github.com/Ahmadastics/froam-studio/blob/main/docs/froam-demo.mp4)**
-— 
-GitHub plays it in the file view.
+Colour is a frequency. Sound is a frequency. Interaction is a frequency.
+[A short piece on the identity](https://github.com/Ahmadastics/froam-studio/blob/main/docs/froam-demo.mp4)
+— GitHub plays it in the file view.
 
 ## ✨ What's new
 
