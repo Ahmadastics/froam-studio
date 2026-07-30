@@ -42,6 +42,50 @@ export function createFroamPublishApi(options: {
   commit?: ((input: FroamCommitInput) => Promise<unknown>) | null
 }): (req: IncomingMessage, res: ServerResponse) => Promise<boolean>
 
+export type FroamRole = 'owner' | 'editor' | 'commenter' | 'viewer'
+
+export type FroamRoomMember = {
+  actor: string
+  name: string
+  role: FroamRole
+  /** Heartbeat within the presence window. */
+  here: boolean
+  routeKey: string | null
+  viewport: 'desktop' | 'tablet' | 'mobile' | null
+  selectedPath: string | null
+  seenAt: number | null
+}
+
+export type FroamRoomView = {
+  id: string
+  routes: readonly string[] | '*'
+  createdAt: number
+  members: FroamRoomMember[]
+  /** The highest-ranked editor currently present, or null if nobody is. */
+  presenter: string | null
+  you: { actor: string; role: FroamRole; name: string } | null
+}
+
+/** How long after a heartbeat someone still counts as present. */
+export const PRESENCE_TTL_MS: number
+
+/**
+ * A room is who may touch a design and what they may do with it.
+ *
+ * Four endpoints under the mount point: POST /rooms to open one,
+ * GET /rooms/:id?token= to read it, POST /rooms/:id/join to become someone,
+ * POST /rooms/:id/presence to say you are still here. An invite token carries
+ * a role, so a client can be let in with no account, password or email.
+ *
+ * `authorize` gates opening a room; tokens gate everything after that.
+ */
+export function createFroamRoomApi(options: {
+  file: string
+  authorize?: (req: IncomingMessage) => boolean | Promise<boolean>
+  log?: (line: string) => void
+  now?: () => number
+}): (req: IncomingMessage, res: ServerResponse) => Promise<boolean>
+
 /**
  * Commit a design to GitHub through the Contents API, so a save made on a
  * device with no `froam dev` bridge — a phone — still reaches the repo and
