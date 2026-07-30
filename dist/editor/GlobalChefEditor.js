@@ -1323,6 +1323,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const opLog = opLogRef.current;
     const opBatchRef = useRef(null);
     const opBatchTimerRef = useRef(0);
+    /**
+     * Names the next store change for the reconciler.
+     *
+     * Paths that write straight to the store — inline text, drag-to-move,
+     * clearing a route — get caught by the reconciler and would otherwise all
+     * read as "Edit". That is survivable alone and useless in a shared log,
+     * where "Zainab · Edit · div" tells you nothing. Consumed once, then reset.
+     */
+    const opPendingLabelRef = useRef(null);
     /** Set by paths that load a design rather than edit one, so the ops they
      *  produce are baseline rather than someone's undo history. */
     const opLoadingDesignRef = useRef(false);
@@ -1442,7 +1451,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             // renders. Ops found here are appended *after* it, so the undo button
             // would stay greyed out on exactly the edits this effect exists to catch
             // unless we ask for another render.
-            if (session.reconcile(store).length)
+            const pending = opPendingLabelRef.current;
+            opPendingLabelRef.current = null;
+            if (session.reconcile(store, pending ?? 'Edit').length)
                 bumpLog();
         }
         catch {
@@ -2082,6 +2093,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 // Sync text back to draft
                 const path = getElementPath(textTarget, rootElement);
                 const newText = textTarget.innerText;
+                opPendingLabelRef.current = 'Rewrote copy';
                 setStore((currentStore) => {
                     const vsk = viewportStoreKeyRef.current;
                     return {
@@ -2263,6 +2275,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 styles: { ...(existing.styles ?? {}), position: pos, top: `${Math.round(newTop)}px`, left: `${Math.round(newLeft)}px` },
             };
             nextStore[viewportStoreKey] = routeStore;
+            opPendingLabelRef.current = 'Moved element';
             setStore(nextStore);
             saveStore(nextStore);
             setSelectionRect(drag.target.getBoundingClientRect());
@@ -2879,6 +2892,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         setSelection({ ...buildSelection(target, path), ...nextSelection });
     }
     function clearSelectionDraft() {
+        opPendingLabelRef.current = 'Cleared styles';
         if (!selection)
             return;
         const root = getRoot();
@@ -2897,6 +2911,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         showToast('Selection cleared');
     }
     function clearRouteDrafts() {
+        opPendingLabelRef.current = `Reset ${viewportMode}`;
         const root = getRoot();
         if (root) {
             Object.entries(routeDrafts).forEach(([path]) => {
@@ -2928,6 +2943,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
     /* ─── Canvas styles ─── */
     function applyCanvasStyles(patch) {
+        opPendingLabelRef.current = 'Page background';
         if (!getCanvasHost()) {
             showToast('Canvas edits need a page canvas host');
             return;
@@ -2953,6 +2969,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
     /* ─── Save / export ─── */
     function applyCanvasImage(imageData) {
+        opPendingLabelRef.current = 'Page background image';
         keepStudioPinned();
         if (!getCanvasHost()) {
             showToast('Canvas edits need a page canvas host');
@@ -2982,6 +2999,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         showToast('Page background image applied');
     }
     function clearCanvasImage() {
+        opPendingLabelRef.current = 'Removed background image';
         keepStudioPinned();
         if (!getCanvasHost()) {
             showToast('Canvas edits need a page canvas host');
@@ -4778,6 +4796,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                         setLayers(collectLayers(root)); }, children: [_jsx(Search, { size: 12 }), " Refresh layers"] })] }), _jsx(AccordionSection, { id: "cssVars", icon: _jsx(Variable, { size: 14 }), title: "CSS Variables", isOpen: openSections.cssVars, onToggle: () => toggleSection('cssVars'), children: _jsxs("div", { className: "fs-stack", children: [cssVars.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "No custom properties found on :root" })) : (cssVars.map((v) => (_jsxs("div", { className: "fs-css-var", "data-chef-editor-root": "true", children: [_jsx("span", { className: "fs-css-var__name", title: v.name, children: v.name }), _jsx("input", { type: "text", className: "fs-input fs-css-var__value", value: v.value, onChange: (e) => updateCSSVar(v.name, e.target.value) }), _jsx("button", { type: "button", className: "fs-gradient-stop__remove", onClick: () => removeCSSVar(v.name), title: "Remove", children: _jsx(X, { size: 12 }) })] }, v.name)))), _jsxs("div", { className: "fs-row", style: { gap: 6 }, children: [_jsx("input", { type: "text", className: "fs-input", value: newVarName, onChange: (e) => setNewVarName(e.target.value), placeholder: "--my-color", style: { flex: 1 } }), _jsx("input", { type: "text", className: "fs-input", value: newVarValue, onChange: (e) => setNewVarValue(e.target.value), placeholder: "#ff0000", style: { flex: 1 } }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: addCSSVar, children: [_jsx(Plus, { size: 12 }), " Add"] })] })] }) }), _jsx(AccordionSection, { id: "versions", icon: _jsx(GitCommit, { size: 14 }), title: "Versions", isOpen: openSections.versions, onToggle: () => toggleSection('versions'), children: _jsx(FroamVersionPanel, { routeKey: routeKey, viewportMode: viewportMode, currentStore: routeDrafts, getCurrentStore: () => collectVersionRouteDrafts(), captureThumb: capturePageThumb, onLoadVersion: (versionStore, versionName) => {
                                     // No snapshot needed: the reconcile effect turns this store
                                     // swap into ops, so loading a version is undoable by itself.
+                                    opPendingLabelRef.current = `Loaded “${versionName}”`;
                                     const nextStore = {
                                         ...store,
                                         [viewportStoreKey]: versionStore,

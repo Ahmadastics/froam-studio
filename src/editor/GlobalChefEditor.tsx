@@ -1721,6 +1721,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const opLog = opLogRef.current
   const opBatchRef = useRef<{ id: string; label: string } | null>(null)
   const opBatchTimerRef = useRef<number>(0)
+  /**
+   * Names the next store change for the reconciler.
+   *
+   * Paths that write straight to the store — inline text, drag-to-move,
+   * clearing a route — get caught by the reconciler and would otherwise all
+   * read as "Edit". That is survivable alone and useless in a shared log,
+   * where "Zainab · Edit · div" tells you nothing. Consumed once, then reset.
+   */
+  const opPendingLabelRef = useRef<string | null>(null)
   /** Set by paths that load a design rather than edit one, so the ops they
    *  produce are baseline rather than someone's undo history. */
   const opLoadingDesignRef = useRef(false)
@@ -1843,7 +1852,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       // renders. Ops found here are appended *after* it, so the undo button
       // would stay greyed out on exactly the edits this effect exists to catch
       // unless we ask for another render.
-      if (session.reconcile(store).length) bumpLog()
+      const pending = opPendingLabelRef.current
+      opPendingLabelRef.current = null
+      if (session.reconcile(store, pending ?? 'Edit').length) bumpLog()
     } catch {
       /* Never let bookkeeping break an edit. */
     }
@@ -2498,6 +2509,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         // Sync text back to draft
         const path = getElementPath(textTarget, rootElement)
         const newText = textTarget.innerText
+        opPendingLabelRef.current = 'Rewrote copy'
         setStore((currentStore) => {
           const vsk = viewportStoreKeyRef.current
           return {
@@ -2679,6 +2691,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         styles: { ...(existing.styles ?? {}), position: pos, top: `${Math.round(newTop)}px`, left: `${Math.round(newLeft)}px` },
       }
       nextStore[viewportStoreKey] = routeStore
+      opPendingLabelRef.current = 'Moved element'
       setStore(nextStore)
       saveStore(nextStore)
       setSelectionRect(drag.target.getBoundingClientRect())
@@ -3346,6 +3359,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   }
 
   function clearSelectionDraft() {
+    opPendingLabelRef.current = 'Cleared styles'
     if (!selection) return
     const root = getRoot()
     const target = root ? findElementByPath(root, selection.path) : null
@@ -3362,6 +3376,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   }
 
   function clearRouteDrafts() {
+    opPendingLabelRef.current = `Reset ${viewportMode}`
     const root = getRoot()
     if (root) {
       Object.entries(routeDrafts).forEach(([path]) => {
@@ -3391,6 +3406,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   /* ─── Canvas styles ─── */
   function applyCanvasStyles(patch: Partial<CanvasState>) {
+    opPendingLabelRef.current = 'Page background'
     if (!getCanvasHost()) {
       showToast('Canvas edits need a page canvas host')
       return
@@ -3417,6 +3433,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   /* ─── Save / export ─── */
   function applyCanvasImage(imageData: string) {
+    opPendingLabelRef.current = 'Page background image'
     keepStudioPinned()
     if (!getCanvasHost()) {
       showToast('Canvas edits need a page canvas host')
@@ -3447,6 +3464,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   }
 
   function clearCanvasImage() {
+    opPendingLabelRef.current = 'Removed background image'
     keepStudioPinned()
     if (!getCanvasHost()) {
       showToast('Canvas edits need a page canvas host')
@@ -6406,6 +6424,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 onLoadVersion={(versionStore, versionName) => {
                   // No snapshot needed: the reconcile effect turns this store
                   // swap into ops, so loading a version is undoable by itself.
+                  opPendingLabelRef.current = `Loaded “${versionName}”`
                   const nextStore: EditorStore = {
                     ...store,
                     [viewportStoreKey]: versionStore as Record<string, ElementDraft>,
