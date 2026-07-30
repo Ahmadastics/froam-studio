@@ -7,6 +7,7 @@ import {
 } from '../config'
 import { apiGetFresh } from '../lib/api'
 import FroamReview from './FroamReview'
+import { readRoomFromLocation } from '../collab/room'
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources'
 import { normalizeFroamRouteKey, useFroamRouteKey } from '../routing'
 import { isFroamPersonaPath } from './froamPersona'
@@ -41,6 +42,14 @@ const CANVAS_KEY = '__froam_canvas__'
 const INJECTION_KEY = '__froam_injection__'
 const ROOT_PARENT_KEY = '__froam_root__'
 const DEFAULT_RUNTIME_ROUTES: readonly string[] | '*' = '*'
+/**
+ * How often a follower re-asks for the design during a session.
+ *
+ * Fast enough that a change lands while the designer is still talking about
+ * it, slow enough to be unremarkable on a phone connection. Only runs when
+ * the page is actually a session.
+ */
+const LIVE_POLL_MS = 4_000
 
 export type FroamLocalDesign = {
   version: number
@@ -317,6 +326,9 @@ export default function FroamRuntime({
   const isRuntimeRoute = enabled && routeMatches(routeKey, runtimeRoutes)
   const [viewportMode, setViewportMode] = useState<ViewportMode>(() => getRuntimeViewportMode())
   const [publishedStore, setPublishedStore] = useState<Record<string, ElementDraft> | null>(null)
+  // Fixed for the life of the page: an invite in the URL is what makes this a
+  // session, and nothing else should start a poll loop.
+  const inSession = useMemo(() => readRoomFromLocation() !== null, [])
   const appliedSnapshotsRef = useRef<RuntimeSnapshot[]>([])
 
   const endpoint = useMemo(() => {
@@ -408,8 +420,28 @@ export default function FroamRuntime({
 
     void loadPublished()
 
+    /**
+     * In a session, keep asking.
+     *
+     * The presenter publishes as they work, so the client's page has to notice
+     * without them refreshing — that is the whole "watch me change it" of a
+     * review call. Polling rather than a socket because the same code has to
+     * run on the dev bridge and on serverless, where nothing holds a
+     * connection open.
+     *
+     * Only while the tab is visible: a buried tab repainting a design nobody
+     * is looking at is just cost.
+     */
+    let poll = 0
+    if (inSession) {
+      poll = window.setInterval(() => {
+        if (!document.hidden) void loadPublished()
+      }, LIVE_POLL_MS)
+    }
+
     return () => {
       cancelled = true
+      if (poll) window.clearInterval(poll)
     }
   }, [design, endpoint, isRuntimeRoute, prefer, routeKey, viewportMode])
 

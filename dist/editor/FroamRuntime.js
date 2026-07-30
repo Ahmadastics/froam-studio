@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { configureFroamStudio, getFroamRootElement, getFroamStudioConfig, } from '../config.js';
 import { apiGetFresh } from '../lib/api.js';
 import FroamReview from './FroamReview.js';
+import { readRoomFromLocation } from '../collab/room.js';
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources.js';
 import { normalizeFroamRouteKey, useFroamRouteKey } from '../routing.js';
 import { isFroamPersonaPath } from './froamPersona.js';
@@ -10,6 +11,14 @@ const CANVAS_KEY = '__froam_canvas__';
 const INJECTION_KEY = '__froam_injection__';
 const ROOT_PARENT_KEY = '__froam_root__';
 const DEFAULT_RUNTIME_ROUTES = '*';
+/**
+ * How often a follower re-asks for the design during a session.
+ *
+ * Fast enough that a change lands while the designer is still talking about
+ * it, slow enough to be unremarkable on a phone connection. Only runs when
+ * the page is actually a session.
+ */
+const LIVE_POLL_MS = 4_000;
 function getRuntimeViewportMode() {
     if (typeof window === 'undefined')
         return 'desktop';
@@ -236,6 +245,9 @@ export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true
     const isRuntimeRoute = enabled && routeMatches(routeKey, runtimeRoutes);
     const [viewportMode, setViewportMode] = useState(() => getRuntimeViewportMode());
     const [publishedStore, setPublishedStore] = useState(null);
+    // Fixed for the life of the page: an invite in the URL is what makes this a
+    // session, and nothing else should start a poll loop.
+    const inSession = useMemo(() => readRoomFromLocation() !== null, []);
     const appliedSnapshotsRef = useRef([]);
     const endpoint = useMemo(() => {
         const params = new URLSearchParams({ routeKey, viewportMode });
@@ -316,8 +328,29 @@ export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true
             }
         }
         void loadPublished();
+        /**
+         * In a session, keep asking.
+         *
+         * The presenter publishes as they work, so the client's page has to notice
+         * without them refreshing — that is the whole "watch me change it" of a
+         * review call. Polling rather than a socket because the same code has to
+         * run on the dev bridge and on serverless, where nothing holds a
+         * connection open.
+         *
+         * Only while the tab is visible: a buried tab repainting a design nobody
+         * is looking at is just cost.
+         */
+        let poll = 0;
+        if (inSession) {
+            poll = window.setInterval(() => {
+                if (!document.hidden)
+                    void loadPublished();
+            }, LIVE_POLL_MS);
+        }
         return () => {
             cancelled = true;
+            if (poll)
+                window.clearInterval(poll);
         };
     }, [design, endpoint, isRuntimeRoute, prefer, routeKey, viewportMode]);
     /* Fonts the design references must actually load with it. */

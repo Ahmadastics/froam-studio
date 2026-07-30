@@ -1433,6 +1433,23 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         autoJoinAs: persona.name || 'Designer',
     });
     const roomPresence = room.present;
+    /**
+     * While someone is watching, push edits to them as they settle.
+     *
+     * Deliberately later than the 400ms undo batch: that decides what counts as
+     * one change, this decides when a change is finished being fiddled with.
+     * Publishing mid-drag would show the client the fumbling rather than the
+     * result — fig. 0.4 called for edits arriving settled.
+     */
+    const sessionPublishRef = useRef(0);
+    useEffect(() => {
+        if (!room.inRoom || roomPresence.length === 0)
+            return;
+        window.clearTimeout(sessionPublishRef.current);
+        sessionPublishRef.current = window.setTimeout(() => { void publishForSession(); }, 1_200);
+        return () => window.clearTimeout(sessionPublishRef.current);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [store, room.inRoom, roomPresence.length]);
     const draftCount = useMemo(() => countRenderableDrafts(routeDrafts), [routeDrafts]);
     const hasRouteDrafts = useMemo(() => draftCount > 0, [draftCount]);
     const showPanel = panelOpen || active;
@@ -3057,6 +3074,28 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         });
         await navigator.clipboard.writeText(report);
         showToast('Design report copied for Codex');
+    }
+    /**
+     * Publish quietly while presenting.
+     *
+     * In a session the client should see a change land while you are still
+     * talking about it, not when you remember to press save. Same endpoint as
+     * Ctrl+S — no second sync path — but silent: a toast every few seconds
+     * would be its own kind of noise, and a failed beat here is not worth
+     * interrupting anyone for.
+     */
+    async function publishForSession() {
+        try {
+            const routeSnapshot = collectVersionRouteDrafts();
+            await apiPost('/api/froam/published', {
+                routeKey,
+                viewportMode,
+                store: stripPersonaDrafts(routeSnapshot),
+            });
+        }
+        catch {
+            /* The next settle publishes the same design. */
+        }
     }
     async function saveToRunam() {
         keepStudioPinned();
