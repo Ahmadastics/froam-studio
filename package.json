@@ -67,7 +67,7 @@
     "build": "node scripts/clean.mjs && tsc -p tsconfig.json && node scripts/fix-js-extensions.mjs && node scripts/copy-assets.mjs && node scripts/build-standalone.mjs",
     "build:standalone": "node scripts/build-standalone.mjs",
     "clean": "node scripts/clean.mjs",
-    "test": "node scripts/test-oplog.mjs && node scripts/test-committer.mjs && node scripts/test-rooms.mjs"
+    "test": "node scripts/test-oplog.mjs && node scripts/test-committer.mjs && node scripts/test-rooms.mjs && node scripts/test-room-client.mjs"
   },
   "peerDependencies": {
     "react": ">=18",
