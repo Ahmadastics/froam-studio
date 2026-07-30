@@ -105,6 +105,7 @@ import FroamShapeLibrary from './FroamShapeLibrary'
 import FroamPersonaEditor from './FroamPersonaEditor'
 import { getFroamRootElement } from '../config'
 import { createOpLogSession, type OpLogSession } from '../collab/session'
+import { useFroamRoom } from '../collab/useFroamRoom'
 import { diffStores, type FroamChange } from '../collab/oplog'
 import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist'
 import { findElementByPath, getElementPath, isSafeDraftPath, tagOfPath } from '../collab/paths'
@@ -1820,6 +1821,19 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [logVersion, store, viewportStoreKey],
   )
+  /**
+   * The session, if this page is one. Inert without an invite in the URL:
+   * no polling, no storage, nothing rendered.
+   *
+   * The editor is the presenter's side — it announces where it is so a client
+   * following along knows which page to be on.
+   */
+  const room = useFroamRoom({
+    where: { routeKey, viewport: viewportMode, selectedPath: selection?.path ?? null },
+    autoJoinAs: persona.name || 'Designer',
+  })
+  const roomPresence = room.present
+
   const draftCount = useMemo(() => countRenderableDrafts(routeDrafts), [routeDrafts])
   const hasRouteDrafts = useMemo(() => draftCount > 0, [draftCount])
   const showPanel = panelOpen || active
@@ -5420,6 +5434,18 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 <span className="froam-studio__version-dot" />
                 <span className="froam-studio__logo">{persona.name} Studio</span>
                 <span className="froam-studio__badge">v4</span>
+                {/* Only when this page is actually a session. */}
+                {roomPresence.length > 0 && (
+                  <span
+                    className="froam-studio__badge"
+                    title={roomPresence.map((m) => `${m.name} · ${m.role}`).join('\n')}
+                    style={{ background: 'rgba(94,234,212,0.16)', color: '#5eead4' }}
+                  >
+                    {roomPresence.length === 1
+                      ? `${roomPresence[0].name} is here`
+                      : `${roomPresence.length} here`}
+                  </span>
+                )}
               </div>
               <div className="froam-studio__header-actions">
                 <button
