@@ -36,6 +36,6 @@ export type FroamRuntimeProps = Pick<FroamStudioConfig, 'apiBaseUrl' | 'fetch' |
      */
     prefer?: 'repo' | 'newest';
 };
-export default function FroamRuntime({ apiBaseUrl, design, enabled, fetch, rootSelector, routeKey: explicitRouteKey, routes, prefer, }: FroamRuntimeProps): null;
+export default function FroamRuntime({ apiBaseUrl, design, enabled, fetch, rootSelector, routeKey: explicitRouteKey, routes, prefer, }: FroamRuntimeProps): import("react").JSX.Element | null;
 export {};
 //# sourceMappingURL=FroamRuntime.d.ts.map

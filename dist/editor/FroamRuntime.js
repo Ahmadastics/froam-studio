@@ -1,6 +1,8 @@
+import { jsx as _jsx } from "react/jsx-runtime";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { configureFroamStudio, getFroamRootElement, getFroamStudioConfig, } from '../config.js';
 import { apiGetFresh } from '../lib/api.js';
+import FroamReview from './FroamReview.js';
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources.js';
 import { normalizeFroamRouteKey, useFroamRouteKey } from '../routing.js';
 import { isFroamPersonaPath } from './froamPersona.js';
@@ -359,6 +361,11 @@ export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true
             appliedSnapshotsRef.current = [];
         };
     }, [publishedStore, isRuntimeRoute]);
-    return null;
+    // The runtime paints a design and otherwise renders nothing. A review
+    // session is the one exception: the client has no editor, so this is the
+    // only Froam surface they will ever see.
+    if (!isRuntimeRoute)
+        return null;
+    return _jsx(FroamReview, { routeKey: routeKey, viewport: viewportMode });
 }
 //# sourceMappingURL=FroamRuntime.js.map

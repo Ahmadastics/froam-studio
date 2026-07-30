@@ -6,6 +6,7 @@ import {
   type FroamStudioConfig,
 } from '../config'
 import { apiGetFresh } from '../lib/api'
+import FroamReview from './FroamReview'
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources'
 import { normalizeFroamRouteKey, useFroamRouteKey } from '../routing'
 import { isFroamPersonaPath } from './froamPersona'
@@ -456,5 +457,9 @@ export default function FroamRuntime({
     }
   }, [publishedStore, isRuntimeRoute])
 
-  return null
+  // The runtime paints a design and otherwise renders nothing. A review
+  // session is the one exception: the client has no editor, so this is the
+  // only Froam surface they will ever see.
+  if (!isRuntimeRoute) return null
+  return <FroamReview routeKey={routeKey} viewport={viewportMode} />
 }

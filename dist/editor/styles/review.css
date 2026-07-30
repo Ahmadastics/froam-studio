@@ -1,0 +1,166 @@
+/*
+ * Froam Review — the client's bar.
+ *
+ * Deliberately not styled like the editor. This is the one Froam surface a
+ * person who has never heard of Froam will ever see, so it reads as a quiet
+ * note attached to their site rather than as a tool sitting on top of it.
+ *
+ * Everything is fixed to the bottom, safe-area aware, and narrow enough to
+ * leave the page visible behind it.
+ */
+
+.froam-review {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2147483000;
+  display: flex;
+  justify-content: center;
+  padding: 0 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.froam-review__bar,
+.froam-review__sheet {
+  pointer-events: auto;
+  width: min(520px, 100%);
+  background: rgba(12, 15, 20, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #e7ecf3;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.85);
+  animation: froam-review-rise 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.froam-review__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px 11px 14px;
+}
+
+.froam-review__bar.is-moving {
+  border-color: rgba(255, 138, 69, 0.55);
+}
+
+.froam-review__who {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.froam-review__who b {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 640;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.froam-review__who span {
+  font-size: 11.5px;
+  color: rgba(231, 236, 243, 0.62);
+}
+
+/* Presence, as a light that is on rather than a number. */
+.froam-review__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(231, 236, 243, 0.3);
+  flex: none;
+}
+
+.froam-review__dot.is-live {
+  background: #5eead4;
+  box-shadow: 0 0 0 0 rgba(94, 234, 212, 0.55);
+  animation: froam-review-pulse 2.4s ease-out infinite;
+}
+
+.froam-review__go {
+  flex: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 680;
+  background: #5eead4;
+  color: #06231d;
+  cursor: pointer;
+}
+
+.froam-review__go:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.froam-review__go:focus-visible {
+  outline: 2px solid #5eead4;
+  outline-offset: 3px;
+}
+
+.froam-review__sheet {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.froam-review__label {
+  font-size: 13px;
+  font-weight: 620;
+}
+
+.froam-review__row {
+  display: flex;
+  gap: 8px;
+}
+
+.froam-review__input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  padding: 9px 12px;
+}
+
+.froam-review__input:focus-visible {
+  outline: 2px solid #5eead4;
+  outline-offset: 1px;
+}
+
+.froam-review__error {
+  margin: 0;
+  font-size: 12px;
+  color: #ff8a45;
+}
+
+@keyframes froam-review-rise {
+  from { transform: translateY(14px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes froam-review-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(94, 234, 212, 0.5); }
+  70%  { box-shadow: 0 0 0 7px rgba(94, 234, 212, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(94, 234, 212, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .froam-review__bar,
+  .froam-review__sheet,
+  .froam-review__dot.is-live {
+    animation: none;
+  }
+}
