@@ -48,7 +48,7 @@ export declare function useFroamRoom(options: {
         presenter(): import("./room").RoomMemberView | null;
         someoneElseIsPresenting(): boolean;
         role(): FroamRole | null;
-        comments(routeKey: string, viewport: FroamViewport): Promise<import("./room").RoomComment[]>;
+        comments(routeKey: string): Promise<import("./room").RoomComment[]>;
         comment(input: {
             routeKey: string;
             viewport: FroamViewport;

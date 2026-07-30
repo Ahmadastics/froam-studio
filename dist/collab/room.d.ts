@@ -140,7 +140,7 @@ export declare function createRoomClient(options: {
     /** Is someone else driving? The question v5.1's follow mode turns on. */
     someoneElseIsPresenting(): boolean;
     role(): FroamRole | null;
-    comments(routeKey: string, viewport: FroamViewport): Promise<RoomComment[]>;
+    comments(routeKey: string): Promise<RoomComment[]>;
     comment(input: {
         routeKey: string;
         viewport: FroamViewport;

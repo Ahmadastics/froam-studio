@@ -145,8 +145,8 @@ export default function FroamReview({ routeKey, viewport }: Props) {
 
   const refreshNotes = useCallback(async () => {
     if (!room.client) return
-    try { setNotes(await room.client.comments(routeKey, viewport)) } catch { /* offline */ }
-  }, [room.client, routeKey, viewport])
+    try { setNotes(await room.client.comments(routeKey)) } catch { /* offline */ }
+  }, [room.client, routeKey])
 
   useEffect(() => { void refreshNotes() }, [refreshNotes])
 

@@ -171,8 +171,8 @@ export function createRoomClient(options) {
             return identity?.role ?? null;
         },
         /* ─── notes ─── */
-        async comments(routeKey, viewport) {
-            const params = new URLSearchParams({ token, routeKey, viewportMode: viewport });
+        async comments(routeKey) {
+            const params = new URLSearchParams({ token, routeKey });
             if (identity)
                 params.set('actor', identity.actor);
             const payload = await transport.get(`/api/froam/rooms/${roomId}/comments?${params}`);

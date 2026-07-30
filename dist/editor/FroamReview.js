@@ -138,10 +138,10 @@ export default function FroamReview({ routeKey, viewport }) {
         if (!room.client)
             return;
         try {
-            setNotes(await room.client.comments(routeKey, viewport));
+            setNotes(await room.client.comments(routeKey));
         }
         catch { /* offline */ }
-    }, [room.client, routeKey, viewport]);
+    }, [room.client, routeKey]);
     useEffect(() => { void refreshNotes(); }, [refreshNotes]);
     const send = useCallback(async () => {
         if (!draft || !room.client)

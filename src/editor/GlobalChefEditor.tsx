@@ -47,6 +47,7 @@ import {
   Smartphone,
   Tablet,
   MousePointer2,
+  MessageSquare,
   Move,
   Paintbrush,
   Palette,
@@ -106,6 +107,8 @@ import FroamPersonaEditor from './FroamPersonaEditor'
 import { getFroamRootElement } from '../config'
 import { createOpLogSession, type OpLogSession } from '../collab/session'
 import { useFroamRoom } from '../collab/useFroamRoom'
+import type { RoomComment } from '../collab/room'
+import FroamNotePins from './FroamNotePins'
 import { diffStores, type FroamChange } from '../collab/oplog'
 import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist'
 import { findElementByPath, getElementPath, isSafeDraftPath, tagOfPath } from '../collab/paths'
@@ -1635,6 +1638,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     gradient: false,
     cssVars: false,
     history: false,
+    notes: false,
     textShadow: false,
     versions: false,
     shapes: false,
@@ -1833,6 +1837,55 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     autoJoinAs: persona.name || 'Designer',
   })
   const roomPresence = room.present
+
+  /**
+   * Notes the client has left on this page.
+   *
+   * Polled on the same rhythm as everything else in a session — a note arriving
+   * within a few seconds is the difference between answering it on the call and
+   * finding it afterwards.
+   */
+  const [notes, setNotes] = useState<RoomComment[]>([])
+  const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
+
+  const refreshNotes = useCallback(async () => {
+    if (!room.client || !room.inRoom) return
+    try { setNotes(await room.client.comments(routeKey)) } catch { /* offline */ }
+  }, [room.client, room.inRoom, routeKey])
+
+  useEffect(() => {
+    if (!room.inRoom) return
+    void refreshNotes()
+    const timer = window.setInterval(() => { if (!document.hidden) void refreshNotes() }, 5_000)
+    return () => window.clearInterval(timer)
+  }, [room.inRoom, refreshNotes])
+
+  const resolveNote = useCallback(async (note: RoomComment) => {
+    if (!room.client) return
+    try {
+      await room.client.resolveComment(note.id, !note.resolved)
+      await refreshNotes()
+      showToast(note.resolved ? 'Reopened' : 'Resolved')
+    } catch {
+      showToast('Could not reach the room')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.client, refreshNotes])
+
+  /** Jump to what a note is about, using the anchor rather than the raw path. */
+  const goToNote = useCallback((note: RoomComment) => {
+    setActiveNoteId(note.id)
+    const root = getRoot()
+    if (!root) return
+    const found = resolveAnchor(note.anchor as FroamAnchor, root)
+    if (found.status === 'orphaned') {
+      showToast('That element is gone — the note is kept')
+      return
+    }
+    found.element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    selectInsertedElement(found.element)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   /**
    * While someone is watching, push edits to them as they settle.
    *
@@ -6535,6 +6588,64 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               )}
             </AccordionSection>
 
+            {/* ─── Notes from the client ─── */}
+            {room.inRoom && (
+              <AccordionSection
+                id="notes"
+                icon={<MessageSquare size={14} />}
+                title={notes.some((n) => !n.resolved) ? `Notes · ${notes.filter((n) => !n.resolved).length}` : 'Notes'}
+                isOpen={openSections.notes}
+                onToggle={() => toggleSection('notes')}
+              >
+                {notes.length === 0 ? (
+                  <span style={{ color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }}>
+                    Nothing yet — notes land here as they are left
+                  </span>
+                ) : (
+                  <div className="froam-notes">
+                    {notes.map((note, i) => {
+                      const root = getRoot()
+                      const orphaned = root
+                        ? resolveAnchor(note.anchor as FroamAnchor, root).status === 'orphaned'
+                        : false
+                      return (
+                        <div
+                          key={note.id}
+                          className={`froam-note${note.resolved ? ' is-resolved' : ''}${orphaned ? ' is-orphaned' : ''}`}
+                          data-chef-editor-root="true"
+                        >
+                          <div className="froam-note__head">
+                            <span className="froam-note__num">{i + 1}</span>
+                            <span className="froam-note__who">{note.name}</span>
+                            <span className="froam-note__when">{note.viewport === viewportMode ? relativeTime(note.createdAt) : `on ${note.viewport} · ${relativeTime(note.createdAt)}`}</span>
+                          </div>
+                          {note.quoted && <div className="froam-note__quote">“{note.quoted}”</div>}
+                          <div className="froam-note__body">{note.body}</div>
+                          {orphaned && (
+                            <div className="froam-note__flag">
+                              The element this was about is gone — kept, not deleted
+                            </div>
+                          )}
+                          <div className="froam-note__row">
+                            {!orphaned && (
+                              <button type="button" className="fs-pill" onClick={() => goToNote(note)}>Show me</button>
+                            )}
+                            <button
+                              type="button"
+                              className={note.resolved ? 'fs-pill' : 'fs-pill is-accent'}
+                              onClick={() => void resolveNote(note)}
+                            >
+                              {note.resolved ? 'Reopen' : 'Resolve'}
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </AccordionSection>
+            )}
+
             {/* ─── Inspiration Board ─── */}
             <AccordionSection
               id="inspiration"
@@ -6767,6 +6878,18 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         accept="image/*"
         onChange={handleImageUpload}
       />
+
+      {/* v5.2: the client's notes, stuck to what they are about. Shown
+          whenever the page is a session, panel open or not — a note you can
+          only see by opening a panel is a note you answer tomorrow. */}
+      {room.inRoom && (
+        <FroamNotePins
+          notes={notes}
+          root={getRoot()}
+          activeId={activeNoteId}
+          onPick={goToNote}
+        />
+      )}
 
       {/* v4: Resize handles on selected element */}
       {showPanel && selection && !inlineEditing && (
