@@ -12,8 +12,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFroamRoom } from '../collab/useFroamRoom'
-import { ROOM_PARAM, TOKEN_PARAM } from '../collab/room'
-import type { FroamViewport } from '../collab/types'
+import { ROOM_PARAM, TOKEN_PARAM, type RoomComment } from '../collab/room'
+import { createAnchor } from '../collab/anchor'
+import type { FroamAnchor, FroamViewport } from '../collab/types'
 
 type Props = {
   routeKey: string
@@ -37,6 +38,71 @@ export default function FroamReview({ routeKey, viewport }: Props) {
   const [asking, setAsking] = useState(false)
   const [paused, setPaused] = useState(false)
   const [movingTo, setMovingTo] = useState<string | null>(null)
+  const [commenting, setCommenting] = useState(false)
+  const [draft, setDraft] = useState<{ anchor: FroamAnchor; quoted: string; body: string } | null>(null)
+  const [sending, setSending] = useState(false)
+  const [notes, setNotes] = useState<RoomComment[]>([])
+
+  const canComment = room.role === 'commenter' || room.role === 'owner' || room.role === 'editor'
+  // Read inside the tap handler without re-subscribing it on every keystroke.
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+
+  /**
+   * Comment mode is a *mode*, and this is why.
+   *
+   * On a phone, tapping to leave a note and tapping to follow a link are the
+   * same gesture. So while the banner is up we take the tap: the link does not
+   * fire, and a note is attached to whatever was under the finger instead.
+   * Capture phase, because the page's own handlers must never see it.
+   */
+  useEffect(() => {
+    if (!commenting) return
+    const root = document.querySelector<HTMLElement>('[data-froam-root]') ?? document.body
+
+    const take = (event: PointerEvent) => {
+      // elementFromPoint, not event.target: it gives the element actually under
+      // the finger. A note anchored to a wrapper quotes the whole page back at
+      // you and tells the designer nothing about what you meant.
+      const under = (event.clientX || event.clientY)
+        ? (document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null)
+        : (event.target as HTMLElement | null)
+      const target = under ?? (event.target as HTMLElement | null)
+
+      if (!target || target.closest('[data-chef-editor-root]')) return
+      if (!root.contains(target) || target === root) return
+
+      // Swallow every tap for as long as the mode is on, including the click
+      // that follows the pointerdown which opened the sheet. Tearing the
+      // listeners down the moment a draft exists let that click through to the
+      // link underneath — the sheet opened *and* the page navigated, which is
+      // the exact collision this mode exists to prevent.
+      event.preventDefault()
+      event.stopPropagation()
+
+      // One note at a time: the tap that opened the sheet must not also
+      // re-anchor it out from under whoever is typing.
+      if (draftRef.current) return
+
+      const quoted = (target.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 120)
+      setDraft({ anchor: createAnchor(target, root), quoted, body: '' })
+    }
+
+    document.addEventListener('pointerdown', take, true)
+    document.addEventListener('pointerup', take, true)
+    document.addEventListener('click', take, true)
+    return () => {
+      document.removeEventListener('pointerdown', take, true)
+      document.removeEventListener('pointerup', take, true)
+      document.removeEventListener('click', take, true)
+    }
+  }, [commenting])
+
+  /** Opening the sheet pauses following — you asked for that, and it is right:
+   *  being navigated away mid-sentence loses the note. */
+  useEffect(() => {
+    if (commenting || draft) setPaused(true)
+  }, [commenting, draft])
 
   const presenter = room.presenter
   const following = room.someoneElseIsPresenting && !paused
@@ -76,6 +142,31 @@ export default function FroamReview({ routeKey, viewport }: Props) {
     }, 1200)
     return () => window.clearTimeout(timer)
   }, [following, presenter?.routeKey, routeKey])
+
+  const refreshNotes = useCallback(async () => {
+    if (!room.client) return
+    try { setNotes(await room.client.comments(routeKey, viewport)) } catch { /* offline */ }
+  }, [room.client, routeKey, viewport])
+
+  useEffect(() => { void refreshNotes() }, [refreshNotes])
+
+  const send = useCallback(async () => {
+    if (!draft || !room.client) return
+    setSending(true)
+    try {
+      await room.client.comment({
+        routeKey,
+        viewport,
+        anchor: draft.anchor,
+        quoted: draft.quoted || null,
+        body: draft.body.trim(),
+      })
+      setDraft(null)
+      await refreshNotes()
+    } finally {
+      setSending(false)
+    }
+  }, [draft, room.client, routeKey, viewport, refreshNotes])
 
   const submit = useCallback(async () => {
     const trimmed = name.trim()
@@ -146,19 +237,60 @@ export default function FroamReview({ routeKey, viewport }: Props) {
     )
   }
 
+  /* ── Writing a note ── */
+  if (draft) {
+    return (
+      <div className="froam-review" data-chef-editor-root="true">
+        <div className="froam-review__sheet">
+          {/* Quote what they tapped, so there is no argument later about which
+              bit they meant. */}
+          {draft.quoted && <p className="froam-review__quote">“{draft.quoted}”</p>}
+          <textarea
+            className="froam-review__input froam-review__note"
+            autoFocus
+            placeholder="What would you change?"
+            value={draft.body}
+            onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+          />
+          <div className="froam-review__row">
+            <button type="button" className="froam-review__ghost" onClick={() => setDraft(null)}>Cancel</button>
+            <button type="button" className="froam-review__go" disabled={!draft.body.trim() || sending} onClick={() => void send()}>
+              {sending ? '…' : 'Send'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   /* ── In the session ── */
   return (
     <div className="froam-review" data-chef-editor-root="true">
-      <div className={`froam-review__bar${movingTo ? ' is-moving' : ''}`}>
-        <span className={`froam-review__dot${following ? ' is-live' : ''}`} aria-hidden="true" />
-        <div className="froam-review__who">
-          <b>{label}</b>
-          <span>{following ? 'They are showing you the site' : `${room.present.length + 1} here`}</span>
+      {commenting ? (
+        <div className="froam-review__bar is-commenting">
+          <div className="froam-review__who">
+            <b>Tap anything you want changed</b>
+            <span>{notes.length ? `${notes.length} note${notes.length === 1 ? '' : 's'} so far` : 'Your notes go straight to them'}</span>
+          </div>
+          <button type="button" className="froam-review__go" onClick={() => setCommenting(false)}>Done</button>
         </div>
-        {paused && room.someoneElseIsPresenting && !movingTo && (
-          <button type="button" className="froam-review__go" onClick={() => setPaused(false)}>Rejoin</button>
-        )}
-      </div>
+      ) : (
+        <div className={`froam-review__bar${movingTo ? ' is-moving' : ''}`}>
+          <span className={`froam-review__dot${following ? ' is-live' : ''}`} aria-hidden="true" />
+          <div className="froam-review__who">
+            <b>{label}</b>
+            <span>{following ? 'They are showing you the site' : `${room.present.length + 1} here`}</span>
+          </div>
+          {paused && room.someoneElseIsPresenting && !movingTo && (
+            <button type="button" className="froam-review__ghost" onClick={() => setPaused(false)}>Rejoin</button>
+          )}
+          {canComment && (
+            <button type="button" className="froam-review__go" onClick={() => setCommenting(true)}>
+              {notes.length ? `Notes · ${notes.length}` : 'Comment'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

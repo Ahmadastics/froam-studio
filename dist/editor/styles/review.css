@@ -164,3 +164,53 @@
     animation: none;
   }
 }
+
+/* ── Comment mode ─────────────────────────────────────────── */
+
+.froam-review__bar.is-commenting {
+  border-color: rgba(94, 234, 212, 0.5);
+  background: rgba(10, 32, 28, 0.94);
+}
+
+.froam-review__ghost {
+  flex: none;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: transparent;
+  color: rgba(231, 236, 243, 0.86);
+  cursor: pointer;
+}
+
+.froam-review__ghost:focus-visible {
+  outline: 2px solid #5eead4;
+  outline-offset: 3px;
+}
+
+/* What they tapped, quoted back, so there is no argument later about which
+   bit they meant. */
+.froam-review__quote {
+  margin: 0;
+  padding-left: 9px;
+  border-left: 2px solid #5eead4;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(231, 236, 243, 0.68);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.froam-review__note {
+  min-height: 74px;
+  resize: none;
+  line-height: 1.45;
+}
+
+.froam-review__sheet .froam-review__row {
+  justify-content: flex-end;
+}

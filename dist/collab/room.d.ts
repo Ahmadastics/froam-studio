@@ -40,6 +40,33 @@ export type RoomIdentity = {
     name: string;
     role: FroamRole;
 };
+export type RoomComment = {
+    id: string;
+    actor: string;
+    name: string;
+    routeKey: string;
+    viewport: FroamViewport;
+    anchor: {
+        path: string;
+        fingerprint: {
+            tag: string;
+            text?: string;
+            id?: string;
+        };
+    };
+    quoted: string | null;
+    body: string;
+    createdAt: number;
+    resolved: boolean;
+    resolvedBy?: string | null;
+    replies: Array<{
+        id: string;
+        actor: string;
+        name: string;
+        body: string;
+        createdAt: number;
+    }>;
+};
 export type RoomTransport = {
     get: (path: string) => Promise<unknown>;
     post: (path: string, body: unknown) => Promise<unknown>;
@@ -113,6 +140,18 @@ export declare function createRoomClient(options: {
     /** Is someone else driving? The question v5.1's follow mode turns on. */
     someoneElseIsPresenting(): boolean;
     role(): FroamRole | null;
+    comments(routeKey: string, viewport: FroamViewport): Promise<RoomComment[]>;
+    comment(input: {
+        routeKey: string;
+        viewport: FroamViewport;
+        anchor: {
+            path: string;
+            fingerprint: unknown;
+        };
+        quoted?: string | null;
+        body: string;
+    }): Promise<RoomComment | null>;
+    resolveComment(commentId: string, resolved?: boolean): Promise<RoomComment | null>;
 };
 export type RoomClient = ReturnType<typeof createRoomClient>;
 //# sourceMappingURL=room.d.ts.map

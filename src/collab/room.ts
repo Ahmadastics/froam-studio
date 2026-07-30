@@ -36,6 +36,21 @@ export type RoomView = {
 
 export type RoomIdentity = { actor: string; name: string; role: FroamRole }
 
+export type RoomComment = {
+  id: string
+  actor: string
+  name: string
+  routeKey: string
+  viewport: FroamViewport
+  anchor: { path: string; fingerprint: { tag: string; text?: string; id?: string } }
+  quoted: string | null
+  body: string
+  createdAt: number
+  resolved: boolean
+  resolvedBy?: string | null
+  replies: Array<{ id: string; actor: string; name: string; body: string; createdAt: number }>
+}
+
 export type RoomTransport = {
   get: (path: string) => Promise<unknown>
   post: (path: string, body: unknown) => Promise<unknown>
@@ -232,6 +247,37 @@ export function createRoomClient(options: {
 
     role(): FroamRole | null {
       return identity?.role ?? null
+    },
+
+    /* ─── notes ─── */
+
+    async comments(routeKey: string, viewport: FroamViewport) {
+      const params = new URLSearchParams({ token, routeKey, viewportMode: viewport })
+      if (identity) params.set('actor', identity.actor)
+      const payload = await transport.get(`/api/froam/rooms/${roomId}/comments?${params}`) as { comments?: RoomComment[] }
+      return payload?.comments ?? []
+    },
+
+    async comment(input: {
+      routeKey: string
+      viewport: FroamViewport
+      anchor: { path: string; fingerprint: unknown }
+      quoted?: string | null
+      body: string
+    }) {
+      if (!identity) throw new Error('Join the room first')
+      const payload = await transport.post(`/api/froam/rooms/${roomId}/comments`, {
+        token, actor: identity.actor, ...input,
+      }) as { comment?: RoomComment }
+      return payload?.comment ?? null
+    },
+
+    async resolveComment(commentId: string, resolved = true) {
+      if (!identity) throw new Error('Join the room first')
+      const payload = await transport.post(`/api/froam/rooms/${roomId}/comments/${commentId}/resolve`, {
+        token, actor: identity.actor, resolved,
+      }) as { comment?: RoomComment }
+      return payload?.comment ?? null
     },
   }
 }

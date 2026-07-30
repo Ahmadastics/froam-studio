@@ -170,6 +170,30 @@ export function createRoomClient(options) {
         role() {
             return identity?.role ?? null;
         },
+        /* ─── notes ─── */
+        async comments(routeKey, viewport) {
+            const params = new URLSearchParams({ token, routeKey, viewportMode: viewport });
+            if (identity)
+                params.set('actor', identity.actor);
+            const payload = await transport.get(`/api/froam/rooms/${roomId}/comments?${params}`);
+            return payload?.comments ?? [];
+        },
+        async comment(input) {
+            if (!identity)
+                throw new Error('Join the room first');
+            const payload = await transport.post(`/api/froam/rooms/${roomId}/comments`, {
+                token, actor: identity.actor, ...input,
+            });
+            return payload?.comment ?? null;
+        },
+        async resolveComment(commentId, resolved = true) {
+            if (!identity)
+                throw new Error('Join the room first');
+            const payload = await transport.post(`/api/froam/rooms/${roomId}/comments/${commentId}/resolve`, {
+                token, actor: identity.actor, resolved,
+            });
+            return payload?.comment ?? null;
+        },
     };
 }
 //# sourceMappingURL=room.js.map

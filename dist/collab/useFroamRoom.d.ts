@@ -23,6 +23,44 @@ export declare function useFroamRoom(options: {
     everyMs?: number;
     href?: string;
 }): {
+    /** The raw client, for surfaces that need notes as well as presence. */
+    client: {
+        readonly roomId: string;
+        readonly identity: import("./room").RoomIdentity | null;
+        readonly room: RoomView | null;
+        readonly joined: boolean;
+        on(listener: (room: RoomView | null) => void): () => boolean;
+        join(name: string): Promise<import("./room").RoomIdentity>;
+        refresh(): Promise<RoomView | null>;
+        beat(where?: {
+            routeKey?: string;
+            viewport?: FroamViewport;
+            selectedPath?: string | null;
+        }): Promise<RoomView | null>;
+        start(where: () => {
+            routeKey?: string;
+            viewport?: FroamViewport;
+            selectedPath?: string | null;
+        }, everyMs?: number): () => void;
+        stop(): void;
+        others(): import("./room").RoomMemberView[];
+        present(): import("./room").RoomMemberView[];
+        presenter(): import("./room").RoomMemberView | null;
+        someoneElseIsPresenting(): boolean;
+        role(): FroamRole | null;
+        comments(routeKey: string, viewport: FroamViewport): Promise<import("./room").RoomComment[]>;
+        comment(input: {
+            routeKey: string;
+            viewport: FroamViewport;
+            anchor: {
+                path: string;
+                fingerprint: unknown;
+            };
+            quoted?: string | null;
+            body: string;
+        }): Promise<import("./room").RoomComment | null>;
+        resolveComment(commentId: string, resolved?: boolean): Promise<import("./room").RoomComment | null>;
+    } | null;
     /** Is this page a session at all? */
     inRoom: boolean;
     roomId: string | null;

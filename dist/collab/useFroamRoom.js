@@ -88,6 +88,8 @@ export function useFroamRoom(options) {
     const others = client?.others() ?? [];
     const presenter = client?.presenter() ?? null;
     return {
+        /** The raw client, for surfaces that need notes as well as presence. */
+        client,
         /** Is this page a session at all? */
         inRoom: Boolean(invite),
         roomId: invite?.roomId ?? null,

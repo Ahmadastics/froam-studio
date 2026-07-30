@@ -188,6 +188,142 @@ test('a room survives a restart', async () => {
   assert.equal(seen.room.id, created.room.id)
 })
 
+/* ── comments ─────────────────────────────────────────────── */
+
+async function roomWithGuest(role = 'commenter') {
+  const { api } = await freshApi()
+  const created = await open(api)
+  const guest = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, {
+    token: created.invites[role], name: 'Amina',
+  })
+  return { api, created, guest, id: created.room.id, token: created.invites[role] }
+}
+
+const ANCHOR = { path: 'div:1/h1:1', fingerprint: { tag: 'h1', text: 'Rooms that hold a family.' } }
+
+test('a client can leave a note on something', async () => {
+  const { api, id, token, guest } = await roomWithGuest()
+  const made = await call(api, 'POST', `/api/froam/rooms/${id}/comments`, {
+    token, actor: guest.you.actor, routeKey: '/', viewport: 'mobile',
+    anchor: ANCHOR, quoted: 'Rooms that hold a family.', body: 'Can we try the darker green here?',
+  })
+  assert.equal(made.success, true)
+  assert.equal(made.comment.name, 'Amina')
+  assert.equal(made.comment.body, 'Can we try the darker green here?')
+  assert.equal(made.comment.resolved, false)
+})
+
+test('the note carries the fingerprint, not just the path', async () => {
+  // Without it a note detaches the moment the page is rebuilt around it.
+  const { api, id, token, guest } = await roomWithGuest()
+  const made = await call(api, 'POST', `/api/froam/rooms/${id}/comments`, {
+    token, actor: guest.you.actor, routeKey: '/', anchor: ANCHOR, body: 'Bigger please',
+  })
+  assert.equal(made.comment.anchor.fingerprint.tag, 'h1')
+  assert.equal(made.comment.anchor.fingerprint.text, 'Rooms that hold a family.')
+})
+
+test('a viewer link is for looking', async () => {
+  const { api, id, token, guest } = await roomWithGuest('viewer')
+  const denied = await call(api, 'POST', `/api/froam/rooms/${id}/comments`, {
+    token, actor: guest.you.actor, routeKey: '/', anchor: ANCHOR, body: 'Nope',
+  })
+  assert.equal(denied.status, 403)
+})
+
+test('a note must say something and point at something', async () => {
+  const { api, id, token, guest } = await roomWithGuest()
+  const empty = await call(api, 'POST', `/api/froam/rooms/${id}/comments`, {
+    token, actor: guest.you.actor, routeKey: '/', anchor: ANCHOR, body: '   ',
+  })
+  assert.equal(empty.status, 400)
+  const loose = await call(api, 'POST', `/api/froam/rooms/${id}/comments`, {
+    token, actor: guest.you.actor, routeKey: '/', body: 'Floating note',
+  })
+  assert.equal(loose.status, 400)
+})
+
+test('notes come back for the page they were left on', async () => {
+  const { api, id, token, guest } = await roomWithGuest()
+  await call(api, 'POST', `/api/froam/rooms/${id}/comments`, {
+    token, actor: guest.you.actor, routeKey: '/', anchor: ANCHOR, body: 'On the home page',
+  })
+  await call(api, 'POST', `/api/froam/rooms/${id}/comments`, {
+    token, actor: guest.you.actor, routeKey: '/pricing', anchor: ANCHOR, body: 'On pricing',
+  })
+  const home = await call(api, 'GET', `/api/froam/rooms/${id}/comments?token=${token}&routeKey=%2F`)
+  assert.deepEqual(home.comments.map((c) => c.body), ['On the home page'])
+})
+
+test('the designer resolves a note', async () => {
+  const { api, created, id, guest } = await roomWithGuest()
+  const made = await call(api, 'POST', `/api/froam/rooms/${id}/comments`, {
+    token: created.invites.commenter, actor: guest.you.actor, routeKey: '/', anchor: ANCHOR, body: 'Too tight',
+  })
+  const done = await call(api, 'POST', `/api/froam/rooms/${id}/comments/${made.comment.id}/resolve`, {
+    token: created.invites.owner, actor: created.you.actor,
+  })
+  assert.equal(done.comment.resolved, true)
+  assert.equal(done.comment.resolvedBy, 'Ahmad')
+})
+
+test('withdrawing your own note is not a privilege', async () => {
+  const { api, id, token, guest } = await roomWithGuest()
+  const made = await call(api, 'POST', `/api/froam/rooms/${id}/comments`, {
+    token, actor: guest.you.actor, routeKey: '/', anchor: ANCHOR, body: 'Actually never mind',
+  })
+  const done = await call(api, 'POST', `/api/froam/rooms/${id}/comments/${made.comment.id}/resolve`, {
+    token, actor: guest.you.actor,
+  })
+  assert.equal(done.comment.resolved, true)
+})
+
+test('a commenter cannot resolve somebody else’s note', async () => {
+  const { api, created, id } = await roomWithGuest()
+  const second = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, {
+    token: created.invites.commenter, name: 'Bola',
+  })
+  const mine = await call(api, 'POST', `/api/froam/rooms/${id}/comments`, {
+    token: created.invites.commenter, actor: second.you.actor, routeKey: '/', anchor: ANCHOR, body: 'Bola’s note',
+  })
+  const guest2 = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, {
+    token: created.invites.commenter, name: 'Chidi',
+  })
+  const denied = await call(api, 'POST', `/api/froam/rooms/${id}/comments/${mine.comment.id}/resolve`, {
+    token: created.invites.commenter, actor: guest2.you.actor,
+  })
+  assert.equal(denied.status, 403)
+})
+
+test('a note can be replied to', async () => {
+  const { api, created, id, guest } = await roomWithGuest()
+  const made = await call(api, 'POST', `/api/froam/rooms/${id}/comments`, {
+    token: created.invites.commenter, actor: guest.you.actor, routeKey: '/', anchor: ANCHOR, body: 'Darker green?',
+  })
+  const replied = await call(api, 'POST', `/api/froam/rooms/${id}/comments/${made.comment.id}/reply`, {
+    token: created.invites.owner, actor: created.you.actor, body: 'Trying it now',
+  })
+  assert.equal(replied.comment.replies.length, 1)
+  assert.equal(replied.comment.replies[0].name, 'Ahmad')
+})
+
+test('notes survive a restart', async () => {
+  const dir = await fsp.mkdtemp(nodePath.join(os.tmpdir(), 'froam-rooms-'))
+  const file = nodePath.join(dir, 'rooms.json')
+  const first = createFroamRoomApi({ file, now })
+  const created = await call(first, 'POST', '/api/froam/rooms', { name: 'Ahmad' })
+  const guest = await call(first, 'POST', `/api/froam/rooms/${created.room.id}/join`, {
+    token: created.invites.commenter, name: 'Amina',
+  })
+  await call(first, 'POST', `/api/froam/rooms/${created.room.id}/comments`, {
+    token: created.invites.commenter, actor: guest.you.actor, routeKey: '/', anchor: ANCHOR, body: 'Still here?',
+  })
+
+  const second = createFroamRoomApi({ file, now })
+  const seen = await call(second, 'GET', `/api/froam/rooms/${created.room.id}/comments?token=${created.invites.owner}&routeKey=%2F`)
+  assert.deepEqual(seen.comments.map((c) => c.body), ['Still here?'])
+})
+
 let failed = 0
 for (const [name, fn] of tests) {
   try {
