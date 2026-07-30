@@ -35,7 +35,14 @@ export declare function applyOp(store: EditorStore, op: FroamOp): EditorStore;
  * other write — derivation never has to know what an undo *is*. That keeps
  * this function a plain reduce, which is why it can run on a server too.
  */
-export declare function deriveStore(ops: readonly FroamOp[]): EditorStore;
+export declare function deriveStore(ops: readonly FroamOp[], 
+/**
+ * How to order two ops. Defaults to clock-then-actor; a room passes
+ * `createAuthorityComparator` so a genuine tie settles in the owner's
+ * favour. Folding order *is* the merge, so this is the one place the
+ * 60/40 rule has to reach.
+ */
+compare?: (a: FroamOp, b: FroamOp) => number): EditorStore;
 /** Current value of one field, per the log. */
 export declare function currentValue(store: EditorStore, op: Pick<FroamOp, 'routeKey' | 'viewport' | 'path' | 'field'>): string | undefined;
 export type EditInput = {

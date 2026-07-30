@@ -108,8 +108,15 @@ export function applyOp(store, op) {
  * other write — derivation never has to know what an undo *is*. That keeps
  * this function a plain reduce, which is why it can run on a server too.
  */
-export function deriveStore(ops) {
-    const ordered = [...ops].sort(compareOps);
+export function deriveStore(ops, 
+/**
+ * How to order two ops. Defaults to clock-then-actor; a room passes
+ * `createAuthorityComparator` so a genuine tie settles in the owner's
+ * favour. Folding order *is* the merge, so this is the one place the
+ * 60/40 rule has to reach.
+ */
+compare = compareOps) {
+    const ordered = [...ops].sort(compare);
     let store = {};
     for (const op of ordered)
         store = applyOp(store, op);

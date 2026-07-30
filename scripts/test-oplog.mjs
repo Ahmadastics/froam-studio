@@ -26,6 +26,10 @@ const {
 } = await import('../dist/collab/oplog.js')
 const { scopeKey } = await import('../dist/collab/types.js')
 const { createOpLogSession } = await import('../dist/collab/session.js')
+const {
+  FROAM_ROLE_RANK, outranks, canEdit, canComment, canRevert,
+  createAuthorityComparator, rankLookup,
+} = await import('../dist/collab/authority.js')
 
 /** Minimal localStorage stand-in, with an optional byte ceiling to force quota errors. */
 function fakeStorage(limitBytes = Infinity) {
@@ -504,6 +508,83 @@ test('undo in a room reverts only my own work', () => {
   ahmad.undo()
   assert.equal(ahmad.store()[SCOPE]?.hero, undefined)
   assert.equal(ahmad.store()[SCOPE].footer.styles.color, '#zainab')
+})
+
+/* ─── authority: the 60/40 rule ─── */
+
+test('the ranks are the rule as agreed', () => {
+  assert.equal(FROAM_ROLE_RANK.owner, 60)
+  assert.equal(FROAM_ROLE_RANK.editor, 40)
+  assert.equal(outranks('owner', 'editor'), true)
+  assert.equal(outranks('editor', 'owner'), false)
+})
+
+test('who can do what', () => {
+  assert.equal(canEdit('owner'), true)
+  assert.equal(canEdit('editor'), true)
+  assert.equal(canEdit('commenter'), false)
+  assert.equal(canComment('commenter'), true)
+  assert.equal(canComment('viewer'), false)
+})
+
+test('undoing your own work is always yours to do', () => {
+  assert.equal(canRevert({ role: 'editor', ownWork: true }), 'allowed')
+  assert.equal(canRevert({ role: 'owner', ownWork: true }), 'allowed')
+})
+
+test('an owner enacts an undo, a guest editor proposes one', () => {
+  assert.equal(canRevert({ role: 'owner', ownWork: false }), 'allowed')
+  assert.equal(canRevert({ role: 'editor', ownWork: false }), 'propose')
+  assert.equal(canRevert({ role: 'commenter', ownWork: false }), 'denied')
+})
+
+test('a genuine conflict resolves in the owner’s favour', () => {
+  const rankOf = rankLookup([
+    { actor: 'ahmad', role: 'owner' },
+    { actor: 'zainab', role: 'editor' },
+  ])
+  const compare = createAuthorityComparator(rankOf)
+  // Same clock: neither saw the other. That is the only real conflict.
+  const owner = { id: 'a', clock: 5, actor: 'ahmad', kind: 'edit', ts: 1, routeKey: ROUTE, viewport: VIEW, path: 'hero', field: 'style:color', before: undefined, after: '#owner' }
+  const guest = { id: 'b', clock: 5, actor: 'zainab', kind: 'edit', ts: 1, routeKey: ROUTE, viewport: VIEW, path: 'hero', field: 'style:color', before: undefined, after: '#guest' }
+  const settled = [guest, owner].sort(compare)
+  assert.equal(settled.at(-1).after, '#owner', 'the owner’s value lands last and wins')
+  assert.deepEqual([owner, guest].sort(compare).at(-1).after, '#owner', 'and the input order does not matter')
+})
+
+test('rank never beats the clock — that would be a read-only account', () => {
+  const rankOf = rankLookup([
+    { actor: 'ahmad', role: 'owner' },
+    { actor: 'zainab', role: 'editor' },
+  ])
+  const compare = createAuthorityComparator(rankOf)
+  const ownerEarlier = { id: 'a', clock: 2, actor: 'ahmad', kind: 'edit', ts: 1, routeKey: ROUTE, viewport: VIEW, path: 'hero', field: 'style:color', before: undefined, after: '#owner' }
+  const guestLater = { id: 'b', clock: 9, actor: 'zainab', kind: 'edit', ts: 1, routeKey: ROUTE, viewport: VIEW, path: 'hero', field: 'style:color', before: undefined, after: '#guest' }
+  assert.equal(
+    [ownerEarlier, guestLater].sort(compare).at(-1).after,
+    '#guest',
+    'an edit that demonstrably came later is a sequence, not a conflict',
+  )
+})
+
+test('the rule reaches the merge, not just the comparator', () => {
+  // Folding order is the merge, so this is the end-to-end proof.
+  const compare = createAuthorityComparator(rankLookup([
+    { actor: 'ahmad', role: 'owner' },
+    { actor: 'zainab', role: 'editor' },
+  ]))
+  const conflict = [
+    { id: 'z', clock: 5, actor: 'zainab', kind: 'edit', ts: 1, routeKey: ROUTE, viewport: VIEW, path: 'hero', field: 'style:color', before: undefined, after: '#guest' },
+    { id: 'a', clock: 5, actor: 'ahmad', kind: 'edit', ts: 1, routeKey: ROUTE, viewport: VIEW, path: 'hero', field: 'style:color', before: undefined, after: '#owner' },
+  ]
+  assert.equal(deriveStore(conflict, compare)[SCOPE].hero.styles.color, '#owner')
+  // Without the rule, the same two ops tie on actor id and the guest wins.
+  assert.equal(deriveStore(conflict)[SCOPE].hero.styles.color, '#guest')
+})
+
+test('unknown actors rank as viewers rather than crashing', () => {
+  const rankOf = rankLookup([{ actor: 'ahmad', role: 'owner' }])
+  assert.equal(rankOf('someone-else'), 0)
 })
 
 /* ─── the change log ─── */
