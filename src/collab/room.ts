@@ -51,6 +51,20 @@ export type RoomComment = {
   replies: Array<{ id: string; actor: string; name: string; body: string; createdAt: number }>
 }
 
+export type RoomRevision = {
+  id: string
+  routeKey: string
+  viewport: FroamViewport
+  store: Record<string, unknown>
+  note: string | null
+  createdAt: number
+  createdBy: string
+  status: 'sent' | 'approved' | 'changes-requested'
+  decidedBy: string | null
+  decidedAt: number | null
+  decisionNote: string | null
+}
+
 export type RoomTransport = {
   get: (path: string) => Promise<unknown>
   post: (path: string, body: unknown) => Promise<unknown>
@@ -270,6 +284,31 @@ export function createRoomClient(options: {
         token, actor: identity.actor, ...input,
       }) as { comment?: RoomComment }
       return payload?.comment ?? null
+    },
+
+    /* ─── revisions ─── */
+
+    async revisions(routeKey: string) {
+      const params = new URLSearchParams({ token, routeKey })
+      if (identity) params.set('actor', identity.actor)
+      const payload = await transport.get(`/api/froam/rooms/${roomId}/revisions?${params}`) as { revisions?: RoomRevision[] }
+      return payload?.revisions ?? []
+    },
+
+    async sendRevision(input: { routeKey: string; viewport: FroamViewport; store: unknown; note?: string }) {
+      if (!identity) throw new Error('Join the room first')
+      const payload = await transport.post(`/api/froam/rooms/${roomId}/revisions`, {
+        token, actor: identity.actor, ...input,
+      }) as { revision?: RoomRevision }
+      return payload?.revision ?? null
+    },
+
+    async decide(revisionId: string, decision: 'approved' | 'changes-requested', note?: string) {
+      if (!identity) throw new Error('Join the room first')
+      const payload = await transport.post(`/api/froam/rooms/${roomId}/revisions/${revisionId}/decision`, {
+        token, actor: identity.actor, decision, note,
+      }) as { revision?: RoomRevision }
+      return payload?.revision ?? null
     },
 
     async resolveComment(commentId: string, resolved = true) {

@@ -186,6 +186,30 @@ export function createRoomClient(options) {
             });
             return payload?.comment ?? null;
         },
+        /* ─── revisions ─── */
+        async revisions(routeKey) {
+            const params = new URLSearchParams({ token, routeKey });
+            if (identity)
+                params.set('actor', identity.actor);
+            const payload = await transport.get(`/api/froam/rooms/${roomId}/revisions?${params}`);
+            return payload?.revisions ?? [];
+        },
+        async sendRevision(input) {
+            if (!identity)
+                throw new Error('Join the room first');
+            const payload = await transport.post(`/api/froam/rooms/${roomId}/revisions`, {
+                token, actor: identity.actor, ...input,
+            });
+            return payload?.revision ?? null;
+        },
+        async decide(revisionId, decision, note) {
+            if (!identity)
+                throw new Error('Join the room first');
+            const payload = await transport.post(`/api/froam/rooms/${roomId}/revisions/${revisionId}/decision`, {
+                token, actor: identity.actor, decision, note,
+            });
+            return payload?.revision ?? null;
+        },
         async resolveComment(commentId, resolved = true) {
             if (!identity)
                 throw new Error('Join the room first');

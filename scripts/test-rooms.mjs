@@ -324,6 +324,113 @@ test('notes survive a restart', async () => {
   assert.deepEqual(seen.comments.map((c) => c.body), ['Still here?'])
 })
 
+/* ── revisions & approval ─────────────────────────────────── */
+
+const SNAPSHOT = { 'h1:1': { styles: { color: '#12c877' } } }
+
+test('the designer sends a revision', async () => {
+  const { api, created, id } = await roomWithGuest()
+  const sent = await call(api, 'POST', `/api/froam/rooms/${id}/revisions`, {
+    token: created.invites.owner, actor: created.you.actor,
+    routeKey: '/', viewport: 'desktop', store: SNAPSHOT, note: 'Second pass on the hero',
+  })
+  assert.equal(sent.revision.status, 'sent')
+  assert.equal(sent.revision.createdBy, 'Ahmad')
+  assert.deepEqual(sent.revision.store, SNAPSHOT, 'a revision is the design as it stood')
+})
+
+test('a client cannot send a revision', async () => {
+  const { api, id, token, guest } = await roomWithGuest()
+  const denied = await call(api, 'POST', `/api/froam/rooms/${id}/revisions`, {
+    token, actor: guest.you.actor, routeKey: '/', store: SNAPSHOT,
+  })
+  assert.equal(denied.status, 403)
+})
+
+test('the client approves it', async () => {
+  const { api, created, id, token, guest } = await roomWithGuest()
+  const sent = await call(api, 'POST', `/api/froam/rooms/${id}/revisions`, {
+    token: created.invites.owner, actor: created.you.actor, routeKey: '/', store: SNAPSHOT,
+  })
+  const decided = await call(api, 'POST', `/api/froam/rooms/${id}/revisions/${sent.revision.id}/decision`, {
+    token, actor: guest.you.actor, decision: 'approved',
+  })
+  assert.equal(decided.revision.status, 'approved')
+  assert.equal(decided.revision.decidedBy, 'Amina')
+})
+
+test('“not yet” is a real answer, not a failure', async () => {
+  const { api, created, id, token, guest } = await roomWithGuest()
+  const sent = await call(api, 'POST', `/api/froam/rooms/${id}/revisions`, {
+    token: created.invites.owner, actor: created.you.actor, routeKey: '/', store: SNAPSHOT,
+  })
+  const decided = await call(api, 'POST', `/api/froam/rooms/${id}/revisions/${sent.revision.id}/decision`, {
+    token, actor: guest.you.actor, decision: 'changes-requested', note: 'Nearly — the green is still loud',
+  })
+  assert.equal(decided.revision.status, 'changes-requested')
+  assert.equal(decided.revision.decisionNote, 'Nearly — the green is still loud')
+})
+
+test('approval is never blocked by open notes', async () => {
+  // The rule fig. 0.4 settled: "approved, with two notes" is real information,
+  // and a tool that refuses it teaches people to lie.
+  const { api, created, id, token, guest } = await roomWithGuest()
+  await call(api, 'POST', `/api/froam/rooms/${id}/comments`, {
+    token, actor: guest.you.actor, routeKey: '/', anchor: ANCHOR, body: 'Still unhappy about this bit',
+  })
+  const sent = await call(api, 'POST', `/api/froam/rooms/${id}/revisions`, {
+    token: created.invites.owner, actor: created.you.actor, routeKey: '/', store: SNAPSHOT,
+  })
+  const decided = await call(api, 'POST', `/api/froam/rooms/${id}/revisions/${sent.revision.id}/decision`, {
+    token, actor: guest.you.actor, decision: 'approved',
+  })
+  assert.equal(decided.revision.status, 'approved')
+
+  const notes = await call(api, 'GET', `/api/froam/rooms/${id}/comments?token=${token}&routeKey=%2F`)
+  assert.equal(notes.comments.filter((c) => !c.resolved).length, 1, 'and the note is still open, not swept up')
+})
+
+test('a viewer cannot decide', async () => {
+  const { api, created, id } = await roomWithGuest()
+  const looker = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, {
+    token: created.invites.viewer, name: 'Passer-by',
+  })
+  const sent = await call(api, 'POST', `/api/froam/rooms/${id}/revisions`, {
+    token: created.invites.owner, actor: created.you.actor, routeKey: '/', store: SNAPSHOT,
+  })
+  const denied = await call(api, 'POST', `/api/froam/rooms/${id}/revisions/${sent.revision.id}/decision`, {
+    token: created.invites.viewer, actor: looker.you.actor, decision: 'approved',
+  })
+  assert.equal(denied.status, 403)
+})
+
+test('a decision has to say what it is', async () => {
+  const { api, created, id, token, guest } = await roomWithGuest()
+  const sent = await call(api, 'POST', `/api/froam/rooms/${id}/revisions`, {
+    token: created.invites.owner, actor: created.you.actor, routeKey: '/', store: SNAPSHOT,
+  })
+  const vague = await call(api, 'POST', `/api/froam/rooms/${id}/revisions/${sent.revision.id}/decision`, {
+    token, actor: guest.you.actor, decision: 'maybe',
+  })
+  assert.equal(vague.status, 400)
+})
+
+test('revisions come back newest first, per page', async () => {
+  const { api, created, id } = await roomWithGuest()
+  const send = (routeKey) => call(api, 'POST', `/api/froam/rooms/${id}/revisions`, {
+    token: created.invites.owner, actor: created.you.actor, routeKey, store: SNAPSHOT,
+  })
+  await send('/')
+  tick(1000)
+  await send('/')
+  tick(1000)
+  await send('/pricing')
+
+  const home = await call(api, 'GET', `/api/froam/rooms/${id}/revisions?token=${created.invites.owner}&routeKey=%2F`)
+  assert.equal(home.revisions.length, 2)
+  assert.ok(home.revisions[0].createdAt > home.revisions[1].createdAt, 'the current question first')
+})
+
 let failed = 0
 for (const [name, fn] of tests) {
   try {

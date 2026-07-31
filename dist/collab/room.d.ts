@@ -67,6 +67,19 @@ export type RoomComment = {
         createdAt: number;
     }>;
 };
+export type RoomRevision = {
+    id: string;
+    routeKey: string;
+    viewport: FroamViewport;
+    store: Record<string, unknown>;
+    note: string | null;
+    createdAt: number;
+    createdBy: string;
+    status: 'sent' | 'approved' | 'changes-requested';
+    decidedBy: string | null;
+    decidedAt: number | null;
+    decisionNote: string | null;
+};
 export type RoomTransport = {
     get: (path: string) => Promise<unknown>;
     post: (path: string, body: unknown) => Promise<unknown>;
@@ -151,6 +164,14 @@ export declare function createRoomClient(options: {
         quoted?: string | null;
         body: string;
     }): Promise<RoomComment | null>;
+    revisions(routeKey: string): Promise<RoomRevision[]>;
+    sendRevision(input: {
+        routeKey: string;
+        viewport: FroamViewport;
+        store: unknown;
+        note?: string;
+    }): Promise<RoomRevision | null>;
+    decide(revisionId: string, decision: "approved" | "changes-requested", note?: string): Promise<RoomRevision | null>;
     resolveComment(commentId: string, resolved?: boolean): Promise<RoomComment | null>;
 };
 export type RoomClient = ReturnType<typeof createRoomClient>;

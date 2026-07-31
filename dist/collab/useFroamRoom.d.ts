@@ -59,6 +59,14 @@ export declare function useFroamRoom(options: {
             quoted?: string | null;
             body: string;
         }): Promise<import("./room").RoomComment | null>;
+        revisions(routeKey: string): Promise<import("./room").RoomRevision[]>;
+        sendRevision(input: {
+            routeKey: string;
+            viewport: FroamViewport;
+            store: unknown;
+            note?: string;
+        }): Promise<import("./room").RoomRevision | null>;
+        decide(revisionId: string, decision: "approved" | "changes-requested", note?: string): Promise<import("./room").RoomRevision | null>;
         resolveComment(commentId: string, resolved?: boolean): Promise<import("./room").RoomComment | null>;
     } | null;
     /** Is this page a session at all? */

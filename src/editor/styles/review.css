@@ -310,3 +310,9 @@
 .froam-note__body { font-size: 0.76rem; line-height: 1.45; }
 .froam-note__flag { font-size: 0.66rem; color: #ff8a45; }
 .froam-note__row { display: flex; gap: 6px; }
+
+/* The state of the review, above the notes it produced. */
+.froam-revision {
+  border-color: rgba(94, 234, 212, 0.35);
+  background: rgba(94, 234, 212, 0.06);
+}

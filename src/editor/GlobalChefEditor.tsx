@@ -107,7 +107,7 @@ import FroamPersonaEditor from './FroamPersonaEditor'
 import { getFroamRootElement } from '../config'
 import { createOpLogSession, type OpLogSession } from '../collab/session'
 import { useFroamRoom } from '../collab/useFroamRoom'
-import type { RoomComment } from '../collab/room'
+import type { RoomComment, RoomRevision } from '../collab/room'
 import FroamNotePins from './FroamNotePins'
 import { diffStores, type FroamChange } from '../collab/oplog'
 import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist'
@@ -1848,10 +1848,38 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [notes, setNotes] = useState<RoomComment[]>([])
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
 
+  const [revisions, setRevisions] = useState<RoomRevision[]>([])
+
   const refreshNotes = useCallback(async () => {
     if (!room.client || !room.inRoom) return
-    try { setNotes(await room.client.comments(routeKey)) } catch { /* offline */ }
+    try {
+      setNotes(await room.client.comments(routeKey))
+      setRevisions(await room.client.revisions(routeKey))
+    } catch { /* offline */ }
   }, [room.client, room.inRoom, routeKey])
+
+  /**
+   * Send what is on screen for a decision.
+   *
+   * The snapshot is taken now, so "approved" refers to a specific design
+   * rather than to whatever the page happens to look like when someone reads
+   * the word later.
+   */
+  const sendForReview = useCallback(async () => {
+    if (!room.client) return
+    try {
+      await room.client.sendRevision({
+        routeKey,
+        viewport: viewportMode,
+        store: stripPersonaDrafts(collectVersionRouteDrafts()),
+      })
+      await refreshNotes()
+      showToast('Sent for review')
+    } catch {
+      showToast('Could not reach the room')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.client, routeKey, viewportMode, refreshNotes])
 
   useEffect(() => {
     if (!room.inRoom) return
@@ -6597,6 +6625,31 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 isOpen={openSections.notes}
                 onToggle={() => toggleSection('notes')}
               >
+                {/* Where the review stands, and the one action that moves it. */}
+                <div className="froam-note froam-revision" data-chef-editor-root="true">
+                  {(() => {
+                    const latest = revisions[0]
+                    if (!latest) return <div className="froam-note__body">Not sent for review yet</div>
+                    if (latest.status === 'sent') {
+                      return <div className="froam-note__body">Waiting on {room.present[0]?.name ?? 'them'} · sent {relativeTime(latest.createdAt)}</div>
+                    }
+                    if (latest.status === 'approved') {
+                      return <div className="froam-note__body" style={{ color: 'var(--fs-accent, #5eead4)' }}>
+                        Approved by {latest.decidedBy} · {relativeTime(latest.decidedAt ?? latest.createdAt)}
+                      </div>
+                    }
+                    return <div className="froam-note__body" style={{ color: '#ff8a45' }}>
+                      {latest.decidedBy} asked for changes · {relativeTime(latest.decidedAt ?? latest.createdAt)}
+                      {latest.decisionNote && <div className="froam-note__quote" style={{ marginTop: 4 }}>“{latest.decisionNote}”</div>}
+                    </div>
+                  })()}
+                  <div className="froam-note__row">
+                    <button type="button" className="fs-pill is-accent" onClick={() => void sendForReview()}>
+                      {revisions.length ? 'Send again' : 'Send for review'}
+                    </button>
+                  </div>
+                </div>
+
                 {notes.length === 0 ? (
                   <span style={{ color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }}>
                     Nothing yet — notes land here as they are left

@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFroamRoom } from '../collab/useFroamRoom'
-import { ROOM_PARAM, TOKEN_PARAM, type RoomComment } from '../collab/room'
+import { ROOM_PARAM, TOKEN_PARAM, type RoomComment, type RoomRevision } from '../collab/room'
 import { createAnchor } from '../collab/anchor'
 import type { FroamAnchor, FroamViewport } from '../collab/types'
 
@@ -42,6 +42,9 @@ export default function FroamReview({ routeKey, viewport }: Props) {
   const [draft, setDraft] = useState<{ anchor: FroamAnchor; quoted: string; body: string } | null>(null)
   const [sending, setSending] = useState(false)
   const [notes, setNotes] = useState<RoomComment[]>([])
+  const [pending, setPending] = useState<RoomRevision | null>(null)
+  const [asked, setAsked] = useState(false)
+  const [deciding, setDeciding] = useState(false)
 
   const canComment = room.role === 'commenter' || room.role === 'owner' || room.role === 'editor'
   // Read inside the tap handler without re-subscribing it on every keystroke.
@@ -145,10 +148,32 @@ export default function FroamReview({ routeKey, viewport }: Props) {
 
   const refreshNotes = useCallback(async () => {
     if (!room.client) return
-    try { setNotes(await room.client.comments(routeKey)) } catch { /* offline */ }
+    try {
+      setNotes(await room.client.comments(routeKey))
+      // The one still waiting on an answer. Older decided revisions are
+      // history; only an undecided one is a question being asked of them.
+      const list = await room.client.revisions(routeKey)
+      setPending(list.find((r) => r.status === 'sent') ?? null)
+    } catch { /* offline */ }
   }, [room.client, routeKey])
 
-  useEffect(() => { void refreshNotes() }, [refreshNotes])
+  useEffect(() => {
+    void refreshNotes()
+    const timer = window.setInterval(() => { if (!document.hidden) void refreshNotes() }, 6_000)
+    return () => window.clearInterval(timer)
+  }, [refreshNotes])
+
+  const decide = useCallback(async (decision: 'approved' | 'changes-requested') => {
+    if (!pending || !room.client) return
+    setDeciding(true)
+    try {
+      await room.client.decide(pending.id, decision)
+      setAsked(false)
+      await refreshNotes()
+    } finally {
+      setDeciding(false)
+    }
+  }, [pending, room.client, refreshNotes])
 
   const send = useCallback(async () => {
     if (!draft || !room.client) return
@@ -263,6 +288,31 @@ export default function FroamReview({ routeKey, viewport }: Props) {
     )
   }
 
+  /* ── The decision ── */
+  if (asked && pending) {
+    const open = notes.filter((n) => !n.resolved).length
+    return (
+      <div className="froam-review" data-chef-editor-root="true">
+        <div className="froam-review__sheet">
+          <div className="froam-review__label">Happy with this?</div>
+          <p className="froam-review__quote">
+            {open === 0
+              ? `${pending.createdBy} will know either way.`
+              : `You asked for ${open} change${open === 1 ? '' : 's'}. ${pending.createdBy} will see ${open === 1 ? 'it' : 'them'} either way.`}
+          </p>
+          <div className="froam-review__row">
+            <button type="button" className="froam-review__ghost" disabled={deciding} onClick={() => void decide('changes-requested')}>
+              Not yet
+            </button>
+            <button type="button" className="froam-review__go" disabled={deciding} onClick={() => void decide('approved')}>
+              {deciding ? '…' : 'Approve'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   /* ── In the session ── */
   return (
     <div className="froam-review" data-chef-editor-root="true">
@@ -284,10 +334,20 @@ export default function FroamReview({ routeKey, viewport }: Props) {
           {paused && room.someoneElseIsPresenting && !movingTo && (
             <button type="button" className="froam-review__ghost" onClick={() => setPaused(false)}>Rejoin</button>
           )}
-          {canComment && (
+          {canComment && !pending && (
             <button type="button" className="froam-review__go" onClick={() => setCommenting(true)}>
               {notes.length ? `Notes · ${notes.length}` : 'Comment'}
             </button>
+          )}
+          {/* A revision waiting on them is the most important thing on the
+              screen, so it takes the primary slot and comment steps back. */}
+          {canComment && pending && (
+            <>
+              <button type="button" className="froam-review__ghost" onClick={() => setCommenting(true)}>
+                {notes.length ? `Notes · ${notes.length}` : 'Comment'}
+              </button>
+              <button type="button" className="froam-review__go" onClick={() => setAsked(true)}>Review</button>
+            </>
           )}
         </div>
       )}
