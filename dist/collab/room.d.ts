@@ -104,6 +104,22 @@ export declare function readRoomFromLocation(href?: string): {
     roomId: string;
     token: string;
 } | null;
+export type OwnedRoom = {
+    roomId: string;
+    /** One token per role. The commenter one is what you send a client. */
+    invites: Record<FroamRole, string>;
+    createdAt: number;
+};
+/**
+ * The designer should not have to paste their own invite into their own
+ * browser. They made the room, so the browser remembers it and they are simply
+ * in it — the link exists to be given away, not to be kept.
+ */
+export declare function readOwnedRoom(): OwnedRoom | null;
+export declare function rememberOwnedRoom(room: OwnedRoom): void;
+export declare function forgetOwnedRoom(): void;
+/** The link you actually send someone, for a given role and page. */
+export declare function inviteLink(room: OwnedRoom, role?: FroamRole, href?: string): string;
 export declare function createRoomClient(options: {
     roomId: string;
     token: string;

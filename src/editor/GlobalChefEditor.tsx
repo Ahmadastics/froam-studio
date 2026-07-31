@@ -44,6 +44,7 @@ import {
   Minus,
   Monitor,
   MousePointer,
+  Share2,
   Smartphone,
   Tablet,
   MousePointer2,
@@ -1639,6 +1640,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     cssVars: false,
     history: false,
     notes: false,
+    share: false,
     textShadow: false,
     versions: false,
     shapes: false,
@@ -1849,6 +1851,43 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
 
   const [revisions, setRevisions] = useState<RoomRevision[]>([])
+  const [sharing, setSharing] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  /** The link to hand over — a commenter one, since that is what a client is. */
+  const shareLink = useMemo(
+    () => (room.owned ? room.inviteLink(room.owned, 'commenter') : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [room.owned?.roomId, routeKey],
+  )
+
+  const startSharing = useCallback(async (fresh = false) => {
+    setSharing(true)
+    try {
+      // "New link" opens a new room, which is how you cut off an old one:
+      // the tokens that were sent stop working because the room they name is
+      // no longer the one being shown.
+      if (fresh || !room.owned) await room.openRoom(persona.name || 'Designer')
+      showToast(fresh ? 'New link — the old one no longer works' : 'Review link ready')
+    } catch {
+      showToast('Could not open a room — is the bridge running?')
+    } finally {
+      setSharing(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.owned, room.openRoom, persona.name])
+
+  const copyShareLink = useCallback(async () => {
+    if (!shareLink) return
+    try {
+      await navigator.clipboard.writeText(shareLink)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2_000)
+    } catch {
+      showToast('Copy failed — select the link and copy it')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shareLink])
 
   const refreshNotes = useCallback(async () => {
     if (!room.client || !room.inRoom) return
@@ -6613,6 +6652,46 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     </li>
                   ))}
                 </ul>
+              )}
+            </AccordionSection>
+
+            {/* ─── Share for review ─── */}
+            <AccordionSection
+              id="share"
+              icon={<Share2 size={14} />}
+              title={room.inRoom ? 'Shared for review' : 'Share for review'}
+              isOpen={openSections.share}
+              onToggle={() => toggleSection('share')}
+            >
+              {!shareLink ? (
+                <div className="froam-notes">
+                  <span style={{ color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }}>
+                    Open a room and send the link. They need no account — the link is the way in.
+                  </span>
+                  <button
+                    type="button"
+                    className="fs-pill is-accent"
+                    disabled={sharing}
+                    onClick={() => void startSharing()}
+                  >
+                    {sharing ? 'Opening…' : 'Get a review link'}
+                  </button>
+                </div>
+              ) : (
+                <div className="froam-notes">
+                  <div className="froam-share__link" title={shareLink}>{shareLink}</div>
+                  <div className="froam-note__row">
+                    <button type="button" className="fs-pill is-accent" onClick={() => void copyShareLink()}>
+                      {copied ? 'Copied' : 'Copy link'}
+                    </button>
+                    <button type="button" className="fs-pill" onClick={() => void startSharing(true)}>New link</button>
+                  </div>
+                  <span style={{ color: 'var(--fs-text-tertiary)', fontSize: '0.7rem' }}>
+                    {roomPresence.length
+                      ? `${roomPresence.map((m) => m.name).join(', ')} ${roomPresence.length === 1 ? 'is' : 'are'} here`
+                      : 'Nobody has opened it yet'}
+                  </span>
+                </div>
               )}
             </AccordionSection>
 

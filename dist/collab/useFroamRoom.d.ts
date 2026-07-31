@@ -1,4 +1,4 @@
-import { type RoomTransport, type RoomView } from './room';
+import { inviteLink, type OwnedRoom, type RoomTransport, type RoomView } from './room';
 import type { FroamRole, FroamViewport } from './types';
 export type RoomWhere = {
     routeKey?: string;
@@ -69,6 +69,13 @@ export declare function useFroamRoom(options: {
         decide(revisionId: string, decision: "approved" | "changes-requested", note?: string): Promise<import("./room").RoomRevision | null>;
         resolveComment(commentId: string, resolved?: boolean): Promise<import("./room").RoomComment | null>;
     } | null;
+    openRoom: (name: string) => Promise<{
+        roomId: string;
+        invites: OwnedRoom["invites"];
+        createdAt: number;
+    }>;
+    owned: OwnedRoom | null;
+    inviteLink: typeof inviteLink;
     /** Is this page a session at all? */
     inRoom: boolean;
     roomId: string | null;

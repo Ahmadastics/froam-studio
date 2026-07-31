@@ -2,7 +2,7 @@ import { jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment } from "react/jsx-run
 import { useCallback, useEffect, useMemo, useRef, useState, } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlignCenter, AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignLeft, AlignRight, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, Bold, Box, ChevronDown, ClipboardCheck, Clock, Code, Command, Copy, Download, Eraser, Eye, EyeOff, FileImage, FileText, GitCommit, Grip, ImagePlus, Italic, Keyboard, Layers, LayoutGrid, Link, Minus, Monitor, MousePointer, Smartphone, Tablet, MousePointer2, MessageSquare, Move, Paintbrush, Palette, PencilLine, Plus, Redo2, RotateCw, Save, DraftingCompass, ScanLine, Search, SlidersHorizontal, Sparkles, Square, SquareDashedBottom, Strikethrough, Type, Underline, Undo2, Unlink, Variable, Maximize2, X, Zap, Coins, AlignCenterHorizontal, AlignCenterVertical, Timer, } from 'lucide-react';
+import { AlignCenter, AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignLeft, AlignRight, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, Bold, Box, ChevronDown, ClipboardCheck, Clock, Code, Command, Copy, Download, Eraser, Eye, EyeOff, FileImage, FileText, GitCommit, Grip, ImagePlus, Italic, Keyboard, Layers, LayoutGrid, Link, Minus, Monitor, MousePointer, Share2, Smartphone, Tablet, MousePointer2, MessageSquare, Move, Paintbrush, Palette, PencilLine, Plus, Redo2, RotateCw, Save, DraftingCompass, ScanLine, Search, SlidersHorizontal, Sparkles, Square, SquareDashedBottom, Strikethrough, Type, Underline, Undo2, Unlink, Variable, Maximize2, X, Zap, Coins, AlignCenterHorizontal, AlignCenterVertical, Timer, } from 'lucide-react';
 import FroamSectionBoundary from './FroamSectionBoundary.js';
 import { apiGetFresh, apiPost } from '../lib/api.js';
 import { bridgeUrl } from '../lib/bridge.js';
@@ -1247,6 +1247,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         cssVars: false,
         history: false,
         notes: false,
+        share: false,
         textShadow: false,
         versions: false,
         shapes: false,
@@ -1445,6 +1446,43 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [notes, setNotes] = useState([]);
     const [activeNoteId, setActiveNoteId] = useState(null);
     const [revisions, setRevisions] = useState([]);
+    const [sharing, setSharing] = useState(false);
+    const [copied, setCopied] = useState(false);
+    /** The link to hand over — a commenter one, since that is what a client is. */
+    const shareLink = useMemo(() => (room.owned ? room.inviteLink(room.owned, 'commenter') : null), 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [room.owned?.roomId, routeKey]);
+    const startSharing = useCallback(async (fresh = false) => {
+        setSharing(true);
+        try {
+            // "New link" opens a new room, which is how you cut off an old one:
+            // the tokens that were sent stop working because the room they name is
+            // no longer the one being shown.
+            if (fresh || !room.owned)
+                await room.openRoom(persona.name || 'Designer');
+            showToast(fresh ? 'New link — the old one no longer works' : 'Review link ready');
+        }
+        catch {
+            showToast('Could not open a room — is the bridge running?');
+        }
+        finally {
+            setSharing(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [room.owned, room.openRoom, persona.name]);
+    const copyShareLink = useCallback(async () => {
+        if (!shareLink)
+            return;
+        try {
+            await navigator.clipboard.writeText(shareLink);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 2_000);
+        }
+        catch {
+            showToast('Copy failed — select the link and copy it');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [shareLink]);
     const refreshNotes = useCallback(async () => {
         if (!room.client || !room.inRoom)
             return;
@@ -4941,7 +4979,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                     applyStoreToDOM(nextStore, { clearCurrent: true });
                                     showToast(`Loaded "${versionName}"`);
                                     toggleSection('versions');
-                                }, onClose: () => toggleSection('versions') }) }), _jsx(AccordionSection, { id: "history", icon: _jsx(Clock, { size: 14 }), title: "History", isOpen: openSections.history, onToggle: () => toggleSection('history'), children: changeLog.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Nothing changed here yet" })) : (_jsx("ul", { className: "fs-history-list", children: changeLog.map((change) => (_jsxs("li", { className: "fs-history-item", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "fs-history-meta", children: [_jsx("span", { children: describeChange(change) }), _jsx("small", { children: changeByline(change) })] }), _jsx("button", { type: "button", className: "fs-pill is-accent", title: `Undo ${describeChange(change)}`, onClick: () => revertChange(change), children: "Undo" })] }, change.id))) })) }), room.inRoom && (_jsxs(AccordionSection, { id: "notes", icon: _jsx(MessageSquare, { size: 14 }), title: notes.some((n) => !n.resolved) ? `Notes · ${notes.filter((n) => !n.resolved).length}` : 'Notes', isOpen: openSections.notes, onToggle: () => toggleSection('notes'), children: [_jsxs("div", { className: "froam-note froam-revision", "data-chef-editor-root": "true", children: [(() => {
+                                }, onClose: () => toggleSection('versions') }) }), _jsx(AccordionSection, { id: "history", icon: _jsx(Clock, { size: 14 }), title: "History", isOpen: openSections.history, onToggle: () => toggleSection('history'), children: changeLog.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Nothing changed here yet" })) : (_jsx("ul", { className: "fs-history-list", children: changeLog.map((change) => (_jsxs("li", { className: "fs-history-item", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "fs-history-meta", children: [_jsx("span", { children: describeChange(change) }), _jsx("small", { children: changeByline(change) })] }), _jsx("button", { type: "button", className: "fs-pill is-accent", title: `Undo ${describeChange(change)}`, onClick: () => revertChange(change), children: "Undo" })] }, change.id))) })) }), _jsx(AccordionSection, { id: "share", icon: _jsx(Share2, { size: 14 }), title: room.inRoom ? 'Shared for review' : 'Share for review', isOpen: openSections.share, onToggle: () => toggleSection('share'), children: !shareLink ? (_jsxs("div", { className: "froam-notes", children: [_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Open a room and send the link. They need no account \u2014 the link is the way in." }), _jsx("button", { type: "button", className: "fs-pill is-accent", disabled: sharing, onClick: () => void startSharing(), children: sharing ? 'Opening…' : 'Get a review link' })] })) : (_jsxs("div", { className: "froam-notes", children: [_jsx("div", { className: "froam-share__link", title: shareLink, children: shareLink }), _jsxs("div", { className: "froam-note__row", children: [_jsx("button", { type: "button", className: "fs-pill is-accent", onClick: () => void copyShareLink(), children: copied ? 'Copied' : 'Copy link' }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => void startSharing(true), children: "New link" })] }), _jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.7rem' }, children: roomPresence.length
+                                            ? `${roomPresence.map((m) => m.name).join(', ')} ${roomPresence.length === 1 ? 'is' : 'are'} here`
+                                            : 'Nobody has opened it yet' })] })) }), room.inRoom && (_jsxs(AccordionSection, { id: "notes", icon: _jsx(MessageSquare, { size: 14 }), title: notes.some((n) => !n.resolved) ? `Notes · ${notes.filter((n) => !n.resolved).length}` : 'Notes', isOpen: openSections.notes, onToggle: () => toggleSection('notes'), children: [_jsxs("div", { className: "froam-note froam-revision", "data-chef-editor-root": "true", children: [(() => {
                                             const latest = revisions[0];
                                             if (!latest)
                                                 return _jsx("div", { className: "froam-note__body", children: "Not sent for review yet" });

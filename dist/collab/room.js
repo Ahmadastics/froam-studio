@@ -22,6 +22,48 @@ export function readRoomFromLocation(href) {
         return null;
     }
 }
+/* ─── the room you own ─── */
+const OWNED_KEY = 'froam-room-owner:v1';
+/**
+ * The designer should not have to paste their own invite into their own
+ * browser. They made the room, so the browser remembers it and they are simply
+ * in it — the link exists to be given away, not to be kept.
+ */
+export function readOwnedRoom() {
+    try {
+        if (typeof window === 'undefined')
+            return null;
+        const raw = window.localStorage.getItem(OWNED_KEY);
+        if (!raw)
+            return null;
+        const parsed = JSON.parse(raw);
+        return parsed?.roomId && parsed?.invites?.commenter ? parsed : null;
+    }
+    catch {
+        return null;
+    }
+}
+export function rememberOwnedRoom(room) {
+    try {
+        if (typeof window !== 'undefined')
+            window.localStorage.setItem(OWNED_KEY, JSON.stringify(room));
+    }
+    catch { /* private mode */ }
+}
+export function forgetOwnedRoom() {
+    try {
+        if (typeof window !== 'undefined')
+            window.localStorage.removeItem(OWNED_KEY);
+    }
+    catch { /* nothing to do */ }
+}
+/** The link you actually send someone, for a given role and page. */
+export function inviteLink(room, role = 'commenter', href) {
+    const url = new URL(href ?? (typeof window === 'undefined' ? 'http://localhost/' : window.location.href));
+    url.searchParams.set(ROOM_PARAM, room.roomId);
+    url.searchParams.set(TOKEN_PARAM, room.invites[role]);
+    return url.toString();
+}
 /* ─── defaults ─── */
 function browserStorage() {
     return {
