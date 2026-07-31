@@ -188,6 +188,43 @@ test('a room survives a restart', async () => {
   assert.equal(seen.room.id, created.room.id)
 })
 
+/* ── pluggable storage ────────────────────────────────────── */
+
+test('a room can live anywhere that can get and put', async () => {
+  // The contract a host implements against its own database. Everything about
+  // who may do what stays in one place; only where the room is kept varies.
+  const rows = new Map()
+  const storage = {
+    get: async (roomId) => (rows.has(roomId) ? JSON.parse(rows.get(roomId)) : null),
+    put: async (room) => { rows.set(room.id, JSON.stringify(room)) },
+  }
+  const api = createFroamRoomApi({ storage, now })
+
+  const created = await call(api, 'POST', '/api/froam/rooms', { name: 'Ahmad' })
+  assert.equal(created.success, true)
+  assert.equal(rows.size, 1, 'the room went to the custom storage, not a file')
+
+  const guest = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, {
+    token: created.invites.commenter, name: 'Amina',
+  })
+  assert.equal(guest.you.role, 'commenter')
+
+  await call(api, 'POST', `/api/froam/rooms/${created.room.id}/comments`, {
+    token: created.invites.commenter, actor: guest.you.actor,
+    routeKey: '/', anchor: { path: 'h1:1', fingerprint: { tag: 'h1' } }, body: 'From Postgres, in spirit',
+  })
+  const seen = await call(api, 'GET', `/api/froam/rooms/${created.room.id}/comments?token=${created.invites.owner}&routeKey=%2F`)
+  assert.deepEqual(seen.comments.map((c) => c.body), ['From Postgres, in spirit'])
+
+  // And the refusals still hold, because they are the same code.
+  const denied = await call(api, 'GET', `/api/froam/rooms/${created.room.id}?token=made-up`)
+  assert.equal(denied.status, 403)
+})
+
+test('storage is required', () => {
+  assert.throws(() => createFroamRoomApi({}), /file or a storage/)
+})
+
 /* ── comments ─────────────────────────────────────────────── */
 
 async function roomWithGuest(role = 'commenter') {
