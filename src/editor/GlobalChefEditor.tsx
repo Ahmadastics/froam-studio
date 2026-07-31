@@ -5018,6 +5018,26 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const paletteCommands: PaletteCommand[] = [
     { id: 'save', label: 'Save draft', shortcut: 'Ctrl+S', icon: <Save size={15} />, action: saveToRunam },
     { id: 'save-repo', label: 'Save to Repo (git-ready)', shortcut: 'Ctrl+Shift+S', icon: <GitCommit size={15} />, action: () => { void saveToRepo() } },
+    // Sharing is the start of a review, so it belongs where people look for a
+    // verb — not only in a panel section they have to find first.
+    {
+      id: 'share',
+      label: shareLink ? 'Copy review link' : 'Share for review',
+      icon: <Share2 size={15} />,
+      action: () => {
+        setOpenSections((p) => ({ ...p, share: true }))
+        if (shareLink) void copyShareLink()
+        else void startSharing()
+      },
+    },
+    ...(shareLink
+      ? [{
+        id: 'share-new',
+        label: 'New review link (revokes the old one)',
+        icon: <Share2 size={15} />,
+        action: () => { setOpenSections((p) => ({ ...p, share: true })); void startSharing(true) },
+      }]
+      : []),
     { id: 'scan', label: 'Scan page', icon: <ScanLine size={15} />, action: () => setScanActive(true) },
     { id: 'blueprint', label: 'Blueprint', icon: <DraftingCompass size={15} />, action: () => setBlueprintOpen(true) },
     { id: 'versions', label: 'Versions', icon: <GitCommit size={15} />, action: () => { setOpenSections((p) => ({ ...p, versions: !p.versions })) } },
