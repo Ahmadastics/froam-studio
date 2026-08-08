@@ -1,0 +1,4 @@
+.froam-intelligence{grid-template-rows:auto auto auto minmax(0,1fr)}
+.froam-intelligence__journey{display:flex;align-items:center;justify-content:center;gap:7px;padding:6px 10px;border-bottom:1px solid rgba(148,163,184,.1);color:#64748b;font-size:8px;text-transform:uppercase;letter-spacing:.06em}
+.froam-intelligence__journey span:nth-of-type(2){color:#a5b4fc}
+.froam-intelligence__journey i{font-style:normal;opacity:.45}

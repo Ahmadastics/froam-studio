@@ -25,9 +25,9 @@ function attributedIdentity(element, root) {
 export function captureNodeRef(element, root, registry, options = {}) {
     const anchor = createAnchor(element, root);
     const attributed = attributedIdentity(element, root);
-    const existing = attributed && registry[attributed]
+    const existing = options.preferredNodeId || (attributed && registry[attributed]
         ? attributed
-        : Object.values(registry).find((entry) => {
+        : options.skipRegistrySearch ? undefined : Object.values(registry).find((entry) => {
             if (entry.routeKey !== options.routeKey || entry.viewport !== options.viewport)
                 return false;
             // An explicit host id is a stable signal. A path alone may locate an
@@ -37,7 +37,7 @@ export function captureNodeRef(element, root, registry, options = {}) {
             return entry.path === anchor.path
                 && Boolean(entry.fingerprint)
                 && scoreFingerprint(entry.fingerprint, anchor.fingerprint) >= ANCHOR_MATCH_THRESHOLD;
-        })?.nodeId;
+        })?.nodeId);
     const nodeId = existing || attributed || (options.idFactory ?? defaultId)();
     const ref = {
         nodeId,
@@ -48,17 +48,12 @@ export function captureNodeRef(element, root, registry, options = {}) {
     };
     if (options.attach !== false)
         element.setAttribute(FROAM_NODE_ATTRIBUTE, nodeId);
-    return {
-        ref,
-        registry: {
-            ...registry,
-            [nodeId]: {
-                ...ref,
-                source: element.dataset.froamInjected === 'true' ? 'froam' : 'host-dom',
-                updatedAt: options.now ?? Date.now(),
-            },
-        },
-    };
+    const entry = { ...ref, source: element.dataset.froamInjected === 'true' ? 'froam' : 'host-dom', updatedAt: options.now ?? Date.now() };
+    if (options.mutateRegistry) {
+        registry[nodeId] = entry;
+        return { ref, registry };
+    }
+    return { ref, registry: { ...registry, [nodeId]: entry } };
 }
 export function resolveNodeRef(ref, root, registry = {}, options = {}) {
     const at = options.now ?? Date.now();
@@ -161,5 +156,16 @@ export function registryRef(registry, nodeId) {
         return null;
     const { source: _source, updatedAt: _updatedAt, lastResolution: _lastResolution, recoveryCount: _recoveryCount, ...ref } = entry;
     return ref;
+}
+/** A project-level diagnostic snapshot. Percentages describe registry entries, not human sessions. */
+export function identityHealthReport(registry) {
+    const entries = Object.values(registry);
+    const counts = { attribute: 0, 'host-id': 0, path: 0, fingerprint: 0, ambiguous: 0, failed: 0, uncaptured: 0 };
+    for (const entry of entries)
+        counts[entry.lastResolution ?? 'uncaptured'] += 1;
+    const total = entries.length;
+    const stable = counts.attribute + counts['host-id'] + counts.uncaptured;
+    const recovered = counts.path + counts.fingerprint;
+    return { total, counts, stablePercent: total ? stable / total * 100 : 100, recoveryPercent: total ? recovered / total * 100 : 0, ambiguous: counts.ambiguous, failed: counts.failed };
 }
 //# sourceMappingURL=node-registry.js.map

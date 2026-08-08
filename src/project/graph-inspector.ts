@@ -22,8 +22,12 @@ export function materializeGraphRows(state: FroamProjectState): FroamGraphRow[] 
   const nodes = Object.values(state.nodes)
   const relations = Object.values(state.relations)
   const children = new Map<string, FroamNode[]>()
+  const incoming = new Map<string, FroamRelation[]>()
+  const outgoing = new Map<string, FroamRelation[]>()
   const childIds = new Set<string>()
   for (const relation of relations) {
+    incoming.set(relation.to, [...(incoming.get(relation.to) ?? []), relation])
+    outgoing.set(relation.from, [...(outgoing.get(relation.from) ?? []), relation])
     if (relation.kind !== 'contains') continue
     const child = state.nodes[relation.to]
     if (!child || !state.nodes[relation.from]) continue
@@ -38,8 +42,8 @@ export function materializeGraphRows(state: FroamProjectState): FroamGraphRow[] 
     rows.push({
       node,
       depth,
-      incoming: relations.filter((relation) => relation.to === node.id),
-      outgoing: relations.filter((relation) => relation.from === node.id),
+      incoming: incoming.get(node.id) ?? [],
+      outgoing: outgoing.get(node.id) ?? [],
     })
     for (const child of (children.get(node.id) ?? []).sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id))) visit(child, depth + 1)
   }

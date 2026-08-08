@@ -101,7 +101,7 @@ export function applyProjectEvent(current: FroamProjectState, event: FroamProjec
       break
     case 'scan.captured': {
       const scan = payload.scan as FroamProjectState['scans'][string]
-      if (scan?.id) next.scans[scan.id] = scan
+      if (scan?.id) next.scans[scan.node.nodeId] = scan
       break
     }
     case 'archive.upserted': {
@@ -302,6 +302,7 @@ export function createProjectBranch(document: FroamProjectDocument, input: {
     label: `Forked from ${parent.name}`,
     eventIds: [],
     state: deriveBranchState(document, parentId),
+    parentCheckpointId: parent.baseCheckpointId,
   }
   const branch: FroamBranch = {
     id: input.id,

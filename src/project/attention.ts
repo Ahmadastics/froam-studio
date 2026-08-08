@@ -1,10 +1,13 @@
 import type { FroamAnalysis, FroamScanRecord } from './types'
 
 export type FroamAttentionRank = { nodeId: string; score: number; rank: number; role: string; reasons: string[] }
+export type FroamAttentionFixture = { id: string; records: FroamScanRecord[]; expectedTopNodeIds: string[]; note: string }
+export type FroamAttentionEvaluation = { provider: string; fixtures: number; topChoiceAgreement: number; meanTopThreeRecall: number; results: Array<{ fixtureId: string; topChoice: boolean; topThreeRecall: number }> }
+export interface FroamAttentionProvider { id: string; maturity: 'experimental'; method: string; predict(records: readonly FroamScanRecord[], now?: number): FroamAnalysis }
 
 function signal(record: FroamScanRecord, kind: string) { return record.signals.find((item) => item.kind === kind)?.values ?? {} }
 
-export function predictAttention(records: readonly FroamScanRecord[], now = Date.now()): FroamAnalysis {
+function heuristicPrediction(records: readonly FroamScanRecord[], now = Date.now()): FroamAnalysis {
   const raw = records.map((record) => {
     const layout = signal(record, 'layout') as { rect?: { width?: number; height?: number; y?: number } }
     const visual = signal(record, 'appearance')
@@ -22,5 +25,14 @@ export function predictAttention(records: readonly FroamScanRecord[], now = Date
   const ranking: FroamAttentionRank[] = raw.map((item, index) => ({ ...item, score: Math.round(item.score / max * 100), rank: index + 1 }))
   const primaryAction = ranking.find((item) => item.role === 'cta' || item.role === 'button')
   const warnings = primaryAction && primaryAction.rank > 3 ? [`Primary action ranks ${primaryAction.rank}, below ${primaryAction.rank - 1} other elements.`] : []
-  return { schemaVersion: 1, id: `attention:${now}`, kind: 'predicted-attention', targetIds: ranking.map((item) => item.nodeId), createdAt: now, provider: 'froam-local-heuristics-v1', local: true, confidence: .55, result: { ranking, warnings, disclaimer: 'Heuristic prediction, not eye-tracking data.' } }
+  const evidenceCoverage = records.length ? raw.filter((item) => item.reasons.length).length / records.length : 0
+  return { schemaVersion: 1, id: `attention:${now}`, kind: 'predicted-attention', targetIds: ranking.map((item) => item.nodeId), createdAt: now, provider: 'froam-local-attention-v1', local: true, confidence: Math.min(.6, .35 + evidenceCoverage * .25), result: { ranking, warnings, method: 'Area, typography, semantic affordance and early-viewport weighted ranking.', maturity: 'experimental', evidenceCoverage, disclaimer: 'Heuristic prediction, not eye-tracking data; confidence describes available heuristic evidence, not human-gaze accuracy.' } }
+}
+
+export const LOCAL_ATTENTION_PROVIDER: FroamAttentionProvider = { id: 'froam-local-attention-v1', maturity: 'experimental', method: 'Deterministic weighted salience heuristic', predict: heuristicPrediction }
+export function predictAttention(records: readonly FroamScanRecord[], now = Date.now()): FroamAnalysis { return LOCAL_ATTENTION_PROVIDER.predict(records, now) }
+
+export function evaluateAttentionProvider(provider: FroamAttentionProvider, fixtures: readonly FroamAttentionFixture[]): FroamAttentionEvaluation {
+  const results = fixtures.map((fixture, index) => { const ranking = (provider.predict(fixture.records, index + 1).result.ranking ?? []) as FroamAttentionRank[]; const predicted = ranking.slice(0, 3).map((item) => item.nodeId); return { fixtureId: fixture.id, topChoice: predicted[0] === fixture.expectedTopNodeIds[0], topThreeRecall: fixture.expectedTopNodeIds.length ? fixture.expectedTopNodeIds.filter((id) => predicted.includes(id)).length / fixture.expectedTopNodeIds.length : 0 } })
+  return { provider: provider.id, fixtures: fixtures.length, topChoiceAgreement: fixtures.length ? results.filter((item) => item.topChoice).length / fixtures.length : 0, meanTopThreeRecall: fixtures.length ? results.reduce((sum, item) => sum + item.topThreeRecall, 0) / fixtures.length : 0, results }
 }

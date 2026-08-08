@@ -11,6 +11,7 @@ export declare function createArchiveItem(input: {
     legacyPath?: string;
     assetIds?: string[];
     interactionIds?: string[];
+    variantOf?: string;
     now?: number;
 }): FroamArchiveItem;
 export declare function upsertArchive(archive: Record<string, FroamArchiveItem>, item: FroamArchiveItem): {
@@ -26,6 +27,7 @@ export declare function reuseArchiveItem(item: FroamArchiveItem, input: {
     routeKey?: string;
     path?: string;
 }): FroamNode;
+export declare function recordArchiveUsage(item: FroamArchiveItem, nodeId: string): FroamArchiveItem;
 export declare function similarArchiveItems(archive: Record<string, FroamArchiveItem>): {
     left: string;
     right: string;

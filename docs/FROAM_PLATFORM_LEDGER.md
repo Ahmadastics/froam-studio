@@ -1,6 +1,34 @@
 # Froam Platform Implementation Ledger
 
-Last updated: 2026-08-08 · Release: 7.0.0 — Froam Understands
+Last updated: 2026-08-08 · Release: 7.1.0 — Intelligence Hardening
+
+## v7.1 hardening status
+
+- **Screenshot → Live UI remains Experimental.** It now has multi-reference
+  inputs, injectable OCR, public browser-local OCR when available, stable
+  graph/DOM identities, conservative text roles, repeated-family inference,
+  render/capture validation, largest mismatch tiles and a four-pass maximum
+  geometry-correction boundary. It still lacks bundled cross-browser OCR,
+  perceptual diffing, asset recovery and reliable responsive inference.
+- **Hosted project synchronization is limited Beta.** A separate delta contract
+  synchronizes branch-scoped project events/checkpoints idempotently by cursor.
+  Design operations must carry their Room sequence, keeping Rooms canonical.
+  Host authentication/storage configuration is required; the editor does not
+  silently enable a second canonical transport.
+- **Framework identity maintenance is Beta diagnostic infrastructure.** React
+  and Vue are detected only through public DOM markers. A bounded mutation
+  observer reuses normal registry/path/fingerprint recovery. Private fibers or
+  component instances are deliberately not read.
+- **Incremental Scan is Beta infrastructure.** Changed top-level regions can be
+  rescanned while unaffected records/DNA remain valid. Full Scan remains an
+  explicit action and the normal UI cap remains conservative.
+- **Predicted Attention remains Experimental.** Provider evaluation fixtures
+  now report top-choice agreement and top-three recall. Confidence describes
+  available heuristic evidence, not human gaze accuracy.
+- **Replay/Archaeology remain Beta.** Checkpoint parents now cross prototype
+  forks and ancestry is walked lazily from the active checkpoint.
+
+See `FROAM_V7_1_PERFORMANCE.md` for the reproducible synthetic profile.
 
 ## Production
 

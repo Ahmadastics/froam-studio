@@ -5,7 +5,8 @@ import { appendProjectEvents, createProjectBranch, createProjectDocument, create
 import { nodeRegistryGraphRecords, legacyOpsToProjectEvents } from '../project/adapters'
 import { materializeGraphRows } from '../project/graph-inspector'
 import { branchReplayEvents, replayActors, replayCategory, replayEventLabel, replayStateAt, type FroamReplayCategory } from '../project/replay'
-import type { FroamIdentityDiagnostic, FroamNodeRegistry } from '../project/node-registry'
+import { identityHealthReport, type FroamIdentityDiagnostic, type FroamNodeRegistry } from '../project/node-registry'
+import type { FroamFrameworkFinding } from '../project/framework-identity'
 import type { FroamInteraction, FroamProjectDocument, FroamProjectState } from '../project/types'
 import { interactionInspectorRecord } from '../project/animator-adapter'
 import FroamAnimator from './FroamAnimator'
@@ -22,6 +23,7 @@ type Props = {
   store: EditorStore
   registry: FroamNodeRegistry
   diagnostics: readonly FroamIdentityDiagnostic[]
+  frameworkFinding?: FroamFrameworkFinding | null
   routeKey: string
   viewport: FroamViewport
   selection: SelectionRef
@@ -94,6 +96,7 @@ export default function FroamConnectedCanvas(props: Props) {
   const projectState = useMemo(() => mergeRegistryState(deriveBranchState(project), props.registry), [project, props.registry])
   const graphRows = useMemo(() => materializeGraphRows(projectState), [projectState])
   const selectedEntry = props.selection?.nodeId ? props.registry[props.selection.nodeId] : undefined
+  const identityHealth = useMemo(() => identityHealthReport(props.registry), [props.registry, props.diagnostics.length])
   const selectedRelations = props.selection?.nodeId
     ? Object.values(projectState.relations).filter((relation) => relation.from === props.selection?.nodeId || relation.to === props.selection?.nodeId)
     : []
@@ -184,6 +187,14 @@ export default function FroamConnectedCanvas(props: Props) {
             <label>Relationships<strong>{selectedRelations.length}</strong></label>
           </div> : <p className="froam-connected__empty">Select a node to inspect its stable identity.</p>}
           <h4>Recovery diagnostics</h4>
+          <div className="froam-connected__inspector">
+            <label>Stable resolution<strong>{identityHealth.stablePercent.toFixed(1)}%</strong></label>
+            <label>Path fallback<strong>{identityHealth.counts.path}</strong></label>
+            <label>Fingerprint recovery<strong>{identityHealth.counts.fingerprint}</strong></label>
+            <label>Ambiguous / failed<strong>{identityHealth.ambiguous} / {identityHealth.failed}</strong></label>
+            <label>Host framework<strong>{props.frameworkFinding?.framework ?? 'unknown'}</strong></label>
+            <label>Adapter strategy<strong>observable DOM · no private internals</strong></label>
+          </div>
           <div className="froam-connected__diagnostics">{props.diagnostics.slice(-12).reverse().map((event, index) => <div key={`${event.at}-${index}`}><strong>{event.type.replaceAll('-', ' ')}</strong><small>{event.nodeId}{event.path ? ` · ${event.path}` : ''}</small></div>)}</div>
         </section>}
 

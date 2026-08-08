@@ -11,6 +11,12 @@ credentials or project data to a remote service.
 - Predicted Attention uses a labelled local heuristic. It is not eye tracking.
 - Screenshot → Live UI decodes and segments pixels in the browser. The imported
   image is not uploaded by Froam.
+- v7.1 OCR uses the browser's local `TextDetector` API when the host exposes it.
+  When unavailable or unsuccessful, Froam records that state and does not
+  fabricate text. Custom future OCR providers remain subject to the same
+  local/remote disclosure and explicit-consent contract.
+- Screenshot validation captures only the newly reconstructed Froam frame in
+  the browser and compares equal-sized pixel buffers locally.
 
 The resulting records are stored with the project's normal local/sidecar
 project envelope. Existing host applications may choose their own persistence

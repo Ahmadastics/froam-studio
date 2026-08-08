@@ -11,5 +11,7 @@ export declare function branchReplayEvents(document: FroamProjectDocument, branc
 /** Fold to a cursor without mutating the project. Checkpoints make the initial state cheap. */
 export declare function replayStateAt(document: FroamProjectDocument, cursor: number, branchId?: string, filter?: FroamReplayFilter): FroamProjectState;
 export declare function replayActors(events: readonly FroamProjectEvent[]): string[];
+/** Walked on demand so older checkpoint state does not inflate normal Replay work. */
+export declare function checkpointAncestry(document: FroamProjectDocument, checkpointId: string): import("./types").FroamCheckpoint[];
 export declare function replayEventLabel(event: FroamProjectEvent): string;
 //# sourceMappingURL=replay.d.ts.map

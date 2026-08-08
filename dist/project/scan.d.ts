@@ -32,4 +32,18 @@ export declare function scanDomTree(root: HTMLElement, registry: FroamNodeRegist
 }): FroamScanBundle;
 /** Convert evidence into versioned DNA without erasing uncertainty or provenance. */
 export declare function dnaFromScan(record: FroamScanRecord): FroamDNA;
+/** Re-scan only the highest changed roots; callers keep unaffected records/DNA. */
+export declare function scanDomChanges(root: HTMLElement, changed: readonly HTMLElement[], registry: FroamNodeRegistry, options: {
+    routeKey: string;
+    viewport: FroamViewport;
+    now?: number;
+    maxNodesPerRegion?: number;
+}): {
+    records: FroamScanRecord[];
+    dna: FroamDNA[];
+    nodes: FroamNode[];
+    relations: FroamRelation[];
+    registry: FroamNodeRegistry;
+    invalidatedNodeIds: string[];
+};
 //# sourceMappingURL=scan.d.ts.map

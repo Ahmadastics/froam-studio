@@ -1,6 +1,7 @@
 import { type Dispatch, type SetStateAction } from 'react';
 import type { EditorStore, FroamOp, FroamViewport } from '../collab/types';
-import type { FroamIdentityDiagnostic, FroamNodeRegistry } from '../project/node-registry';
+import { type FroamIdentityDiagnostic, type FroamNodeRegistry } from '../project/node-registry';
+import type { FroamFrameworkFinding } from '../project/framework-identity';
 import type { FroamProjectDocument } from '../project/types';
 type SelectionRef = {
     nodeId?: string;
@@ -16,6 +17,7 @@ type Props = {
     store: EditorStore;
     registry: FroamNodeRegistry;
     diagnostics: readonly FroamIdentityDiagnostic[];
+    frameworkFinding?: FroamFrameworkFinding | null;
     routeKey: string;
     viewport: FroamViewport;
     selection: SelectionRef;

@@ -34,6 +34,14 @@ from READMEs, so canvas and WebGL are off the table there.
 
 ## ✨ What's new
 
+**7.1.0 — Intelligence Hardening.** Screenshot → Live UI now supports
+multi-reference metadata, injectable local OCR, stable reconstruction IDs,
+render/capture validation with a disclosed RGB-error metric, and a bounded
+geometry-correction primitive. Identity health, safe observable-DOM framework
+maintenance, checkpoint ancestry, incremental Scan, large-page profiling and
+a limited branch-aware hosted project-sync contract harden the v7 substrate.
+Screenshot and Predicted Attention remain Experimental.
+
 **7.0.0 — Froam Understands.** The new Froam Intelligence surface turns the
 live page into shared, provenance-aware Scan records and Component DNA. It adds
 Component Archive, Design Archaeology, graph-backed Product Flow, Priority
@@ -274,6 +282,23 @@ Invite links grant a role, while joining mints a separate per-member session.
 Never treat the public actor id as authentication. Comments persist against
 fingerprinted DOM anchors; room chat and cursor presence are session chrome and
 never enter `froam.design.json`.
+
+v7.1 also exports a limited-beta project-document delta endpoint for hosts that
+need branch/checkpoint intelligence records across devices. It is intentionally
+separate from—and subordinate to—the Room operation log:
+
+```js
+import { createFroamProjectSyncApi } from 'froam-studio/server'
+
+const projectSync = createFroamProjectSyncApi({
+  storage: projectStorage,
+  authorize: async (req, { projectId, actor }) => mayEditProject(req, projectId, actor),
+})
+```
+
+Design-operation events are refused unless they carry their canonical Room
+sequence. Deltas are cursor-based, idempotent and branch-scoped; hosted storage
+must still provide concurrency-safe `put` behavior.
 
 ## 🚀 Publish straight to GitHub — no laptop required
 

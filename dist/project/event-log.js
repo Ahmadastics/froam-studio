@@ -94,7 +94,7 @@ export function applyProjectEvent(current, event) {
         case 'scan.captured': {
             const scan = payload.scan;
             if (scan?.id)
-                next.scans[scan.id] = scan;
+                next.scans[scan.node.nodeId] = scan;
             break;
         }
         case 'archive.upserted': {
@@ -261,6 +261,7 @@ export function createProjectBranch(document, input) {
         label: `Forked from ${parent.name}`,
         eventIds: [],
         state: deriveBranchState(document, parentId),
+        parentCheckpointId: parent.baseCheckpointId,
     };
     const branch = {
         id: input.id,

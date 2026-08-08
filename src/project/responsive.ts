@@ -22,18 +22,19 @@ export function responsiveSuggestions(records: readonly FroamScanRecord[], polic
   return suggestions
 }
 
-function overlaps(a: DOMRect, b: DOMRect) { return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top }
+function overlapArea(a: DOMRect, b: DOMRect) { return Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)) }
 
 export function observeResponsiveState(root: HTMLElement, registry: Record<string, { nodeId: string }>, policies: Record<string, FroamResponsivePolicy>, width: number): FroamResponsiveObservation {
   const entries = Object.values(registry).map((entry) => ({ entry, element: root.querySelector<HTMLElement>(`[data-froam-id="${CSS.escape(entry.nodeId)}"]`) })).filter((item): item is { entry: { nodeId: string }; element: HTMLElement } => Boolean(item.element))
-  const visible = entries.filter(({ element }) => { const style = getComputedStyle(element); return style.display !== 'none' && style.visibility !== 'hidden' })
+  const visible = entries.filter(({ element }) => { const style = getComputedStyle(element); const rect = element.getBoundingClientRect(); return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0 })
   const collisions: Array<[string, string]> = []
-  for (let i = 0; i < visible.length; i += 1) for (let j = i + 1; j < visible.length; j += 1) {
-    const a = visible[i].element.getBoundingClientRect(); const b = visible[j].element.getBoundingClientRect()
-    if (overlaps(a, b) && !visible[i].element.contains(visible[j].element) && !visible[j].element.contains(visible[i].element)) collisions.push([visible[i].entry.nodeId, visible[j].entry.nodeId])
-  }
+  const positioned = visible.map((item) => ({ ...item, rect: item.element.getBoundingClientRect() }))
+  const cells = new Map<string, number[]>(); const cellSize = 256
+  for (let index = 0; index < positioned.length; index += 1) { const rect = positioned[index].rect; for (let x = Math.floor(rect.left / cellSize); x <= Math.floor(Math.max(rect.left, rect.right - 1) / cellSize); x += 1) for (let y = Math.floor(rect.top / cellSize); y <= Math.floor(Math.max(rect.top, rect.bottom - 1) / cellSize); y += 1) { const key = `${x}:${y}`; cells.set(key, [...(cells.get(key) ?? []), index]) } }
+  const compared = new Set<string>()
+  for (const candidates of cells.values()) for (let aIndex = 0; aIndex < candidates.length; aIndex += 1) for (let bIndex = aIndex + 1; bIndex < candidates.length; bIndex += 1) { const left = Math.min(candidates[aIndex], candidates[bIndex]); const right = Math.max(candidates[aIndex], candidates[bIndex]); const key = `${left}:${right}`; if (compared.has(key)) continue; compared.add(key); const a = positioned[left]; const b = positioned[right]; if (overlapArea(a.rect, b.rect) >= 4 && !a.element.contains(b.element) && !b.element.contains(a.element)) collisions.push([a.entry.nodeId, b.entry.nodeId]) }
   const hiddenCritical = entries.filter(({ entry, element }) => policies[entry.nodeId]?.priority === 'critical' && !visible.some((item) => item.element === element)).map(({ entry }) => entry.nodeId)
-  const clipped = visible.filter(({ element }) => element.scrollWidth > element.clientWidth + 2 || element.scrollHeight > element.clientHeight + 2).map(({ entry }) => entry.nodeId)
+  const clipped = visible.filter(({ element }) => { const style = getComputedStyle(element); const clipsX = ['hidden', 'clip'].includes(style.overflowX); const clipsY = ['hidden', 'clip'].includes(style.overflowY); return (clipsX && element.scrollWidth > element.clientWidth + 2) || (clipsY && element.scrollHeight > element.clientHeight + 2) }).map(({ entry }) => entry.nodeId)
   const touchTargets = visible.filter(({ element }) => { const rect = element.getBoundingClientRect(); return ['A', 'BUTTON', 'INPUT'].includes(element.tagName) && (rect.width < 24 || rect.height < 24) }).map(({ entry }) => entry.nodeId)
   const overflowX = root.scrollWidth > width + 2
   const markers = [...(overflowX ? ['Horizontal overflow detected'] : []), ...(collisions.length ? [`${collisions.length} possible collisions`] : []), ...(hiddenCritical.length ? ['Critical element hidden'] : []), ...(clipped.length ? [`${clipped.length} clipped elements`] : [])]

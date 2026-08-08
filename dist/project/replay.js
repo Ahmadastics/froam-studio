@@ -53,6 +53,18 @@ export function replayStateAt(document, cursor, branchId = document.activeBranch
 export function replayActors(events) {
     return [...new Set(events.map((event) => event.actorId).filter((actor) => actor !== 'baseline'))].sort();
 }
+/** Walked on demand so older checkpoint state does not inflate normal Replay work. */
+export function checkpointAncestry(document, checkpointId) {
+    const lineage = [];
+    const seen = new Set();
+    let current = document.checkpoints[checkpointId];
+    while (current && !seen.has(current.id)) {
+        lineage.push(current);
+        seen.add(current.id);
+        current = current.parentCheckpointId ? document.checkpoints[current.parentCheckpointId] : undefined;
+    }
+    return lineage;
+}
 export function replayEventLabel(event) {
     const op = event.type === 'design.op.appended' ? event.payload.op : undefined;
     return event.label || op?.label || event.type.replaceAll('.', ' ');

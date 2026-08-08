@@ -22,7 +22,7 @@ type Props = {
     selectedElement: HTMLElement | null;
     onSelectNode: (nodeId: string, path?: string) => void;
     onInsertArchived: (html: string) => void;
-    onInsertReconstruction: (regions: FroamScreenshotRegion[], width: number, height: number) => void;
+    onInsertReconstruction: (regions: FroamScreenshotRegion[], width: number, height: number, rootNodeId: string) => HTMLElement;
     onPreviewWidth: (width: number | null) => void;
     onToast: (message: string) => void;
 };

@@ -1,4 +1,5 @@
 import { captureNodeRef, type FroamNodeRegistry } from './node-registry'
+import { ANCHOR_MATCH_THRESHOLD, createAnchor, scoreFingerprint } from '../collab/anchor'
 import { FROAM_DNA_SCHEMA_VERSION, type FroamDNA, type FroamNode, type FroamRelation, type FroamScanRecord, type FroamScanSignal, type FroamSemanticRole } from './types'
 import type { FroamViewport } from '../collab/types'
 
@@ -100,10 +101,13 @@ export function scanDomTree(root: HTMLElement, registry: FroamNodeRegistry, opti
   const elements = [scanRoot, ...Array.from(scanRoot.querySelectorAll<HTMLElement>('*'))]
     .filter((element) => !element.closest('[data-chef-editor-root]'))
     .slice(0, options.maxNodes ?? 600)
-  let nextRegistry = registry
+  let nextRegistry = { ...registry }
+  const registryByPath = new Map(Object.values(registry).filter((entry) => entry.path).map((entry) => [`${entry.routeKey ?? ''}|${entry.viewport ?? ''}|${entry.path}`, entry]))
   const refs = new Map<HTMLElement, ReturnType<typeof captureNodeRef>['ref']>()
   for (const element of elements) {
-    const captured = captureNodeRef(element, root, nextRegistry, { routeKey: options.routeKey, viewport: options.viewport, now: capturedAt })
+    const anchor = createAnchor(element, root); const indexed = registryByPath.get(`${options.routeKey}|${options.viewport}|${anchor.path}`)
+    const preferredNodeId = indexed?.fingerprint && scoreFingerprint(indexed.fingerprint, anchor.fingerprint) >= ANCHOR_MATCH_THRESHOLD ? indexed.nodeId : undefined
+    const captured = captureNodeRef(element, root, nextRegistry, { routeKey: options.routeKey, viewport: options.viewport, now: capturedAt, preferredNodeId, skipRegistrySearch: true, mutateRegistry: true })
     nextRegistry = captured.registry
     refs.set(element, captured.ref)
   }
@@ -151,7 +155,16 @@ export function dnaFromScan(record: FroamScanRecord): FroamDNA {
     if (!key) continue
     const current = (dna[key] as Record<string, unknown> | undefined) ?? {}
     ;(dna as unknown as Record<string, unknown>)[key] = { ...current, ...signal.values }
-    for (const [field, value] of Object.entries(signal.values)) dna.knowledge![`${signal.kind}.${field}`] = { value, origin: signal.origin, source: signal.source, confidence: signal.confidence, capturedAt: record.capturedAt }
+    dna.knowledge![`${signal.kind}.$source`] = { value: null, origin: signal.origin, source: signal.source, confidence: signal.confidence, capturedAt: record.capturedAt }
+    if (signal.origin !== 'observed' || signal.confidence !== undefined) for (const [field, value] of Object.entries(signal.values)) dna.knowledge![`${signal.kind}.${field}`] = { value, origin: signal.origin, source: signal.source, confidence: signal.confidence, capturedAt: record.capturedAt }
   }
   return dna
+}
+
+/** Re-scan only the highest changed roots; callers keep unaffected records/DNA. */
+export function scanDomChanges(root: HTMLElement, changed: readonly HTMLElement[], registry: FroamNodeRegistry, options: { routeKey: string; viewport: FroamViewport; now?: number; maxNodesPerRegion?: number }) {
+  const unique = changed.filter((element, index, all) => root.contains(element) && !all.some((other, otherIndex) => otherIndex !== index && other.contains(element)))
+  let nextRegistry = registry; const bundles: FroamScanBundle[] = []
+  for (const element of unique) { const bundle = scanDomTree(root, nextRegistry, { routeKey: options.routeKey, viewport: options.viewport, now: options.now, selectedRoot: element, maxNodes: options.maxNodesPerRegion ?? 600 }); nextRegistry = bundle.registry; bundles.push(bundle) }
+  const records = bundles.flatMap((bundle) => bundle.records); return { records, dna: records.map(dnaFromScan), nodes: bundles.flatMap((bundle) => bundle.nodes), relations: bundles.flatMap((bundle) => bundle.relations), registry: nextRegistry, invalidatedNodeIds: [...new Set(records.map((record) => record.node.nodeId))] }
 }

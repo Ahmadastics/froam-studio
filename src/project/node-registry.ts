@@ -25,6 +25,14 @@ export type FroamIdentityDiagnostic = {
   detail?: string
 }
 export type FroamIdentityDiagnosticSink = (event: FroamIdentityDiagnostic) => void
+export type FroamIdentityHealth = {
+  total: number
+  counts: Record<FroamNodeResolutionMethod | 'uncaptured', number>
+  stablePercent: number
+  recoveryPercent: number
+  ambiguous: number
+  failed: number
+}
 
 function defaultId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
@@ -58,13 +66,18 @@ export function captureNodeRef(
     now?: number
     idFactory?: () => string
     attach?: boolean
+    /** Pre-indexed registry match used by large Scan; validated by the caller. */
+    preferredNodeId?: string
+    skipRegistrySearch?: boolean
+    /** Internal batch mode: caller owns the registry instance for this scan. */
+    mutateRegistry?: boolean
   } = {},
 ): { ref: FroamNodeRef; registry: FroamNodeRegistry } {
   const anchor = createAnchor(element, root)
   const attributed = attributedIdentity(element, root)
-  const existing = attributed && registry[attributed]
+  const existing = options.preferredNodeId || (attributed && registry[attributed]
     ? attributed
-    : Object.values(registry).find((entry) => {
+    : options.skipRegistrySearch ? undefined : Object.values(registry).find((entry) => {
         if (entry.routeKey !== options.routeKey || entry.viewport !== options.viewport) return false
         // An explicit host id is a stable signal. A path alone may locate an
         // existing registry record, but it never creates the permanent id.
@@ -72,7 +85,7 @@ export function captureNodeRef(
         return entry.path === anchor.path
           && Boolean(entry.fingerprint)
           && scoreFingerprint(entry.fingerprint!, anchor.fingerprint) >= ANCHOR_MATCH_THRESHOLD
-      })?.nodeId
+      })?.nodeId)
   const nodeId = existing || attributed || (options.idFactory ?? defaultId)()
   const ref: FroamNodeRef = {
     nodeId,
@@ -82,17 +95,9 @@ export function captureNodeRef(
     viewport: options.viewport,
   }
   if (options.attach !== false) element.setAttribute(FROAM_NODE_ATTRIBUTE, nodeId)
-  return {
-    ref,
-    registry: {
-      ...registry,
-      [nodeId]: {
-        ...ref,
-        source: element.dataset.froamInjected === 'true' ? 'froam' : 'host-dom',
-        updatedAt: options.now ?? Date.now(),
-      },
-    },
-  }
+  const entry: FroamNodeRegistryEntry = { ...ref, source: element.dataset.froamInjected === 'true' ? 'froam' : 'host-dom', updatedAt: options.now ?? Date.now() }
+  if (options.mutateRegistry) { registry[nodeId] = entry; return { ref, registry } }
+  return { ref, registry: { ...registry, [nodeId]: entry } }
 }
 
 export function resolveNodeRef(
@@ -205,4 +210,13 @@ export function registryRef(registry: FroamNodeRegistry, nodeId: string): FroamN
   if (!entry) return null
   const { source: _source, updatedAt: _updatedAt, lastResolution: _lastResolution, recoveryCount: _recoveryCount, ...ref } = entry
   return ref
+}
+
+/** A project-level diagnostic snapshot. Percentages describe registry entries, not human sessions. */
+export function identityHealthReport(registry: FroamNodeRegistry): FroamIdentityHealth {
+  const entries = Object.values(registry)
+  const counts: FroamIdentityHealth['counts'] = { attribute: 0, 'host-id': 0, path: 0, fingerprint: 0, ambiguous: 0, failed: 0, uncaptured: 0 }
+  for (const entry of entries) counts[entry.lastResolution ?? 'uncaptured'] += 1
+  const total = entries.length; const stable = counts.attribute + counts['host-id'] + counts.uncaptured; const recovered = counts.path + counts.fingerprint
+  return { total, counts, stablePercent: total ? stable / total * 100 : 100, recoveryPercent: total ? recovered / total * 100 : 0, ambiguous: counts.ambiguous, failed: counts.failed }
 }

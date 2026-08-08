@@ -103,6 +103,16 @@ export function createFroamRoomApi(options: {
 }): (req: IncomingMessage, res: ServerResponse) => Promise<boolean>
 
 /**
+ * Beta branch/checkpoint project-document delta contract. The existing Room
+ * operation log remains canonical; design events must carry their room seq.
+ */
+export function createFroamProjectSyncApi(options: {
+  file?: string
+  storage?: { get: (projectId: string) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null; put: (project: Record<string, unknown>) => Promise<void> | void }
+  authorize?: (req: IncomingMessage, input: { projectId: string; actor?: string | null }) => boolean | Promise<boolean>
+}): (req: IncomingMessage, res: ServerResponse) => Promise<boolean>
+
+/**
  * Commit a design to GitHub through the Contents API, so a save made on a
  * device with no `froam dev` bridge — a phone — still reaches the repo and
  * triggers whatever deploys from it.

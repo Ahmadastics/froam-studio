@@ -122,6 +122,7 @@ import { findElementByPath, getElementPath, isSafeDraftPath, tagOfPath } from '.
 import { createAnchor, resolveAnchor } from '../collab/anchor'
 import { LOCAL_ACTOR, scopeKey, type FroamAnchor, type FroamOp, type FroamViewport } from '../collab/types'
 import { captureNodeRef, resolveNodeRef, type FroamIdentityDiagnostic, type FroamNodeRegistry } from '../project/node-registry'
+import { createFrameworkIdentityObserver, type FroamFrameworkFinding } from '../project/framework-identity'
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources'
 import { useFroamRouteKey } from '../routing'
 import {
@@ -1695,6 +1696,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [connectedCanvasOpen, setConnectedCanvasOpen] = useState(false)
   const [intelligenceOpen, setIntelligenceOpen] = useState(false)
   const [identityDiagnostics, setIdentityDiagnostics] = useState<FroamIdentityDiagnostic[]>([])
+  const [frameworkIdentityFinding, setFrameworkIdentityFinding] = useState<FroamFrameworkFinding | null>(null)
   const [tipsReady, setTipsReady] = useState(() => {
     try { return window.localStorage.getItem(SCAN_DONE_KEY) === '1' } catch { return true }
   })
@@ -2659,6 +2661,20 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
   }, [hasRouteDrafts, routeDrafts, viewportStoreKey])
 
+  useEffect(() => {
+    if (!showPanel) return
+    const root = getRoot()
+    if (!root || typeof MutationObserver === 'undefined') return
+    const maintenance = createFrameworkIdentityObserver({
+      root,
+      registry: () => nodeRegistryRef.current,
+      onRegistry: (registry) => { nodeRegistryRef.current = registry; saveNodeRegistry(registry) },
+      onDiagnostic: (event) => setIdentityDiagnostics((current) => [...current.slice(-199), event]),
+    })
+    setFrameworkIdentityFinding(maintenance.finding)
+    return () => maintenance.disconnect()
+  }, [showPanel, viewportStoreKey])
+
   /* ─── v4: touch affordances while editing on a coarse pointer ─── */
   useEffect(() => {
     if (!showPanel || !isTouchDevice) return
@@ -3241,23 +3257,26 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     showToast('Inserted from Component Archive')
   }
 
-  function insertScreenshotReconstruction(regions: FroamScreenshotRegion[], width: number, height: number) {
+  function insertScreenshotReconstruction(regions: FroamScreenshotRegion[], width: number, height: number, rootNodeId: string) {
     const frame = document.createElement('section')
     frame.setAttribute('data-froam-injected', 'true')
     frame.setAttribute('data-froam-block', 'true')
+    frame.setAttribute('data-froam-id', rootNodeId)
     frame.style.cssText = `position:relative;width:100%;max-width:${width}px;aspect-ratio:${width}/${height};overflow:hidden;background:#f8fafc;border:1px solid rgba(15,23,42,.12);margin:24px auto;`
     for (const region of regions) {
-      const child = document.createElement(region.kind === 'text' ? 'p' : 'div')
+      const child = document.createElement(region.semanticRole === 'button' ? 'button' : region.semanticRole === 'heading' ? 'h2' : region.kind === 'text' ? 'p' : 'div')
       child.setAttribute('data-froam-injected', 'true')
+      child.setAttribute('data-froam-id', region.nodeId)
       child.contentEditable = 'true'
-      child.textContent = region.kind === 'text' ? 'Reconstructed text region' : ''
-      child.style.cssText = `position:absolute;left:${region.x / width * 100}%;top:${region.y / height * 100}%;width:${region.width / width * 100}%;height:${region.height / height * 100}%;margin:0;border:1px dashed rgba(99,102,241,.28);background:${region.kind === 'container' ? 'rgba(226,232,240,.42)' : 'transparent'};`
+      child.textContent = region.kind === 'text' ? (region.text ?? '') : ''
+      child.setAttribute('data-froam-ocr-confidence', String(region.textConfidence ?? 0))
+      child.style.cssText = `position:absolute;left:${region.x / width * 100}%;top:${region.y / height * 100}%;width:${region.width / width * 100}%;height:${region.height / height * 100}%;margin:0;overflow:hidden;color:#0f172a;background:${region.averageColor ?? (region.kind === 'container' ? 'rgb(226,232,240)' : 'transparent')};font-size:${region.semanticRole === 'heading' ? '32px' : '16px'};line-height:1.25;`
       frame.appendChild(child)
     }
-    assignFreshFroamNodeIds(frame)
     placeInsertedNode(frame, 'end')
     selectInsertedElement(frame)
     persistLiveRouteSnapshot()
+    return frame
   }
 
   function previewIntelligenceWidth(width: number | null) {
@@ -7338,6 +7357,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         store={store}
         registry={nodeRegistryRef.current}
         diagnostics={identityDiagnostics}
+        frameworkFinding={frameworkIdentityFinding}
         routeKey={routeKey}
         viewport={viewportMode}
         selection={selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null}

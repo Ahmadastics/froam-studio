@@ -13,8 +13,12 @@ export function materializeGraphRows(state) {
     const nodes = Object.values(state.nodes);
     const relations = Object.values(state.relations);
     const children = new Map();
+    const incoming = new Map();
+    const outgoing = new Map();
     const childIds = new Set();
     for (const relation of relations) {
+        incoming.set(relation.to, [...(incoming.get(relation.to) ?? []), relation]);
+        outgoing.set(relation.from, [...(outgoing.get(relation.from) ?? []), relation]);
         if (relation.kind !== 'contains')
             continue;
         const child = state.nodes[relation.to];
@@ -32,8 +36,8 @@ export function materializeGraphRows(state) {
         rows.push({
             node,
             depth,
-            incoming: relations.filter((relation) => relation.to === node.id),
-            outgoing: relations.filter((relation) => relation.from === node.id),
+            incoming: incoming.get(node.id) ?? [],
+            outgoing: outgoing.get(node.id) ?? [],
         });
         for (const child of (children.get(node.id) ?? []).sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id)))
             visit(child, depth + 1);

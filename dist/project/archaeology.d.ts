@@ -22,6 +22,12 @@ export type FroamArchaeologyRecord = {
     branchLineage: string[];
     derivedFrom: string[];
     authors: string[];
+    checkpointLineage: Array<{
+        id: string;
+        branchId: string;
+        at: number;
+        label?: string;
+    }>;
 };
 export declare function archaeologyForNode(document: FroamProjectDocument, nodeId: string): FroamArchaeologyRecord;
 //# sourceMappingURL=archaeology.d.ts.map

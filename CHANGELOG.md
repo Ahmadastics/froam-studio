@@ -1,5 +1,45 @@
 # Changelog
 
+## 7.1.0 - 2026-08-08
+
+**Intelligence hardening.** This release strengthens the v7 substrate without
+starting v8 systems or replacing proven live-DOM, Rooms or output behavior.
+
+### Added
+
+- Screenshot reconstruction v2 with multi-reference metadata, injectable OCR,
+  browser-local `TextDetector` support where available, uncertain/missing-text
+  handling, text hierarchy, repeated families and stable graph/DOM identities.
+- Render/capture validation using disclosed normalized RGB mean absolute error,
+  largest mismatch tiles and a maximum-four-pass geometry correction primitive.
+- Framework identity maintenance through observable DOM markers and normal
+  registry/fingerprint recovery. No React/Vue private internals are used.
+- Project-level identity health metrics in Connected Canvas.
+- Limited beta hosted project synchronization contract with reconnect cursors,
+  branch/checkpoint isolation, event idempotency and canonical Room-sequence
+  enforcement for design operations.
+- Lazy checkpoint ancestry for Replay/Design Archaeology, incremental regional
+  Scan, attention evaluation fixtures and large-page benchmark tooling.
+
+### Hardened
+
+- Graph materialization and Archive exact-similarity grouping avoid repeated
+  full relation/pair scans.
+- Responsive collisions use spatial buckets; clipping warnings require actual
+  clipping overflow modes, reducing false positives.
+- Scan uses indexed registry matching and owned batch mutation. A synthetic
+  5,000-node Scan improved from roughly 10.3 seconds to about 76 milliseconds
+  on the recorded Windows/Node fixture.
+- DNA provenance metadata is compacted while retaining observed/inferred source
+  markers; latest materialized scans replace older per-node scans.
+
+### Compatibility
+
+- Project schema remains v2 and DNA schema remains v1; no data migration is
+  required. Screenshot analysis result fields are additive.
+- Rooms ordering, operation-log reconnect, path-based runtime/code generation,
+  Blueprint 2D/3D, Animator and existing v7 projects remain compatible.
+
 ## 7.0.0 - 2026-08-08
 
 **Froam Understands.** A coherent Intelligence surface now reads the live DOM

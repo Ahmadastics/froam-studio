@@ -110,23 +110,26 @@ const {
 const { legacyOpsToProjectEvents, nodeRegistryGraphRecords, sitePlanGraphRecords } = await import('../dist/project/adapters.js')
 const { makeEdit } = await import('../dist/collab/oplog.js')
 const { componentCatalogGraphRecords } = await import('../dist/project/component-adapter.js')
-const { dnaFromScan } = await import('../dist/project/scan.js')
+const { dnaFromScan, scanDomChanges } = await import('../dist/project/scan.js')
 const { scanDomTree, detectComponentFamilies } = await import('../dist/project/scan.js')
 const { compileInteractionToCss } = await import('../dist/project/interaction-runtime.js')
-const { branchReplayEvents, filterReplayEvents, replayCategory, replayStateAt } = await import('../dist/project/replay.js')
+const { branchReplayEvents, checkpointAncestry, filterReplayEvents, replayCategory, replayStateAt } = await import('../dist/project/replay.js')
 const { graphSelectionIndex, materializeGraphRows } = await import('../dist/project/graph-inspector.js')
 const { interactionInspectorRecord, legacyAnimatorToInteraction } = await import('../dist/project/animator-adapter.js')
 const { runSimulationScenario } = await import('../dist/project/simulation.js')
 const { defaultFroamFeatureFlags, FROAM_ROADMAP_FEATURES } = await import('../dist/project/experiments.js')
 const { isProjectFile, loadProjectFile, writeProjectFile } = await import('../lib/project-store.mjs')
-const { createArchiveItem, upsertArchive, removeFromArchive, reuseArchiveItem, searchArchive } = await import('../dist/project/archive.js')
+const { createArchiveItem, recordArchiveUsage, similarArchiveItems, upsertArchive, removeFromArchive, reuseArchiveItem, searchArchive } = await import('../dist/project/archive.js')
 const { archaeologyForNode } = await import('../dist/project/archaeology.js')
 const { createFlowGraph } = await import('../dist/project/product-flow.js')
-const { predictAttention } = await import('../dist/project/attention.js')
+const { evaluateAttentionProvider, LOCAL_ATTENTION_PROVIDER, predictAttention } = await import('../dist/project/attention.js')
 const { analyzeVisualRhythm } = await import('../dist/project/rhythm.js')
 const { cinemaWidths, defaultResponsivePolicy, observeResponsiveState, responsiveSuggestions } = await import('../dist/project/responsive.js')
-const { localScreenshotProvider } = await import('../dist/project/screenshot-reconstruction.js')
+const { boundedGeometryCorrection, compareScreenshotPixels, createLocalScreenshotProvider, localScreenshotProvider, unavailableOcrProvider } = await import('../dist/project/screenshot-reconstruction.js')
 const { LOCAL_HEURISTIC_PROVIDER, assertRemoteProviderConsent } = await import('../dist/project/intelligence-provider.js')
+const { identityHealthReport } = await import('../dist/project/node-registry.js')
+const { detectFrameworkHost } = await import('../dist/project/framework-identity.js')
+const { profileIntelligence } = await import('../dist/project/performance.js')
 
 const tests = []
 const test = (name, fn) => tests.push([name, fn])
@@ -490,6 +493,18 @@ test('Product Flow uses graph nodes and persisted transition relations', () => {
   assert.equal(graph.relations[0].condition, 'payment accepted')
 })
 
+test('Product Flow distinguishes a route page, screen and multiple states', () => {
+  const graph = createFlowGraph('Checkout states', [
+    { id: 'page-checkout', name: 'Checkout page', kind: 'page', routeKey: '/checkout' },
+    { id: 'screen-checkout', name: 'Checkout screen', kind: 'screen', pageId: 'page-checkout', routeKey: '/checkout' },
+    { id: 'state-error', name: 'Payment error', kind: 'state', screenId: 'screen-checkout', stateType: 'error', routeKey: '/checkout' },
+    { id: 'state-success', name: 'Payment success', kind: 'state', screenId: 'screen-checkout', stateType: 'success', routeKey: '/checkout' },
+  ], [{ id: 'retry', from: 'state-error', to: 'screen-checkout', name: 'Retry' }])
+  assert.equal(graph.nodes.filter((node) => node.locator.routeKey === '/checkout').length, 4)
+  assert.equal(graph.nodes.find((node) => node.id === 'state-error').parentId, 'screen-checkout')
+  assert.equal(graph.nodes.find((node) => node.id === 'state-success').metadata.stateType, 'success')
+})
+
 test('Predicted Attention is explicit local heuristic analysis mapped to node ids', () => {
   const record = (id, role, width, height, y, fontSize = '16px') => ({ schemaVersion: 1, id: `scan-${id}`, node: { nodeId: id }, capturedAt: 1, childNodeIds: [], siblingNodeIds: [], signals: [
     { kind: 'layout', origin: 'observed', source: 'computed-style', values: { rect: { width, height, y } } },
@@ -525,7 +540,7 @@ test('Breakpoint observations conservatively detect overflow, collision, clippin
   const root = new FakeElement('main', { rect: { x: 0, y: 0, left: 0, top: 0, width: 320, height: 400, right: 320, bottom: 400 } })
   root.scrollWidth = 500
   const first = new FakeElement('button', { rect: { x: 0, y: 0, left: 0, top: 0, width: 20, height: 20, right: 20, bottom: 20 } })
-  const second = new FakeElement('div', { rect: { x: 10, y: 10, left: 10, top: 10, width: 30, height: 30, right: 40, bottom: 40 } })
+  const second = new FakeElement('div', { rect: { x: 10, y: 10, left: 10, top: 10, width: 30, height: 30, right: 40, bottom: 40 }, style: { overflowX: 'hidden' } })
   second.scrollWidth = 60
   const critical = new FakeElement('button', { style: { display: 'none' } })
   first.setAttribute('data-froam-id', 'first'); second.setAttribute('data-froam-id', 'second'); critical.setAttribute('data-froam-id', 'critical')
@@ -548,6 +563,75 @@ test('Screenshot reconstruction creates normal graph nodes and DNA and rejects u
   assert.ok(result.dna.every((dna) => dna.schemaVersion === 1 && dna.provenance.source === 'screenshot'))
   await assert.rejects(() => localScreenshotProvider.reconstruct({ width, height, data, mimeType: 'image/gif' }), /Unsupported/)
   await assert.rejects(() => localScreenshotProvider.reconstruct({ width, height, data: new Uint8ClampedArray(4), mimeType: 'image/png' }), /Invalid/)
+})
+
+test('Screenshot OCR maps confident text and preserves uncertainty without fabrication', async () => {
+  const pixels = { width: 64, height: 64, data: new Uint8ClampedArray(64 * 64 * 4).fill(240), mimeType: 'image/png', referenceId: 'desktop', metadata: { viewportWidth: 1440, state: 'open' } }
+  const ocr = { id: 'fixture-ocr', local: true, available: () => true, async recognize() { return { provider: 'fixture-ocr', available: true, warnings: [], lines: [{ id: 'headline', text: 'Welcome', bounds: { x: 4, y: 4, width: 50, height: 32 }, confidence: .91 }, { id: 'action', text: 'Start now', bounds: { x: 4, y: 42, width: 52, height: 24 }, confidence: .82 }] } } }
+  const result = await createLocalScreenshotProvider(ocr).reconstruct({ references: [pixels, { ...pixels, referenceId: 'mobile', metadata: { viewportWidth: 375 } }], primaryReferenceId: 'desktop' })
+  assert.equal(result.references.length, 2)
+  assert.ok(result.regions.some((region) => region.text === 'Welcome' && region.semanticRole === 'heading'))
+  assert.ok(result.regions.some((region) => region.text === 'Start now' && region.semanticRole === 'button'))
+  assert.ok(result.nodes.some((node) => node.id === result.regions[0].nodeId))
+  const unavailable = await createLocalScreenshotProvider(unavailableOcrProvider).reconstruct(pixels)
+  assert.ok(unavailable.ocr[0].warnings[0].includes('no text was fabricated'))
+  assert.ok(unavailable.regions.every((region) => region.text === undefined))
+})
+
+test('Visual diff uses transparent RGB error and correction is strictly bounded', () => {
+  const reference = { width: 16, height: 16, data: new Uint8ClampedArray(16 * 16 * 4), mimeType: 'image/png' }
+  const candidate = { ...reference, data: new Uint8ClampedArray(reference.data) }; candidate.data[0] = 255
+  const diff = compareScreenshotPixels(reference, candidate, 8)
+  assert.equal(diff.comparable, true); assert.ok(diff.pixelSimilarity < 1 && diff.pixelSimilarity > .99); assert.equal(diff.metric, 'normalized-rgb-mae-v1')
+  const corrected = boundedGeometryCorrection([{ id: 'a', nodeId: 'a', x: 0, y: 0, width: 10, height: 10, kind: 'container', confidence: .5 }], [{ id: 'a', x: 16, y: 8, width: 20, height: 20 }], 99)
+  assert.equal(corrected.passes.length, 4); assert.ok(corrected.regions[0].x < 16)
+})
+
+test('Incremental Scan invalidates only changed regions', () => {
+  const root = new FakeElement('main'); const left = new FakeElement('section'); const right = new FakeElement('section'); left.append(new FakeElement('p', { text: 'Changed' })); right.append(new FakeElement('p', { text: 'Untouched' })); root.append(left, right)
+  const initial = scanDomTree(root, {}, { routeKey: '/', viewport: 'desktop', now: 1 })
+  const rightId = initial.records.find((record) => record.node.path?.includes('section:2'))?.node.nodeId
+  const incremental = scanDomChanges(root, [left, left.children[0]], initial.registry, { routeKey: '/', viewport: 'desktop', now: 2 })
+  assert.ok(incremental.invalidatedNodeIds.length === 2)
+  assert.ok(!incremental.invalidatedNodeIds.includes(rightId))
+})
+
+test('Identity health survives repeated public-DOM rerenders and reports recovery honestly', () => {
+  const root = new FakeElement('main'); const button = new FakeElement('button', { text: 'Save' }); root.append(button)
+  let captured = captureNodeRef(button, root, {}, { idFactory: () => 'save', now: 1 }); let registry = captured.registry
+  for (let pass = 0; pass < 3; pass += 1) { button.attributes.delete('data-froam-id'); delete button.dataset.froamId; const resolved = resolveNodeRef(captured.ref, root, registry, { now: pass + 2 }); assert.notEqual(resolved.status, 'orphaned'); registry = resolved.registry }
+  const health = identityHealthReport(registry); assert.equal(health.failed, 0); assert.equal(health.ambiguous, 0); assert.equal(health.counts.path, 1)
+  root.setAttribute('data-reactroot', ''); assert.equal(detectFrameworkHost(root).framework, 'react'); assert.equal(detectFrameworkHost(root).privateInternalsUsed, false)
+})
+
+test('Attention provider evaluation exposes fixture agreement rather than scientific claims', () => {
+  const make = (id, role, width, height) => ({ schemaVersion: 1, id: `s:${id}`, node: { nodeId: id }, capturedAt: 1, childNodeIds: [], siblingNodeIds: [], signals: [{ kind: 'layout', origin: 'observed', source: 'computed-style', values: { rect: { width, height, y: 0 } } }, { kind: 'semantics', origin: 'observed', source: 'dom', values: { role } }] })
+  const records = [make('hero', 'media', 900, 500), make('cta', 'cta', 180, 48)]
+  const evaluation = evaluateAttentionProvider(LOCAL_ATTENTION_PROVIDER, [{ id: 'hero-layout', records, expectedTopNodeIds: ['hero', 'cta'], note: 'fixture expectation only' }])
+  assert.equal(evaluation.fixtures, 1); assert.equal(evaluation.topChoiceAgreement, 1); assert.equal(evaluation.meanTopThreeRecall, 1)
+})
+
+test('Archive hardening tracks reuse and similarity confidence without merging', () => {
+  const dna = { schemaVersion: 1, nodeId: 'card', capturedAt: 1, structure: { componentFamilyId: 'cards', childNodeIds: ['a'] }, layout: { display: 'grid' }, semantics: { role: 'card' } }
+  const first = createArchiveItem({ id: 'one', nodeId: 'card-1', name: 'Card one', actorId: 'a', projectId: 'p', branchId: 'main', dna })
+  const second = createArchiveItem({ id: 'two', nodeId: 'card-2', name: 'Card two', actorId: 'a', projectId: 'p', branchId: 'main', dna: { ...dna, nodeId: 'card-2' }, variantOf: 'one' })
+  assert.deepEqual(recordArchiveUsage(first, 'instance-1').usageNodeIds, ['instance-1'])
+  assert.ok(similarArchiveItems({ one: first, two: second })[0].confidence >= .9); assert.equal(second.variantOf, 'one')
+})
+
+test('Checkpoint ancestry crosses a prototype fork lazily', () => {
+  let ids = 0; let project = createProjectDocument({ id: 'ancestry', name: 'Ancestry', actorId: 'a', now: 1, idFactory: () => `a-${++ids}` })
+  project = checkpointBranch(project, { actorId: 'a', now: 2, idFactory: () => `a-${++ids}` })
+  project = createProjectBranch(project, { id: 'prototype', name: 'Prototype', actorId: 'a', now: 3, idFactory: () => `a-${++ids}` })
+  const lineage = checkpointAncestry(project, project.branches.prototype.baseCheckpointId)
+  assert.equal(lineage[0].branchId, 'prototype'); assert.equal(lineage[1].branchId, 'main')
+})
+
+test('Large intelligence fixture stays serializable and reports measured stages', () => {
+  const records = Array.from({ length: 500 }, (_, index) => ({ schemaVersion: 1, id: `perf-${index}`, node: { nodeId: `n-${index}` }, capturedAt: 1, childNodeIds: [], siblingNodeIds: [], signals: [{ kind: 'layout', origin: 'observed', source: 'computed-style', values: { rect: { width: 100, height: 120, y: index * 120 } } }] }))
+  const nodes = Object.fromEntries(records.map((record) => [record.node.nodeId, { id: record.node.nodeId, kind: 'element', source: 'host-dom' }]))
+  const profile = profileIntelligence({ records, state: { legacyStore: {}, nodes, relations: {}, flows: {}, interactions: {}, dna: {}, assets: {}, scans: {}, archive: {}, analyses: {}, responsive: {} } })
+  assert.equal(profile.nodeCount, 500); assert.ok(profile.serializedBytes > 0); assert.ok(profile.graphMs >= 0)
 })
 
 test('intelligence providers disclose privacy and remote providers require consent', () => {

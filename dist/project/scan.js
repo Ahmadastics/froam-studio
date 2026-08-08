@@ -1,4 +1,5 @@
 import { captureNodeRef } from './node-registry.js';
+import { ANCHOR_MATCH_THRESHOLD, createAnchor, scoreFingerprint } from '../collab/anchor.js';
 import { FROAM_DNA_SCHEMA_VERSION } from './types.js';
 function semanticRole(element) {
     const tag = element.tagName.toLowerCase();
@@ -94,10 +95,14 @@ export function scanDomTree(root, registry, options) {
     const elements = [scanRoot, ...Array.from(scanRoot.querySelectorAll('*'))]
         .filter((element) => !element.closest('[data-chef-editor-root]'))
         .slice(0, options.maxNodes ?? 600);
-    let nextRegistry = registry;
+    let nextRegistry = { ...registry };
+    const registryByPath = new Map(Object.values(registry).filter((entry) => entry.path).map((entry) => [`${entry.routeKey ?? ''}|${entry.viewport ?? ''}|${entry.path}`, entry]));
     const refs = new Map();
     for (const element of elements) {
-        const captured = captureNodeRef(element, root, nextRegistry, { routeKey: options.routeKey, viewport: options.viewport, now: capturedAt });
+        const anchor = createAnchor(element, root);
+        const indexed = registryByPath.get(`${options.routeKey}|${options.viewport}|${anchor.path}`);
+        const preferredNodeId = indexed?.fingerprint && scoreFingerprint(indexed.fingerprint, anchor.fingerprint) >= ANCHOR_MATCH_THRESHOLD ? indexed.nodeId : undefined;
+        const captured = captureNodeRef(element, root, nextRegistry, { routeKey: options.routeKey, viewport: options.viewport, now: capturedAt, preferredNodeId, skipRegistrySearch: true, mutateRegistry: true });
         nextRegistry = captured.registry;
         refs.set(element, captured.ref);
     }
@@ -147,9 +152,24 @@ export function dnaFromScan(record) {
             continue;
         const current = dna[key] ?? {};
         dna[key] = { ...current, ...signal.values };
-        for (const [field, value] of Object.entries(signal.values))
-            dna.knowledge[`${signal.kind}.${field}`] = { value, origin: signal.origin, source: signal.source, confidence: signal.confidence, capturedAt: record.capturedAt };
+        dna.knowledge[`${signal.kind}.$source`] = { value: null, origin: signal.origin, source: signal.source, confidence: signal.confidence, capturedAt: record.capturedAt };
+        if (signal.origin !== 'observed' || signal.confidence !== undefined)
+            for (const [field, value] of Object.entries(signal.values))
+                dna.knowledge[`${signal.kind}.${field}`] = { value, origin: signal.origin, source: signal.source, confidence: signal.confidence, capturedAt: record.capturedAt };
     }
     return dna;
+}
+/** Re-scan only the highest changed roots; callers keep unaffected records/DNA. */
+export function scanDomChanges(root, changed, registry, options) {
+    const unique = changed.filter((element, index, all) => root.contains(element) && !all.some((other, otherIndex) => otherIndex !== index && other.contains(element)));
+    let nextRegistry = registry;
+    const bundles = [];
+    for (const element of unique) {
+        const bundle = scanDomTree(root, nextRegistry, { routeKey: options.routeKey, viewport: options.viewport, now: options.now, selectedRoot: element, maxNodes: options.maxNodesPerRegion ?? 600 });
+        nextRegistry = bundle.registry;
+        bundles.push(bundle);
+    }
+    const records = bundles.flatMap((bundle) => bundle.records);
+    return { records, dna: records.map(dnaFromScan), nodes: bundles.flatMap((bundle) => bundle.nodes), relations: bundles.flatMap((bundle) => bundle.relations), registry: nextRegistry, invalidatedNodeIds: [...new Set(records.map((record) => record.node.nodeId))] };
 }
 //# sourceMappingURL=scan.js.map

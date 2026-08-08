@@ -1,6 +1,6 @@
 # Froam Rooms — roadmap to v6
 
-**Where we are:** v7.0.0 · **Status:** Froam Understands is implemented. Scan, DNA, Archive, Archaeology, Product Flow, Priority Responsive and Breakpoint Cinema are beta; Predicted Attention, Visual Rhythm and Screenshot → Live UI are honest local experiments.
+**Where we are:** v7.1.0 · **Status:** Froam Intelligence is hardened with measurable screenshot validation, OCR/provider boundaries, identity health, checkpoint ancestry, incremental Scan, profiling and limited hosted project synchronization. Experimental systems remain honestly experimental; v8 has not begun.
 
 v7 adds one shared understanding layer over the v6 identity, graph, history,
 branch and interaction substrate. It does not replace live-DOM editing or the

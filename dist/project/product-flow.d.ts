@@ -5,6 +5,8 @@ export type FroamFlowNodeInput = {
     routeKey?: string;
     kind?: 'page' | 'screen' | 'state';
     stateType?: 'normal' | 'success' | 'error';
+    pageId?: string;
+    screenId?: string;
 };
 export declare function createFlowGraph(name: string, nodes: readonly FroamFlowNodeInput[], transitions: readonly {
     id: string;

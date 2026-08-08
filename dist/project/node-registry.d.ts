@@ -19,6 +19,14 @@ export type FroamIdentityDiagnostic = {
     detail?: string;
 };
 export type FroamIdentityDiagnosticSink = (event: FroamIdentityDiagnostic) => void;
+export type FroamIdentityHealth = {
+    total: number;
+    counts: Record<FroamNodeResolutionMethod | 'uncaptured', number>;
+    stablePercent: number;
+    recoveryPercent: number;
+    ambiguous: number;
+    failed: number;
+};
 export declare function isValidFroamNodeId(value: string | null | undefined): value is string;
 export declare function captureNodeRef(element: HTMLElement, root: HTMLElement, registry: FroamNodeRegistry, options?: {
     routeKey?: string;
@@ -26,6 +34,11 @@ export declare function captureNodeRef(element: HTMLElement, root: HTMLElement, 
     now?: number;
     idFactory?: () => string;
     attach?: boolean;
+    /** Pre-indexed registry match used by large Scan; validated by the caller. */
+    preferredNodeId?: string;
+    skipRegistrySearch?: boolean;
+    /** Internal batch mode: caller owns the registry instance for this scan. */
+    mutateRegistry?: boolean;
 }): {
     ref: FroamNodeRef;
     registry: FroamNodeRegistry;
@@ -46,4 +59,6 @@ export declare function resolveNodeRef(ref: FroamNodeRef, root: HTMLElement, reg
     registry: FroamNodeRegistry;
 };
 export declare function registryRef(registry: FroamNodeRegistry, nodeId: string): FroamNodeRef | null;
+/** A project-level diagnostic snapshot. Percentages describe registry entries, not human sessions. */
+export declare function identityHealthReport(registry: FroamNodeRegistry): FroamIdentityHealth;
 //# sourceMappingURL=node-registry.d.ts.map
