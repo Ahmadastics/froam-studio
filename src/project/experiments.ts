@@ -39,17 +39,17 @@ export const FROAM_ROADMAP_FEATURES: readonly FroamFeatureDefinition[] = [
   { id: 'visual-rhythm', maturity: 'experimental', defaultEnabled: true, prerequisites: ['Scan'] },
   { id: 'priority-responsive', maturity: 'beta', defaultEnabled: true, prerequisites: ['DNA', 'Scan'] },
   { id: 'breakpoint-cinema', maturity: 'beta', defaultEnabled: true, prerequisites: ['responsive observations', 'live DOM'] },
-  { id: 'interaction-library', maturity: 'architecture-only', defaultEnabled: false, prerequisites: ['interaction model'] },
-  { id: 'ui-sampling', maturity: 'research-only', defaultEnabled: false, prerequisites: ['extension boundary', 'interaction model'] },
+  { id: 'interaction-library', maturity: 'experimental', defaultEnabled: false, prerequisites: ['interaction model'] },
+  { id: 'ui-sampling', maturity: 'experimental', defaultEnabled: false, prerequisites: ['Froam-controlled DOM', 'interaction model'] },
   { id: 'screenshot-to-ui', maturity: 'experimental', defaultEnabled: true, prerequisites: ['Scan', 'DNA', 'asset provenance'] },
   { id: 'attention-heatmap', maturity: 'experimental', defaultEnabled: true, prerequisites: ['Scan', 'validation corpus'] },
-  { id: 'design-physics', maturity: 'architecture-only', defaultEnabled: false, prerequisites: ['interaction model', 'runtime adapter'] },
-  { id: 'ui-gravity', maturity: 'research-only', defaultEnabled: false, prerequisites: ['design physics'] },
+  { id: 'design-physics', maturity: 'experimental', defaultEnabled: false, prerequisites: ['interaction model', 'runtime adapter'] },
+  { id: 'ui-gravity', maturity: 'experimental', defaultEnabled: false, prerequisites: ['design physics'] },
   { id: 'ui-sound', maturity: 'architecture-only', defaultEnabled: false, prerequisites: ['interaction model', 'assets'] },
   { id: 'chaos-testing', maturity: 'experimental', defaultEnabled: false, prerequisites: ['simulation adapter'] },
   { id: 'synthetic-ux', maturity: 'research-only', defaultEnabled: false, prerequisites: ['simulation adapter', 'flow graph'] },
   { id: 'reality-mode', maturity: 'research-only', defaultEnabled: false, prerequisites: ['simulation adapter', 'privacy model'] },
-  { id: 'mutate', maturity: 'architecture-only', defaultEnabled: false, prerequisites: ['branches', 'history', 'DNA'] },
+  { id: 'mutate', maturity: 'experimental', defaultEnabled: false, prerequisites: ['branches', 'history', 'DNA'] },
   { id: 'froam-space', maturity: 'architecture-only', defaultEnabled: false, prerequisites: ['project graph', 'stable identity'] },
   { id: 'make-it-froam', maturity: 'research-only', defaultEnabled: false, prerequisites: ['brand model'] },
 ] as const
@@ -57,3 +57,6 @@ export const FROAM_ROADMAP_FEATURES: readonly FroamFeatureDefinition[] = [
 export function defaultFroamFeatureFlags(): Record<FroamRoadmapFeature, boolean> {
   return Object.fromEntries(FROAM_ROADMAP_FEATURES.map((feature) => [feature.id, feature.defaultEnabled])) as Record<FroamRoadmapFeature, boolean>
 }
+
+export type FroamLabsFlags = { mutate: boolean; interactionLibrary: boolean; uiSampling: boolean; designPhysics: boolean; uiGravity: boolean }
+export const defaultFroamLabsFlags = (): FroamLabsFlags => ({ mutate: false, interactionLibrary: false, uiSampling: false, designPhysics: false, uiGravity: false })

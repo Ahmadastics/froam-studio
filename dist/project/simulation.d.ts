@@ -22,6 +22,27 @@ export type FroamSimulationEvent = {
     targetId: string;
     action: string;
     value?: string;
+} | {
+    atMs: number;
+    type: 'assets';
+    state: 'available' | 'missing' | 'partial';
+    assetIds?: string[];
+} | {
+    atMs: number;
+    type: 'content';
+    state: 'normal' | 'long-text' | 'empty';
+    locale?: string;
+} | {
+    atMs: number;
+    type: 'permissions';
+    state: 'granted' | 'denied' | 'prompt';
+    permission: string;
+} | {
+    atMs: number;
+    type: 'api';
+    state: 'success' | 'failure' | 'timeout';
+    endpointId: string;
+    status?: number;
 };
 export type FroamSimulationScenario = {
     id: string;

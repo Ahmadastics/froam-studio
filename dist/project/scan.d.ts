@@ -32,6 +32,8 @@ export declare function scanDomTree(root: HTMLElement, registry: FroamNodeRegist
 }): FroamScanBundle;
 /** Convert evidence into versioned DNA without erasing uncertainty or provenance. */
 export declare function dnaFromScan(record: FroamScanRecord): FroamDNA;
+/** Fingerprint the exact derived DNA payload while excluding its own storage marker. */
+export declare function dnaProjectionHash(dna: FroamDNA): string;
 /** Re-scan only the highest changed roots; callers keep unaffected records/DNA. */
 export declare function scanDomChanges(root: HTMLElement, changed: readonly HTMLElement[], registry: FroamNodeRegistry, options: {
     routeKey: string;

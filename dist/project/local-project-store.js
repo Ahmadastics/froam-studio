@@ -1,3 +1,4 @@
+import { packProjectDocument, unpackProjectDocument } from './storage-codec.js';
 export const FROAM_LOCAL_PROJECT_INLINE_LIMIT = 1_500_000;
 const DATABASE_NAME = 'froam-projects-v1';
 const STORE_NAME = 'projects';
@@ -112,7 +113,15 @@ export async function loadProjectFromIndexedDb(projectId) {
     return new Promise((resolve) => {
         try {
             const request = database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(projectId);
-            request.onsuccess = () => resolve(request.result ?? null);
+            request.onsuccess = () => {
+                const saved = request.result;
+                try {
+                    resolve(saved && 'kind' in saved && saved.kind === 'froam-packed-project' ? unpackProjectDocument(saved) : saved ?? null);
+                }
+                catch {
+                    resolve(null);
+                }
+            };
             request.onerror = () => resolve(null);
         }
         catch {
@@ -127,7 +136,9 @@ async function writeProjectToIndexedDb(project) {
     return new Promise((resolve) => {
         try {
             const transaction = database.transaction(STORE_NAME, 'readwrite');
-            transaction.objectStore(STORE_NAME).put(project, project.id);
+            const packed = packProjectDocument(project);
+            const stored = JSON.stringify(packed).length < JSON.stringify(project).length ? packed : project;
+            transaction.objectStore(STORE_NAME).put(stored, project.id);
             transaction.oncomplete = () => resolve(true);
             transaction.onerror = () => resolve(false);
             transaction.onabort = () => resolve(false);

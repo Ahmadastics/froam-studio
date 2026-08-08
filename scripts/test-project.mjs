@@ -131,6 +131,15 @@ const { identityHealthReport } = await import('../dist/project/node-registry.js'
 const { detectFrameworkHost } = await import('../dist/project/framework-identity.js')
 const { profileIntelligence } = await import('../dist/project/performance.js')
 const { compactProjectForLocalStorage, persistProjectToLocalStorage } = await import('../dist/project/local-project-store.js')
+const { compactProjectHistory } = await import('../dist/project/history-compaction.js')
+const { packProjectDocument, profileProjectSize, unpackProjectDocument } = await import('../dist/project/storage-codec.js')
+const { aggregateIdentityDiagnostics, createIdentityTelemetry } = await import('../dist/project/identity-telemetry.js')
+const { createMutationPrototype, deterministicMutationProvider } = await import('../dist/project/mutation.js')
+const { applyInteractionRecipe, deleteInteractionRecipe, duplicateInteractionRecipe, renameInteractionRecipe, saveInteractionRecipe } = await import('../dist/project/interaction-library.js')
+const { createSamplingSession, recordSamplingFrame, samplingSessionToRecipe } = await import('../dist/project/ui-sampling.js')
+const { compilePhysicsRuntime, interactionWithPhysics, stepSpring } = await import('../dist/project/physics.js')
+const { evaluateScreenshotReconstruction } = await import('../dist/project/screenshot-evaluation.js')
+const { factorComponentFamilies } = await import('../dist/project/structural-deduplication.js')
 
 const tests = []
 const test = (name, fn) => tests.push([name, fn])
@@ -165,6 +174,86 @@ test('local recovery compaction does not mutate the complete project document', 
   assert.ok(project.checkpoints.checkpoint.state.scans.node)
   assert.deepEqual(compact.checkpoints.checkpoint.state.scans, {})
   assert.equal(compact.metadata.localPersistence.fullDocument, 'indexeddb')
+})
+
+test('content-addressed project storage round-trips canonical history exactly', () => {
+  const project = createProjectDocument({ id: 'packed', name: 'Packed', actorId: 'tester', idFactory: () => 'checkpoint' })
+  project.metadata = { repeated: ['x'.repeat(800), 'x'.repeat(800)] }
+  const packed = packProjectDocument(project, 64)
+  assert.deepEqual(unpackProjectDocument(packed), project)
+  assert.ok(Object.keys(packed.blobs).length > 0)
+  const compacted = compactProjectHistory(project)
+  assert.equal(compacted.report.canonicalEquivalent, true)
+  assert.equal(compacted.report.eventIdsPreserved, true)
+  assert.equal(compacted.report.checkpointIdsPreserved, true)
+})
+
+test('size profiler separates platform categories and duplicate strings', () => {
+  const project = createProjectDocument({ id: 'profile', name: 'Profile', actorId: 'tester', idFactory: () => 'checkpoint' })
+  project.metadata = { values: ['repeat-me', 'repeat-me', 'repeat-me'] }
+  const profile = profileProjectSize(project)
+  assert.ok(profile.totalBytes > 0)
+  assert.ok(profile.categories.checkpoints > 0)
+  assert.ok(profile.duplicateStringBytes > 0)
+})
+
+test('structural factoring requires confidence or explicit user intent', () => {
+  const dna = Object.fromEntries(['a','b','c'].map((nodeId) => [nodeId, { schemaVersion: 1, nodeId, capturedAt: 1, visual: { color: 'red' }, layout: { order: nodeId } }]))
+  assert.equal(factorComponentFamilies([{ id: 'weak', memberNodeIds: ['a','b','c'], signature: 'x', confidence: .6 }], dna).length, 0)
+  const factored = factorComponentFamilies([{ id: 'strong', memberNodeIds: ['a','b','c'], signature: 'x', confidence: .9 }], dna)
+  assert.equal(factored[0].sharedDna.visual.color, 'red')
+  assert.equal(factored[0].instanceOverrides.a.layout.order, 'a')
+})
+
+test('identity telemetry is aggregate-only and maps recovery methods', () => {
+  const aggregate = aggregateIdentityDiagnostics([{ type: 'stable-id-resolved', at: 1 }, { type: 'resolved-by-path', at: 2 }, { type: 'resolution-failed', at: 3 }])
+  assert.equal(aggregate.counts['stable-id'], 1)
+  assert.equal(aggregate.counts.path, 1)
+  assert.equal(aggregate.counts.failed, 1)
+  assert.equal(JSON.stringify(aggregate).includes('DOM secret'), false)
+  const collector = createIdentityTelemetry(1); collector.record('duplicate-prevented', 2, 2); assert.equal(collector.snapshot().total, 2)
+})
+
+test('MUTATE creates an isolated branch with deterministic provenance', () => {
+  const base = createProjectDocument({ id: 'mutate', name: 'Mutate', actorId: 'tester', idFactory: (() => { let i = 0; return () => `id-${++i}` })() })
+  base.checkpoints[base.branches.main.baseCheckpointId].state.nodes.hero = { id: 'hero', kind: 'element', source: 'host-dom' }
+  const before = JSON.stringify(base)
+  const result = createMutationPrototype(base, { branchId: 'mutation-001', actorId: 'tester', level: 'safe', scopeNodeIds: ['hero'], seed: 1, now: 10, idFactory: (() => { let i = 10; return () => `id-${++i}` })() })
+  assert.equal(JSON.stringify(base), before)
+  assert.equal(result.project.activeBranchId, 'mutation-001')
+  assert.equal(result.provenance.sourceBranchId, 'main')
+  assert.ok(result.project.events.every((event) => event.branchId === 'mutation-001'))
+  const request = { state: result.project.checkpoints[result.project.branches.main.baseCheckpointId].state, scopeNodeIds: ['hero'], level: 'safe', seed: 1, now: 10 }
+  assert.deepEqual(deterministicMutationProvider.propose(request), deterministicMutationProvider.propose(request))
+})
+
+test('Interaction Library CRUD and semantic binding remain portable', () => {
+  const recipe = { id: 'menu', name: 'Menu', interaction: { id: 'menu', name: 'Menu', sourceId: 'old-button', targetIds: ['old-panel'], trigger: 'click', timeline: [{ at: 0, values: { opacity: 0 } }, { at: 1, values: { opacity: 1 } }] }, bindings: { source: { role: 'trigger', required: true }, targets: [{ role: 'panel', required: true }] }, provenance: { kind: 'native', projectId: 'p', branchId: 'main', createdAt: 1 } }
+  let library = saveInteractionRecipe({}, recipe); library = renameInteractionRecipe(library, 'menu', 'Reveal'); library = duplicateInteractionRecipe(library, 'menu', 'menu-copy')
+  const applied = applyInteractionRecipe(library.menu, { sourceId: 'new-button', targetIds: { panel: 'new-panel' } })
+  assert.equal(applied.sourceId, 'new-button'); assert.deepEqual(applied.targetIds, ['new-panel']); assert.equal(library['menu-copy'].name, 'Reveal copy')
+  assert.equal(deleteInteractionRecipe(library, 'menu').menu, undefined)
+})
+
+test('native Sampling records observable frames and labels reconstruction provenance', () => {
+  let session = createSamplingSession({ id: 'sample', trigger: 'click', sourceRole: 'trigger', startedAt: 1 })
+  session = recordSamplingFrame(session, { atMs: 0, targetRole: 'panel', styles: { opacity: 0 } }); session = recordSamplingFrame(session, { atMs: 200, targetRole: 'panel', styles: { opacity: 1 } })
+  const recipe = samplingSessionToRecipe(session, { recipeId: 'sampled', name: 'Sampled', projectId: 'p', branchId: 'main' })
+  assert.equal(recipe.provenance.kind, 'sampled'); assert.equal(recipe.interaction.timeline.length, 2); assert.equal(recipe.interaction.metadata.reconstructedFromObservation, true)
+})
+
+test('Design Physics serializes and produces deterministic compiler/runtime output', () => {
+  const interaction = interactionWithPhysics({ id: 'spring', name: 'Spring', sourceId: 'a', targetIds: ['a'], trigger: 'drag', timeline: [] }, { stiffness: 120, damping: 18, mass: 2 })
+  const compiled = compilePhysicsRuntime(JSON.parse(JSON.stringify(interaction)))
+  assert.equal(compiled.physics.stiffness, 120); assert.equal(compiled.deterministicStep, 'semi-implicit-euler')
+  assert.deepEqual(stepSpring({ position: 0, velocity: 0 }, 1, compiled.physics, .016), stepSpring({ position: 0, velocity: 0 }, 1, compiled.physics, .016))
+})
+
+test('screenshot corpus metrics keep text geometry structure and pixels separate', () => {
+  const reconstruction = { regions: [{ id: 'r', nodeId: 'n', kind: 'text', x: 10, y: 10, width: 100, height: 20, confidence: .8, averageColor: '#fff' }], ocr: [{ provider: 'fixture', available: true, warnings: [], lines: [{ id: 'l', text: 'Hello world', bounds: { x: 10, y: 10, width: 100, height: 20 }, confidence: .9 }] }], analysis: {}, nodes: [], relations: [], dna: [], rootNodeId: 'root', references: [], correctionPasses: [] }
+  const metrics = evaluateScreenshotReconstruction({ id: 'case', reference: { width: 100, height: 100, data: new Uint8ClampedArray(40000), mimeType: 'image/png' }, viewport: { width: 100, height: 100 }, expectedText: ['Hello'], expectedRegions: [{ kind: 'text', x: 10, y: 10, width: 100, height: 20 }], expectedStructure: { groups: 0 }, tags: ['gradient', 'overlap', 'transparency', 'large-type', 'icon-only', 'card-grid', 'nested-cards', 'navigation', 'modal', 'dark-mode', 'light-mode', 'unusual-font', 'image-heavy', 'small-text', 'low-contrast', 'responsive'] }, reconstruction, { timingMs: 12 })
+  assert.equal(metrics.text.accuracy, 1); assert.equal(metrics.geometry.meanIoU, 1); assert.equal(metrics.structure.observedGroups, 0); assert.equal(metrics.visual.typographyApproximation, 'not-measured')
+  assert.ok(metrics.limitations.some((item) => item.includes('z-order'))); assert.ok(metrics.limitations.some((item) => item.includes('responsive behavior')))
 })
 
 test('stable identity survives DOM reordering', () => {

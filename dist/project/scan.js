@@ -157,7 +157,24 @@ export function dnaFromScan(record) {
             for (const [field, value] of Object.entries(signal.values))
                 dna.knowledge[`${signal.kind}.${field}`] = { value, origin: signal.origin, source: signal.source, confidence: signal.confidence, capturedAt: record.capturedAt };
     }
+    const projectionHash = dnaProjectionHash(dna);
+    dna.provenance = { ...dna.provenance, _froamProjection: { kind: 'scan-derived-v1', scanId: record.id, hash: projectionHash } };
     return dna;
+}
+/** Fingerprint the exact derived DNA payload while excluding its own storage marker. */
+export function dnaProjectionHash(dna) {
+    const provenance = { ...dna.provenance };
+    delete provenance._froamProjection;
+    const normalized = Object.keys(provenance).length ? { ...dna, provenance } : Object.fromEntries(Object.entries(dna).filter(([key]) => key !== 'provenance'));
+    const serialized = JSON.stringify(normalized);
+    let a = 0x811c9dc5;
+    let b = 0x9e3779b9;
+    for (let index = 0; index < serialized.length; index += 1) {
+        const code = serialized.charCodeAt(index);
+        a = Math.imul(a ^ code, 0x01000193);
+        b = Math.imul(b ^ code, 0x85ebca6b);
+    }
+    return `${(a >>> 0).toString(36)}${(b >>> 0).toString(36)}:${serialized.length}`;
 }
 /** Re-scan only the highest changed roots; callers keep unaffected records/DNA. */
 export function scanDomChanges(root, changed, registry, options) {

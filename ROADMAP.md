@@ -1,5 +1,12 @@
 # Froam Rooms — roadmap to v6
 
+> **v7.2 transition status (2026-08-09):** the v7 platform now has measured
+> packed storage, durable revisioned hosted-sync boundaries, aggregate identity
+> telemetry, and a reusable screenshot corpus harness. Bounded v8 Labs for
+> MUTATE, Interaction Library, native Sampling, and Design Physics are real but
+> disabled-by-default Experimental systems. Formal v8.0 product work has not
+> begun.
+
 **Where we are:** v7.1.0 · **Status:** Froam Intelligence is hardened with measurable screenshot validation, OCR/provider boundaries, identity health, checkpoint ancestry, incremental Scan, profiling and limited hosted project synchronization. Experimental systems remain honestly experimental; v8 has not begun.
 
 v7 adds one shared understanding layer over the v6 identity, graph, history,

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { createFroamProjectSyncApi, mergeHostedProjectState } from '../lib/project-sync-store.mjs'
+import { createMemoryProjectDocumentStore, FroamStaleRevisionError } from '../lib/project-document-store.mjs'
 import { createProjectDocument, createProjectEvent } from '../dist/project/event-log.js'
 import { mergeProjectSyncDelta, projectSyncPush } from '../dist/project/project-sync.js'
 
@@ -37,6 +38,53 @@ test('hosted HTTP contract authorizes, persists and reconnects by cursor', async
   const denied = await call(api, 'GET', '/api/froam/projects/p/sync?branchId=main&actor=stranger'); assert.equal(denied.status, 403)
   const pushed = await call(api, 'POST', '/api/froam/projects/p/sync', { actor: 'ahmad', branchId: 'main', cursor: 0, events: [{ event: event('p', 'main', 'e-http') }], checkpoints: [], branches: [] }); assert.equal(pushed.status, 200); assert.equal(pushed.events.length, 1)
   const reconnect = await call(api, 'GET', '/api/froam/projects/p/sync?branchId=main&actor=ahmad&cursor=1'); assert.equal(reconnect.status, 200); assert.equal(reconnect.events.length, 0); assert.equal(reconnect.cursor, 1)
+})
+
+test('durable store serializes concurrent writers without losing either branch', async () => {
+  const storage = createMemoryProjectDocumentStore()
+  await Promise.all([
+    storage.transaction('p', undefined, (current) => mergeHostedProjectState(current, { projectId: 'p', branchId: 'main', events: [{ event: event('p', 'main', 'main-1') }], checkpoints: [], branches: [] })),
+    storage.transaction('p', undefined, (current) => mergeHostedProjectState(current, { projectId: 'p', branchId: 'prototype', events: [{ event: event('p', 'prototype', 'prototype-1') }], checkpoints: [], branches: [] })),
+  ])
+  const stored = await storage.read('p')
+  assert.deepEqual(new Set(stored.events.map((item) => item.event.id)), new Set(['main-1', 'prototype-1']))
+  assert.equal(stored.revision, 2)
+})
+
+test('durable store rejects stale compare-and-swap revisions', async () => {
+  const storage = createMemoryProjectDocumentStore(); await storage.transaction('p', 0, (current) => current)
+  await assert.rejects(() => storage.transaction('p', 0, (current) => current), FroamStaleRevisionError)
+})
+
+test('legacy hosted records migrate during reconnect before the next atomic write', async () => {
+  const storage = createMemoryProjectDocumentStore()
+  await storage.compareAndSwap('p', 0, { version: 1, id: 'p', sequence: 4, events: [], checkpoints: {}, branches: {} })
+  const migrated = await storage.read('p')
+  assert.equal(migrated.version, 2); assert.equal(migrated.revision, 1); assert.equal(migrated.sequence, 4)
+  const updated = await storage.transaction('p', 1, (current) => ({ ...current, sequence: 5 }))
+  assert.equal(updated.revision, 2); assert.equal(updated.sequence, 5)
+})
+
+test('HTTP sync returns conflict for stale revision and remains idempotent on retry', async () => {
+  const storage = createMemoryProjectDocumentStore(); const api = createFroamProjectSyncApi({ storage })
+  const body = { branchId: 'main', expectedRevision: 0, cursor: 0, events: [{ event: event('p', 'main', 'retry') }], checkpoints: [], branches: [] }
+  const first = await call(api, 'POST', '/api/froam/projects/p/sync', body); assert.equal(first.status, 200); assert.equal(first.revision, 1)
+  const stale = await call(api, 'POST', '/api/froam/projects/p/sync', body); assert.equal(stale.status, 409); assert.equal(stale.stale, true)
+  const retry = await call(api, 'POST', '/api/froam/projects/p/sync', { ...body, expectedRevision: 1 }); assert.equal(retry.status, 200)
+  assert.equal((await storage.read('p')).events.length, 1)
+})
+
+test('stale reconnect cursor resets safely within the requested branch', async () => {
+  const storage = createMemoryProjectDocumentStore(); const api = createFroamProjectSyncApi({ storage })
+  await call(api, 'POST', '/api/froam/projects/p/sync', { branchId: 'main', events: [{ event: event('p', 'main', 'cursor-event') }], checkpoints: [], branches: [] })
+  const reconnect = await call(api, 'GET', '/api/froam/projects/p/sync?branchId=main&cursor=999')
+  assert.equal(reconnect.cursorReset, true); assert.equal(reconnect.events.length, 1); assert.ok(reconnect.events.every((item) => item.event.branchId === 'main'))
+})
+
+test('checkpoint integrity rejects unknown event and missing parent references', () => {
+  const checkpoint = { id: 'cp', projectId: 'p', branchId: 'main', createdAt: 1, createdBy: 'a', eventIds: ['missing'], state: {} }
+  assert.throws(() => mergeHostedProjectState(null, { projectId: 'p', branchId: 'main', events: [], checkpoints: [checkpoint], branches: [] }), /unknown events/)
+  assert.throws(() => mergeHostedProjectState(null, { projectId: 'p', branchId: 'main', events: [], checkpoints: [{ ...checkpoint, eventIds: [], parentCheckpointId: 'absent' }], branches: [] }), /parent is missing/)
 })
 
 let passed = 0

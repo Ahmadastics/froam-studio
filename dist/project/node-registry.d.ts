@@ -11,7 +11,7 @@ export type FroamNodeRegistryEntry = FroamNodeLocator & {
 export type FroamNodeRegistry = Record<string, FroamNodeRegistryEntry>;
 export type FroamNodeResolutionMethod = 'attribute' | 'host-id' | 'path' | 'fingerprint' | 'ambiguous' | 'failed';
 export type FroamIdentityDiagnostic = {
-    type: 'identity-attribute-lost' | 'resolved-by-path' | 'path-stale' | 'fingerprint-match' | 'registry-updated' | 'ambiguous-match' | 'resolution-failed';
+    type: 'stable-id-resolved' | 'registry-resolved' | 'identity-attribute-lost' | 'resolved-by-path' | 'path-stale' | 'fingerprint-match' | 'registry-updated' | 'ambiguous-match' | 'resolution-failed' | 'duplicate-identity-prevented';
     nodeId: string;
     at: number;
     path?: string;

@@ -113,6 +113,7 @@ import FroamNotePins from './FroamNotePins'
 import FroamPresenceLayer from './FroamPresenceLayer'
 import FroamConnectedCanvas from './FroamConnectedCanvas'
 import FroamIntelligence from './FroamIntelligence'
+import FroamLabs from './FroamLabs'
 import { useFroamProjectDocument } from './useFroamProjectDocument'
 import type { FroamScreenshotRegion } from '../project/screenshot-reconstruction'
 import FroamRoomChat from './FroamRoomChat'
@@ -1695,6 +1696,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [blueprintOpen, setBlueprintOpen] = useState(false)
   const [connectedCanvasOpen, setConnectedCanvasOpen] = useState(false)
   const [intelligenceOpen, setIntelligenceOpen] = useState(false)
+  const [labsOpen, setLabsOpen] = useState(false)
   const [identityDiagnostics, setIdentityDiagnostics] = useState<FroamIdentityDiagnostic[]>([])
   const [frameworkIdentityFinding, setFrameworkIdentityFinding] = useState<FroamFrameworkFinding | null>(null)
   const [tipsReady, setTipsReady] = useState(() => {
@@ -5933,6 +5935,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 <button type="button" className={`froam-studio__icon-btn ${intelligenceOpen ? 'is-active' : ''}`} onClick={() => setIntelligenceOpen((value) => !value)} title="Froam Intelligence — Scan, DNA, Archive, Flow and responsive understanding">
                   <Sparkles size={14} />
                 </button>
+                <button type="button" className={`froam-studio__icon-btn ${labsOpen ? 'is-active' : ''}`} onClick={() => setLabsOpen((value) => !value)} title="Froam Labs — experimental v8 systems">
+                  <Zap size={14} />
+                </button>
                 <button type="button" className="froam-studio__icon-btn" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
                   <Undo2 size={14} />
                 </button>
@@ -7397,6 +7402,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         onInsertArchived={insertArchivedHtml}
         onInsertReconstruction={insertScreenshotReconstruction}
         onPreviewWidth={previewIntelligenceWidth}
+        onToast={showToast}
+      />
+
+      <FroamLabs
+        open={labsOpen}
+        onClose={() => setLabsOpen(false)}
+        project={projectSession.project}
+        onProjectChange={projectSession.setProject}
+        actorId={room.identity?.actor ?? LOCAL_ACTOR}
+        selectedNodeId={selection?.nodeId}
+        selectedElement={currentSelectionRef.current}
         onToast={showToast}
       />
 

@@ -19,11 +19,11 @@ export function mergeProjectSyncDelta(document, delta) {
         branches[branch.id] = branch;
     return { ...document, events: [...events.values()], checkpoints, branches, updatedAt: Math.max(document.updatedAt, ...delta.events.map((item) => item.event.createdAt), 0) };
 }
-export function projectSyncPush(document, branchId = document.activeBranchId, cursor = 0, roomSequences = {}) {
+export function projectSyncPush(document, branchId = document.activeBranchId, cursor = 0, roomSequences = {}, concurrency = {}) {
     if (!document.branches[branchId])
         throw new Error(`Unknown Froam branch: ${branchId}`);
     return {
-        projectId: document.id, branchId, cursor,
+        projectId: document.id, branchId, cursor, ...concurrency,
         events: document.events.filter((event) => event.branchId === branchId).map((event) => ({ event, roomSequence: roomSequences[event.id] })),
         checkpoints: Object.values(document.checkpoints).filter((checkpoint) => checkpoint.branchId === branchId),
         branches: Object.values(document.branches).filter((branch) => branch.id === branchId || branch.id === document.branches[branchId].parentBranchId),

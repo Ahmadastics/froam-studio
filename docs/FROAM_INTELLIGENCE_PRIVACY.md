@@ -36,6 +36,11 @@ Froam refuses to invoke a remote provider without explicit consent. Provider
 implementations should minimize payloads, omit source credentials/secrets and
 avoid sending complete projects when a scan record or cropped region suffices.
 
+Identity-health telemetry is aggregated locally by recovery method. It does not
+collect DOM text, project content, source code, URLs, individual node IDs, or
+fingerprints. Its optional remote exporter receives aggregate counters/rates
+only and must be explicitly enabled and disclosed.
+
 Adding a provider does not make its output an observed fact. Model results must
 remain inferred analysis with confidence/provenance, and the UI must retain an
 honest maturity label.

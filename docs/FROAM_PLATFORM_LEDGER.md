@@ -1,5 +1,24 @@
 # Froam Platform Implementation Ledger
 
+## v7.2 release status — 2026-08-09
+
+- **Production/Beta:** exact-round-trip packed storage, scan-derived DNA
+  projection, repeated-content addressing, quota-safe recovery, aggregate-only
+  identity telemetry, and an Advanced identity-health dashboard.
+- **Beta:** hosted project sync now has a vendor-neutral durable-store contract,
+  revision transactions, branch/checkpoint validation, stale-cursor recovery,
+  idempotent retry, and concurrency coverage. Rooms remain canonical for design
+  operations. Authorization and a multi-process database are host concerns.
+- **Experimental:** Screenshot → Live UI and Predicted Attention remain provider
+  experiments. MUTATE, Interaction Library, native UI Sampling, Design Physics,
+  and Motion Gravity now have independently flagged Labs prototypes on the
+  shared branch/graph/DNA/interaction substrate.
+- **Research:** external UI Sampling, Synthetic UX, Reality Mode, and Froam
+  Space. Make it Froam received no implementation effort.
+
+See `FROAM_V7_2_STORAGE_PERFORMANCE.md`, `FROAM_V7_2_LABS.md`, and
+`FROAM_UI_SAMPLING_FEASIBILITY.md` for measurements and boundaries.
+
 Last updated: 2026-08-08 · Release: 7.1.0 — Intelligence Hardening
 
 ## v7.1 hardening status

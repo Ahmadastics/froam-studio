@@ -17,7 +17,7 @@ export type FroamNodeRegistry = Record<string, FroamNodeRegistryEntry>
 
 export type FroamNodeResolutionMethod = 'attribute' | 'host-id' | 'path' | 'fingerprint' | 'ambiguous' | 'failed'
 export type FroamIdentityDiagnostic = {
-  type: 'identity-attribute-lost' | 'resolved-by-path' | 'path-stale' | 'fingerprint-match' | 'registry-updated' | 'ambiguous-match' | 'resolution-failed'
+  type: 'stable-id-resolved' | 'registry-resolved' | 'identity-attribute-lost' | 'resolved-by-path' | 'path-stale' | 'fingerprint-match' | 'registry-updated' | 'ambiguous-match' | 'resolution-failed' | 'duplicate-identity-prevented'
   nodeId: string
   at: number
   path?: string
@@ -120,6 +120,7 @@ export function resolveNodeRef(
   const byNodeId = root.querySelector<HTMLElement>(`[${FROAM_NODE_ATTRIBUTE}="${safeSelectorValue(ref.nodeId)}"]`)
   if (byNodeId) {
     const updated = { ...locator, path: getElementPath(byNodeId, root) }
+    emit({ type: 'stable-id-resolved', path: updated.path })
     return {
       status: 'exact',
       resolvedBy: 'attribute',
@@ -137,6 +138,7 @@ export function resolveNodeRef(
     if (byHostId && byHostId.tagName.toLowerCase() === locator.fingerprint.tag) {
       byHostId.setAttribute(FROAM_NODE_ATTRIBUTE, ref.nodeId)
       const updated = { ...locator, path: getElementPath(byHostId, root) }
+      emit({ type: 'registry-resolved', path: updated.path, detail: 'Explicit host identity' })
       emit({ type: 'registry-updated', path: updated.path, detail: 'Recovered through explicit host id' })
       return { status: 'recovered', resolvedBy: 'host-id', element: byHostId, ref: updated, registry: updateRegistry(registry, updated, byHostId, 'host-id', at) }
     }

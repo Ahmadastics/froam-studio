@@ -1,7 +1,9 @@
 import { performance } from 'node:perf_hooks'
 import { scanDomTree } from '../dist/project/scan.js'
-import { profileIntelligence } from '../dist/project/performance.js'
+import { profileIntelligence, profileProjectPlatform } from '../dist/project/performance.js'
 import { observeResponsiveState } from '../dist/project/responsive.js'
+import { createProjectDocument } from '../dist/project/event-log.js'
+import { dnaFromScan } from '../dist/project/scan.js'
 
 class Element {
   constructor(tag = 'div', index = 0) { this.tagName = tag.toUpperCase(); this.id = ''; this.className = index % 5 === 0 ? 'card' : ''; this.textContent = index % 5 === 0 ? `Card ${index}` : ''; this.parentElement = null; this.children = []; this.dataset = {}; this.attributes = new Map(); this.idIndex = new Map(); this.tabIndex = -1; this.onclick = null; this.style = {}; this.rect = { x: 0, y: index * 48, left: 0, top: index * 48, width: 960, height: 40, right: 960, bottom: index * 48 + 40 }; this.scrollWidth = 960; this.clientWidth = 960; this.scrollHeight = 40; this.clientHeight = 40 }
@@ -22,5 +24,5 @@ function tree(size) { const root = new Element('main', 0); const queue = [root];
 function state(bundle) { return { legacyStore: {}, nodes: Object.fromEntries(bundle.nodes.map((item) => [item.id, item])), relations: Object.fromEntries(bundle.relations.map((item) => [item.id, item])), flows: {}, interactions: {}, dna: {}, assets: {}, scans: Object.fromEntries(bundle.records.map((item) => [item.id, item])), archive: {}, analyses: {}, responsive: {} } }
 
 const results = []
-for (const size of [500, 1000, 5000]) { const root = tree(size); const start = performance.now(); const bundle = scanDomTree(root, {}, { routeKey: '/', viewport: 'desktop', maxNodes: size, now: 1 }); const scanMs = performance.now() - start; results.push({ ...profileIntelligence({ records: bundle.records, state: state(bundle), scanMs, cinema: () => observeResponsiveState(root, bundle.registry, {}, 960) }), memoryBytes: process.memoryUsage().heapUsed }) }
+for (const size of [500, 1000, 5000, 10000]) { const beforeHeap = process.memoryUsage().heapUsed; const root = tree(size); const start = performance.now(); const bundle = scanDomTree(root, {}, { routeKey: '/', viewport: 'desktop', maxNodes: size, now: 1 }); const scanMs = performance.now() - start; const materialized = state(bundle); materialized.dna = Object.fromEntries(bundle.records.map((record) => { const dna = dnaFromScan(record); return [dna.nodeId, dna] })); const project = createProjectDocument({ id: `benchmark-${size}`, name: 'Benchmark', actorId: 'benchmark', now: 1, idFactory: () => `checkpoint-${size}`, initialState: materialized }); results.push({ ...profileIntelligence({ records: bundle.records, state: materialized, scanMs, cinema: () => observeResponsiveState(root, bundle.registry, {}, 960) }), platform: profileProjectPlatform(project), heapDeltaBytes: process.memoryUsage().heapUsed - beforeHeap }) }
 console.log(JSON.stringify({ environment: { node: process.version, platform: process.platform, architecture: process.arch }, results }, null, 2))

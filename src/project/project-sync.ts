@@ -1,7 +1,7 @@
 import type { FroamBranch, FroamCheckpoint, FroamProjectDocument, FroamProjectEvent } from './types'
 
 export type FroamProjectSyncEvent = { seq: number; roomSequence?: number; event: FroamProjectEvent }
-export type FroamProjectSyncDelta = { projectId: string; branchId: string; cursor: number; events: FroamProjectSyncEvent[]; checkpoints: FroamCheckpoint[]; branches: FroamBranch[] }
+export type FroamProjectSyncDelta = { projectId: string; branchId: string; cursor: number; revision?: number; cursorReset?: boolean; events: FroamProjectSyncEvent[]; checkpoints: FroamCheckpoint[]; branches: FroamBranch[] }
 
 /** Idempotent client fold. The requested branch cannot import another branch's events/checkpoints. */
 export function mergeProjectSyncDelta(document: FroamProjectDocument, delta: FroamProjectSyncDelta): FroamProjectDocument {
@@ -15,10 +15,10 @@ export function mergeProjectSyncDelta(document: FroamProjectDocument, delta: Fro
   return { ...document, events: [...events.values()], checkpoints, branches, updatedAt: Math.max(document.updatedAt, ...delta.events.map((item) => item.event.createdAt), 0) }
 }
 
-export function projectSyncPush(document: FroamProjectDocument, branchId = document.activeBranchId, cursor = 0, roomSequences: Record<string, number> = {}) {
+export function projectSyncPush(document: FroamProjectDocument, branchId = document.activeBranchId, cursor = 0, roomSequences: Record<string, number> = {}, concurrency: { expectedRevision?: number; expectedBranchHeadId?: string | null } = {}) {
   if (!document.branches[branchId]) throw new Error(`Unknown Froam branch: ${branchId}`)
   return {
-    projectId: document.id, branchId, cursor,
+    projectId: document.id, branchId, cursor, ...concurrency,
     events: document.events.filter((event) => event.branchId === branchId).map((event) => ({ event, roomSequence: roomSequences[event.id] })),
     checkpoints: Object.values(document.checkpoints).filter((checkpoint) => checkpoint.branchId === branchId),
     branches: Object.values(document.branches).filter((branch) => branch.id === branchId || branch.id === document.branches[branchId].parentBranchId),

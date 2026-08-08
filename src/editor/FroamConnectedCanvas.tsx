@@ -7,6 +7,7 @@ import { materializeGraphRows } from '../project/graph-inspector'
 import { branchReplayEvents, replayActors, replayCategory, replayEventLabel, replayStateAt, type FroamReplayCategory } from '../project/replay'
 import { identityHealthReport, type FroamIdentityDiagnostic, type FroamNodeRegistry } from '../project/node-registry'
 import type { FroamFrameworkFinding } from '../project/framework-identity'
+import { aggregateIdentityDiagnostics, identityTelemetryRates } from '../project/identity-telemetry'
 import type { FroamInteraction, FroamProjectDocument, FroamProjectState } from '../project/types'
 import { interactionInspectorRecord } from '../project/animator-adapter'
 import FroamAnimator from './FroamAnimator'
@@ -97,6 +98,8 @@ export default function FroamConnectedCanvas(props: Props) {
   const graphRows = useMemo(() => materializeGraphRows(projectState), [projectState])
   const selectedEntry = props.selection?.nodeId ? props.registry[props.selection.nodeId] : undefined
   const identityHealth = useMemo(() => identityHealthReport(props.registry), [props.registry, props.diagnostics.length])
+  const identityTelemetry = useMemo(() => aggregateIdentityDiagnostics(props.diagnostics), [props.diagnostics])
+  const identityRates = useMemo(() => identityTelemetryRates(identityTelemetry), [identityTelemetry])
   const selectedRelations = props.selection?.nodeId
     ? Object.values(projectState.relations).filter((relation) => relation.from === props.selection?.nodeId || relation.to === props.selection?.nodeId)
     : []
@@ -192,6 +195,8 @@ export default function FroamConnectedCanvas(props: Props) {
             <label>Path fallback<strong>{identityHealth.counts.path}</strong></label>
             <label>Fingerprint recovery<strong>{identityHealth.counts.fingerprint}</strong></label>
             <label>Ambiguous / failed<strong>{identityHealth.ambiguous} / {identityHealth.failed}</strong></label>
+            <label>Observed path / fingerprint<strong>{(identityRates.path * 100).toFixed(1)}% / {(identityRates.fingerprint * 100).toFixed(1)}%</strong></label>
+            <label>Local telemetry events<strong>{identityTelemetry.total}</strong></label>
             <label>Host framework<strong>{props.frameworkFinding?.framework ?? 'unknown'}</strong></label>
             <label>Adapter strategy<strong>observable DOM · no private internals</strong></label>
           </div>

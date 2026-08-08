@@ -1,0 +1,10 @@
+import type { FroamInteraction } from './types'
+
+export type FroamPhysicsDescription = { mass: number; stiffness: number; damping: number; friction?: number; bounce?: number; initialVelocity?: number }
+export type FroamPhysicsState = { position: number; velocity: number }
+export function normalizePhysics(input: Partial<FroamPhysicsDescription>): FroamPhysicsDescription { return { mass: Math.max(.01, input.mass ?? 1), stiffness: Math.max(0, input.stiffness ?? 170), damping: Math.max(0, input.damping ?? 26), friction: Math.max(0, input.friction ?? 0), bounce: Math.max(0, Math.min(1, input.bounce ?? 0)), initialVelocity: input.initialVelocity ?? 0 } }
+export function stepSpring(state: FroamPhysicsState, target: number, physics: FroamPhysicsDescription, deltaSeconds: number): FroamPhysicsState { const dt = Math.max(0, Math.min(.05, deltaSeconds)); const force = -physics.stiffness * (state.position - target) - physics.damping * state.velocity; const velocity = (state.velocity + (force / physics.mass) * dt) * Math.max(0, 1 - (physics.friction ?? 0) * dt); return { velocity, position: state.position + velocity * dt } }
+export function interactionWithPhysics(interaction: FroamInteraction, input: Partial<FroamPhysicsDescription>): FroamInteraction { const physics = normalizePhysics(input); return { ...interaction, physics: { preset: 'spring', stiffness: physics.stiffness, damping: physics.damping, mass: physics.mass }, metadata: { ...interaction.metadata, physics: { ...physics, compiler: 'froam-spring-runtime-v1' } } } }
+export function compilePhysicsRuntime(interaction: FroamInteraction) { const physics = normalizePhysics((interaction.metadata?.physics as Partial<FroamPhysicsDescription> | undefined) ?? interaction.physics ?? {}); return { kind: 'froam-physics-runtime' as const, version: 1 as const, interactionId: interaction.id, physics, deterministicStep: 'semi-implicit-euler', requiresRuntime: true } }
+export type FroamGravityDescription = { mode: 'attract-cursor' | 'repel-cursor' | 'follow-target'; strength: number; radius: number; targetId?: string }
+

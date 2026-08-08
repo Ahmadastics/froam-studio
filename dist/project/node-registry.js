@@ -68,6 +68,7 @@ export function resolveNodeRef(ref, root, registry = {}, options = {}) {
     const byNodeId = root.querySelector(`[${FROAM_NODE_ATTRIBUTE}="${safeSelectorValue(ref.nodeId)}"]`);
     if (byNodeId) {
         const updated = { ...locator, path: getElementPath(byNodeId, root) };
+        emit({ type: 'stable-id-resolved', path: updated.path });
         return {
             status: 'exact',
             resolvedBy: 'attribute',
@@ -85,6 +86,7 @@ export function resolveNodeRef(ref, root, registry = {}, options = {}) {
         if (byHostId && byHostId.tagName.toLowerCase() === locator.fingerprint.tag) {
             byHostId.setAttribute(FROAM_NODE_ATTRIBUTE, ref.nodeId);
             const updated = { ...locator, path: getElementPath(byHostId, root) };
+            emit({ type: 'registry-resolved', path: updated.path, detail: 'Explicit host identity' });
             emit({ type: 'registry-updated', path: updated.path, detail: 'Recovered through explicit host id' });
             return { status: 'recovered', resolvedBy: 'host-id', element: byHostId, ref: updated, registry: updateRegistry(registry, updated, byHostId, 'host-id', at) };
         }

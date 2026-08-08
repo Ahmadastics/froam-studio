@@ -108,9 +108,22 @@ export function createFroamRoomApi(options: {
  */
 export function createFroamProjectSyncApi(options: {
   file?: string
-  storage?: { get: (projectId: string) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null; put: (project: Record<string, unknown>) => Promise<void> | void }
+  storage?: FroamProjectDocumentStore | { get: (projectId: string) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null; put: (project: Record<string, unknown>) => Promise<void> | void }
   authorize?: (req: IncomingMessage, input: { projectId: string; actor?: string | null }) => boolean | Promise<boolean>
 }): (req: IncomingMessage, res: ServerResponse) => Promise<boolean>
+
+export type FroamProjectDocumentStore = {
+  kind: string
+  atomic: boolean
+  read(projectId: string): Promise<Record<string, unknown> | null>
+  compareAndSwap(projectId: string, expectedRevision: number, next: Record<string, unknown>): Promise<Record<string, unknown>>
+  transaction(projectId: string, expectedRevision: number | undefined, update: (current: Record<string, unknown>) => Record<string, unknown> | Promise<Record<string, unknown>>): Promise<Record<string, unknown>>
+  getBlob(blobId: string): Promise<unknown | null>
+  putBlob(blobId: string, value: unknown): Promise<string>
+}
+export class FroamStaleRevisionError extends Error { expected: unknown; actual: unknown }
+export function createMemoryProjectDocumentStore(): FroamProjectDocumentStore
+export function createFileProjectDocumentStore(file: string): FroamProjectDocumentStore
 
 /**
  * Commit a design to GitHub through the Contents API, so a save made on a

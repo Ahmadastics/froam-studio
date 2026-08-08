@@ -4,6 +4,10 @@ export type FroamSimulationEvent =
   | { atMs: number; type: 'data'; state: 'empty' | 'partial' | 'full' | 'error' }
   | { atMs: number; type: 'session'; state: 'anonymous' | 'authenticated' | 'expired' }
   | { atMs: number; type: 'input'; targetId: string; action: string; value?: string }
+  | { atMs: number; type: 'assets'; state: 'available' | 'missing' | 'partial'; assetIds?: string[] }
+  | { atMs: number; type: 'content'; state: 'normal' | 'long-text' | 'empty'; locale?: string }
+  | { atMs: number; type: 'permissions'; state: 'granted' | 'denied' | 'prompt'; permission: string }
+  | { atMs: number; type: 'api'; state: 'success' | 'failure' | 'timeout'; endpointId: string; status?: number }
 
 export type FroamSimulationScenario = {
   id: string
@@ -22,4 +26,3 @@ export async function runSimulationScenario(scenario: FroamSimulationScenario, a
   for (const event of ordered) await adapter.apply(event)
   return { scenarioId: scenario.id, applied: ordered.length }
 }
-

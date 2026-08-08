@@ -1,5 +1,22 @@
 # Changelog
 
+## 7.2.0 - 2026-08-09
+
+**Production Hardening + v8 Labs.** Canonical project history remains intact
+while a packed encoding removes repeated content and regenerable DNA. Hosted
+sync gains durable revision transactions, branch/checkpoint validation, stale
+reconnect handling, and concurrency coverage. Identity telemetry remains local
+and aggregate-only; screenshot evaluation accepts reusable local fixture packs.
+
+Independently disabled Labs add branch-isolated MUTATE, a portable Interaction
+Library, native observable UI Sampling, Design Physics, and Motion Gravity.
+These reuse shared platform models and remain Experimental. External Sampling
+remains research-only; Froam Space and Make it Froam were not started.
+
+The synthetic 5,000-node project packs from 33,802,355 to 19,479,155 bytes
+(42.37%). Scan took 89.59 ms, packed save 830.65 ms, load 253.32 ms, and Replay
+0.02 ms on the recorded machine. See the v7.2 storage report for limitations.
+
 ## 7.1.1
 
 - Prevent Connected Canvas crashes when a project exceeds the browser `localStorage` quota.

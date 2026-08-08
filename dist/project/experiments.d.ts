@@ -8,4 +8,12 @@ export type FroamFeatureDefinition = {
 };
 export declare const FROAM_ROADMAP_FEATURES: readonly FroamFeatureDefinition[];
 export declare function defaultFroamFeatureFlags(): Record<FroamRoadmapFeature, boolean>;
+export type FroamLabsFlags = {
+    mutate: boolean;
+    interactionLibrary: boolean;
+    uiSampling: boolean;
+    designPhysics: boolean;
+    uiGravity: boolean;
+};
+export declare const defaultFroamLabsFlags: () => FroamLabsFlags;
 //# sourceMappingURL=experiments.d.ts.map
