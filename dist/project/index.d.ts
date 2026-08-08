@@ -9,4 +9,7 @@ export * from './interaction-runtime';
 export * from './simulation';
 export * from './experiments';
 export * from './bridge';
+export * from './replay';
+export * from './graph-inspector';
+export * from './animator-adapter';
 //# sourceMappingURL=index.d.ts.map

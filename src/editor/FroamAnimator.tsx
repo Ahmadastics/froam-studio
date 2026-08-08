@@ -12,11 +12,13 @@ import {
   MoveHorizontal,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { legacyAnimatorToInteraction } from '../project/animator-adapter'
+import type { FroamInteraction } from '../project/types'
 
 /* ═══════════════════════════════════════════════════════════════
    Types
    ═══════════════════════════════════════════════════════════════ */
-type AnimatableProperty =
+export type AnimatableProperty =
   | 'opacity'
   | 'transform'
   | 'backgroundColor'
@@ -28,13 +30,13 @@ type AnimatableProperty =
   | 'clipPath'
   | 'filter'
 
-type Keyframe = {
+export type AnimatorKeyframe = {
   id: string
   offset: number  // 0-100 percentage
   properties: Partial<Record<AnimatableProperty, string>>
 }
 
-type AnimationConfig = {
+export type AnimationConfig = {
   name: string
   duration: number    // ms
   delay: number       // ms
@@ -43,7 +45,7 @@ type AnimationConfig = {
   easing: string
   trigger: 'load' | 'hover' | 'click' | 'scroll'
   fillMode: 'none' | 'forwards' | 'backwards' | 'both'
-  keyframes: Keyframe[]
+  keyframes: AnimatorKeyframe[]
 }
 
 type Props = {
@@ -51,6 +53,8 @@ type Props = {
   selectionLabel: string
   onApplyAnimation: (css: string, inline: string) => void
   onToast: (msg: string) => void
+  sourceNodeId?: string | null
+  onInteractionChange?: (interaction: FroamInteraction) => void
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -228,7 +232,7 @@ function defaultConfig(): AnimationConfig {
 /* ═══════════════════════════════════════════════════════════════
    Component
    ═══════════════════════════════════════════════════════════════ */
-export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast }: Props) {
+export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast, sourceNodeId, onInteractionChange }: Props) {
   const [config, setConfig] = useState<AnimationConfig>(defaultConfig)
   const [previewing, setPreviewing] = useState(false)
   const [expandedKeyframe, setExpandedKeyframe] = useState<string | null>(null)
@@ -244,6 +248,14 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
       window.clearTimeout(previewTimerRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    if (!sourceNodeId || !onInteractionChange) return
+    onInteractionChange(legacyAnimatorToInteraction(config, {
+      id: `animator:${sourceNodeId}:${config.name}`,
+      sourceId: sourceNodeId,
+    }))
+  }, [config, sourceNodeId, onInteractionChange])
 
   const updateConfig = useCallback((patch: Partial<AnimationConfig>) => {
     setConfig((prev) => ({ ...prev, ...patch }))
@@ -268,7 +280,7 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
     }))
   }, [])
 
-  const updateKeyframe = useCallback((id: string, patch: Partial<Keyframe>) => {
+  const updateKeyframe = useCallback((id: string, patch: Partial<AnimatorKeyframe>) => {
     setConfig((prev) => ({
       ...prev,
       keyframes: prev.keyframes.map((k) => k.id === id ? { ...k, ...patch } : k),

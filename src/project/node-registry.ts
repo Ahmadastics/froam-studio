@@ -1,5 +1,5 @@
 import { ANCHOR_MATCH_THRESHOLD, createAnchor, resolveAnchor, scoreFingerprint } from '../collab/anchor'
-import { getElementPath } from '../collab/paths'
+import { findElementByPath, getElementPath } from '../collab/paths'
 import type { FroamNodeLocator, FroamNodeRef } from './types'
 
 /** The identity attribute Froam already ships on injected nodes. */
@@ -9,9 +9,22 @@ export type FroamNodeRegistryEntry = FroamNodeLocator & {
   nodeId: string
   source: 'host-dom' | 'froam'
   updatedAt: number
+  lastResolution?: FroamNodeResolutionMethod
+  recoveryCount?: number
 }
 
 export type FroamNodeRegistry = Record<string, FroamNodeRegistryEntry>
+
+export type FroamNodeResolutionMethod = 'attribute' | 'host-id' | 'path' | 'fingerprint' | 'ambiguous' | 'failed'
+export type FroamIdentityDiagnostic = {
+  type: 'identity-attribute-lost' | 'resolved-by-path' | 'path-stale' | 'fingerprint-match' | 'registry-updated' | 'ambiguous-match' | 'resolution-failed'
+  nodeId: string
+  at: number
+  path?: string
+  score?: number
+  detail?: string
+}
+export type FroamIdentityDiagnosticSink = (event: FroamIdentityDiagnostic) => void
 
 function defaultId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
@@ -86,9 +99,12 @@ export function resolveNodeRef(
   ref: FroamNodeRef,
   root: HTMLElement,
   registry: FroamNodeRegistry = {},
+  options: { onDiagnostic?: FroamIdentityDiagnosticSink; now?: number; ambiguityDelta?: number } = {},
 ):
-  | { status: 'exact' | 'recovered'; element: HTMLElement; ref: FroamNodeRef; registry: FroamNodeRegistry }
+  | { status: 'exact' | 'recovered'; resolvedBy: Exclude<FroamNodeResolutionMethod, 'ambiguous' | 'failed'>; element: HTMLElement; ref: FroamNodeRef; registry: FroamNodeRegistry }
   | { status: 'orphaned'; ref: FroamNodeRef; registry: FroamNodeRegistry } {
+  const at = options.now ?? Date.now()
+  const emit = (event: Omit<FroamIdentityDiagnostic, 'nodeId' | 'at'>) => options.onDiagnostic?.({ ...event, nodeId: ref.nodeId, at })
   const stored = registry[ref.nodeId]
   const locator: FroamNodeRef = {
     ...stored,
@@ -101,11 +117,13 @@ export function resolveNodeRef(
     const updated = { ...locator, path: getElementPath(byNodeId, root) }
     return {
       status: 'exact',
+      resolvedBy: 'attribute',
       element: byNodeId,
       ref: updated,
-      registry: updateRegistry(registry, updated, byNodeId),
+      registry: updateRegistry(registry, updated, byNodeId, 'attribute', at),
     }
   }
+  if (stored) emit({ type: 'identity-attribute-lost', path: locator.path })
 
   // Explicit host identity is stronger than the structural path and remains
   // useful when a host application has rerendered without Froam attributes.
@@ -114,31 +132,70 @@ export function resolveNodeRef(
     if (byHostId && byHostId.tagName.toLowerCase() === locator.fingerprint.tag) {
       byHostId.setAttribute(FROAM_NODE_ATTRIBUTE, ref.nodeId)
       const updated = { ...locator, path: getElementPath(byHostId, root) }
-      return { status: 'recovered', element: byHostId, ref: updated, registry: updateRegistry(registry, updated, byHostId) }
+      emit({ type: 'registry-updated', path: updated.path, detail: 'Recovered through explicit host id' })
+      return { status: 'recovered', resolvedBy: 'host-id', element: byHostId, ref: updated, registry: updateRegistry(registry, updated, byHostId, 'host-id', at) }
     }
   }
 
-  if (!locator.path || !locator.fingerprint) return { status: 'orphaned', ref: locator, registry }
+  if (!locator.path || !locator.fingerprint) {
+    emit({ type: 'resolution-failed', path: locator.path, detail: 'Missing path or fingerprint' })
+    return { status: 'orphaned', ref: locator, registry: markResolution(registry, ref.nodeId, 'failed', at) }
+  }
+  const atPath = findElementByPath(root, locator.path)
+  if (atPath) {
+    const pathScore = scoreFingerprint(locator.fingerprint, createAnchor(atPath, root).fingerprint)
+    if (pathScore >= ANCHOR_MATCH_THRESHOLD) {
+      atPath.setAttribute(FROAM_NODE_ATTRIBUTE, ref.nodeId)
+      const updated = { ...locator, fingerprint: createAnchor(atPath, root).fingerprint }
+      emit({ type: 'resolved-by-path', path: locator.path, score: pathScore })
+      emit({ type: 'registry-updated', path: locator.path })
+      return { status: 'recovered', resolvedBy: 'path', element: atPath, ref: updated, registry: updateRegistry(registry, updated, atPath, 'path', at) }
+    }
+    emit({ type: 'path-stale', path: locator.path, score: pathScore })
+  } else emit({ type: 'path-stale', path: locator.path, detail: 'Path no longer resolves' })
+
+  const scored = Array.from(root.querySelectorAll<HTMLElement>(locator.fingerprint.tag))
+    .map((element) => ({ element, score: scoreFingerprint(locator.fingerprint!, createAnchor(element, root).fingerprint) }))
+    .filter((candidate) => candidate.score >= ANCHOR_MATCH_THRESHOLD)
+    .sort((a, b) => b.score - a.score)
+  if (scored.length > 1 && scored[0].score - scored[1].score <= (options.ambiguityDelta ?? 0.05)) {
+    emit({ type: 'ambiguous-match', path: locator.path, score: scored[0].score, detail: `${scored.length} viable candidates` })
+    return { status: 'orphaned', ref: locator, registry: markResolution(registry, ref.nodeId, 'ambiguous', at) }
+  }
   const resolved = resolveAnchor({ path: locator.path, fingerprint: locator.fingerprint }, root)
-  if (resolved.status === 'orphaned') return { status: 'orphaned', ref: locator, registry }
+  if (resolved.status === 'orphaned') {
+    emit({ type: 'resolution-failed', path: locator.path })
+    return { status: 'orphaned', ref: locator, registry: markResolution(registry, ref.nodeId, 'failed', at) }
+  }
   resolved.element.setAttribute(FROAM_NODE_ATTRIBUTE, ref.nodeId)
   const updated = { ...locator, path: resolved.path, fingerprint: createAnchor(resolved.element, root).fingerprint }
+  emit({ type: 'fingerprint-match', path: resolved.path, score: resolved.status === 'recovered' ? resolved.score : 1 })
+  emit({ type: 'registry-updated', path: resolved.path })
   return {
     status: resolved.status,
+    resolvedBy: 'fingerprint',
     element: resolved.element,
     ref: updated,
-    registry: updateRegistry(registry, updated, resolved.element),
+    registry: updateRegistry(registry, updated, resolved.element, 'fingerprint', at),
   }
 }
 
-function updateRegistry(registry: FroamNodeRegistry, ref: FroamNodeRef, element: HTMLElement): FroamNodeRegistry {
+function markResolution(registry: FroamNodeRegistry, nodeId: string, method: FroamNodeResolutionMethod, at: number): FroamNodeRegistry {
+  const entry = registry[nodeId]
+  return entry ? { ...registry, [nodeId]: { ...entry, lastResolution: method, updatedAt: at } } : registry
+}
+
+function updateRegistry(registry: FroamNodeRegistry, ref: FroamNodeRef, element: HTMLElement, method: FroamNodeResolutionMethod, at: number): FroamNodeRegistry {
+  const previous = registry[ref.nodeId]
   return {
     ...registry,
     [ref.nodeId]: {
-      ...registry[ref.nodeId],
+      ...previous,
       ...ref,
       source: element.dataset.froamInjected === 'true' ? 'froam' : 'host-dom',
-      updatedAt: Date.now(),
+      updatedAt: at,
+      lastResolution: method,
+      recoveryCount: (previous?.recoveryCount ?? 0) + (method === 'attribute' ? 0 : 1),
     },
   }
 }
@@ -146,6 +203,6 @@ function updateRegistry(registry: FroamNodeRegistry, ref: FroamNodeRef, element:
 export function registryRef(registry: FroamNodeRegistry, nodeId: string): FroamNodeRef | null {
   const entry = registry[nodeId]
   if (!entry) return null
-  const { source: _source, updatedAt: _updatedAt, ...ref } = entry
+  const { source: _source, updatedAt: _updatedAt, lastResolution: _lastResolution, recoveryCount: _recoveryCount, ...ref } = entry
   return ref
 }

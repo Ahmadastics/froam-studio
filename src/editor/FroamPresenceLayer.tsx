@@ -33,7 +33,14 @@ function findMemberElement(root: HTMLElement, nodeId: string | null, path: strin
 }
 
 function MemberLabel({ member }: { member: RoomMemberView }) {
-  return <>{member.avatarUrl && <img className="froam-presence__avatar" src={member.avatarUrl} alt="" />}{member.name}</>
+  const context = member.action || (member.selectedNodeId || member.selectedPath ? `Editing ${member.selectedNodeId?.slice(0, 12) ?? 'selection'}` : member.tool)
+  return <><strong>{member.name}</strong>{context && <small>{context}</small>}</>
+}
+
+function MemberAvatar({ member }: { member: RoomMemberView }) {
+  return member.avatarUrl
+    ? <img className="froam-presence__avatar" src={member.avatarUrl} alt="" referrerPolicy="no-referrer" />
+    : <span className="froam-presence__initials" style={{ background: member.color }}>{member.name.slice(0, 2).toUpperCase()}</span>
 }
 
 /** Ephemeral multiplayer chrome. Nothing rendered here is persisted. */
@@ -82,6 +89,9 @@ export default function FroamPresenceLayer({ members, routeKey, viewport, root }
 
   return (
     <div className="froam-presence" data-chef-editor-root="true" aria-hidden="true">
+      <div className="froam-presence__rail">
+        {visible.map((member) => <div key={member.actor} title={`${member.name}${member.action ? ` · ${member.action}` : ''}`}><MemberAvatar member={member} /></div>)}
+      </div>
       {visible.map((member) => {
         const selected = root ? findMemberElement(root, member.selectedNodeId, member.selectedPath) : null
         const rect = selected?.getBoundingClientRect()
@@ -98,14 +108,12 @@ export default function FroamPresenceLayer({ members, routeKey, viewport, root }
                   borderColor: member.color,
                 }}
               >
-                <span style={{ background: member.color }}><MemberLabel member={member} /></span>
+                <span style={{ background: member.color }}><MemberAvatar member={member} /><MemberLabel member={member} /></span>
               </div>
             )}
             {member.cursor && (
               <div className="froam-presence__cursor" style={{ left: member.cursor.x, top: member.cursor.y, color: member.color }}>
-                <svg width="18" height="23" viewBox="0 0 18 23" fill="none" aria-hidden="true">
-                  <path d="M2 2 16 12h-6l-3 8-2.6-1L7 11H2V2Z" fill="currentColor" stroke="#111827" strokeWidth="1.2" />
-                </svg>
+                <MemberAvatar member={member} />
                 <span style={{ background: member.color }}><MemberLabel member={member} /></span>
               </div>
             )}

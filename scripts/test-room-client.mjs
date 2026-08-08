@@ -171,6 +171,23 @@ test('you can see who else is here, and who is driving', async () => {
   assert.equal(guest.role(), 'commenter')
 })
 
+test('reconnect reuses stored identity and keeps avatar metadata off lightweight beats', async () => {
+  const { transport, created } = await openRoom()
+  const storage = fakeStorage()
+  const first = createRoomClient({ roomId: created.room.id, token: created.invites.editor, transport, storage, isHidden: () => false, now })
+  const identity = await first.join('Amina', { avatarUrl: 'https://example.com/amina.png' })
+  await first.beat({ routeKey: '/', selectedNodeId: 'hero', selectedPath: 'section:1', tool: 'pointer', action: 'Editing Hero' })
+
+  const reconnected = createRoomClient({ roomId: created.room.id, token: created.invites.editor, transport, storage, isHidden: () => false, now })
+  assert.equal(reconnected.joined, true)
+  assert.equal(reconnected.identity.actor, identity.actor)
+  await reconnected.beat({ routeKey: '/pricing', selectedNodeId: 'pricing-card' })
+  const member = reconnected.room.members.find((candidate) => candidate.actor === identity.actor)
+  assert.equal(member.avatarUrl, 'https://example.com/amina.png')
+  assert.equal(member.selectedNodeId, 'pricing-card')
+  assert.equal(member.routeKey, '/pricing')
+})
+
 test('you are not presenting to yourself', async () => {
   const { transport, created } = await openRoom()
   const owner = createRoomClient({

@@ -85,14 +85,54 @@ export declare function createProjectBranch(document: FroamProjectDocument, inpu
 };
 export declare function switchProjectBranch(document: FroamProjectDocument, branchId: FroamId): {
     activeBranchId: string;
+    updatedAt: number;
     schemaVersion: typeof FROAM_PROJECT_SCHEMA_VERSION;
     id: FroamId;
     name: string;
     createdAt: number;
-    updatedAt: number;
     branches: Record<FroamId, FroamBranch>;
     checkpoints: Record<FroamId, FroamCheckpoint>;
     events: FroamProjectEvent[];
+    metadata?: Record<string, unknown>;
+};
+export declare function renameProjectBranch(document: FroamProjectDocument, branchId: FroamId, name: string, now?: number): {
+    updatedAt: number;
+    branches: {
+        [x: string]: FroamBranch | {
+            name: string;
+            id: FroamId;
+            parentBranchId: FroamId | null;
+            forkEventId: FroamId | null;
+            baseCheckpointId: FroamId;
+            headEventId: FroamId | null;
+            createdAt: number;
+            createdBy: import("../collab/types").FroamActorId;
+        };
+    };
+    schemaVersion: typeof FROAM_PROJECT_SCHEMA_VERSION;
+    id: FroamId;
+    name: string;
+    activeBranchId: FroamId;
+    createdAt: number;
+    checkpoints: Record<FroamId, FroamCheckpoint>;
+    events: FroamProjectEvent[];
+    metadata?: Record<string, unknown>;
+};
+/** Delete only leaf prototypes. Main and parents with descendants are protected. */
+export declare function deleteProjectBranch(document: FroamProjectDocument, branchId: FroamId, now?: number): {
+    activeBranchId: string;
+    updatedAt: number;
+    branches: {
+        [x: string]: FroamBranch;
+    };
+    checkpoints: {
+        [x: string]: FroamCheckpoint;
+    };
+    events: FroamProjectEvent[];
+    schemaVersion: typeof FROAM_PROJECT_SCHEMA_VERSION;
+    id: FroamId;
+    name: string;
+    createdAt: number;
     metadata?: Record<string, unknown>;
 };
 //# sourceMappingURL=event-log.d.ts.map

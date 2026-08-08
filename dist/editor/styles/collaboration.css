@@ -2,10 +2,12 @@
 .froam-presence__selection { position: fixed; border: 2px solid; border-radius: 3px; box-sizing: border-box; }
 .froam-presence__selection.is-locked { border-style: dashed; }
 .froam-presence__selection > span,
-.froam-presence__cursor > span { position: absolute; top: -22px; left: -2px; color: #081018; border-radius: 4px 4px 4px 0; padding: 2px 6px; font: 700 11px/1.4 Inter, system-ui, sans-serif; white-space: nowrap; }
-.froam-presence__cursor { position: fixed; transform: translate(-2px, -2px); }
-.froam-presence__cursor > span { top: 17px; left: 12px; }
-.froam-presence__avatar { width: 14px; height: 14px; margin-right: 4px; border-radius: 999px; object-fit: cover; vertical-align: -3px; }
+.froam-presence__cursor > span { position: absolute; top: -30px; left: -2px; display:flex;align-items:center;gap:5px;color: #081018; border-radius: 7px 7px 7px 0; padding: 3px 6px; font: 700 11px/1.2 Inter, system-ui, sans-serif; white-space: nowrap; max-width:180px; }
+.froam-presence__selection small,.froam-presence__cursor small{display:none;font-size:9px;font-weight:600;opacity:.7}.froam-presence__selection:hover small,.froam-presence__cursor:hover small{display:block}
+.froam-presence__cursor { position: fixed; transform: translate(-50%, -50%); width:28px;height:28px;border:2px solid currentColor;border-radius:999px;box-shadow:0 3px 16px rgba(0,0,0,.35); }
+.froam-presence__cursor > .froam-presence__avatar,.froam-presence__cursor > .froam-presence__initials{width:24px;height:24px;margin:0}.froam-presence__cursor > span { top: 25px; left: 19px; }
+.froam-presence__avatar,.froam-presence__initials { width: 18px; height: 18px; margin-right: 2px; border-radius: 999px; object-fit: cover; vertical-align: -5px; flex:0 0 auto; }.froam-presence__initials{display:inline-grid;place-items:center;color:#071014;font:800 8px/1 Inter,system-ui,sans-serif}
+.froam-presence__rail{position:fixed;top:10px;left:50%;transform:translateX(-50%);display:flex;padding:4px 6px;border-radius:999px;background:rgba(8,11,16,.76);border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(12px)}.froam-presence__rail>div+div{margin-left:-5px}.froam-presence__rail .froam-presence__avatar,.froam-presence__rail .froam-presence__initials{width:24px;height:24px;margin:0;border:2px solid #111827}
 [data-froam-locked-by] { outline: 2px dashed var(--froam-lock-color, #5eead4) !important; outline-offset: 2px; }
 .froam-room-chat { display: grid; gap: 8px; }
 .froam-room-chat__messages { max-height: 180px; overflow: auto; display: grid; gap: 7px; }

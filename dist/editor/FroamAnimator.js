@@ -2,6 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Play, Pause, Plus, Trash2, RotateCw, Copy, ChevronDown, Zap, Clock, MoveHorizontal, } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { legacyAnimatorToInteraction } from '../project/animator-adapter.js';
 /* ═══════════════════════════════════════════════════════════════
    Constants
    ═══════════════════════════════════════════════════════════════ */
@@ -170,7 +171,7 @@ function defaultConfig() {
 /* ═══════════════════════════════════════════════════════════════
    Component
    ═══════════════════════════════════════════════════════════════ */
-export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast }) {
+export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast, sourceNodeId, onInteractionChange }) {
     const [config, setConfig] = useState(defaultConfig);
     const [previewing, setPreviewing] = useState(false);
     const [expandedKeyframe, setExpandedKeyframe] = useState(null);
@@ -185,6 +186,14 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
             window.clearTimeout(previewTimerRef.current);
         };
     }, []);
+    useEffect(() => {
+        if (!sourceNodeId || !onInteractionChange)
+            return;
+        onInteractionChange(legacyAnimatorToInteraction(config, {
+            id: `animator:${sourceNodeId}:${config.name}`,
+            sourceId: sourceNodeId,
+        }));
+    }, [config, sourceNodeId, onInteractionChange]);
     const updateConfig = useCallback((patch) => {
         setConfig((prev) => ({ ...prev, ...patch }));
     }, []);

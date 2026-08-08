@@ -68,4 +68,29 @@ export function withActiveBranch(document, activeBranchId) {
         throw new Error(`Unknown Froam branch: ${activeBranchId}`);
     return { ...document, activeBranchId };
 }
+/** Materialize inspected DOM identities into the shared graph vocabulary. */
+export function nodeRegistryGraphRecords(registry) {
+    const nodes = Object.values(registry).map((entry) => ({
+        id: entry.nodeId,
+        kind: 'element',
+        name: entry.fingerprint?.id || entry.fingerprint?.text?.slice(0, 40) || entry.fingerprint?.tag || entry.nodeId,
+        source: entry.source,
+        locator: {
+            path: entry.path,
+            fingerprint: entry.fingerprint,
+            routeKey: entry.routeKey,
+            viewport: entry.viewport,
+        },
+        metadata: { lastResolution: entry.lastResolution, recoveryCount: entry.recoveryCount ?? 0 },
+    }));
+    const pageIds = new Set(nodes.map((node) => node.locator?.routeKey).filter((value) => Boolean(value)));
+    const pageNodes = [...pageIds].map((routeKey) => ({ id: `page:${routeKey}`, kind: 'page', name: routeKey, source: 'froam', locator: { routeKey } }));
+    const relations = nodes.flatMap((node) => node.locator?.routeKey ? [{
+            id: `contains:page:${node.locator.routeKey}:${node.id}`,
+            kind: 'contains',
+            from: `page:${node.locator.routeKey}`,
+            to: node.id,
+        }] : []);
+    return { nodes: [...pageNodes, ...nodes], relations };
+}
 //# sourceMappingURL=adapters.js.map

@@ -2,6 +2,37 @@
 
 All notable changes to froam-studio are documented here.
 
+## 6.3.0 - 2026-08-08
+
+**Connected Canvas becomes usable.** Collaboration identity, deterministic
+history, prototype branches, stable node identity, the project graph and the
+shared interaction model now meet in one editor surface.
+
+### Added
+- Avatar-first multiplayer presence with a collaborator rail and contextual
+  selection/tool/action labels; avatar URLs remain member metadata rather than
+  heartbeat payloads.
+- Replay controls with scrub, restart, playback speeds and reliable actor and
+  semantic-category filters.
+- Prototype UI for fork, switch, rename and protected deletion, with parent and
+  fork-point visibility and isolated materialized branch state.
+- Advanced stable-node diagnostics and observable recovery outcomes.
+- Experimental graph inspector with canvas selection synchronization.
+- Interaction inspector and a compatibility adapter from the existing Animator
+  configuration to `FroamInteraction`.
+
+### Compatibility
+- `froam.design.json`, path selectors, live-DOM editing, Blueprint, Rooms and
+  generated output retain their existing behavior.
+- No project schema bump is required; all v6.3 data additions are optional or
+  expressed through existing schema-v1 events.
+
+### Known limits
+- No branch merge or MUTATE.
+- Replay is reliable from the active checkpoint forward; host changes never
+  represented in Froam history cannot be reconstructed.
+- Graph and interaction inspectors remain explicitly experimental.
+
 ## 6.2.0 - 2026-08-08
 
 **The Connected Canvas foundation.** Froam now has stable object identity and

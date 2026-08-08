@@ -27,6 +27,25 @@ export function legacyDesignToEditorStore(design) {
     }
     return store;
 }
+export function editorStoreToLegacyDesign(store, previous) {
+    const routes = {};
+    for (const [scope, drafts] of Object.entries(store)) {
+        const separator = scope.lastIndexOf('@@');
+        if (separator < 0)
+            continue;
+        const routeKey = scope.slice(0, separator);
+        const viewport = scope.slice(separator + 2);
+        if (!FROAM_VIEWPORTS.includes(viewport))
+            continue;
+        routes[routeKey] = { ...(routes[routeKey] ?? {}), [viewport]: drafts };
+    }
+    return {
+        version: previous?.version ?? 3,
+        updatedAt: new Date().toISOString(),
+        meta: previous?.meta,
+        routes,
+    };
+}
 export function createProjectFileFromLegacyDesign(design, options) {
     const project = createProjectFromLegacyStore({
         projectId: options.projectId,

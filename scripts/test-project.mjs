@@ -69,14 +69,19 @@ const {
   createProjectBranch,
   createProjectDocument,
   createProjectEvent,
+  deleteProjectBranch,
   deriveBranchState,
+  renameProjectBranch,
   switchProjectBranch,
 } = await import('../dist/project/event-log.js')
-const { legacyOpsToProjectEvents, sitePlanGraphRecords } = await import('../dist/project/adapters.js')
+const { legacyOpsToProjectEvents, nodeRegistryGraphRecords, sitePlanGraphRecords } = await import('../dist/project/adapters.js')
 const { makeEdit } = await import('../dist/collab/oplog.js')
 const { componentCatalogGraphRecords } = await import('../dist/project/component-adapter.js')
 const { dnaFromScan } = await import('../dist/project/scan.js')
 const { compileInteractionToCss } = await import('../dist/project/interaction-runtime.js')
+const { branchReplayEvents, filterReplayEvents, replayCategory, replayStateAt } = await import('../dist/project/replay.js')
+const { graphSelectionIndex, materializeGraphRows } = await import('../dist/project/graph-inspector.js')
+const { interactionInspectorRecord, legacyAnimatorToInteraction } = await import('../dist/project/animator-adapter.js')
 const { runSimulationScenario } = await import('../dist/project/simulation.js')
 const { defaultFroamFeatureFlags } = await import('../dist/project/experiments.js')
 const { isProjectFile, loadProjectFile, writeProjectFile } = await import('../lib/project-store.mjs')
@@ -111,6 +116,37 @@ test('stale path recovers through fingerprint and updates the registry', () => {
   assert.equal(resolved.ref.path, 'p:2')
   assert.equal(resolved.registry['node-recover'].path, 'p:2')
   assert.equal(target.getAttribute('data-froam-id'), 'node-recover')
+})
+
+test('identity loss after a host rerender recovers through the verified path with diagnostics', () => {
+  const root = new FakeElement('main')
+  const original = new FakeElement('button', { text: 'Continue' })
+  root.append(original)
+  const captured = captureNodeRef(original, root, {}, { idFactory: () => 'rerendered-button', now: 1 })
+  const replacement = new FakeElement('button', { text: 'Continue' })
+  root.children = [replacement]
+  replacement.parentElement = root
+  const diagnostics = []
+  const resolved = resolveNodeRef(captured.ref, root, captured.registry, { now: 2, onDiagnostic: (event) => diagnostics.push(event) })
+  assert.equal(resolved.status, 'recovered')
+  assert.equal(resolved.resolvedBy, 'path')
+  assert.equal(replacement.getAttribute('data-froam-id'), 'rerendered-button')
+  assert.ok(diagnostics.some((event) => event.type === 'identity-attribute-lost'))
+  assert.ok(diagnostics.some((event) => event.type === 'resolved-by-path'))
+})
+
+test('ambiguous fingerprint recovery stays orphaned and reports the ambiguity', () => {
+  const root = new FakeElement('main')
+  const first = new FakeElement('p', { text: 'Repeated copy' })
+  const second = new FakeElement('p', { text: 'Repeated copy' })
+  root.append(first, second)
+  const captured = captureNodeRef(first, root, {}, { idFactory: () => 'ambiguous-node', attach: false, now: 1 })
+  const ref = { ...captured.ref, path: 'p:9' }
+  const diagnostics = []
+  const resolved = resolveNodeRef(ref, root, captured.registry, { ambiguityDelta: 0.4, onDiagnostic: (event) => diagnostics.push(event) })
+  assert.equal(resolved.status, 'orphaned')
+  assert.equal(resolved.registry['ambiguous-node'].lastResolution, 'ambiguous')
+  assert.ok(diagnostics.some((event) => event.type === 'ambiguous-match'))
 })
 
 test('keeps an injected Froam component identity', () => {
@@ -278,6 +314,52 @@ test('branches fork the materialized state and remain isolated', () => {
   assert.equal(switchProjectBranch(project, 'main').activeBranchId, 'main')
 })
 
+test('prototype rename, switching, persistence and deletion safeguards are deterministic', () => {
+  let project = createProjectDocument({ id: 'prototype-project', name: 'Prototype', actorId: 'ahmad', now: 1, idFactory: () => 'prototype-base' })
+  project = createProjectBranch(project, { id: 'mobile', name: 'Mobile', actorId: 'ahmad', now: 2, idFactory: () => 'mobile-base' })
+  project = renameProjectBranch(project, 'mobile', 'Mobile Concept', 3)
+  assert.equal(project.branches.mobile.name, 'Mobile Concept')
+  assert.equal(switchProjectBranch(project, 'main').activeBranchId, 'main')
+  assert.throws(() => deleteProjectBranch(project, 'main'), /cannot be deleted/)
+  const serialized = JSON.parse(JSON.stringify(project))
+  assert.equal(serialized.branches.mobile.parentBranchId, 'main')
+  const deleted = deleteProjectBranch(project, 'mobile', 4)
+  assert.equal(deleted.branches.mobile, undefined)
+  assert.equal(deleted.activeBranchId, 'main')
+})
+
+test('a parent prototype with a child cannot be deleted out from under it', () => {
+  let project = createProjectDocument({ id: 'branch-tree', name: 'Tree', actorId: 'ahmad', now: 1, idFactory: () => 'tree-base' })
+  project = createProjectBranch(project, { id: 'parent', name: 'Parent', actorId: 'ahmad', now: 2, idFactory: () => 'parent-base' })
+  project = createProjectBranch(project, { id: 'child', name: 'Child', actorId: 'ahmad', now: 3, idFactory: () => 'child-base' })
+  assert.throws(() => deleteProjectBranch(project, 'parent'), /child prototypes/)
+})
+
+test('Replay orders deterministically and filters by actor and semantic category', () => {
+  let project = createProjectDocument({ id: 'replay-project', name: 'Replay', actorId: 'ahmad', now: 1, idFactory: () => 'replay-base' })
+  const textOp = makeEdit({}, { actor: 'ahmad', clock: 2, routeKey: '/', viewport: 'desktop', path: 'h1:1', field: 'text', value: 'Hello', label: 'Text' })
+  const styleOp = makeEdit({}, { actor: 'musa', clock: 1, routeKey: '/', viewport: 'desktop', path: 'h1:1', field: 'style:color', value: 'red', label: 'Color' })
+  project = appendProjectEvents(project, legacyOpsToProjectEvents([textOp, styleOp], { projectId: project.id, branchId: 'main' }).reverse())
+  const events = branchReplayEvents(project)
+  assert.deepEqual(events.map((event) => event.actorId), ['musa', 'ahmad'])
+  assert.equal(replayCategory(events[0]), 'styling')
+  assert.deepEqual(filterReplayEvents(events, { actorId: 'ahmad' }).map((event) => event.id), [textOp.id])
+  assert.equal(replayStateAt(project, 1).legacyStore['/@@desktop']['h1:1'].styles.color, 'red')
+  assert.equal(replayStateAt(project, 2).legacyStore['/@@desktop']['h1:1'].text, 'Hello')
+})
+
+test('Replay continues from a checkpoint without replaying folded events twice', () => {
+  let counter = 0
+  let project = createProjectDocument({ id: 'replay-checkpoint', name: 'Replay CP', actorId: 'ahmad', now: 1, idFactory: () => `replay-cp-${++counter}` })
+  const first = makeEdit({}, { actor: 'ahmad', clock: 1, routeKey: '/', viewport: 'desktop', path: 'p:1', field: 'text', value: 'One' })
+  project = appendProjectEvents(project, legacyOpsToProjectEvents([first], { projectId: project.id, branchId: 'main' }))
+  project = checkpointBranch(project, { actorId: 'ahmad', now: 2, idFactory: () => `replay-cp-${++counter}` })
+  const second = makeEdit(deriveBranchState(project).legacyStore, { actor: 'ahmad', clock: 2, routeKey: '/', viewport: 'desktop', path: 'p:1', field: 'text', value: 'Two' })
+  project = appendProjectEvents(project, legacyOpsToProjectEvents([second], { projectId: project.id, branchId: 'main' }))
+  assert.equal(replayStateAt(project, 0).legacyStore['/@@desktop']['p:1'].text, 'One')
+  assert.equal(replayStateAt(project, 1).legacyStore['/@@desktop']['p:1'].text, 'Two')
+})
+
 test('Site Planner records project cleanly into shared graph nodes and relations', () => {
   const graph = sitePlanGraphRecords([{
     id: 'home', name: 'Home', path: '/', parentId: null, status: 'ready',
@@ -295,6 +377,16 @@ test('component catalog projects into the same graph vocabulary', () => {
   const graph = componentCatalogGraphRecords([{ id: 'hero-01', title: 'Hero', category: 'hero', anatomy: ['heading'] }])
   assert.equal(graph.nodes[0].kind, 'component-definition')
   assert.equal(graph.nodes[0].metadata.category, 'hero')
+})
+
+test('registry nodes materialize into graph rows with two-way selection mapping', () => {
+  const graph = nodeRegistryGraphRecords({ hero: { nodeId: 'hero', source: 'host-dom', updatedAt: 1, path: 'section:1', routeKey: '/', viewport: 'desktop', fingerprint: { tag: 'section', text: 'Hero' } } })
+  const state = { legacyStore: {}, nodes: Object.fromEntries(graph.nodes.map((node) => [node.id, node])), relations: Object.fromEntries(graph.relations.map((relation) => [relation.id, relation])), flows: {}, interactions: {}, dna: {}, assets: {} }
+  const rows = materializeGraphRows(state)
+  const index = graphSelectionIndex(state)
+  assert.ok(rows.some((row) => row.node.id === 'hero' && row.depth === 1))
+  assert.equal(index.byNodeId.get('hero').locator.path, 'section:1')
+  assert.equal(index.byPath.get('section:1').id, 'hero')
 })
 
 test('Scan signals become DNA without inventing observations', () => {
@@ -317,6 +409,18 @@ test('interaction model compiles through an explicit CSS adapter', () => {
   })
   assert.match(compiled.css, /@keyframes froam-fade-in/)
   assert.equal(compiled.requiresRuntime, true)
+})
+
+test('legacy Animator adapts and serializes through the shared interaction model', () => {
+  const interaction = legacyAnimatorToInteraction({
+    name: 'fade', duration: 500, delay: 20, iterations: 1, direction: 'normal', easing: 'ease-out', trigger: 'hover', fillMode: 'both',
+    keyframes: [{ id: 'a', offset: 100, properties: { opacity: '1' } }, { id: 'b', offset: 0, properties: { opacity: '0' } }],
+  }, { id: 'interaction-1', sourceId: 'hero' })
+  const inspected = interactionInspectorRecord(JSON.parse(JSON.stringify(interaction)))
+  assert.deepEqual(interaction.timeline.map((frame) => frame.at), [0, 1])
+  assert.equal(inspected.trigger, 'hover')
+  assert.equal(inspected.compilerTarget, 'css-keyframes')
+  assert.match(compileInteractionToCss(interaction).animation, /500ms/)
 })
 
 test('simulation scenarios execute deterministically through adapters', async () => {

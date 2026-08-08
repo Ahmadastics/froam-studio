@@ -111,13 +111,14 @@ import { useFroamRoom } from '../collab/useFroamRoom'
 import type { RoomComment, RoomRevision } from '../collab/room'
 import FroamNotePins from './FroamNotePins'
 import FroamPresenceLayer from './FroamPresenceLayer'
+import FroamConnectedCanvas from './FroamConnectedCanvas'
 import FroamRoomChat from './FroamRoomChat'
 import { diffStores, type FroamChange } from '../collab/oplog'
 import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist'
 import { findElementByPath, getElementPath, isSafeDraftPath, tagOfPath } from '../collab/paths'
 import { createAnchor, resolveAnchor } from '../collab/anchor'
 import { LOCAL_ACTOR, scopeKey, type FroamAnchor, type FroamOp, type FroamViewport } from '../collab/types'
-import { captureNodeRef, type FroamNodeRegistry } from '../project/node-registry'
+import { captureNodeRef, resolveNodeRef, type FroamIdentityDiagnostic, type FroamNodeRegistry } from '../project/node-registry'
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources'
 import { useFroamRouteKey } from '../routing'
 import {
@@ -1688,6 +1689,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [studioMinimized, setStudioMinimized] = useState(false)
   const [scanActive, setScanActive] = useState(false)
   const [blueprintOpen, setBlueprintOpen] = useState(false)
+  const [connectedCanvasOpen, setConnectedCanvasOpen] = useState(false)
+  const [identityDiagnostics, setIdentityDiagnostics] = useState<FroamIdentityDiagnostic[]>([])
   const [tipsReady, setTipsReady] = useState(() => {
     try { return window.localStorage.getItem(SCAN_DONE_KEY) === '1' } catch { return true }
   })
@@ -3144,7 +3147,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       // selection or — worse — silently handed back whatever now sits in that
       // slot. The fingerprint follows the element instead of the slot.
       const anchor = selectionAnchorRef.current
-      const resolved = anchor
+      const stableRef = selection.nodeId ? nodeRegistryRef.current[selection.nodeId] : undefined
+      const stableResolved = stableRef ? resolveNodeRef(stableRef, root, nodeRegistryRef.current, {
+        onDiagnostic: (event) => setIdentityDiagnostics((current) => [...current.slice(-99), event]),
+      }) : null
+      if (stableResolved) {
+        nodeRegistryRef.current = stableResolved.registry
+        saveNodeRegistry(stableResolved.registry)
+      }
+      const resolved = stableResolved && stableResolved.status !== 'orphaned'
+        ? { status: stableResolved.status, element: stableResolved.element, path: stableResolved.ref.path ?? getElementPath(stableResolved.element, root) }
+        : anchor
         ? resolveAnchor(anchor, root)
         : (() => {
             const el = findElementByPath(root, selection.path)
@@ -3157,13 +3170,50 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       if (resolved.status === 'recovered') {
         selectionAnchorRef.current = createAnchor(target, root)
       }
-      const refreshed = buildSelection(target, path)
+      const refreshed = { ...buildSelection(target, path), nodeId: selection.nodeId }
       currentSelectionRef.current = target
       target.setAttribute('data-chef-selected', 'true')
       setSelection(refreshed)
       setSelections((current) => current.map((item) => item.path === selection.path ? refreshed : item))
       setSelectionRect(target.getBoundingClientRect())
     })
+  }
+
+  function previewConnectedCanvas(next: EditorStore | null) {
+    applyStoreToDOM(next ?? storeRef.current, { clearCurrent: true })
+  }
+
+  function materializeConnectedBranch(next: EditorStore) {
+    opLoadingDesignRef.current = true
+    opLog.load([])
+    opLog.seed(next)
+    storeRef.current = next
+    setStore(next)
+    saveStore(next)
+    applyStoreToDOM(next, { clearCurrent: true })
+    bumpLog()
+    updateSelectionsState([])
+  }
+
+  function selectConnectedNode(nodeId: string, fallbackPath?: string) {
+    const root = getRoot()
+    if (!root) return
+    const entry = nodeRegistryRef.current[nodeId]
+    if (entry) {
+      const resolved = resolveNodeRef(entry, root, nodeRegistryRef.current, {
+        onDiagnostic: (event) => setIdentityDiagnostics((current) => [...current.slice(-99), event]),
+      })
+      nodeRegistryRef.current = resolved.registry
+      saveNodeRegistry(resolved.registry)
+      if (resolved.status !== 'orphaned') {
+        updateSelectionsState([{ ...buildSelection(resolved.element, resolved.ref.path ?? fallbackPath ?? ''), nodeId }])
+        return
+      }
+    }
+    if (fallbackPath) {
+      const element = findElementByPath(root, fallbackPath)
+      if (element) updateSelectionsState([{ ...buildSelection(element, fallbackPath), nodeId }])
+    }
   }
 
   /**
@@ -5799,6 +5849,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 <button type="button" className="froam-studio__icon-btn" onClick={() => setCommandPaletteOpen(true)} title="Command palette (Ctrl+K)">
                   <Command size={14} />
                 </button>
+                <button type="button" className={`froam-studio__icon-btn ${connectedCanvasOpen ? 'is-active' : ''}`} onClick={() => setConnectedCanvasOpen((value) => !value)} title="Connected Canvas — replay, prototypes and inspectors">
+                  <Share2 size={14} />
+                </button>
                 <button type="button" className="froam-studio__icon-btn" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
                   <Undo2 size={14} />
                 </button>
@@ -7213,6 +7266,35 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           root={getRoot()}
         />
       )}
+
+      <FroamConnectedCanvas
+        open={connectedCanvasOpen}
+        onClose={() => setConnectedCanvasOpen(false)}
+        projectId={`project:${typeof window !== 'undefined' ? window.location.host : 'froam'}`}
+        actorId={room.identity?.actor ?? LOCAL_ACTOR}
+        ops={opLog.all()}
+        store={store}
+        registry={nodeRegistryRef.current}
+        diagnostics={identityDiagnostics}
+        routeKey={routeKey}
+        viewport={viewportMode}
+        selection={selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null}
+        selectedElement={currentSelectionRef.current}
+        onPreviewStore={previewConnectedCanvas}
+        onMaterializeBranch={materializeConnectedBranch}
+        onSelectNode={selectConnectedNode}
+        onApplyAnimation={(css, inline) => {
+          let style = document.getElementById('froam-connected-interactions') as HTMLStyleElement | null
+          if (!style) {
+            style = document.createElement('style')
+            style.id = 'froam-connected-interactions'
+            document.head.appendChild(style)
+          }
+          style.textContent = `${style.textContent ?? ''}\n${css}`
+          applyStyle({ animation: inline }, undefined, 'Animation')
+        }}
+        onToast={showToast}
+      />
 
       {/* v4: Resize handles on selected element */}
       {showPanel && selection && !inlineEditing && (

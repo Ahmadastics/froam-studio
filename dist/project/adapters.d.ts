@@ -1,6 +1,7 @@
 import type { EditorStore, FroamOp } from '../collab/types';
 import type { FroamWireframeSection } from '../editor/FroamPlannerTypes';
 import type { FroamNode, FroamProjectDocument, FroamProjectEvent, FroamRelation } from './types';
+import type { FroamNodeRegistry } from './node-registry';
 /** Carries today's proven field operations into project history unchanged. */
 export declare function legacyOpsToProjectEvents(ops: readonly FroamOp[], input: {
     projectId: string;
@@ -38,5 +39,10 @@ export declare function withActiveBranch(document: FroamProjectDocument, activeB
     checkpoints: Record<import("./types").FroamId, import("./types").FroamCheckpoint>;
     events: FroamProjectEvent[];
     metadata?: Record<string, unknown>;
+};
+/** Materialize inspected DOM identities into the shared graph vocabulary. */
+export declare function nodeRegistryGraphRecords(registry: FroamNodeRegistry): {
+    nodes: FroamNode[];
+    relations: FroamRelation[];
 };
 //# sourceMappingURL=adapters.d.ts.map

@@ -16,6 +16,7 @@ export type FroamProjectFile = {
 export declare function isLegacyDesignFile(value: unknown): value is FroamLegacyDesignFile;
 export declare function isFroamProjectFile(value: unknown): value is FroamProjectFile;
 export declare function legacyDesignToEditorStore(design: FroamLegacyDesignFile): EditorStore;
+export declare function editorStoreToLegacyDesign(store: EditorStore, previous?: FroamLegacyDesignFile): FroamLegacyDesignFile;
 export declare function createProjectFileFromLegacyDesign(design: FroamLegacyDesignFile, options: {
     projectId: string;
     actorId: string;

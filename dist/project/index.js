@@ -9,4 +9,7 @@ export * from './interaction-runtime.js';
 export * from './simulation.js';
 export * from './experiments.js';
 export * from './bridge.js';
+export * from './replay.js';
+export * from './graph-inspector.js';
+export * from './animator-adapter.js';
 //# sourceMappingURL=index.js.map

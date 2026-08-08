@@ -1,6 +1,6 @@
 # Froam Rooms — roadmap to v6
 
-**Where we are:** v6.2.0 · **Status:** Connected Canvas foundations shipped; roadmap integration continues.
+**Where we are:** v6.3.0 · **Status:** Connected Canvas is visible and usable; v7 intelligence systems have not begun.
 
 The roadmap is retained below as the architectural record. Phase 0 and the
 v5 review track shipped first; v6.0/v6.1 complete the same room with ordered

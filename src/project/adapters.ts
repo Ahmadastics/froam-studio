@@ -8,6 +8,7 @@ import type {
   FroamProjectState,
   FroamRelation,
 } from './types'
+import type { FroamNodeRegistry } from './node-registry'
 
 /** Carries today's proven field operations into project history unchanged. */
 export function legacyOpsToProjectEvents(
@@ -98,4 +99,30 @@ export function sitePlanGraphRecords(pages: readonly LegacySitePage[]) {
 export function withActiveBranch(document: FroamProjectDocument, activeBranchId: string) {
   if (!document.branches[activeBranchId]) throw new Error(`Unknown Froam branch: ${activeBranchId}`)
   return { ...document, activeBranchId }
+}
+
+/** Materialize inspected DOM identities into the shared graph vocabulary. */
+export function nodeRegistryGraphRecords(registry: FroamNodeRegistry): { nodes: FroamNode[]; relations: FroamRelation[] } {
+  const nodes = Object.values(registry).map<FroamNode>((entry) => ({
+    id: entry.nodeId,
+    kind: 'element',
+    name: entry.fingerprint?.id || entry.fingerprint?.text?.slice(0, 40) || entry.fingerprint?.tag || entry.nodeId,
+    source: entry.source,
+    locator: {
+      path: entry.path,
+      fingerprint: entry.fingerprint,
+      routeKey: entry.routeKey,
+      viewport: entry.viewport,
+    },
+    metadata: { lastResolution: entry.lastResolution, recoveryCount: entry.recoveryCount ?? 0 },
+  }))
+  const pageIds = new Set(nodes.map((node) => node.locator?.routeKey).filter((value): value is string => Boolean(value)))
+  const pageNodes = [...pageIds].map<FroamNode>((routeKey) => ({ id: `page:${routeKey}`, kind: 'page', name: routeKey, source: 'froam', locator: { routeKey } }))
+  const relations = nodes.flatMap<FroamRelation>((node) => node.locator?.routeKey ? [{
+    id: `contains:page:${node.locator.routeKey}:${node.id}`,
+    kind: 'contains',
+    from: `page:${node.locator.routeKey}`,
+    to: node.id,
+  }] : [])
+  return { nodes: [...pageNodes, ...nodes], relations }
 }

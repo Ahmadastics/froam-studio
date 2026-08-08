@@ -251,6 +251,45 @@ export function createProjectBranch(document, input) {
 export function switchProjectBranch(document, branchId) {
     if (!document.branches[branchId])
         throw new Error(`Unknown Froam branch: ${branchId}`);
-    return { ...document, activeBranchId: branchId };
+    return { ...document, activeBranchId: branchId, updatedAt: Date.now() };
+}
+export function renameProjectBranch(document, branchId, name, now = Date.now()) {
+    const branch = document.branches[branchId];
+    if (!branch)
+        throw new Error(`Unknown Froam branch: ${branchId}`);
+    const cleanName = name.trim().slice(0, 80);
+    if (!cleanName)
+        throw new Error('A Froam prototype needs a name');
+    return {
+        ...document,
+        updatedAt: now,
+        branches: { ...document.branches, [branchId]: { ...branch, name: cleanName } },
+    };
+}
+/** Delete only leaf prototypes. Main and parents with descendants are protected. */
+export function deleteProjectBranch(document, branchId, now = Date.now()) {
+    const branch = document.branches[branchId];
+    if (!branch)
+        throw new Error(`Unknown Froam branch: ${branchId}`);
+    if (branchId === 'main' || branch.parentBranchId === null)
+        throw new Error('The main Froam branch cannot be deleted');
+    if (Object.values(document.branches).some((candidate) => candidate.parentBranchId === branchId)) {
+        throw new Error('Delete child prototypes before deleting their parent');
+    }
+    const branches = { ...document.branches };
+    delete branches[branchId];
+    const checkpoints = { ...document.checkpoints };
+    for (const checkpoint of Object.values(checkpoints)) {
+        if (checkpoint.branchId === branchId)
+            delete checkpoints[checkpoint.id];
+    }
+    return {
+        ...document,
+        activeBranchId: document.activeBranchId === branchId ? branch.parentBranchId : document.activeBranchId,
+        updatedAt: now,
+        branches,
+        checkpoints,
+        events: document.events.filter((event) => event.branchId !== branchId),
+    };
 }
 //# sourceMappingURL=event-log.js.map
