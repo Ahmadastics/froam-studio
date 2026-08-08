@@ -189,12 +189,13 @@ export function createRoomClient(options) {
          * one, so a refresh keeps your comments yours instead of minting a
          * stranger who happens to have the same name.
          */
-        async join(name) {
+        async join(name, profile = {}) {
             const payload = await post(`/api/froam/rooms/${roomId}/join`, {
                 token,
                 name,
                 actor: identity?.actor,
                 session: identity?.session,
+                avatarUrl: profile.avatarUrl,
             });
             if (!payload?.you?.actor)
                 throw new Error('Could not join the room');

@@ -57,7 +57,7 @@ function domDepth(el, root) {
     }
     return depth;
 }
-function collectBlueprintNodes(root) {
+function collectBlueprintNodes(root, nodeIdOf) {
     const selector = 'h1,h2,h3,h4,h5,h6,p,img,svg,picture,video,canvas,button,a,input,select,textarea,section,header,footer,main,article,nav,aside,form,ul,ol,li,blockquote,div';
     const elements = root.querySelectorAll(selector);
     const scrollX = window.scrollX;
@@ -76,6 +76,7 @@ function collectBlueprintNodes(root) {
             continue;
         nodes.push({
             el,
+            nodeId: nodeIdOf?.(el),
             x: r.left + scrollX,
             y: r.top + scrollY,
             w: r.width,
@@ -125,10 +126,10 @@ function collectFonts(root) {
     return [...fonts];
 }
 /** Scan the live page and produce the full blueprint dataset (or null if empty). */
-export function computeBlueprintData(root) {
+export function computeBlueprintData(root, options = {}) {
     if (!root)
         return null;
-    const nodes = collectBlueprintNodes(root);
+    const nodes = collectBlueprintNodes(root, options.nodeIdOf);
     if (nodes.length === 0)
         return null;
     const docWidth = Math.max(window.innerWidth, ...nodes.map((n) => n.x + n.w));

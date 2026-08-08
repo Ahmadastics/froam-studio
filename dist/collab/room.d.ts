@@ -18,15 +18,20 @@ export type RoomMemberView = {
     name: string;
     role: FroamRole;
     color: string;
+    avatarUrl: string | null;
     here: boolean;
     routeKey: string | null;
     viewport: FroamViewport | null;
     selectedPath: string | null;
+    selectedNodeId: string | null;
     lockedPath: string | null;
+    lockedNodeId: string | null;
     cursor: {
         x: number;
         y: number;
     } | null;
+    tool: string | null;
+    action: string | null;
     seenAt: number | null;
 };
 export type RoomView = {
@@ -55,6 +60,7 @@ export type RoomComment = {
     routeKey: string;
     viewport: FroamViewport;
     anchor: {
+        nodeId?: string;
         path: string;
         fingerprint: {
             tag: string;
@@ -153,7 +159,9 @@ export declare function createRoomClient(options: {
      * one, so a refresh keeps your comments yours instead of minting a
      * stranger who happens to have the same name.
      */
-    join(name: string): Promise<RoomIdentity>;
+    join(name: string, profile?: {
+        avatarUrl?: string | null;
+    }): Promise<RoomIdentity>;
     /** Read the room without changing anything. */
     refresh(): Promise<RoomView | null>;
     /**
@@ -167,21 +175,29 @@ export declare function createRoomClient(options: {
         routeKey?: string;
         viewport?: FroamViewport;
         selectedPath?: string | null;
+        selectedNodeId?: string | null;
         lockedPath?: string | null;
+        lockedNodeId?: string | null;
         cursor?: {
             x: number;
             y: number;
         } | null;
+        tool?: string | null;
+        action?: string | null;
     }): Promise<RoomView | null>;
     start(where: () => {
         routeKey?: string;
         viewport?: FroamViewport;
         selectedPath?: string | null;
+        selectedNodeId?: string | null;
         lockedPath?: string | null;
+        lockedNodeId?: string | null;
         cursor?: {
             x: number;
             y: number;
         } | null;
+        tool?: string | null;
+        action?: string | null;
     }, everyMs?: number): () => void;
     stop(): void;
     pollEvents(): Promise<FroamRoomEvent[]>;

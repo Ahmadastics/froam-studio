@@ -5,6 +5,7 @@
 .froam-presence__cursor > span { position: absolute; top: -22px; left: -2px; color: #081018; border-radius: 4px 4px 4px 0; padding: 2px 6px; font: 700 11px/1.4 Inter, system-ui, sans-serif; white-space: nowrap; }
 .froam-presence__cursor { position: fixed; transform: translate(-2px, -2px); }
 .froam-presence__cursor > span { top: 17px; left: 12px; }
+.froam-presence__avatar { width: 14px; height: 14px; margin-right: 4px; border-radius: 999px; object-fit: cover; vertical-align: -3px; }
 [data-froam-locked-by] { outline: 2px dashed var(--froam-lock-color, #5eead4) !important; outline-offset: 2px; }
 .froam-room-chat { display: grid; gap: 8px; }
 .froam-room-chat__messages { max-height: 180px; overflow: auto; display: grid; gap: 7px; }

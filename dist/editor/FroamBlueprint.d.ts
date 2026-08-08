@@ -1,6 +1,8 @@
 type BlueprintCategory = 'heading' | 'media' | 'action' | 'container' | 'text';
 export type BlueprintNode = {
     el: HTMLElement;
+    /** Connected Canvas identity when a project registry is available. */
+    nodeId?: string;
     x: number;
     y: number;
     w: number;
@@ -30,7 +32,9 @@ export type BlueprintData = {
     maxDepth: number;
 };
 /** Scan the live page and produce the full blueprint dataset (or null if empty). */
-export declare function computeBlueprintData(root: HTMLElement | null): BlueprintData | null;
+export declare function computeBlueprintData(root: HTMLElement | null, options?: {
+    nodeIdOf?: (element: HTMLElement) => string | undefined;
+}): BlueprintData | null;
 export declare const BLUEPRINT_CATEGORY_COLOR: Record<BlueprintCategory, string>;
 export declare const BLUEPRINT_CATEGORY_LABEL: Record<BlueprintCategory, string>;
 /**

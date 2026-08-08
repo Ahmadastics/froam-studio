@@ -34,6 +34,11 @@ from READMEs, so canvas and WebGL are off the table there.
 
 ## ✨ What's new
 
+**6.2.0 — Connected Canvas foundation.** Stable identities survive DOM movement,
+the v3 design can live inside a versioned project envelope, and deterministic
+history, checkpoint and branch primitives share one graph-ready substrate.
+Existing designs and path-based output continue unchanged.
+
 **6.1.0 — Froam Rooms.** Review a live site with a client or invite a second
 designer into the same room: ordered co-editing, presence, cursors, soft locks,
 chat, approvals, reconnect replay and per-actor undo share one small protocol.

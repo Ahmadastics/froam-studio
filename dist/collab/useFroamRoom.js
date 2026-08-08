@@ -25,7 +25,7 @@ const defaultTransport = {
     },
 };
 export function useFroamRoom(options) {
-    const { where, enabled = true, transport = defaultTransport, everyMs = ROOM_BEAT_MS, href, autoJoinAs } = options;
+    const { where, enabled = true, transport = defaultTransport, everyMs = ROOM_BEAT_MS, href, autoJoinAs, autoJoinProfile } = options;
     /**
      * Where the room comes from, in order: a link someone was given, then a room
      * this browser opened. The designer made it, so they are in it without
@@ -60,6 +60,8 @@ export function useFroamRoom(options) {
     // selection doesn't tear down and restart the interval every keystroke.
     const whereRef = useRef(where);
     whereRef.current = where;
+    const profileRef = useRef(autoJoinProfile);
+    profileRef.current = autoJoinProfile;
     // Selection, lock and cursor changes are the part of presence another
     // editor can feel. Send them promptly; the slower heartbeat remains the
     // liveness fallback when nothing is moving.
@@ -68,7 +70,7 @@ export function useFroamRoom(options) {
             return;
         const timer = window.setTimeout(() => { void client.beat(whereRef.current); }, 50);
         return () => window.clearTimeout(timer);
-    }, [client, enabled, where.routeKey, where.viewport, where.selectedPath, where.lockedPath, where.cursor?.x, where.cursor?.y]);
+    }, [client, enabled, where.routeKey, where.viewport, where.selectedPath, where.selectedNodeId, where.lockedPath, where.lockedNodeId, where.cursor?.x, where.cursor?.y, where.tool, where.action]);
     useEffect(() => {
         if (!client || !enabled)
             return;
@@ -88,7 +90,7 @@ export function useFroamRoom(options) {
             // double-mount find no stored identity, so both join, and one person
             // shows up in the room twice — which then reads as "2 here".
             autoJoinRef.current = true;
-            void client.join(autoJoinAs).then(begin).catch(() => { autoJoinRef.current = false; });
+            void client.join(autoJoinAs, profileRef.current).then(begin).catch(() => { autoJoinRef.current = false; });
         }
         else {
             // Nothing to announce until they have a name; still read the room so the

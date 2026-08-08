@@ -117,6 +117,7 @@ import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist'
 import { findElementByPath, getElementPath, isSafeDraftPath, tagOfPath } from '../collab/paths'
 import { createAnchor, resolveAnchor } from '../collab/anchor'
 import { LOCAL_ACTOR, scopeKey, type FroamAnchor, type FroamOp, type FroamViewport } from '../collab/types'
+import { captureNodeRef, type FroamNodeRegistry } from '../project/node-registry'
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources'
 import { useFroamRouteKey } from '../routing'
 import {
@@ -153,6 +154,8 @@ type FroamPublishedResponse = {
 
 type SelectionState = {
   path: string
+  /** Stable identity is additive; all editing and output remain path-based. */
+  nodeId?: string
   label: string
   text: string
   background: string
@@ -281,6 +284,7 @@ const cursorOptions = ['auto', 'default', 'pointer', 'grab', 'grabbing', 'text',
    Constants
    ═══════════════════════════════════════════════════════════════ */
 const STORAGE_KEY = 'froam-editor-store-v1'
+const NODE_REGISTRY_KEY = 'froam-node-registry-v1'
 /** Retired in 4.9.4 — history is the op log now. Kept only to clear it. */
 const LEGACY_HISTORY_KEY = 'froam-history-v1'
 const MAX_INLINE_ASSET_LENGTH = 40_000
@@ -409,6 +413,24 @@ function saveStore(store: EditorStore) {
       // Keep the in-memory editor usable even when persistence is unavailable.
     }
   }
+}
+
+function loadNodeRegistry(): FroamNodeRegistry {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(NODE_REGISTRY_KEY) ?? '{}')
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as FroamNodeRegistry : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveNodeRegistry(registry: FroamNodeRegistry) {
+  try {
+    const entries = Object.entries(registry)
+      .sort(([, left], [, right]) => right.updatedAt - left.updatedAt)
+      .slice(0, 5_000)
+    window.localStorage.setItem(NODE_REGISTRY_KEY, JSON.stringify(Object.fromEntries(entries)))
+  } catch { /* private mode or quota pressure */ }
 }
 
 function loadPersonaPreference() {
@@ -1610,6 +1632,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   // Core state
   const [store, setStore] = useState<EditorStore>(() => loadStore())
+  const nodeRegistryRef = useRef<FroamNodeRegistry>(loadNodeRegistry())
   const [buttonPosition, setButtonPosition] = useState(CHEF_BUTTON_START)
   const [panelPosition, setPanelPosition] = useState<{ x: number; y: number } | null>(null)
   const panelDragRef = useRef<{ offsetX: number; offsetY: number } | null>(null)
@@ -1843,10 +1866,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       routeKey,
       viewport: viewportMode,
       selectedPath: selection?.path ?? null,
+      selectedNodeId: selection?.nodeId ?? null,
       lockedPath: roomLockedPath,
+      lockedNodeId: roomLockedPath === selection?.path ? selection?.nodeId ?? null : null,
       cursor: roomCursor,
+      tool: activeTool,
+      action: roomLockedPath ? 'Transforming selection' : selection ? 'Editing selection' : null,
     },
     autoJoinAs: persona.name || 'Designer',
+    autoJoinProfile: { avatarUrl: persona.imageUrl || null },
   })
   const roomPresence = room.present
   const roomSubmittedOpsRef = useRef<Set<string>>(new Set())
@@ -3073,7 +3101,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     batch?: string,
   ) {
     try {
-      opLog.record({
+      const recorded = opLog.record({
         routeKey,
         viewport: viewportMode,
         path,
@@ -3082,6 +3110,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         label,
         batch: batch ?? opBatch(label),
       })
+      const nodeId = Object.values(nodeRegistryRef.current).find((entry) => (
+        entry.routeKey === routeKey && entry.viewport === viewportMode && entry.path === path
+      ))?.nodeId
+      if (nodeId) recorded.forEach((op) => { op.nodeId = nodeId })
     } catch {
       /* The log is not load-bearing yet — never let it break an edit. */
     }
@@ -3872,16 +3904,25 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         })
       }
 
-      nextSelections.forEach((sel) => {
+      let registry = nodeRegistryRef.current
+      const identifiedSelections = nextSelections.map((sel) => {
         const el = root ? findElementByPath(root, sel.path) : null
         if (el) {
+          const captured = captureNodeRef(el, root as HTMLElement, registry, { routeKey, viewport: viewportMode })
+          registry = captured.registry
           el.setAttribute('data-chef-selected', 'true')
           if (nextSelections.length > 1) el.setAttribute('data-froam-multi-selected', 'true')
+          return { ...sel, nodeId: captured.ref.nodeId }
         }
+        return sel
       })
+      if (registry !== nodeRegistryRef.current) {
+        nodeRegistryRef.current = registry
+        saveNodeRegistry(registry)
+      }
 
-      setSelections(nextSelections)
-      const primary = nextSelections[nextSelections.length - 1] ?? null
+      setSelections(identifiedSelections)
+      const primary = identifiedSelections[identifiedSelections.length - 1] ?? null
       setSelection(primary)
       const nextElement = primary && root ? findElementByPath(root, primary.path) : null
       currentSelectionRef.current = nextElement

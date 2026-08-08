@@ -49,13 +49,18 @@ export type FroamRoomMember = {
   name: string
   role: FroamRole
   color: string
+  avatarUrl: string | null
   /** Heartbeat within the presence window. */
   here: boolean
   routeKey: string | null
   viewport: 'desktop' | 'tablet' | 'mobile' | null
   selectedPath: string | null
+  selectedNodeId: string | null
   lockedPath: string | null
+  lockedNodeId: string | null
   cursor: { x: number; y: number } | null
+  tool: string | null
+  action: string | null
   seenAt: number | null
 }
 

@@ -24,6 +24,18 @@ function findByPath(root: HTMLElement, path: string) {
   return current
 }
 
+function findMemberElement(root: HTMLElement, nodeId: string | null, path: string | null) {
+  if (nodeId) {
+    const byId = root.querySelector<HTMLElement>(`[data-froam-id="${CSS.escape(nodeId)}"]`)
+    if (byId) return byId
+  }
+  return path ? findByPath(root, path) : null
+}
+
+function MemberLabel({ member }: { member: RoomMemberView }) {
+  return <>{member.avatarUrl && <img className="froam-presence__avatar" src={member.avatarUrl} alt="" />}{member.name}</>
+}
+
 /** Ephemeral multiplayer chrome. Nothing rendered here is persisted. */
 export default function FroamPresenceLayer({ members, routeKey, viewport, root }: Props) {
   const [, redraw] = useState(0)
@@ -53,8 +65,8 @@ export default function FroamPresenceLayer({ members, routeKey, viewport, root }
     if (!root) return
     const marked: HTMLElement[] = []
     for (const member of visible) {
-      if (!member.lockedPath) continue
-      const element = findByPath(root, member.lockedPath)
+      if (!member.lockedPath && !member.lockedNodeId) continue
+      const element = findMemberElement(root, member.lockedNodeId, member.lockedPath)
       if (!element) continue
       element.dataset.froamLockedBy = member.name
       element.style.setProperty('--froam-lock-color', member.color)
@@ -71,13 +83,13 @@ export default function FroamPresenceLayer({ members, routeKey, viewport, root }
   return (
     <div className="froam-presence" data-chef-editor-root="true" aria-hidden="true">
       {visible.map((member) => {
-        const selected = member.selectedPath && root ? findByPath(root, member.selectedPath) : null
+        const selected = root ? findMemberElement(root, member.selectedNodeId, member.selectedPath) : null
         const rect = selected?.getBoundingClientRect()
         return (
           <div key={member.actor}>
             {rect && (
               <div
-                className={`froam-presence__selection${member.lockedPath === member.selectedPath ? ' is-locked' : ''}`}
+                className={`froam-presence__selection${(member.lockedNodeId && member.lockedNodeId === member.selectedNodeId) || member.lockedPath === member.selectedPath ? ' is-locked' : ''}`}
                 style={{
                   left: rect.left,
                   top: rect.top,
@@ -86,7 +98,7 @@ export default function FroamPresenceLayer({ members, routeKey, viewport, root }
                   borderColor: member.color,
                 }}
               >
-                <span style={{ background: member.color }}>{member.name}</span>
+                <span style={{ background: member.color }}><MemberLabel member={member} /></span>
               </div>
             )}
             {member.cursor && (
@@ -94,7 +106,7 @@ export default function FroamPresenceLayer({ members, routeKey, viewport, root }
                 <svg width="18" height="23" viewBox="0 0 18 23" fill="none" aria-hidden="true">
                   <path d="M2 2 16 12h-6l-3 8-2.6-1L7 11H2V2Z" fill="currentColor" stroke="#111827" strokeWidth="1.2" />
                 </svg>
-                <span style={{ background: member.color }}>{member.name}</span>
+                <span style={{ background: member.color }}><MemberLabel member={member} /></span>
               </div>
             )}
           </div>

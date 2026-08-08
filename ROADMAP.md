@@ -1,6 +1,6 @@
 # Froam Rooms — roadmap to v6
 
-**Where we are:** v6.1.0 · **Status:** shipped — more than one person can now work in a design.
+**Where we are:** v6.2.0 · **Status:** Connected Canvas foundations shipped; roadmap integration continues.
 
 The roadmap is retained below as the architectural record. Phase 0 and the
 v5 review track shipped first; v6.0/v6.1 complete the same room with ordered

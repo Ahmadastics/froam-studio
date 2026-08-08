@@ -26,12 +26,17 @@ export type RoomMemberView = {
   name: string
   role: FroamRole
   color: string
+  avatarUrl: string | null
   here: boolean
   routeKey: string | null
   viewport: FroamViewport | null
   selectedPath: string | null
+  selectedNodeId: string | null
   lockedPath: string | null
+  lockedNodeId: string | null
   cursor: { x: number; y: number } | null
+  tool: string | null
+  action: string | null
   seenAt: number | null
 }
 
@@ -53,7 +58,7 @@ export type RoomComment = {
   name: string
   routeKey: string
   viewport: FroamViewport
-  anchor: { path: string; fingerprint: { tag: string; text?: string; id?: string } }
+  anchor: { nodeId?: string; path: string; fingerprint: { tag: string; text?: string; id?: string } }
   quoted: string | null
   body: string
   createdAt: number
@@ -293,12 +298,13 @@ export function createRoomClient(options: {
      * one, so a refresh keeps your comments yours instead of minting a
      * stranger who happens to have the same name.
      */
-    async join(name: string) {
+    async join(name: string, profile: { avatarUrl?: string | null } = {}) {
       const payload = await post(`/api/froam/rooms/${roomId}/join`, {
         token,
         name,
         actor: identity?.actor,
         session: identity?.session,
+        avatarUrl: profile.avatarUrl,
       }) as { you?: RoomIdentity }
       if (!payload?.you?.actor) throw new Error('Could not join the room')
       remember(payload.you)
@@ -322,8 +328,12 @@ export function createRoomClient(options: {
       routeKey?: string
       viewport?: FroamViewport
       selectedPath?: string | null
+      selectedNodeId?: string | null
       lockedPath?: string | null
+      lockedNodeId?: string | null
       cursor?: { x: number; y: number } | null
+      tool?: string | null
+      action?: string | null
     } = {}) {
       if (!identity || isHidden()) return room
       try {
@@ -339,7 +349,7 @@ export function createRoomClient(options: {
       }
     },
 
-    start(where: () => { routeKey?: string; viewport?: FroamViewport; selectedPath?: string | null; lockedPath?: string | null; cursor?: { x: number; y: number } | null }, everyMs = ROOM_BEAT_MS) {
+    start(where: () => { routeKey?: string; viewport?: FroamViewport; selectedPath?: string | null; selectedNodeId?: string | null; lockedPath?: string | null; lockedNodeId?: string | null; cursor?: { x: number; y: number } | null; tool?: string | null; action?: string | null }, everyMs = ROOM_BEAT_MS) {
       this.stop()
       void this.beat(where())
       timer = setInterval(() => { void this.beat(where()) }, everyMs)

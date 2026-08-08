@@ -35,6 +35,8 @@ const CATEGORY_LABEL: Record<BlueprintCategory, string> = {
 
 export type BlueprintNode = {
   el: HTMLElement
+  /** Connected Canvas identity when a project registry is available. */
+  nodeId?: string
   x: number
   y: number
   w: number
@@ -92,7 +94,7 @@ function domDepth(el: HTMLElement, root: HTMLElement): number {
   return depth
 }
 
-function collectBlueprintNodes(root: HTMLElement): BlueprintNode[] {
+function collectBlueprintNodes(root: HTMLElement, nodeIdOf?: (element: HTMLElement) => string | undefined): BlueprintNode[] {
   const selector = 'h1,h2,h3,h4,h5,h6,p,img,svg,picture,video,canvas,button,a,input,select,textarea,section,header,footer,main,article,nav,aside,form,ul,ol,li,blockquote,div'
   const elements = root.querySelectorAll<HTMLElement>(selector)
   const scrollX = window.scrollX
@@ -107,6 +109,7 @@ function collectBlueprintNodes(root: HTMLElement): BlueprintNode[] {
     if ((category === 'container' || category === 'text') && (r.width < 48 || r.height < 22)) continue
     nodes.push({
       el,
+      nodeId: nodeIdOf?.(el),
       x: r.left + scrollX,
       y: r.top + scrollY,
       w: r.width,
@@ -158,9 +161,12 @@ function collectFonts(root: HTMLElement): string[] {
 }
 
 /** Scan the live page and produce the full blueprint dataset (or null if empty). */
-export function computeBlueprintData(root: HTMLElement | null): BlueprintData | null {
+export function computeBlueprintData(
+  root: HTMLElement | null,
+  options: { nodeIdOf?: (element: HTMLElement) => string | undefined } = {},
+): BlueprintData | null {
   if (!root) return null
-  const nodes = collectBlueprintNodes(root)
+  const nodes = collectBlueprintNodes(root, options.nodeIdOf)
   if (nodes.length === 0) return null
   const docWidth = Math.max(window.innerWidth, ...nodes.map((n) => n.x + n.w))
   const docHeight = Math.max(document.documentElement.scrollHeight, ...nodes.map((n) => n.y + n.h))

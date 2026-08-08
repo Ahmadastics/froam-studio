@@ -131,6 +131,7 @@ export function fingerprintElement(element, root) {
 }
 export function createAnchor(element, root) {
     return {
+        nodeId: element.dataset.froamId || undefined,
         path: getElementPath(element, root),
         fingerprint: fingerprintElement(element, root),
     };
@@ -145,10 +146,21 @@ export function createAnchor(element, root) {
  * element that is the wrong one.
  */
 export function resolveAnchor(anchor, root) {
+    if (anchor.nodeId) {
+        const byNodeId = root.querySelector(`[data-froam-id="${CSS.escape(anchor.nodeId)}"]`);
+        if (byNodeId) {
+            const path = getElementPath(byNodeId, root);
+            if (path === anchor.path)
+                return { status: 'exact', element: byNodeId, path };
+            return { status: 'recovered', element: byNodeId, path, score: 1 };
+        }
+    }
     const atPath = findElementByPath(root, anchor.path);
     if (atPath) {
         const score = scoreFingerprint(anchor.fingerprint, fingerprintElement(atPath, root));
         if (score >= ANCHOR_MATCH_THRESHOLD) {
+            if (anchor.nodeId)
+                atPath.setAttribute('data-froam-id', anchor.nodeId);
             return { status: 'exact', element: atPath, path: anchor.path };
         }
     }
@@ -156,6 +168,8 @@ export function resolveAnchor(anchor, root) {
     if (anchor.fingerprint.id) {
         const byId = root.querySelector(`#${CSS.escape(anchor.fingerprint.id)}`);
         if (byId && byId.tagName.toLowerCase() === anchor.fingerprint.tag) {
+            if (anchor.nodeId)
+                byId.setAttribute('data-froam-id', anchor.nodeId);
             return { status: 'recovered', element: byId, path: getElementPath(byId, root), score: 1 };
         }
     }
@@ -168,6 +182,8 @@ export function resolveAnchor(anchor, root) {
     });
     const winner = best;
     if (winner && winner.score >= ANCHOR_MATCH_THRESHOLD) {
+        if (anchor.nodeId)
+            winner.element.setAttribute('data-froam-id', anchor.nodeId);
         return {
             status: 'recovered',
             element: winner.element,

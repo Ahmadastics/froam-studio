@@ -155,6 +155,34 @@ test('presence says who is here', async () => {
   assert.equal(amina.viewport, 'mobile')
 })
 
+test('member avatar is stored once and presence can carry stable node identity', async () => {
+  const { api } = await freshApi()
+  const created = await open(api)
+  const guest = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, {
+    token: created.invites.editor,
+    name: 'Amina',
+    avatarUrl: 'https://example.com/amina.png',
+  })
+  const beat = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/presence`, {
+    token: created.invites.editor,
+    actor: guest.you.actor,
+    session: guest.you.session,
+    routeKey: '/',
+    viewport: 'desktop',
+    selectedPath: 'main:1/h1:1',
+    selectedNodeId: 'node.hero',
+    lockedNodeId: 'node.hero',
+    tool: 'move',
+    action: 'Dragging hero',
+  })
+  const member = beat.room.members.find((candidate) => candidate.actor === guest.you.actor)
+  assert.equal(member.avatarUrl, 'https://example.com/amina.png')
+  assert.equal(member.selectedNodeId, 'node.hero')
+  assert.equal(member.lockedNodeId, 'node.hero')
+  assert.equal(member.tool, 'move')
+  assert.equal(member.action, 'Dragging hero')
+})
+
 test('presence lapses, so a closed laptop stops driving a phone', async () => {
   const { api } = await freshApi()
   const created = await open(api)

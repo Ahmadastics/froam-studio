@@ -5,11 +5,15 @@ export type RoomWhere = {
     routeKey?: string;
     viewport?: FroamViewport;
     selectedPath?: string | null;
+    selectedNodeId?: string | null;
     lockedPath?: string | null;
+    lockedNodeId?: string | null;
     cursor?: {
         x: number;
         y: number;
     } | null;
+    tool?: string | null;
+    action?: string | null;
 };
 export declare function useFroamRoom(options: {
     /** Where this person currently is, sent on every heartbeat. */
@@ -25,6 +29,10 @@ export declare function useFroamRoom(options: {
      * review link has.
      */
     autoJoinAs?: string;
+    /** Member profile is persisted on join, not repeated on every heartbeat. */
+    autoJoinProfile?: {
+        avatarUrl?: string | null;
+    };
     transport?: RoomTransport;
     everyMs?: number;
     href?: string;
@@ -38,27 +46,37 @@ export declare function useFroamRoom(options: {
         readonly joined: boolean;
         on(listener: (room: RoomView | null) => void): () => boolean;
         onEvents(listener: (events: readonly FroamRoomEvent[]) => void): () => boolean;
-        join(name: string): Promise<import("./room").RoomIdentity>;
+        join(name: string, profile?: {
+            avatarUrl?: string | null;
+        }): Promise<import("./room").RoomIdentity>;
         refresh(): Promise<RoomView | null>;
         beat(where?: {
             routeKey?: string;
             viewport?: FroamViewport;
             selectedPath?: string | null;
+            selectedNodeId?: string | null;
             lockedPath?: string | null;
+            lockedNodeId?: string | null;
             cursor?: {
                 x: number;
                 y: number;
             } | null;
+            tool?: string | null;
+            action?: string | null;
         }): Promise<RoomView | null>;
         start(where: () => {
             routeKey?: string;
             viewport?: FroamViewport;
             selectedPath?: string | null;
+            selectedNodeId?: string | null;
             lockedPath?: string | null;
+            lockedNodeId?: string | null;
             cursor?: {
                 x: number;
                 y: number;
             } | null;
+            tool?: string | null;
+            action?: string | null;
         }, everyMs?: number): () => void;
         stop(): void;
         pollEvents(): Promise<FroamRoomEvent[]>;

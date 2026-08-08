@@ -31,8 +31,12 @@ export type RoomWhere = {
   routeKey?: string
   viewport?: FroamViewport
   selectedPath?: string | null
+  selectedNodeId?: string | null
   lockedPath?: string | null
+  lockedNodeId?: string | null
   cursor?: { x: number; y: number } | null
+  tool?: string | null
+  action?: string | null
 }
 
 const defaultTransport: RoomTransport = {
@@ -61,11 +65,13 @@ export function useFroamRoom(options: {
    * review link has.
    */
   autoJoinAs?: string
+  /** Member profile is persisted on join, not repeated on every heartbeat. */
+  autoJoinProfile?: { avatarUrl?: string | null }
   transport?: RoomTransport
   everyMs?: number
   href?: string
 }) {
-  const { where, enabled = true, transport = defaultTransport, everyMs = ROOM_BEAT_MS, href, autoJoinAs } = options
+  const { where, enabled = true, transport = defaultTransport, everyMs = ROOM_BEAT_MS, href, autoJoinAs, autoJoinProfile } = options
 
   /**
    * Where the room comes from, in order: a link someone was given, then a room
@@ -103,6 +109,8 @@ export function useFroamRoom(options: {
   // selection doesn't tear down and restart the interval every keystroke.
   const whereRef = useRef(where)
   whereRef.current = where
+  const profileRef = useRef(autoJoinProfile)
+  profileRef.current = autoJoinProfile
 
   // Selection, lock and cursor changes are the part of presence another
   // editor can feel. Send them promptly; the slower heartbeat remains the
@@ -111,7 +119,7 @@ export function useFroamRoom(options: {
     if (!client || !enabled || !client.joined) return
     const timer = window.setTimeout(() => { void client.beat(whereRef.current) }, 50)
     return () => window.clearTimeout(timer)
-  }, [client, enabled, where.routeKey, where.viewport, where.selectedPath, where.lockedPath, where.cursor?.x, where.cursor?.y])
+  }, [client, enabled, where.routeKey, where.viewport, where.selectedPath, where.selectedNodeId, where.lockedPath, where.lockedNodeId, where.cursor?.x, where.cursor?.y, where.tool, where.action])
 
   useEffect(() => {
     if (!client || !enabled) return
@@ -131,7 +139,7 @@ export function useFroamRoom(options: {
       // double-mount find no stored identity, so both join, and one person
       // shows up in the room twice — which then reads as "2 here".
       autoJoinRef.current = true
-      void client.join(autoJoinAs).then(begin).catch(() => { autoJoinRef.current = false })
+      void client.join(autoJoinAs, profileRef.current).then(begin).catch(() => { autoJoinRef.current = false })
     } else {
       // Nothing to announce until they have a name; still read the room so the
       // surface can say who is already in it.

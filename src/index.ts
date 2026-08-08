@@ -21,6 +21,7 @@ export {
   type RoomView,
 } from './collab/room'
 export { useFroamRoom, type RoomWhere } from './collab/useFroamRoom'
+export * from './project/index'
 export type {
   FroamChatMessage,
   FroamMember,

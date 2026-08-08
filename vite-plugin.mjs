@@ -15,12 +15,15 @@
  * Dev-server endpoints (never present in production builds):
  *   POST /__froam/repo/save    { routeKey, viewportMode, store }
  *   GET  /__froam/repo/load    -> { success, design }
+ *   GET  /__froam/repo/project/load and POST /project/save manage the
+ *        additive froam.project.json sidecar without changing generated output.
  *   GET  /__froam/repo/status  -> { success, exists, dirty, files }
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { ensureScaffold, loadDesign, mergeSave, writeArtifacts, VIEWPORTS } from './lib/codegen.mjs'
+import { loadProjectFile, writeProjectFile } from './lib/project-store.mjs'
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -68,6 +71,10 @@ export default function froamStudio(options = {}) {
     return path.join(froamDir, 'froam.design.json')
   }
 
+  function projectPath() {
+    return path.join(froamDir, 'froam.project.json')
+  }
+
   return {
     name: 'froam-studio',
     apply: 'serve',
@@ -87,12 +94,24 @@ export default function froamStudio(options = {}) {
           if (url === '/__froam/repo/load' && req.method === 'GET') {
             return send(res, 200, { success: true, design: loadDesign(designPath()) })
           }
+          if (url === '/__froam/repo/project/load' && req.method === 'GET') {
+            return send(res, 200, { success: true, project: loadProjectFile(projectPath()) })
+          }
+          if (url === '/__froam/repo/project/save' && req.method === 'POST') {
+            try {
+              writeProjectFile(projectPath(), await readJsonBody(req))
+              return send(res, 200, { success: true, file: 'froam.project.json' })
+            } catch (error) {
+              return send(res, 400, { success: false, error: error instanceof Error ? error.message : 'Invalid project' })
+            }
+          }
 
           if (url === '/__froam/repo/status' && req.method === 'GET') {
             const status = await gitStatus(froamDir)
             return send(res, 200, {
               success: true,
               exists: fs.existsSync(designPath()),
+              projectExists: fs.existsSync(projectPath()),
               dir: froamDir,
               ...status,
             })

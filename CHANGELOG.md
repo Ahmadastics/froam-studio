@@ -2,6 +2,29 @@
 
 All notable changes to froam-studio are documented here.
 
+## 6.2.0 - 2026-08-08
+
+**The Connected Canvas foundation.** Froam now has stable object identity and
+a versioned project substrate beneath the existing live-DOM editor. Current
+v3 design files, runtime CSS and path selectors remain fully compatible.
+
+### Added
+- Stable `FroamNodeRef` records with `data-froam-id`, legacy path and anchor
+  fingerprint recovery, including native nodes and duplicate-ID prevention.
+- A v1 project envelope preserving the existing v3 design verbatim, with
+  additive migration for old design files.
+- Deterministic project events, checkpoints and isolated branch primitives
+  built around the existing operation log.
+- Shared graph, Scan-to-DNA, interaction-runtime and simulation boundaries.
+- Optional `froam.project.json` bridge and Vite-plugin load/save endpoints.
+- Node-aware presence and comments, member avatars and tool/action metadata.
+- A platform implementation ledger with explicit feature maturity.
+
+### Compatibility
+- Live editing, undo/redo, Rooms, Blueprint, generated CSS and runtime output
+  retain their existing path-based behavior.
+- Research-heavy roadmap features are disabled by default.
+
 ## 6.1.0 — 2026-08-08
 
 **Froam Rooms is complete.** The review room introduced across v5 is now the

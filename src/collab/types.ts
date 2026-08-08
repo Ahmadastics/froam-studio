@@ -101,6 +101,8 @@ export type FroamOp = {
   routeKey: string
   viewport: FroamViewport
   path: string
+  /** Stable identity during migration; `path` remains the projection key. */
+  nodeId?: string
   field: FroamOpField
 
   /** `undefined` means the field was unset. Needed to invert cleanly. */
@@ -163,6 +165,8 @@ export type FroamMember = {
   role: FroamRole
   /** Stable per-actor colour for cursors, selection halos and comment pins. */
   color: string
+  /** Stored once on the member, never repeated in every cursor heartbeat. */
+  avatarUrl?: string | null
 }
 
 export type FroamRoom = {
@@ -199,6 +203,7 @@ export type FroamAnchorFingerprint = {
 }
 
 export type FroamAnchor = {
+  nodeId?: string
   path: string
   fingerprint: FroamAnchorFingerprint
 }
@@ -238,9 +243,13 @@ export type FroamPresence = {
   routeKey: string
   viewport: FroamViewport
   selectedPath?: string
+  selectedNodeId?: string
   /** Element the actor is actively dragging — soft-locked for everyone else. */
   lockedPath?: string
+  lockedNodeId?: string
   cursor?: { x: number; y: number }
+  tool?: string
+  action?: string
   seenAt: number
 }
 
