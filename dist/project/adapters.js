@@ -1,8 +1,9 @@
-import { createProjectDocument } from './event-log.js';
+import { createProjectDocument, emptyProjectState } from './event-log.js';
+import { FROAM_PROJECT_SCHEMA_VERSION } from './types.js';
 /** Carries today's proven field operations into project history unchanged. */
 export function legacyOpsToProjectEvents(ops, input) {
     return ops.map((op) => ({
-        schemaVersion: 1,
+        schemaVersion: FROAM_PROJECT_SCHEMA_VERSION,
         id: op.id,
         projectId: input.projectId,
         branchId: input.branchId,
@@ -17,15 +18,7 @@ export function legacyOpsToProjectEvents(ops, input) {
     }));
 }
 export function createProjectFromLegacyStore(input) {
-    const initialState = {
-        legacyStore: input.store,
-        nodes: {},
-        relations: {},
-        flows: {},
-        interactions: {},
-        dna: {},
-        assets: {},
-    };
+    const initialState = { ...emptyProjectState(), legacyStore: input.store };
     return createProjectDocument({ ...input, id: input.projectId, initialState });
 }
 /** Converts the current Site Planner tree into graph records without changing its UI storage. */

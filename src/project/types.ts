@@ -7,7 +7,8 @@ import type {
 } from '../collab/types'
 
 /** Schema version of the Connected Canvas project envelope (not the product version). */
-export const FROAM_PROJECT_SCHEMA_VERSION = 1 as const
+export const FROAM_PROJECT_SCHEMA_VERSION = 2 as const
+export const FROAM_DNA_SCHEMA_VERSION = 1 as const
 
 export type FroamId = string
 
@@ -53,6 +54,9 @@ export type FroamRelationKind =
   | 'transitions-to'
   | 'uses-asset'
   | 'derived-from'
+  | 'variant-of'
+  | 'belongs-to'
+  | 'connected-to'
   | 'custom'
 
 export type FroamRelation = {
@@ -96,17 +100,103 @@ export type FroamFlow = {
   metadata?: Record<string, unknown>
 }
 
+export type FroamKnowledgeOrigin = 'observed' | 'inferred' | 'user-defined'
+
+export type FroamKnowledge<T = unknown> = {
+  value: T
+  origin: FroamKnowledgeOrigin
+  source: string
+  confidence?: number
+  capturedAt: number
+}
+
+export type FroamSemanticRole = 'navigation' | 'button' | 'cta' | 'heading' | 'paragraph' | 'card' | 'form' | 'input' | 'hero' | 'footer' | 'list' | 'media' | 'badge' | 'modal' | 'menu' | 'unknown'
+
+export type FroamScanSignalKind = 'identity' | 'structure' | 'layout' | 'appearance' | 'semantics' | 'behavior' | 'responsive' | 'accessibility' | 'provenance'
+
+export type FroamScanSignal = {
+  kind: FroamScanSignalKind
+  origin: FroamKnowledgeOrigin
+  source: 'dom' | 'computed-style' | 'react' | 'runtime' | 'import' | 'manual' | 'heuristic'
+  values: Record<string, unknown>
+  confidence?: number
+}
+
+export type FroamScanRecord = {
+  schemaVersion: 1
+  id: FroamId
+  node: FroamNodeRef
+  capturedAt: number
+  signals: FroamScanSignal[]
+  childNodeIds: FroamId[]
+  siblingNodeIds: FroamId[]
+}
+
+export type FroamResponsivePriority = 'critical' | 'high' | 'medium' | 'low' | 'decorative'
+export type FroamResponsivePolicy = {
+  schemaVersion: 1
+  nodeId: FroamId
+  priority: FroamResponsivePriority
+  canHide: boolean
+  canCollapse: boolean
+  canWrap: boolean
+  canTruncate: boolean
+  canCrop: boolean
+  canReposition: boolean
+  minimumUsefulWidth?: number
+  minimumUsefulHeight?: number
+  preferredRelationship?: string
+  updatedAt: number
+  updatedBy: FroamActorId
+}
+
 export type FroamDNA = {
+  schemaVersion: typeof FROAM_DNA_SCHEMA_VERSION
   nodeId: FroamId
   capturedAt: number
+  identity?: Record<string, unknown>
   structure?: Record<string, unknown>
   layout?: Record<string, unknown>
   visual?: Record<string, unknown>
+  semantics?: Record<string, unknown>
   behavior?: Record<string, unknown>
   motion?: Record<string, unknown>
   responsive?: Record<string, unknown>
   accessibility?: Record<string, unknown>
   provenance?: Record<string, unknown>
+  history?: Record<string, unknown>
+  usage?: Record<string, unknown>
+  knowledge?: Record<string, FroamKnowledge>
+}
+
+export type FroamArchiveItem = {
+  schemaVersion: 1
+  id: FroamId
+  nodeId: FroamId
+  name: string
+  createdAt: number
+  createdBy: FroamActorId
+  snapshot?: { html?: string; legacyPath?: string; previewDataUrl?: string }
+  dna: FroamDNA
+  assetIds: FroamId[]
+  interactionIds: FroamId[]
+  variantOf?: FroamId
+  provenance: { projectId: FroamId; branchId: FroamId; sourceNodeId: FroamId }
+  usageNodeIds: FroamId[]
+  metadata?: Record<string, unknown>
+}
+
+export type FroamAnalysisKind = 'predicted-attention' | 'visual-rhythm' | 'responsive-observation' | 'screenshot-reconstruction'
+export type FroamAnalysis = {
+  schemaVersion: 1
+  id: FroamId
+  kind: FroamAnalysisKind
+  targetIds: FroamId[]
+  createdAt: number
+  provider: string
+  local: boolean
+  confidence?: number
+  result: Record<string, unknown>
 }
 
 export type FroamAsset = {
@@ -128,6 +218,10 @@ export type FroamProjectState = {
   interactions: Record<FroamId, FroamInteraction>
   dna: Record<FroamId, FroamDNA>
   assets: Record<FroamId, FroamAsset>
+  scans: Record<FroamId, FroamScanRecord>
+  archive: Record<FroamId, FroamArchiveItem>
+  analyses: Record<FroamId, FroamAnalysis>
+  responsive: Record<FroamId, FroamResponsivePolicy>
 }
 
 export type FroamProjectEventType =
@@ -144,6 +238,13 @@ export type FroamProjectEventType =
   | 'dna.captured'
   | 'asset.upserted'
   | 'asset.removed'
+  | 'scan.captured'
+  | 'archive.upserted'
+  | 'archive.removed'
+  | 'analysis.upserted'
+  | 'analysis.removed'
+  | 'responsive.upserted'
+  | 'responsive.removed'
 
 export type FroamProjectEventPayload =
   | { store: EditorStore }
@@ -159,6 +260,13 @@ export type FroamProjectEventPayload =
   | { dna: FroamDNA }
   | { asset: FroamAsset }
   | { assetId: FroamId }
+  | { scan: FroamScanRecord }
+  | { archiveItem: FroamArchiveItem }
+  | { archiveItemId: FroamId }
+  | { analysis: FroamAnalysis }
+  | { analysisId: FroamId }
+  | { responsive: FroamResponsivePolicy }
+  | { nodeId: FroamId; remove: 'responsive' }
 
 export type FroamProjectEvent = {
   schemaVersion: typeof FROAM_PROJECT_SCHEMA_VERSION
@@ -185,6 +293,7 @@ export type FroamCheckpoint = {
   /** Events already folded into state. Late events remain detectable and replayable. */
   eventIds: FroamId[]
   state: FroamProjectState
+  parentCheckpointId?: FroamId | null
 }
 
 export type FroamBranch = {
@@ -196,6 +305,8 @@ export type FroamBranch = {
   headEventId: FroamId | null
   createdAt: number
   createdBy: FroamActorId
+  /** Earliest reconstructable state for complete branch replay. */
+  rootCheckpointId?: FroamId
 }
 
 export type FroamProjectDocument = {

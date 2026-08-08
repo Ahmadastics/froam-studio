@@ -1,29 +1,12 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Boxes, Bug, GitBranch, History, Pause, Play, Plus, RotateCcw, Trash2, X, Zap } from 'lucide-react';
-import { appendProjectEvents, createProjectBranch, createProjectDocument, createProjectEvent, deleteProjectBranch, deriveBranchState, emptyProjectState, renameProjectBranch, switchProjectBranch } from '../project/event-log.js';
-import { nodeRegistryGraphRecords, legacyOpsToProjectEvents } from '../project/adapters.js';
+import { appendProjectEvents, createProjectBranch, createProjectEvent, deleteProjectBranch, deriveBranchState, renameProjectBranch, switchProjectBranch } from '../project/event-log.js';
+import { nodeRegistryGraphRecords } from '../project/adapters.js';
 import { materializeGraphRows } from '../project/graph-inspector.js';
 import { branchReplayEvents, replayActors, replayCategory, replayEventLabel, replayStateAt } from '../project/replay.js';
-import { editorStoreToLegacyDesign } from '../project/serialization.js';
-import { loadProjectFromBridge, saveProjectToBridge } from '../project/bridge.js';
 import { interactionInspectorRecord } from '../project/animator-adapter.js';
 import FroamAnimator from './FroamAnimator.js';
-function storageKey(projectId) { return `froam-connected-canvas-v1:${projectId}`; }
-function loadDocument(projectId) {
-    try {
-        const value = JSON.parse(window.localStorage.getItem(storageKey(projectId)) ?? 'null');
-        return value?.schemaVersion === 1 && value.id === projectId && value.branches?.main ? value : null;
-    }
-    catch {
-        return null;
-    }
-}
-function createDocument(projectId, actorId, ops) {
-    let document = createProjectDocument({ id: projectId, name: 'Froam Connected Canvas', actorId, initialState: emptyProjectState() });
-    document = appendProjectEvents(document, legacyOpsToProjectEvents(ops, { projectId, branchId: 'main' }));
-    return document;
-}
 function mergeRegistryState(state, registry) {
     const graph = nodeRegistryGraphRecords(registry);
     return {
@@ -34,7 +17,8 @@ function mergeRegistryState(state, registry) {
 }
 export default function FroamConnectedCanvas(props) {
     const [tab, setTab] = useState('replay');
-    const [project, setProject] = useState(() => loadDocument(props.projectId) ?? createDocument(props.projectId, props.actorId, props.ops));
+    const project = props.project;
+    const setProject = props.onProjectChange;
     const [cursor, setCursor] = useState(0);
     const [playing, setPlaying] = useState(false);
     const [speed, setSpeed] = useState(1);
@@ -43,33 +27,6 @@ export default function FroamConnectedCanvas(props) {
     const [branchName, setBranchName] = useState('Prototype 01');
     const [draftInteraction, setDraftInteraction] = useState(null);
     const previewing = useRef(false);
-    useEffect(() => {
-        void loadProjectFromBridge().then((file) => {
-            if (file?.project.id === props.projectId) {
-                setProject((current) => file.project.updatedAt > current.updatedAt ? file.project : current);
-            }
-        }).catch(() => undefined);
-    }, [props.projectId]);
-    useEffect(() => {
-        setProject((current) => {
-            const known = new Set(current.events.map((event) => event.id));
-            const incoming = props.ops.filter((op) => !known.has(op.id) && (current.events.length === 0 || op.actor !== 'baseline'));
-            return incoming.length
-                ? appendProjectEvents(current, legacyOpsToProjectEvents(incoming, { projectId: current.id, branchId: current.activeBranchId }))
-                : current;
-        });
-    }, [props.ops, props.projectId]);
-    useEffect(() => {
-        window.localStorage.setItem(storageKey(project.id), JSON.stringify(project));
-        const timer = window.setTimeout(() => {
-            const file = {
-                kind: 'froam-project', schemaVersion: 1, project,
-                design: editorStoreToLegacyDesign(props.store),
-            };
-            void saveProjectToBridge(file).catch(() => undefined);
-        }, 800);
-        return () => window.clearTimeout(timer);
-    }, [project, props.store]);
     useEffect(() => () => { if (previewing.current)
         props.onPreviewStore(null); }, [props.onPreviewStore]);
     const replayEvents = useMemo(() => branchReplayEvents(project, project.activeBranchId, {

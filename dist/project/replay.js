@@ -30,7 +30,8 @@ export function branchReplayEvents(document, branchId = document.activeBranchId,
     const branch = document.branches[branchId];
     if (!branch)
         throw new Error(`Unknown Froam branch: ${branchId}`);
-    const folded = new Set(document.checkpoints[branch.baseCheckpointId]?.eventIds ?? []);
+    const replayCheckpointId = branch.rootCheckpointId ?? branch.baseCheckpointId;
+    const folded = new Set(document.checkpoints[replayCheckpointId]?.eventIds ?? []);
     return filterReplayEvents(document.events.filter((event) => event.branchId === branchId && !folded.has(event.id)), filter);
 }
 /** Fold to a cursor without mutating the project. Checkpoints make the initial state cheap. */
@@ -38,7 +39,7 @@ export function replayStateAt(document, cursor, branchId = document.activeBranch
     const branch = document.branches[branchId];
     if (!branch)
         throw new Error(`Unknown Froam branch: ${branchId}`);
-    const checkpoint = document.checkpoints[branch.baseCheckpointId];
+    const checkpoint = document.checkpoints[branch.rootCheckpointId ?? branch.baseCheckpointId];
     if (!checkpoint)
         throw new Error(`Missing checkpoint for Froam branch: ${branchId}`);
     const folded = new Set(checkpoint.eventIds);

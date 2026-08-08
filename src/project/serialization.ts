@@ -1,7 +1,8 @@
 import type { EditorStore, ElementDraft, FroamViewport } from '../collab/types'
 import { FROAM_VIEWPORTS } from '../collab/types'
 import { createProjectFromLegacyStore } from './adapters'
-import { FROAM_PROJECT_SCHEMA_VERSION, type FroamProjectDocument } from './types'
+import { FROAM_DNA_SCHEMA_VERSION, FROAM_PROJECT_SCHEMA_VERSION, type FroamProjectDocument, type FroamProjectState } from './types'
+import { normalizeProjectState } from './event-log'
 
 export type FroamLegacyDesignFile = {
   version: number
@@ -31,6 +32,50 @@ export function isFroamProjectFile(value: unknown): value is FroamProjectFile {
     && candidate.schemaVersion === FROAM_PROJECT_SCHEMA_VERSION
     && candidate.project?.schemaVersion === FROAM_PROJECT_SCHEMA_VERSION
     && isLegacyDesignFile(candidate.design)
+}
+
+function isV1ProjectFile(value: unknown): value is { kind: 'froam-project'; schemaVersion: 1; project: FroamProjectDocument & { schemaVersion: 1 }; design: FroamLegacyDesignFile } {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Record<string, unknown>
+  const project = candidate.project as Record<string, unknown> | undefined
+  return candidate.kind === 'froam-project' && candidate.schemaVersion === 1 && project?.schemaVersion === 1 && isLegacyDesignFile(candidate.design)
+}
+
+/** Additive v6→v7 project migration. Existing event IDs and legacy design remain byte-for-byte meaningful. */
+export function migrateProjectFileV1(value: unknown): FroamProjectFile | null {
+  if (!isV1ProjectFile(value)) return null
+  const oldProject = value.project as unknown as FroamProjectDocument
+  const checkpoints = Object.fromEntries(Object.entries(oldProject.checkpoints).map(([id, checkpoint]) => [id, {
+    ...checkpoint,
+    state: normalizeProjectState(checkpoint.state as Partial<FroamProjectState>),
+  }]))
+  const branches = Object.fromEntries(Object.entries(oldProject.branches).map(([id, branch]) => {
+    const oldest = Object.values(checkpoints)
+      .filter((checkpoint) => checkpoint.branchId === id)
+      .sort((a, b) => a.createdAt - b.createdAt)[0]
+    return [id, { ...branch, rootCheckpointId: oldest?.id ?? branch.baseCheckpointId }]
+  }))
+  for (const checkpoint of Object.values(checkpoints)) {
+    for (const [nodeId, dna] of Object.entries(checkpoint.state.dna)) {
+      if (!dna.schemaVersion) checkpoint.state.dna[nodeId] = { ...dna, schemaVersion: FROAM_DNA_SCHEMA_VERSION }
+    }
+  }
+  return {
+    kind: 'froam-project',
+    schemaVersion: FROAM_PROJECT_SCHEMA_VERSION,
+    design: value.design,
+    project: {
+      ...oldProject,
+      schemaVersion: FROAM_PROJECT_SCHEMA_VERSION,
+      branches,
+      checkpoints,
+      events: oldProject.events.map((event) => ({ ...event, schemaVersion: FROAM_PROJECT_SCHEMA_VERSION })),
+    },
+  }
+}
+
+export function coerceFroamProjectFile(value: unknown): FroamProjectFile | null {
+  return isFroamProjectFile(value) ? value : migrateProjectFileV1(value)
 }
 
 export function legacyDesignToEditorStore(design: FroamLegacyDesignFile): EditorStore {
@@ -83,6 +128,8 @@ export function parseFroamProjectFile(
 ): { file: FroamProjectFile; migrated: boolean } {
   const value: unknown = typeof input === 'string' ? JSON.parse(input) : input
   if (isFroamProjectFile(value)) return { file: value, migrated: false }
+  const upgraded = migrateProjectFileV1(value)
+  if (upgraded) return { file: upgraded, migrated: true }
   if (isLegacyDesignFile(value)) return { file: createProjectFileFromLegacyDesign(value, migration), migrated: true }
   throw new Error('Not a supported Froam project or design file')
 }

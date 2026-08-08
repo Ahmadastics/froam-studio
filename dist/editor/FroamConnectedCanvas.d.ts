@@ -1,5 +1,7 @@
+import { type Dispatch, type SetStateAction } from 'react';
 import type { EditorStore, FroamOp, FroamViewport } from '../collab/types';
 import type { FroamIdentityDiagnostic, FroamNodeRegistry } from '../project/node-registry';
+import type { FroamProjectDocument } from '../project/types';
 type SelectionRef = {
     nodeId?: string;
     path: string;
@@ -23,6 +25,8 @@ type Props = {
     onSelectNode: (nodeId: string, path?: string) => void;
     onApplyAnimation: (css: string, inline: string) => void;
     onToast: (message: string) => void;
+    project: FroamProjectDocument;
+    onProjectChange: Dispatch<SetStateAction<FroamProjectDocument>>;
 };
 export default function FroamConnectedCanvas(props: Props): import("react").JSX.Element | null;
 export {};

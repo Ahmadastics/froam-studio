@@ -6,19 +6,16 @@ function defaultId() {
     return `froam-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 export function emptyProjectState() {
-    return { legacyStore: {}, nodes: {}, relations: {}, flows: {}, interactions: {}, dna: {}, assets: {} };
+    return { legacyStore: {}, nodes: {}, relations: {}, flows: {}, interactions: {}, dna: {}, assets: {}, scans: {}, archive: {}, analyses: {}, responsive: {} };
 }
-function cloneState(state) {
+export function normalizeProjectState(state) {
     return {
-        legacyStore: { ...state.legacyStore },
-        nodes: { ...state.nodes },
-        relations: { ...state.relations },
-        flows: { ...state.flows },
-        interactions: { ...state.interactions },
-        dna: { ...state.dna },
-        assets: { ...state.assets },
+        legacyStore: { ...(state.legacyStore ?? {}) }, nodes: { ...(state.nodes ?? {}) }, relations: { ...(state.relations ?? {}) },
+        flows: { ...(state.flows ?? {}) }, interactions: { ...(state.interactions ?? {}) }, dna: { ...(state.dna ?? {}) }, assets: { ...(state.assets ?? {}) },
+        scans: { ...(state.scans ?? {}) }, archive: { ...(state.archive ?? {}) }, analyses: { ...(state.analyses ?? {}) }, responsive: { ...(state.responsive ?? {}) },
     };
 }
+function cloneState(state) { return normalizeProjectState(state); }
 export function compareProjectEvents(a, b) {
     if (a.clock !== b.clock)
         return a.clock - b.clock;
@@ -94,6 +91,39 @@ export function applyProjectEvent(current, event) {
         case 'asset.removed':
             delete next.assets[String(payload.assetId ?? '')];
             break;
+        case 'scan.captured': {
+            const scan = payload.scan;
+            if (scan?.id)
+                next.scans[scan.id] = scan;
+            break;
+        }
+        case 'archive.upserted': {
+            const item = payload.archiveItem;
+            if (item?.id)
+                next.archive[item.id] = item;
+            break;
+        }
+        case 'archive.removed':
+            delete next.archive[String(payload.archiveItemId ?? '')];
+            break;
+        case 'analysis.upserted': {
+            const analysis = payload.analysis;
+            if (analysis?.id)
+                next.analyses[analysis.id] = analysis;
+            break;
+        }
+        case 'analysis.removed':
+            delete next.analyses[String(payload.analysisId ?? '')];
+            break;
+        case 'responsive.upserted': {
+            const responsive = payload.responsive;
+            if (responsive?.nodeId)
+                next.responsive[responsive.nodeId] = responsive;
+            break;
+        }
+        case 'responsive.removed':
+            delete next.responsive[String(payload.nodeId ?? '')];
+            break;
     }
     return next;
 }
@@ -121,6 +151,7 @@ export function createProjectDocument(input) {
         headEventId: null,
         createdAt: now,
         createdBy: input.actorId,
+        rootCheckpointId: checkpointId,
     };
     return {
         schemaVersion: FROAM_PROJECT_SCHEMA_VERSION,
@@ -200,6 +231,7 @@ export function checkpointBranch(document, input) {
         label: input.label,
         eventIds: document.events.filter((event) => event.branchId === branchId).map((event) => event.id),
         state: deriveBranchState(document, branchId),
+        parentCheckpointId: branch.baseCheckpointId,
     };
     return {
         ...document,
@@ -239,6 +271,7 @@ export function createProjectBranch(document, input) {
         headEventId: null,
         createdAt: now,
         createdBy: input.actorId,
+        rootCheckpointId: checkpointId,
     };
     return {
         ...document,

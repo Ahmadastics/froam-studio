@@ -1,6 +1,7 @@
 import type { EditorStore, FroamOp } from '../collab/types'
 import type { FroamWireframeSection } from '../editor/FroamPlannerTypes'
-import { createProjectDocument } from './event-log'
+import { createProjectDocument, emptyProjectState } from './event-log'
+import { FROAM_PROJECT_SCHEMA_VERSION } from './types'
 import type {
   FroamNode,
   FroamProjectDocument,
@@ -16,7 +17,7 @@ export function legacyOpsToProjectEvents(
   input: { projectId: string; branchId: string },
 ): FroamProjectEvent[] {
   return ops.map((op) => ({
-    schemaVersion: 1,
+    schemaVersion: FROAM_PROJECT_SCHEMA_VERSION,
     id: op.id,
     projectId: input.projectId,
     branchId: input.branchId,
@@ -39,15 +40,7 @@ export function createProjectFromLegacyStore(input: {
   now?: number
   idFactory?: () => string
 }) {
-  const initialState: FroamProjectState = {
-    legacyStore: input.store,
-    nodes: {},
-    relations: {},
-    flows: {},
-    interactions: {},
-    dna: {},
-    assets: {},
-  }
+  const initialState: FroamProjectState = { ...emptyProjectState(), legacyStore: input.store }
   return createProjectDocument({ ...input, id: input.projectId, initialState })
 }
 

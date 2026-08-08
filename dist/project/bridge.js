@@ -1,11 +1,11 @@
 import { bridgeUrl } from '../lib/bridge.js';
-import { isFroamProjectFile } from './serialization.js';
+import { coerceFroamProjectFile, isFroamProjectFile } from './serialization.js';
 export async function loadProjectFromBridge(fetchImpl = fetch) {
     const response = await fetchImpl(bridgeUrl('/__froam/repo/project/load'), { cache: 'no-store' });
     if (!response.ok)
         throw new Error(`Could not load Froam project (${response.status})`);
     const payload = await response.json();
-    return isFroamProjectFile(payload.project) ? payload.project : null;
+    return coerceFroamProjectFile(payload.project);
 }
 export async function saveProjectToBridge(project, fetchImpl = fetch) {
     if (!isFroamProjectFile(project))

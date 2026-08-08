@@ -1,19 +1,35 @@
-import type { FroamDNA, FroamNodeRef } from './types';
-export type FroamScanSignalKind = 'structure' | 'layout' | 'visual' | 'behavior' | 'motion' | 'responsive' | 'accessibility' | 'provenance';
-export type FroamScanSignal = {
-    kind: FroamScanSignalKind;
-    source: 'dom' | 'computed-style' | 'react' | 'runtime' | 'import' | 'manual';
-    values: Record<string, unknown>;
-    confidence?: number;
-};
-export type FroamScanRecord = {
-    node: FroamNodeRef;
+import { type FroamNodeRegistry } from './node-registry';
+import { type FroamDNA, type FroamNode, type FroamRelation, type FroamScanRecord } from './types';
+import type { FroamViewport } from '../collab/types';
+export type FroamScanBundle = {
+    schemaVersion: 1;
     capturedAt: number;
-    signals: FroamScanSignal[];
+    rootNodeId: string;
+    records: FroamScanRecord[];
+    nodes: FroamNode[];
+    relations: FroamRelation[];
+    registry: FroamNodeRegistry;
+    families: Array<{
+        id: string;
+        memberNodeIds: string[];
+        signature: string;
+        confidence: number;
+    }>;
 };
-/**
- * The shared seam between today's DOM/Intel scanners and future DNA consumers.
- * It performs no prediction: it only groups observed facts with provenance.
- */
+export declare function detectComponentFamilies(records: readonly FroamScanRecord[]): {
+    id: string;
+    signature: string;
+    memberNodeIds: string[];
+    confidence: number;
+}[];
+/** Local-only DOM understanding. It never uploads source or credentials. */
+export declare function scanDomTree(root: HTMLElement, registry: FroamNodeRegistry, options: {
+    routeKey: string;
+    viewport: FroamViewport;
+    now?: number;
+    maxNodes?: number;
+    selectedRoot?: HTMLElement;
+}): FroamScanBundle;
+/** Convert evidence into versioned DNA without erasing uncertainty or provenance. */
 export declare function dnaFromScan(record: FroamScanRecord): FroamDNA;
 //# sourceMappingURL=scan.d.ts.map

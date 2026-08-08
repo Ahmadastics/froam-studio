@@ -1,5 +1,6 @@
 import type { EditorStore, FroamOp } from '../collab/types';
 import type { FroamWireframeSection } from '../editor/FroamPlannerTypes';
+import { FROAM_PROJECT_SCHEMA_VERSION } from './types';
 import type { FroamNode, FroamProjectDocument, FroamProjectEvent, FroamRelation } from './types';
 import type { FroamNodeRegistry } from './node-registry';
 /** Carries today's proven field operations into project history unchanged. */
@@ -30,7 +31,7 @@ export declare function sitePlanGraphRecords(pages: readonly LegacySitePage[]): 
 };
 export declare function withActiveBranch(document: FroamProjectDocument, activeBranchId: string): {
     activeBranchId: string;
-    schemaVersion: typeof import("./types").FROAM_PROJECT_SCHEMA_VERSION;
+    schemaVersion: typeof FROAM_PROJECT_SCHEMA_VERSION;
     id: import("./types").FroamId;
     name: string;
     createdAt: number;

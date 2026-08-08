@@ -1,6 +1,12 @@
 # Froam Rooms — roadmap to v6
 
-**Where we are:** v6.3.0 · **Status:** Connected Canvas is visible and usable; v7 intelligence systems have not begun.
+**Where we are:** v7.0.0 · **Status:** Froam Understands is implemented. Scan, DNA, Archive, Archaeology, Product Flow, Priority Responsive and Breakpoint Cinema are beta; Predicted Attention, Visual Rhythm and Screenshot → Live UI are honest local experiments.
+
+v7 adds one shared understanding layer over the v6 identity, graph, history,
+branch and interaction substrate. It does not replace live-DOM editing or the
+legacy path-based output pipeline. See `docs/FROAM_PLATFORM_LEDGER.md` for the
+implementation/maturity ledger and `docs/FROAM_INTELLIGENCE_PRIVACY.md` for
+the local/remote processing boundary. v8 work has not begun.
 
 The roadmap is retained below as the architectural record. Phase 0 and the
 v5 review track shipped first; v6.0/v6.1 complete the same room with ordered

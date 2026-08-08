@@ -34,6 +34,14 @@ from READMEs, so canvas and WebGL are off the table there.
 
 ## ✨ What's new
 
+**7.0.0 — Froam Understands.** The new Froam Intelligence surface turns the
+live page into shared, provenance-aware Scan records and Component DNA. It adds
+Component Archive, Design Archaeology, graph-backed Product Flow, Priority
+Responsive and Breakpoint Cinema, plus clearly labelled local experiments for
+Predicted Attention, Visual Rhythm and Screenshot → Live UI. Project schema v2
+migrates v1 envelopes automatically; legacy designs and path-based generated
+output remain unchanged.
+
 **6.3.0 — Connected Canvas.** Open one focused surface for avatar presence,
 deterministic Replay, isolated Prototypes, stable-node diagnostics, an
 experimental project graph and the shared Interaction inspector. The v6.2

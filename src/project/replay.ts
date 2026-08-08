@@ -32,7 +32,8 @@ export function filterReplayEvents(events: readonly FroamProjectEvent[], filter:
 export function branchReplayEvents(document: FroamProjectDocument, branchId = document.activeBranchId, filter: FroamReplayFilter = {}) {
   const branch = document.branches[branchId]
   if (!branch) throw new Error(`Unknown Froam branch: ${branchId}`)
-  const folded = new Set(document.checkpoints[branch.baseCheckpointId]?.eventIds ?? [])
+  const replayCheckpointId = branch.rootCheckpointId ?? branch.baseCheckpointId
+  const folded = new Set(document.checkpoints[replayCheckpointId]?.eventIds ?? [])
   return filterReplayEvents(document.events.filter((event) => event.branchId === branchId && !folded.has(event.id)), filter)
 }
 
@@ -45,7 +46,7 @@ export function replayStateAt(
 ): FroamProjectState {
   const branch = document.branches[branchId]
   if (!branch) throw new Error(`Unknown Froam branch: ${branchId}`)
-  const checkpoint = document.checkpoints[branch.baseCheckpointId]
+  const checkpoint = document.checkpoints[branch.rootCheckpointId ?? branch.baseCheckpointId]
   if (!checkpoint) throw new Error(`Missing checkpoint for Froam branch: ${branchId}`)
   const folded = new Set(checkpoint.eventIds)
   const baseline = document.events

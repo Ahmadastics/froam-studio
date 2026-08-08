@@ -14,6 +14,14 @@ class FakeElement {
     this.children = []
     this.dataset = {}
     this.attributes = new Map()
+    this.style = options.style ?? {}
+    this.rect = options.rect ?? { x: 0, y: 0, left: 0, top: 0, width: 100, height: 40, right: 100, bottom: 40 }
+    this.tabIndex = options.tabIndex ?? -1
+    this.onclick = null
+    this.scrollWidth = this.rect.width
+    this.scrollHeight = this.rect.height
+    this.clientWidth = this.rect.width
+    this.clientHeight = this.rect.height
   }
   append(...children) {
     for (const child of children) {
@@ -28,6 +36,21 @@ class FakeElement {
     if (name === 'data-froam-injected') this.dataset.froamInjected = text
   }
   getAttribute(name) { return this.attributes.get(name) ?? null }
+  hasAttribute(name) { return this.attributes.has(name) }
+  getBoundingClientRect() { return this.rect }
+  contains(candidate) {
+    if (candidate === this) return true
+    return this.children.some((child) => child.contains(candidate))
+  }
+  matches() { return false }
+  closest(selector) {
+    let current = this
+    while (current) {
+      if (selector === '[data-chef-editor-root]' && current.hasAttribute('data-chef-editor-root')) return current
+      current = current.parentElement
+    }
+    return null
+  }
   querySelector(selector) { return this.querySelectorAll(selector)[0] ?? null }
   querySelectorAll(selector) {
     const all = []
@@ -43,6 +66,7 @@ class FakeElement {
 }
 
 function matches(element, selector) {
+  if (selector === '*') return true
   const attribute = selector.match(/^\[data-froam-id="(.+)"\]$/)
   if (attribute) return element.getAttribute('data-froam-id') === attribute[1]
   if (selector.startsWith('#')) return element.id === selector.slice(1)
@@ -51,6 +75,15 @@ function matches(element, selector) {
 
 globalThis.HTMLElement = FakeElement
 globalThis.CSS = { escape: (value) => String(value) }
+const defaultStyle = {
+  display: 'block', position: 'static', width: '100px', height: '40px', minWidth: '0px', maxWidth: 'none', minHeight: '0px', maxHeight: 'none',
+  flexDirection: 'row', flexWrap: 'nowrap', justifyContent: 'normal', alignItems: 'normal', gridTemplateColumns: 'none', gridTemplateRows: 'none', gap: '0px',
+  margin: '0px', padding: '0px', overflow: 'visible', overflowX: 'visible', overflowY: 'visible', color: 'rgb(0,0,0)', backgroundColor: 'rgba(0,0,0,0)',
+  backgroundImage: 'none', fontFamily: 'Inter', fontSize: '16px', fontWeight: '400', lineHeight: '24px', letterSpacing: '0px', border: '0px none',
+  borderRadius: '0px', boxShadow: 'none', opacity: '1', transition: 'none', animation: 'none', visibility: 'visible', outline: 'none',
+}
+globalThis.window = { getComputedStyle: (element) => ({ ...defaultStyle, ...element.style }), innerHeight: 800 }
+globalThis.getComputedStyle = globalThis.window.getComputedStyle
 
 const {
   captureNodeRef,
@@ -78,13 +111,22 @@ const { legacyOpsToProjectEvents, nodeRegistryGraphRecords, sitePlanGraphRecords
 const { makeEdit } = await import('../dist/collab/oplog.js')
 const { componentCatalogGraphRecords } = await import('../dist/project/component-adapter.js')
 const { dnaFromScan } = await import('../dist/project/scan.js')
+const { scanDomTree, detectComponentFamilies } = await import('../dist/project/scan.js')
 const { compileInteractionToCss } = await import('../dist/project/interaction-runtime.js')
 const { branchReplayEvents, filterReplayEvents, replayCategory, replayStateAt } = await import('../dist/project/replay.js')
 const { graphSelectionIndex, materializeGraphRows } = await import('../dist/project/graph-inspector.js')
 const { interactionInspectorRecord, legacyAnimatorToInteraction } = await import('../dist/project/animator-adapter.js')
 const { runSimulationScenario } = await import('../dist/project/simulation.js')
-const { defaultFroamFeatureFlags } = await import('../dist/project/experiments.js')
+const { defaultFroamFeatureFlags, FROAM_ROADMAP_FEATURES } = await import('../dist/project/experiments.js')
 const { isProjectFile, loadProjectFile, writeProjectFile } = await import('../lib/project-store.mjs')
+const { createArchiveItem, upsertArchive, removeFromArchive, reuseArchiveItem, searchArchive } = await import('../dist/project/archive.js')
+const { archaeologyForNode } = await import('../dist/project/archaeology.js')
+const { createFlowGraph } = await import('../dist/project/product-flow.js')
+const { predictAttention } = await import('../dist/project/attention.js')
+const { analyzeVisualRhythm } = await import('../dist/project/rhythm.js')
+const { cinemaWidths, defaultResponsivePolicy, observeResponsiveState, responsiveSuggestions } = await import('../dist/project/responsive.js')
+const { localScreenshotProvider } = await import('../dist/project/screenshot-reconstruction.js')
+const { LOCAL_HEURISTIC_PROVIDER, assertRemoteProviderConsent } = await import('../dist/project/intelligence-provider.js')
 
 const tests = []
 const test = (name, fn) => tests.push([name, fn])
@@ -200,7 +242,25 @@ test('project envelope serializes and deserializes without losing the legacy des
   })
   assert.equal(parsed.migrated, false)
   assert.deepEqual(unwrapLegacyDesign(parsed.file), legacy)
-  assert.equal(parsed.file.project.schemaVersion, 1)
+  assert.equal(parsed.file.project.schemaVersion, 2)
+})
+
+test('v6 project schema migrates to v7 without changing event ids or legacy design', () => {
+  const current = createProjectFileFromLegacyDesign(legacy, { projectId: 'v6-project', actorId: 'ahmad', now: 10, idFactory: () => 'v6-base' })
+  const v1 = JSON.parse(JSON.stringify(current))
+  v1.schemaVersion = 1
+  v1.project.schemaVersion = 1
+  for (const event of v1.project.events) event.schemaVersion = 1
+  for (const checkpoint of Object.values(v1.project.checkpoints)) {
+    delete checkpoint.state.scans; delete checkpoint.state.archive; delete checkpoint.state.analyses; delete checkpoint.state.responsive
+  }
+  for (const branch of Object.values(v1.project.branches)) delete branch.rootCheckpointId
+  const migrated = parseFroamProjectFile(v1, { projectId: 'unused', actorId: 'unused' })
+  assert.equal(migrated.migrated, true)
+  assert.equal(migrated.file.schemaVersion, 2)
+  assert.deepEqual(migrated.file.design, legacy)
+  assert.deepEqual(migrated.file.project.checkpoints['v6-base'].state.archive, {})
+  assert.equal(migrated.file.project.branches.main.rootCheckpointId, 'v6-base')
 })
 
 test('project sidecar store persists only valid envelopes', () => {
@@ -356,8 +416,144 @@ test('Replay continues from a checkpoint without replaying folded events twice',
   project = checkpointBranch(project, { actorId: 'ahmad', now: 2, idFactory: () => `replay-cp-${++counter}` })
   const second = makeEdit(deriveBranchState(project).legacyStore, { actor: 'ahmad', clock: 2, routeKey: '/', viewport: 'desktop', path: 'p:1', field: 'text', value: 'Two' })
   project = appendProjectEvents(project, legacyOpsToProjectEvents([second], { projectId: project.id, branchId: 'main' }))
-  assert.equal(replayStateAt(project, 0).legacyStore['/@@desktop']['p:1'].text, 'One')
-  assert.equal(replayStateAt(project, 1).legacyStore['/@@desktop']['p:1'].text, 'Two')
+  assert.equal(replayStateAt(project, 0).legacyStore['/@@desktop'], undefined)
+  assert.equal(replayStateAt(project, 1).legacyStore['/@@desktop']['p:1'].text, 'One')
+  assert.equal(replayStateAt(project, 2).legacyStore['/@@desktop']['p:1'].text, 'Two')
+})
+
+test('Froam Scan extracts identity, structure, styles and conservative semantics locally', () => {
+  const root = new FakeElement('main', { rect: { x: 0, y: 0, left: 0, top: 0, width: 1200, height: 800, right: 1200, bottom: 800 } })
+  const nav = new FakeElement('nav', { style: { display: 'flex', gap: '16px' } })
+  const unknown = new FakeElement('div', { text: 'Unclassified' })
+  const button = new FakeElement('button', { text: 'Continue', rect: { x: 0, y: 0, left: 0, top: 0, width: 120, height: 44, right: 120, bottom: 44 } })
+  root.append(nav, unknown); nav.append(button)
+  let id = 0
+  const bundle = scanDomTree(root, {}, { routeKey: '/', viewport: 'desktop', now: 50, maxNodes: 10, selectedRoot: root })
+  assert.equal(bundle.records.length, 4)
+  const navRecord = bundle.records.find((record) => record.node.nodeId === nav.dataset.froamId)
+  assert.equal(navRecord.signals.find((signal) => signal.kind === 'layout').values.display, 'flex')
+  assert.equal(navRecord.signals.find((signal) => signal.kind === 'semantics').values.role, 'navigation')
+  const unknownSemantic = bundle.records.find((record) => record.node.nodeId === unknown.dataset.froamId).signals.find((signal) => signal.kind === 'semantics')
+  assert.equal(unknownSemantic.values.role, 'unknown')
+  assert.equal(unknownSemantic.confidence, 0)
+  assert.ok(bundle.relations.some((relation) => relation.from === nav.dataset.froamId && relation.to === button.dataset.froamId))
+  void id
+})
+
+test('Component DNA is versioned, serializable and preserves observed versus inferred knowledge', () => {
+  const record = { schemaVersion: 1, id: 'scan-dna', node: { nodeId: 'hero', path: 'section:1' }, capturedAt: 60, childNodeIds: [], siblingNodeIds: [], signals: [
+    { kind: 'layout', origin: 'observed', source: 'computed-style', values: { display: 'grid' } },
+    { kind: 'semantics', origin: 'inferred', source: 'heuristic', confidence: .7, values: { role: 'hero' } },
+  ] }
+  const dna = dnaFromScan(record)
+  const roundTrip = JSON.parse(JSON.stringify(dna))
+  assert.equal(roundTrip.schemaVersion, 1)
+  assert.equal(roundTrip.layout.display, 'grid')
+  assert.equal(roundTrip.knowledge['semantics.role'].origin, 'inferred')
+  assert.equal(roundTrip.behavior, undefined)
+})
+
+test('Component families require repeated structure and refuse unrelated semantics', () => {
+  const make = (id, signature, role) => ({ schemaVersion: 1, id: `scan-${id}`, node: { nodeId: id }, capturedAt: 1, childNodeIds: [], siblingNodeIds: [], signals: [
+    { kind: 'structure', origin: 'observed', source: 'dom', values: { signature } }, { kind: 'semantics', origin: 'inferred', source: 'heuristic', values: { role } },
+  ] })
+  const families = detectComponentFamilies([make('a', 'article|card|block|h2,p', 'card'), make('b', 'article|card|block|h2,p', 'card'), make('c', 'nav|navigation|flex|a', 'navigation')])
+  assert.deepEqual(families[0].memberNodeIds, ['a', 'b'])
+  assert.equal(families.length, 1)
+})
+
+test('Archive add, persistence, search, reuse, removal and provenance share stable identity', () => {
+  const dna = { schemaVersion: 1, nodeId: 'card', capturedAt: 1, semantics: { role: 'card' } }
+  const item = createArchiveItem({ id: 'archive-card', nodeId: 'card', name: 'Pricing Card', actorId: 'ahmad', projectId: 'p', branchId: 'main', dna, html: '<article>Card</article>', legacyPath: 'article:1', now: 2 })
+  let archive = upsertArchive({}, item)
+  assert.equal(searchArchive(archive, 'pricing')[0].provenance.sourceNodeId, 'card')
+  const instance = reuseArchiveItem(item, { nodeId: 'card-copy', routeKey: '/pricing' })
+  assert.equal(instance.componentId, 'archive-card')
+  assert.equal(instance.metadata.derivedFrom, 'card')
+  archive = removeFromArchive(archive, item.id)
+  assert.deepEqual(archive, {})
+})
+
+test('Archaeology reports recorded lineage and never invents rationale', () => {
+  let project = createProjectDocument({ id: 'archaeology', name: 'Origins', actorId: 'ahmad', now: 1, idFactory: () => 'arch-base' })
+  project = appendProjectEvents(project, [createProjectEvent({ id: 'create-card', projectId: project.id, branchId: 'main', actorId: 'ahmad', clock: 1, createdAt: 2, type: 'node.upserted', targetIds: ['card'], payload: { node: { id: 'card', kind: 'element', source: 'froam' } } }), createProjectEvent({ id: 'edit-card', projectId: project.id, branchId: 'main', actorId: 'musa', clock: 2, createdAt: 3, type: 'dna.captured', targetIds: ['card'], payload: { dna: { schemaVersion: 1, nodeId: 'card', capturedAt: 3 } }, label: 'Spacing update' })])
+  const origin = archaeologyForNode(project, 'card')
+  assert.equal(origin.creation.actorId, 'ahmad')
+  assert.deepEqual(origin.authors, ['ahmad', 'musa'])
+  assert.equal(origin.edits[1].rationale, undefined)
+})
+
+test('Product Flow uses graph nodes and persisted transition relations', () => {
+  const graph = createFlowGraph('Checkout', [{ id: 'cart', name: 'Cart', routeKey: '/cart' }, { id: 'success', name: 'Success', stateType: 'success' }], [{ id: 'pay', from: 'cart', to: 'success', name: 'Pay', condition: 'payment accepted' }])
+  assert.deepEqual(graph.flow.nodeIds, ['cart', 'success'])
+  assert.equal(graph.relations[0].kind, 'transitions-to')
+  assert.equal(graph.relations[0].condition, 'payment accepted')
+})
+
+test('Predicted Attention is explicit local heuristic analysis mapped to node ids', () => {
+  const record = (id, role, width, height, y, fontSize = '16px') => ({ schemaVersion: 1, id: `scan-${id}`, node: { nodeId: id }, capturedAt: 1, childNodeIds: [], siblingNodeIds: [], signals: [
+    { kind: 'layout', origin: 'observed', source: 'computed-style', values: { rect: { width, height, y } } },
+    { kind: 'appearance', origin: 'observed', source: 'computed-style', values: { fontSize } },
+    { kind: 'semantics', origin: 'observed', source: 'dom', values: { role } },
+  ] })
+  const analysis = predictAttention([record('image', 'media', 900, 500, 0), record('cta', 'cta', 120, 44, 500)], 10)
+  assert.equal(analysis.local, true)
+  assert.match(analysis.result.disclaimer, /not eye-tracking/)
+  assert.deepEqual(analysis.targetIds.sort(), ['cta', 'image'])
+})
+
+test('Visual Rhythm reports repeated composition without subjective claims', () => {
+  const records = Array.from({ length: 5 }, (_, index) => ({ schemaVersion: 1, id: `s${index}`, node: { nodeId: `n${index}` }, capturedAt: 1, childNodeIds: [], siblingNodeIds: [], signals: [
+    { kind: 'layout', origin: 'observed', source: 'computed-style', values: { rect: { y: index * 400, height: 400, width: 1000 }, padding: '24px', gap: '16px' } },
+    { kind: 'semantics', origin: 'inferred', source: 'heuristic', values: { role: 'card' } },
+  ] }))
+  const analysis = analyzeVisualRhythm(records, 800, 20)
+  assert.equal(analysis.result.longestRepeatedRun, 5)
+  assert.match(analysis.result.warnings[0], /identical layout rhythm/)
+})
+
+test('Responsive priority serializes survival constraints and produces designer-controlled suggestions', () => {
+  const policy = { ...defaultResponsivePolicy('decoration', 'ahmad', 1), priority: 'decorative', canHide: true, minimumUsefulWidth: 700 }
+  const record = { schemaVersion: 1, id: 'scan-decoration', node: { nodeId: 'decoration' }, capturedAt: 1, childNodeIds: [], siblingNodeIds: [], signals: [{ kind: 'layout', origin: 'observed', source: 'computed-style', values: { rect: { width: 500 } } }] }
+  const suggestions = responsiveSuggestions([record], { decoration: policy }, 410)
+  assert.ok(suggestions.some((item) => item.action === 'hide'))
+  assert.deepEqual(JSON.parse(JSON.stringify(policy)), policy)
+  assert.deepEqual(cinemaWidths(320, 352, 16), [320, 336, 352])
+})
+
+test('Breakpoint observations conservatively detect overflow, collision, clipping, touch and hidden critical nodes', () => {
+  const root = new FakeElement('main', { rect: { x: 0, y: 0, left: 0, top: 0, width: 320, height: 400, right: 320, bottom: 400 } })
+  root.scrollWidth = 500
+  const first = new FakeElement('button', { rect: { x: 0, y: 0, left: 0, top: 0, width: 20, height: 20, right: 20, bottom: 20 } })
+  const second = new FakeElement('div', { rect: { x: 10, y: 10, left: 10, top: 10, width: 30, height: 30, right: 40, bottom: 40 } })
+  second.scrollWidth = 60
+  const critical = new FakeElement('button', { style: { display: 'none' } })
+  first.setAttribute('data-froam-id', 'first'); second.setAttribute('data-froam-id', 'second'); critical.setAttribute('data-froam-id', 'critical')
+  root.append(first, second, critical)
+  const observation = observeResponsiveState(root, { first: { nodeId: 'first' }, second: { nodeId: 'second' }, critical: { nodeId: 'critical' } }, {
+    critical: { ...defaultResponsivePolicy('critical', 'ahmad', 1), priority: 'critical' },
+  }, 320)
+  assert.equal(observation.overflowX, true)
+  assert.deepEqual(observation.collisions, [['first', 'second']])
+  assert.deepEqual(observation.hiddenCritical, ['critical'])
+  assert.deepEqual(observation.clipped, ['second'])
+  assert.deepEqual(observation.touchTargets, ['first'])
+})
+
+test('Screenshot reconstruction creates normal graph nodes and DNA and rejects unsupported input', async () => {
+  const width = 32; const height = 32; const data = new Uint8ClampedArray(width * height * 4).fill(255)
+  const result = await localScreenshotProvider.reconstruct({ width, height, data, mimeType: 'image/png', name: 'Reference' })
+  assert.ok(result.nodes.some((node) => node.kind === 'frame'))
+  assert.ok(result.relations.every((relation) => relation.kind === 'contains'))
+  assert.ok(result.dna.every((dna) => dna.schemaVersion === 1 && dna.provenance.source === 'screenshot'))
+  await assert.rejects(() => localScreenshotProvider.reconstruct({ width, height, data, mimeType: 'image/gif' }), /Unsupported/)
+  await assert.rejects(() => localScreenshotProvider.reconstruct({ width, height, data: new Uint8ClampedArray(4), mimeType: 'image/png' }), /Invalid/)
+})
+
+test('intelligence providers disclose privacy and remote providers require consent', () => {
+  assert.equal(LOCAL_HEURISTIC_PROVIDER.privacy.execution, 'local')
+  assert.equal(LOCAL_HEURISTIC_PROVIDER.privacy.sendsSourceCode, false)
+  assert.throws(() => assertRemoteProviderConsent({ id: 'remote', privacy: { execution: 'remote', sendsSourceCode: false, sendsCredentials: false, dataDescription: 'pixels' } }, false), /explicit consent/)
 })
 
 test('Site Planner records project cleanly into shared graph nodes and relations', () => {
@@ -381,7 +577,7 @@ test('component catalog projects into the same graph vocabulary', () => {
 
 test('registry nodes materialize into graph rows with two-way selection mapping', () => {
   const graph = nodeRegistryGraphRecords({ hero: { nodeId: 'hero', source: 'host-dom', updatedAt: 1, path: 'section:1', routeKey: '/', viewport: 'desktop', fingerprint: { tag: 'section', text: 'Hero' } } })
-  const state = { legacyStore: {}, nodes: Object.fromEntries(graph.nodes.map((node) => [node.id, node])), relations: Object.fromEntries(graph.relations.map((relation) => [relation.id, relation])), flows: {}, interactions: {}, dna: {}, assets: {} }
+  const state = { legacyStore: {}, nodes: Object.fromEntries(graph.nodes.map((node) => [node.id, node])), relations: Object.fromEntries(graph.relations.map((relation) => [relation.id, relation])), flows: {}, interactions: {}, dna: {}, assets: {}, scans: {}, archive: {}, analyses: {}, responsive: {} }
   const rows = materializeGraphRows(state)
   const index = graphSelectionIndex(state)
   assert.ok(rows.some((row) => row.node.id === 'hero' && row.depth === 1))
@@ -436,7 +632,10 @@ test('simulation scenarios execute deterministically through adapters', async ()
 })
 
 test('research-heavy roadmap features are disabled by default', () => {
-  assert.ok(Object.values(defaultFroamFeatureFlags()).every((enabled) => enabled === false))
+  const flags = defaultFroamFeatureFlags()
+  const unavailable = FROAM_ROADMAP_FEATURES.filter((feature) => feature.maturity === 'research-only' || feature.maturity === 'architecture-only')
+  assert.ok(unavailable.every((feature) => flags[feature.id] === false))
+  assert.ok(FROAM_ROADMAP_FEATURES.filter((feature) => feature.maturity === 'beta').every((feature) => flags[feature.id] === true))
 })
 
 let passed = 0

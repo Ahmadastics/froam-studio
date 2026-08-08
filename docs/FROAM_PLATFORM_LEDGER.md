@@ -1,87 +1,200 @@
 # Froam Platform Implementation Ledger
 
-Last updated: 2026-08-08 · Release: 6.3.0 Connected Canvas
+Last updated: 2026-08-08 · Release: 7.0.0 — Froam Understands
 
 ## Production
 
-- Stable node references with `data-froam-id`, legacy path compatibility, duplicate prevention and registry persistence.
-- Versioned `froam.project.json` envelope with exact `froam.design.json` compatibility.
-- Existing live-DOM editing, path-based runtime/code generation, Blueprint 2D/3D, Rooms, undo/redo and collaboration operation log.
-- Lightweight room presence: avatar metadata is stored on the member once; heartbeats carry only location, selection, tool and action references.
+- Stable Froam node identity, duplicate prevention, registry persistence,
+  fingerprint recovery and legacy path compatibility.
+- Versioned project serialization/deserialization with automatic v1→v2
+  migration and unchanged `froam.design.json` compatibility.
+- Existing live-DOM editor, path-based runtime/code generation, Rooms,
+  operation-log undo/redo, Blueprint 2D/3D and Animator compatibility.
 
 ## Beta
 
-- Connected Canvas panel with Replay, Prototypes, Node Inspector, Graph Inspector and Interaction Inspector.
-- Deterministic Replay with play, pause, restart, scrub and 1x/4x/10x/20x speeds; actor and structural/styling/text/interaction filters.
-- Prototype branches: create/fork, switch, rename, parent/fork-point display, leaf deletion and main protection. Switching materializes an isolated branch snapshot.
-- Avatar-first canvas presence, quiet contextual labels and collaborator rail.
-- Identity recovery diagnostics for lost attributes, path fallback, stale paths, fingerprint recovery, ambiguity, registry updates and failures.
-- Local project persistence plus debounced repo-sidecar saves through the existing bridge.
+### Froam Scan
+
+- **Architecture:** local DOM scanner emits graph-compatible, node-addressed
+  scan records. Every knowledge item is `observed`, `inferred`, or
+  `user-defined`, with confidence/reasons where applicable.
+- **Dependencies:** node registry, anchor fingerprints, live DOM, project graph.
+- **Tests:** structure/style extraction, stable identity mapping, conservative
+  semantics and repeated-family detection.
+- **Limitations:** browser-observable signals only; event-listener visibility
+  depends on explicit DOM/Froam metadata; this is not an accessibility audit.
+- **Future:** incremental mutation invalidation and optional framework adapters.
+
+### Component DNA and DNA Inspector
+
+- **Architecture:** serializable `FroamDNA` schema v1 attaches identity,
+  structure, appearance, semantics, behavior, responsive, accessibility,
+  history, usage and provenance-aware knowledge to stable node IDs.
+- **Dependencies:** Scan, graph, history and responsive metadata.
+- **Tests:** versioning, serialization, unknown preservation, provenance and
+  responsive metadata.
+- **Limitations:** DNA is as complete as its observed and recorded inputs;
+  unknown values deliberately remain unknown.
+- **Future:** incremental DNA updates and richer interaction/runtime adapters.
+
+### Component Archive
+
+- **Architecture:** project-level archive entries reuse normal DNA, graph IDs,
+  source markup and provenance. Search, preview, reuse, removal and conservative
+  similarity are service operations, not a second component database.
+- **Dependencies:** stable identity and DNA.
+- **Tests:** add/remove, persistence, search, reuse, provenance and identity.
+- **Limitations:** v7 preview is lightweight; inserted HTML is sanitized and
+  receives fresh identities, but asset packaging is not yet portable.
+- **Future:** lazy visual previews, cross-project packages and user-approved
+  duplicate merging.
+
+### Design Archaeology
+
+- **Architecture:** projects node history, branch ancestry, creators, archive
+  origins and recorded rationale from the canonical event/graph substrate.
+- **Dependencies:** stable identity, branch lineage and project history.
+- **Tests:** creation, author/branch lineage and refusal to invent rationale.
+- **Limitations:** host DOM changes outside Froam history have no archaeology.
+- **Future:** richer before/after forms when structural operation payloads grow.
+
+### Product Flow
+
+- **Architecture:** screens are project graph nodes; transitions and conditions
+  are project graph relations. Editor/flow navigation resolves shared IDs.
+- **Dependencies:** project graph and stable identities.
+- **Tests:** node/transition persistence and graph relationships.
+- **Limitations:** v7 provides a focused list/connection surface, not Froam
+  Space or a large spatial graph renderer.
+- **Future:** scalable graph layout and richer state/error/success authoring.
+
+### Priority Responsive and Breakpoint Cinema
+
+- **Architecture:** user-defined survival policies live in project responsive
+  metadata and DNA can reference them. A deterministic width sequence observes
+  DOM state, records markers and generates non-destructive suggestions.
+- **Dependencies:** Scan, stable identity and live DOM measurements.
+- **Tests:** policy serialization, constraints, deterministic cinema widths,
+  overflow/collision/touch-target observations and state restoration seams.
+- **Limitations:** suggestions never rewrite CSS; browser layout observation can
+  only explain decisions backed by recorded policy. Detection is conservative.
+- **Future:** cached width snapshots, richer breakpoint attribution and an
+  explicit apply/review workflow.
+
+### Connected Canvas (carried from v6.3)
+
+- Replay, prototypes, identity diagnostics, graph/interaction inspectors and
+  avatar presence remain beta. v7 adds checkpoint ancestry/root checkpoints so
+  full recorded branch replay is no longer limited to the active checkpoint.
 
 ## Experimental
 
-- Project graph tree with registry/page materialization and editor↔graph selection sync.
-- Existing Animator adapter to the shared `FroamInteraction` model and an interaction record inspector.
-- Deterministic simulation runner retained as an interface for later Chaos Testing work.
+### Predicted Attention
 
-## Research
+- Local, replaceable heuristic adapter produces a ranked node list, overlay,
+  confidence and explicit disclaimer. Results are dynamic `FroamAnalysis`
+  records rather than intrinsic facts. It is not eye tracking and has no
+  scientific precision claim. A validated model/corpus is future work.
 
-- Component DNA product features, Component Archive, Screenshot-to-Live-UI, Attention Heatmap, Priority Responsive, Breakpoint Cinema and external UI Sampling.
-- MUTATE, Synthetic UX, Design Physics, UI Gravity, Reality Mode, Trailer Generator, Froam Space and Make it Froam.
+### Visual Rhythm
+
+- Local rule-based analysis detects repeated composition, dimensions and
+  spacing over scan records. Language reports measured repetition and never
+  declares a design “boring.” Scroll-level validation and actionable review
+  workflows remain future work.
+
+### Screenshot → Live UI
+
+- An explicit local task decodes image pixels, segments regions and generates
+  normal Froam graph nodes, relations, preliminary DNA and editable injected
+  elements. It rejects invalid, unsupported and oversized inputs. It does not
+  recover original source code, OCR text, assets, responsive behavior or
+  pixel-perfect layout. Multiple-reference and render/diff loops are represented
+  by provider boundaries but are not claimed complete.
+
+### Shared simulation and interaction seams
+
+- Deterministic simulation runner and `FroamInteraction` adapters remain
+  experimental foundations. v7 does not market them as Chaos Testing,
+  Synthetic UX or an Interaction Library.
+
+## Research only / architecture only
+
+- External website UI Sampling, full Interaction Library marketplace, MUTATE,
+  branch merge, Design Physics, UI Gravity, Synthetic UX, complete Chaos
+  Testing, Reality Mode, Trailer Generator, Froam Space and Make it Froam.
+- No v8 product implementation is included. Their prerequisites may consume
+  v7 identity/graph/analysis/provider contracts later.
+
+## Shared model changes
+
+- Project schema v2 adds `scans`, `archive`, `analyses` and `responsive` state.
+- Graph relations add `variant-of`, `belongs-to` and `connected-to`.
+- Scan/DNA knowledge uses explicit observed/inferred/user-defined provenance.
+- Analyses are time-scoped records, separated from intrinsic DNA.
+- Branches retain `rootCheckpointId`; checkpoints retain
+  `parentCheckpointId`, allowing ancestry-aware Replay.
+- Connected Canvas and Intelligence use one editor-owned project document.
 
 ## Migrations
 
-- No project schema bump: v6.3 adds optional registry diagnostics and new project event consumers within schema v1.
-- Legacy Animator configuration adapts into `FroamInteraction`; legacy CSS animation application remains intact.
-- EditorStore can now be projected back into the legacy v3 design shape for sidecar persistence.
-- Existing v3 designs still migrate additively and remain the runtime/code-generation compatibility view.
-
-## Tests added in v6.3
-
-- Identity loss after rerender, verified path recovery, fingerprint recovery and ambiguous-match refusal.
-- Replay ordering, actor/category filtering, legacy-operation projection and checkpoint continuation.
-- Prototype fork isolation, rename, switching, serialization, leaf deletion, parent protection and main protection.
-- Registry graph materialization and node/path selection indexes.
-- Legacy Animator serialization, inspection and deterministic CSS compilation.
-- Presence reconnect with stable actor/avatar metadata and node-aware lightweight beats.
+- `froam.project.json` v1 migrates to v2 on parse/load. New collections default
+  empty, DNA gains its own schema version, branch root checkpoints are derived,
+  and event IDs/history/legacy design are preserved.
+- The bridge sidecar store reads v1 and writes valid v2 envelopes.
+- Existing v3 design migration and path-based output are unchanged.
 
 ## Performance
 
-- Presence pointer updates remain throttled and never resend image data.
-- Replay folds only the visible event prefix and uses the active checkpoint as its base.
-- Graph rows and indexes are memoized from project/registry changes rather than recomputed on pointer movement.
-- Project saves are debounced; branch switching folds once and applies through the existing DOM painter.
+- Scan, attention, rhythm and screenshot work are explicit user actions, never
+  pointer-move work. Graph/DNA outputs are persisted for reuse.
+- Breakpoint Cinema uses bounded deterministic width steps and request-driven
+  playback; it restores preview styles when stopped/closed.
+- Project saves remain debounced. Archive browsing searches stored metadata and
+  does not eagerly render off-screen component trees.
+- Large pages and continuous responsive observation still need profiling and
+  cache invalidation before these beta systems can graduate.
 
-## Architectural decisions and discoveries
+## Tests added in v7
 
-- One Connected Canvas entry point keeps five related systems off the main toolbar and forces them to share the project substrate.
-- Replay is a non-destructive DOM preview; leaving Replay restores the live branch store.
-- Branch switches reset the local compatibility op log to a baseline of the selected branch, while canonical branch history remains in the project document.
-- The current checkpoint model reliably replays from the active checkpoint forward. Complete replay before that checkpoint needs checkpoint ancestry/base-state chaining in a later schema revision.
-- Ambiguous fingerprint candidates are now refused and observable rather than silently choosing the highest near-tie.
-- Framework rerenders can still strip attributes; recovery telemetry will show whether React/framework identity integration is justified.
+- v1→v2 compatibility and unchanged legacy design/event identity.
+- Root-checkpoint replay ancestry.
+- Scan structure/styles/semantics/families and DNA provenance/unknowns.
+- Archive lifecycle/reuse/provenance; Archaeology lineage/no invented reasons.
+- Product Flow graph relations; Attention/Rhythm claim boundaries.
+- Responsive policy/cinema/failure observations.
+- Screenshot node/DNA validity and failure handling.
+- Provider privacy disclosure and explicit remote-consent enforcement.
 
-## Known limitations
+## Known limitations and pre-v8 fixes
 
-- Branch merge is deliberately absent; prototypes are fork/switch/isolate only.
-- Replay semantics are strongest for EditorStore operations. Raw host DOM changes outside Froam history cannot be reconstructed.
-- Structural injected operations remain replayable only to the fidelity represented by their existing operation payload.
-- Animator keyframes are stored in the interaction event and injected for the current session; generated output still follows the legacy path pipeline.
-- Graph completeness is limited to objects already materialized by registry and project adapters. It is not Froam Space.
-- Hosted multi-device project-document persistence is not yet implemented; Rooms still synchronize the proven operation layer.
+- Hosted, branch-aware project-document synchronization remains absent; Rooms
+  synchronize the proven operation layer, not every v2 intelligence record.
+- Unrecorded host DOM mutation cannot replay or produce archaeology.
+- Framework rerenders can remove `data-froam-id`; registry/path/fingerprint
+  recovery works, but framework-native identity adapters would be stronger.
+- Branch merge remains deliberately absent.
+- Screenshot reconstruction needs OCR/model adapters, multi-image inference and
+  a meaningful render/capture/diff loop before it can leave Experimental.
+- Attention needs validation data before any stronger accuracy claim.
+- Large-page Scan/Cinema need performance profiling and incremental caches.
 
-## What v6.3 unlocks for v7
+## Architectural decisions
 
-- Observable identity health for DNA and Archive capture.
-- A usable time axis for Archaeology and richer replay semantics.
-- Safe prototype isolation for future MUTATE experiments.
-- A visible graph surface for validating Product Flow intelligence before spatial interfaces.
-- A shared interaction record ready for Interaction Library and runtime trigger adapters.
+- Intelligence is a separate coherent surface; Connected Canvas stays focused
+  on collaboration/history/graph debugging.
+- All ten v7 views share identity, project graph, history, DNA and analyses;
+  none owns a parallel database.
+- Observed facts, inference and user intent are never collapsed into one truth.
+- Remote intelligence adapters must disclose processing and receive explicit
+  consent; v7 ships only local implementations.
+- Runtime/code-generation selectors remain path-based in v7.
 
-## Remaining work
+## What v7 unlocks
 
-- Chain checkpoint ancestry if complete pre-checkpoint replay becomes a v7 requirement.
-- Add hosted project-document synchronization and branch-aware room persistence.
-- Expand graph materialization from Site Planner, component instances and interactions during normal editor use.
-- Add runtime trigger adapters for click, scroll and drag interactions.
-- Keep all research systems behind explicit experimental boundaries until their prerequisites are reliable.
+- A trustworthy structured representation for future richer interaction,
+  simulation, comparison and spatial views.
+- Stable component understanding reusable by future MUTATE and Froam Space
+  without inventing another identity or graph layer.
+- Provider boundaries for future validated semantic, attention and screenshot
+  models without coupling Froam to one vendor.

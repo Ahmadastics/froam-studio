@@ -1,5 +1,5 @@
-export type FroamRoadmapFeature = 'component-archive' | 'product-flow-intelligence' | 'interaction-library' | 'ui-sampling' | 'screenshot-to-ui' | 'attention-heatmap' | 'design-physics' | 'ui-gravity' | 'ui-sound' | 'chaos-testing' | 'synthetic-ux' | 'reality-mode' | 'mutate' | 'froam-space' | 'make-it-froam';
-export type FroamFeatureMaturity = 'architecture-only' | 'experimental' | 'research-only' | 'production';
+export type FroamRoadmapFeature = 'froam-scan' | 'component-dna' | 'component-archive' | 'design-archaeology' | 'product-flow-intelligence' | 'visual-rhythm' | 'priority-responsive' | 'breakpoint-cinema' | 'interaction-library' | 'ui-sampling' | 'screenshot-to-ui' | 'attention-heatmap' | 'design-physics' | 'ui-gravity' | 'ui-sound' | 'chaos-testing' | 'synthetic-ux' | 'reality-mode' | 'mutate' | 'froam-space' | 'make-it-froam';
+export type FroamFeatureMaturity = 'architecture-only' | 'experimental' | 'research-only' | 'beta' | 'production';
 export type FroamFeatureDefinition = {
     id: FroamRoadmapFeature;
     maturity: FroamFeatureMaturity;

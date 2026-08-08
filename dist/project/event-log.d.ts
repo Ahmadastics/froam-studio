@@ -1,6 +1,7 @@
 import { FROAM_PROJECT_SCHEMA_VERSION, type FroamBranch, type FroamCheckpoint, type FroamId, type FroamProjectDocument, type FroamProjectEvent, type FroamProjectEventPayload, type FroamProjectEventType, type FroamProjectState } from './types';
 export type FroamIdFactory = () => string;
 export declare function emptyProjectState(): FroamProjectState;
+export declare function normalizeProjectState(state: Partial<FroamProjectState>): FroamProjectState;
 export declare function compareProjectEvents(a: FroamProjectEvent, b: FroamProjectEvent): number;
 export declare function applyProjectEvent(current: FroamProjectState, event: FroamProjectEvent): FroamProjectState;
 export declare function createProjectDocument(input: {
@@ -50,6 +51,7 @@ export declare function checkpointBranch(document: FroamProjectDocument, input: 
             headEventId: FroamId | null;
             createdAt: number;
             createdBy: import("../collab/types").FroamActorId;
+            rootCheckpointId?: FroamId;
         };
     };
     schemaVersion: typeof FROAM_PROJECT_SCHEMA_VERSION;
@@ -107,6 +109,7 @@ export declare function renameProjectBranch(document: FroamProjectDocument, bran
             headEventId: FroamId | null;
             createdAt: number;
             createdBy: import("../collab/types").FroamActorId;
+            rootCheckpointId?: FroamId;
         };
     };
     schemaVersion: typeof FROAM_PROJECT_SCHEMA_VERSION;

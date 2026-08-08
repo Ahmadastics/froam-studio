@@ -112,6 +112,9 @@ import type { RoomComment, RoomRevision } from '../collab/room'
 import FroamNotePins from './FroamNotePins'
 import FroamPresenceLayer from './FroamPresenceLayer'
 import FroamConnectedCanvas from './FroamConnectedCanvas'
+import FroamIntelligence from './FroamIntelligence'
+import { useFroamProjectDocument } from './useFroamProjectDocument'
+import type { FroamScreenshotRegion } from '../project/screenshot-reconstruction'
 import FroamRoomChat from './FroamRoomChat'
 import { diffStores, type FroamChange } from '../collab/oplog'
 import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist'
@@ -1690,6 +1693,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [scanActive, setScanActive] = useState(false)
   const [blueprintOpen, setBlueprintOpen] = useState(false)
   const [connectedCanvasOpen, setConnectedCanvasOpen] = useState(false)
+  const [intelligenceOpen, setIntelligenceOpen] = useState(false)
   const [identityDiagnostics, setIdentityDiagnostics] = useState<FroamIdentityDiagnostic[]>([])
   const [tipsReady, setTipsReady] = useState(() => {
     try { return window.localStorage.getItem(SCAN_DONE_KEY) === '1' } catch { return true }
@@ -1842,6 +1846,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const suspendDraftPaintingRef = useRef(false)
   const pendingDraftPaintResumeRef = useRef(false)
   const loadedPublishedKeysRef = useRef<Set<string>>(new Set())
+  const intelligencePreviewStyleRef = useRef<{ element: HTMLElement; width: string; maxWidth: string; marginInline: string } | null>(null)
 
   const isKitchenRoute = routeKey === '/kitchen'
   // Each viewport gets its own isolated store bucket
@@ -1880,6 +1885,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     autoJoinProfile: { avatarUrl: persona.imageUrl || null },
   })
   const roomPresence = room.present
+  const froamProjectId = `project:${typeof window !== 'undefined' ? window.location.host : 'froam'}`
+  const projectSession = useFroamProjectDocument({ projectId: froamProjectId, actorId: room.identity?.actor ?? LOCAL_ACTOR, ops: opLog.all(), store, revision: logVersion })
   const roomSubmittedOpsRef = useRef<Set<string>>(new Set())
   const remoteLocks = useMemo(
     () => new Map(roomPresence.filter((member) => member.lockedPath).map((member) => [member.lockedPath as string, member])),
@@ -3214,6 +3221,58 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       const element = findElementByPath(root, fallbackPath)
       if (element) updateSelectionsState([{ ...buildSelection(element, fallbackPath), nodeId }])
     }
+  }
+
+  function insertArchivedHtml(html: string) {
+    const template = document.createElement('template')
+    template.innerHTML = html.trim()
+    const node = template.content.firstElementChild as HTMLElement | null
+    if (!node) return showToast('Archive item has no reusable structure')
+    node.querySelectorAll('script,iframe,object,embed').forEach((element) => element.remove())
+    ;[node, ...Array.from(node.querySelectorAll<HTMLElement>('*'))].forEach((element) => {
+      for (const attribute of Array.from(element.attributes)) if (attribute.name.toLowerCase().startsWith('on')) element.removeAttribute(attribute.name)
+    })
+    node.setAttribute('data-froam-injected', 'true')
+    node.setAttribute('data-froam-block', 'true')
+    assignFreshFroamNodeIds(node)
+    placeInsertedNode(node, 'end')
+    selectInsertedElement(node)
+    persistLiveRouteSnapshot()
+    showToast('Inserted from Component Archive')
+  }
+
+  function insertScreenshotReconstruction(regions: FroamScreenshotRegion[], width: number, height: number) {
+    const frame = document.createElement('section')
+    frame.setAttribute('data-froam-injected', 'true')
+    frame.setAttribute('data-froam-block', 'true')
+    frame.style.cssText = `position:relative;width:100%;max-width:${width}px;aspect-ratio:${width}/${height};overflow:hidden;background:#f8fafc;border:1px solid rgba(15,23,42,.12);margin:24px auto;`
+    for (const region of regions) {
+      const child = document.createElement(region.kind === 'text' ? 'p' : 'div')
+      child.setAttribute('data-froam-injected', 'true')
+      child.contentEditable = 'true'
+      child.textContent = region.kind === 'text' ? 'Reconstructed text region' : ''
+      child.style.cssText = `position:absolute;left:${region.x / width * 100}%;top:${region.y / height * 100}%;width:${region.width / width * 100}%;height:${region.height / height * 100}%;margin:0;border:1px dashed rgba(99,102,241,.28);background:${region.kind === 'container' ? 'rgba(226,232,240,.42)' : 'transparent'};`
+      frame.appendChild(child)
+    }
+    assignFreshFroamNodeIds(frame)
+    placeInsertedNode(frame, 'end')
+    selectInsertedElement(frame)
+    persistLiveRouteSnapshot()
+  }
+
+  function previewIntelligenceWidth(width: number | null) {
+    const root = getRoot()
+    if (!root) return
+    if (width === null) {
+      const saved = intelligencePreviewStyleRef.current
+      if (saved?.element === root) {
+        root.style.width = saved.width; root.style.maxWidth = saved.maxWidth; root.style.marginInline = saved.marginInline
+      }
+      intelligencePreviewStyleRef.current = null
+      return
+    }
+    if (!intelligencePreviewStyleRef.current) intelligencePreviewStyleRef.current = { element: root, width: root.style.width, maxWidth: root.style.maxWidth, marginInline: root.style.marginInline }
+    root.style.width = `${width}px`; root.style.maxWidth = '100%'; root.style.marginInline = 'auto'
   }
 
   /**
@@ -5852,6 +5911,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 <button type="button" className={`froam-studio__icon-btn ${connectedCanvasOpen ? 'is-active' : ''}`} onClick={() => setConnectedCanvasOpen((value) => !value)} title="Connected Canvas — replay, prototypes and inspectors">
                   <Share2 size={14} />
                 </button>
+                <button type="button" className={`froam-studio__icon-btn ${intelligenceOpen ? 'is-active' : ''}`} onClick={() => setIntelligenceOpen((value) => !value)} title="Froam Intelligence — Scan, DNA, Archive, Flow and responsive understanding">
+                  <Sparkles size={14} />
+                </button>
                 <button type="button" className="froam-studio__icon-btn" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
                   <Undo2 size={14} />
                 </button>
@@ -7270,7 +7332,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       <FroamConnectedCanvas
         open={connectedCanvasOpen}
         onClose={() => setConnectedCanvasOpen(false)}
-        projectId={`project:${typeof window !== 'undefined' ? window.location.host : 'froam'}`}
+        projectId={froamProjectId}
         actorId={room.identity?.actor ?? LOCAL_ACTOR}
         ops={opLog.all()}
         store={store}
@@ -7293,6 +7355,28 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           style.textContent = `${style.textContent ?? ''}\n${css}`
           applyStyle({ animation: inline }, undefined, 'Animation')
         }}
+        onToast={showToast}
+        project={projectSession.project}
+        onProjectChange={projectSession.setProject}
+      />
+
+      <FroamIntelligence
+        open={intelligenceOpen}
+        onClose={() => setIntelligenceOpen(false)}
+        project={projectSession.project}
+        onProjectChange={projectSession.setProject}
+        actorId={room.identity?.actor ?? LOCAL_ACTOR}
+        root={getRoot()}
+        registry={nodeRegistryRef.current}
+        onRegistryChange={(registry) => { nodeRegistryRef.current = registry; saveNodeRegistry(registry) }}
+        routeKey={routeKey}
+        viewport={viewportMode}
+        selection={selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null}
+        selectedElement={currentSelectionRef.current}
+        onSelectNode={selectConnectedNode}
+        onInsertArchived={insertArchivedHtml}
+        onInsertReconstruction={insertScreenshotReconstruction}
+        onPreviewWidth={previewIntelligenceWidth}
         onToast={showToast}
       />
 

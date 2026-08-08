@@ -1,5 +1,44 @@
 # Changelog
 
+## 7.0.0 - 2026-08-08
+
+**Froam Understands.** A coherent Intelligence surface now reads the live DOM
+as a structured product while preserving v6 collaboration, Blueprint,
+live-DOM editing and path-based output.
+
+### Added
+
+- Local Froam Scan with identity, structure, layout, appearance, interaction,
+  responsive and directly detectable accessibility observations. Facts,
+  inferences and user-authored knowledge retain explicit provenance.
+- Versioned Component DNA, conservative component-family detection, Component
+  Archive, Design Archaeology and graph-backed Product Flow.
+- Predicted Attention and Visual Rhythm local heuristic experiments, with
+  confidence/disclaimer metadata instead of scientific or subjective claims.
+- Priority Responsive survival constraints, designer-controlled suggestions,
+  Breakpoint Cinema playback/scrubbing and conservative failure observations.
+- Experimental local Screenshot → Live UI segmentation that creates ordinary
+  Froam nodes, relations, DNA and analysis records.
+- Replaceable intelligence-provider boundary with explicit remote-consent and
+  privacy disclosure contracts.
+
+### Changed
+
+- Project envelope schema advances from v1 to v2 for scans, archive items,
+  analyses and responsive metadata. v1 files migrate automatically without
+  changing event IDs or the embedded legacy design.
+- Checkpoints now record ancestry and branches retain a root checkpoint, so
+  Replay can traverse the complete recorded branch timeline before the active
+  checkpoint.
+- Connected Canvas and Froam Intelligence consume one shared project document.
+
+### Compatibility
+
+- `froam.design.json`, live-DOM selection/editing, stable identity recovery,
+  Rooms, operation-log undo/redo, Blueprint 2D/3D, Animator and generated
+  path selectors remain intact.
+- No AI model, remote analysis service or new runtime dependency is bundled.
+
 All notable changes to froam-studio are documented here.
 
 ## 6.3.0 - 2026-08-08
