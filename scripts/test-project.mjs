@@ -130,9 +130,42 @@ const { LOCAL_HEURISTIC_PROVIDER, assertRemoteProviderConsent } = await import('
 const { identityHealthReport } = await import('../dist/project/node-registry.js')
 const { detectFrameworkHost } = await import('../dist/project/framework-identity.js')
 const { profileIntelligence } = await import('../dist/project/performance.js')
+const { compactProjectForLocalStorage, persistProjectToLocalStorage } = await import('../dist/project/local-project-store.js')
 
 const tests = []
 const test = (name, fn) => tests.push([name, fn])
+
+test('oversized project persistence recovers from localStorage quota without throwing', () => {
+  const project = createProjectDocument({ id: 'quota-project', name: 'Quota', actorId: 'tester', idFactory: () => 'checkpoint' })
+  project.events = [createProjectEvent({
+    id: 'scan-event', projectId: project.id, branchId: 'main', actorId: 'tester', clock: 1, type: 'scan.captured',
+    payload: { scan: { schemaVersion: 1, id: 'scan', node: { nodeId: 'node' }, capturedAt: 1, signals: [{ kind: 'appearance', origin: 'observed', source: 'dom', values: { payload: 'x'.repeat(20_000) } }], childNodeIds: [], siblingNodeIds: [] } },
+  })]
+  let value = ''
+  const storage = {
+    getItem: () => value || null,
+    removeItem: () => { value = '' },
+    setItem: (_key, next) => {
+      if (next.length > 2_000) throw Object.assign(new Error('quota'), { name: 'QuotaExceededError' })
+      value = next
+    },
+  }
+  const result = persistProjectToLocalStorage(storage, 'project', project)
+  assert.notEqual(result.mode, 'memory-only')
+  assert.equal(result.quotaRecovered, true)
+  assert.equal(JSON.parse(value).id, project.id)
+  assert.equal(JSON.parse(value).events.length, 0)
+})
+
+test('local recovery compaction does not mutate the complete project document', () => {
+  const project = createProjectDocument({ id: 'compact-project', name: 'Compact', actorId: 'tester', idFactory: () => 'checkpoint' })
+  const checkpoint = project.checkpoints.checkpoint
+  checkpoint.state.scans.node = { schemaVersion: 1, id: 'scan', node: { nodeId: 'node' }, capturedAt: 1, signals: [], childNodeIds: [], siblingNodeIds: [] }
+  const compact = compactProjectForLocalStorage(project)
+  assert.ok(project.checkpoints.checkpoint.state.scans.node)
+  assert.deepEqual(compact.checkpoints.checkpoint.state.scans, {})
+  assert.equal(compact.metadata.localPersistence.fullDocument, 'indexeddb')
+})
 
 test('stable identity survives DOM reordering', () => {
   const root = new FakeElement('main')

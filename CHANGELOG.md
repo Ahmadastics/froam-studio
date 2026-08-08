@@ -1,5 +1,11 @@
 # Changelog
 
+## 7.1.1
+
+- Prevent Connected Canvas crashes when a project exceeds the browser `localStorage` quota.
+- Persist the complete project document in IndexedDB while retaining a bounded local recovery snapshot.
+- Compact regenerable Scan, DNA, analysis, archive-preview, and inline-asset payloads only in the local recovery copy; project files and IndexedDB remain complete.
+
 ## 7.1.0 - 2026-08-08
 
 **Intelligence hardening.** This release strengthens the v7 substrate without

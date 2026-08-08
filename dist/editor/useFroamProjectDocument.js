@@ -3,6 +3,7 @@ import { appendProjectEvents, createProjectDocument, emptyProjectState, normaliz
 import { legacyOpsToProjectEvents } from '../project/adapters.js';
 import { editorStoreToLegacyDesign } from '../project/serialization.js';
 import { loadProjectFromBridge, saveProjectToBridge } from '../project/bridge.js';
+import { loadProjectFromIndexedDb, persistProjectToLocalStorage, saveProjectToIndexedDb } from '../project/local-project-store.js';
 function storageKey(projectId) { return `froam-connected-canvas-v2:${projectId}`; }
 function legacyStorageKey(projectId) { return `froam-connected-canvas-v1:${projectId}`; }
 function upgradeLocalDocument(value, projectId) {
@@ -39,6 +40,10 @@ export function useFroamProjectDocument(input) {
     useEffect(() => {
         void loadProjectFromBridge().then((file) => { if (file?.project.id === input.projectId)
             setProject((current) => file.project.updatedAt > current.updatedAt ? file.project : current); }).catch(() => undefined);
+        void loadProjectFromIndexedDb(input.projectId).then((saved) => {
+            if (saved?.id === input.projectId)
+                setProject((current) => saved.updatedAt >= current.updatedAt ? saved : current);
+        }).catch(() => undefined);
     }, [input.projectId]);
     useEffect(() => {
         setProject((current) => {
@@ -48,7 +53,8 @@ export function useFroamProjectDocument(input) {
         });
     }, [input.revision, input.projectId]);
     useEffect(() => {
-        window.localStorage.setItem(storageKey(project.id), JSON.stringify(project));
+        void saveProjectToIndexedDb(project).catch(() => false);
+        persistProjectToLocalStorage(window.localStorage, storageKey(project.id), project);
         const timer = window.setTimeout(() => {
             const file = { kind: 'froam-project', schemaVersion: 2, project, design: editorStoreToLegacyDesign(input.store) };
             void saveProjectToBridge(file).catch(() => undefined);

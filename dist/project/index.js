@@ -4,6 +4,7 @@ export * from './node-registry.js';
 export * from './framework-identity.js';
 export * from './project-sync.js';
 export * from './performance.js';
+export * from './local-project-store.js';
 export * from './adapters.js';
 export * from './serialization.js';
 export * from './scan.js';

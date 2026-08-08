@@ -5,6 +5,7 @@ import { legacyOpsToProjectEvents } from '../project/adapters'
 import { editorStoreToLegacyDesign, type FroamProjectFile } from '../project/serialization'
 import { loadProjectFromBridge, saveProjectToBridge } from '../project/bridge'
 import type { FroamProjectDocument } from '../project/types'
+import { loadProjectFromIndexedDb, persistProjectToLocalStorage, saveProjectToIndexedDb } from '../project/local-project-store'
 
 function storageKey(projectId: string) { return `froam-connected-canvas-v2:${projectId}` }
 function legacyStorageKey(projectId: string) { return `froam-connected-canvas-v1:${projectId}` }
@@ -47,6 +48,9 @@ export function useFroamProjectDocument(input: { projectId: string; actorId: str
   const [project, setProject] = useState(() => loadDocument(input.projectId) ?? createDocument(input.projectId, input.actorId, input.ops))
   useEffect(() => {
     void loadProjectFromBridge().then((file) => { if (file?.project.id === input.projectId) setProject((current) => file.project.updatedAt > current.updatedAt ? file.project : current) }).catch(() => undefined)
+    void loadProjectFromIndexedDb(input.projectId).then((saved) => {
+      if (saved?.id === input.projectId) setProject((current) => saved.updatedAt >= current.updatedAt ? saved : current)
+    }).catch(() => undefined)
   }, [input.projectId])
   useEffect(() => {
     setProject((current) => {
@@ -56,7 +60,8 @@ export function useFroamProjectDocument(input: { projectId: string; actorId: str
     })
   }, [input.revision, input.projectId])
   useEffect(() => {
-    window.localStorage.setItem(storageKey(project.id), JSON.stringify(project))
+    void saveProjectToIndexedDb(project).catch(() => false)
+    persistProjectToLocalStorage(window.localStorage, storageKey(project.id), project)
     const timer = window.setTimeout(() => {
       const file: FroamProjectFile = { kind: 'froam-project', schemaVersion: 2, project, design: editorStoreToLegacyDesign(input.store) }
       void saveProjectToBridge(file).catch(() => undefined)
