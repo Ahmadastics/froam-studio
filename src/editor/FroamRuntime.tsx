@@ -420,6 +420,12 @@ export default function FroamRuntime({
 
     void loadPublished()
 
+    const receiveLivePublish = (event: Event) => {
+      const detail = (event as CustomEvent<{ routeKey?: string; viewport?: ViewportMode }>).detail
+      if (detail?.routeKey === routeKey && detail.viewport === viewportMode && !document.hidden) void loadPublished()
+    }
+    window.addEventListener('froam:design-published', receiveLivePublish)
+
     /**
      * In a session, keep asking.
      *
@@ -442,8 +448,9 @@ export default function FroamRuntime({
     return () => {
       cancelled = true
       if (poll) window.clearInterval(poll)
+      window.removeEventListener('froam:design-published', receiveLivePublish)
     }
-  }, [design, endpoint, isRuntimeRoute, prefer, routeKey, viewportMode])
+  }, [design, endpoint, inSession, isRuntimeRoute, prefer, routeKey, viewportMode])
 
   /* Fonts the design references must actually load with it. */
   useEffect(() => {

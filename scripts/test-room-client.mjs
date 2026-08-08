@@ -161,7 +161,7 @@ test('you can see who else is here, and who is driving', async () => {
 
   // The owner is present and is the only editor here.
   await transport.post(`/api/froam/rooms/${created.room.id}/presence`, {
-    token: created.invites.owner, actor: created.you.actor, routeKey: '/pricing',
+    token: created.invites.owner, actor: created.you.actor, session: created.you.session, routeKey: '/pricing',
   })
   await guest.beat({ routeKey: '/' })
 
@@ -199,6 +199,68 @@ test('listeners hear about the room', async () => {
   off()
   await client.beat({ routeKey: '/' })
   assert.equal(seen.length, 1, 'one update while listening, none after unsubscribing')
+})
+
+function edit(actor, id, path, value) {
+  return {
+    id, kind: 'edit', actor, clock: 1, ts: now(), routeKey: '/', viewport: 'desktop',
+    path, field: 'style:color', before: undefined, after: value, label: 'Colour', batch: id,
+  }
+}
+
+test('an editor pushes ops and another device replays them in room order', async () => {
+  const { transport, created } = await openRoom()
+  const ownerStorage = fakeStorage()
+  ownerStorage.write(`froam-room:${created.room.id}`, JSON.stringify(created.you))
+  const owner = createRoomClient({
+    roomId: created.room.id, token: created.invites.owner, transport, storage: ownerStorage, isHidden: () => false, now,
+  })
+  const guest = createRoomClient({
+    roomId: created.room.id, token: created.invites.editor, transport, storage: fakeStorage(), isHidden: () => false, now,
+  })
+  const joined = await guest.join('Zainab')
+
+  await owner.pushOps([edit(created.you.actor, 'owner-op', 'main:1/h1:1', 'green')])
+  await guest.pushOps([edit(joined.actor, 'guest-op', 'main:1/p:1', 'blue')])
+  const replay = await guest.pollEvents()
+  assert.deepEqual(replay.filter((event) => event.type === 'op').map((event) => event.op.id), ['owner-op', 'guest-op'])
+})
+
+test('a write response never skips an intervening remote event', async () => {
+  const { transport, created } = await openRoom()
+  const ownerStorage = fakeStorage()
+  ownerStorage.write(`froam-room:${created.room.id}`, JSON.stringify(created.you))
+  const owner = createRoomClient({
+    roomId: created.room.id, token: created.invites.owner, transport, storage: ownerStorage, isHidden: () => false, now,
+  })
+  const guest = createRoomClient({
+    roomId: created.room.id, token: created.invites.editor, transport, storage: fakeStorage(), isHidden: () => false, now,
+  })
+  const joined = await guest.join('Zainab')
+
+  await owner.pushOps([edit(created.you.actor, 'remote-between', 'main:1/h1:1', 'green')])
+  await guest.pushOps([edit(joined.actor, 'local-after', 'main:1/p:1', 'blue')])
+  assert.equal(guest.cursor, 0, 'only reading the stream may advance its cursor')
+  const replay = await guest.pollEvents()
+  assert.ok(replay.some((event) => event.type === 'op' && event.op.id === 'remote-between'))
+})
+
+test('reconnecting from event zero is safe and duplicate pushes stay singular', async () => {
+  const { transport, created } = await openRoom()
+  const storage = fakeStorage()
+  const first = createRoomClient({
+    roomId: created.room.id, token: created.invites.editor, transport, storage, isHidden: () => false, now,
+  })
+  const joined = await first.join('Zainab')
+  const op = edit(joined.actor, 'offline-op', 'main:1/h1:1', 'purple')
+  await first.pushOps([op])
+  await first.pushOps([op])
+
+  const reconnected = createRoomClient({
+    roomId: created.room.id, token: created.invites.editor, transport, storage, isHidden: () => false, now,
+  })
+  const replay = await reconnected.pollEvents()
+  assert.equal(replay.filter((event) => event.type === 'op' && event.op.id === op.id).length, 1)
 })
 
 let failed = 0

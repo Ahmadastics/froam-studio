@@ -12,7 +12,7 @@ export class FroamStudioApiError extends Error {
 function trimTrailingSlash(value) {
     return value.replace(/\/+$/, '');
 }
-function resolveEndpoint(endpoint) {
+export function resolveApiEndpoint(endpoint) {
     if (/^https?:\/\//i.test(endpoint))
         return endpoint;
     const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
@@ -48,7 +48,7 @@ export async function api(endpoint, options = {}) {
         headers['Content-Type'] = 'application/json';
         request.body = JSON.stringify(body);
     }
-    const response = await fetcher(resolveEndpoint(endpoint), request);
+    const response = await fetcher(resolveApiEndpoint(endpoint), request);
     const rawText = await response.text();
     const data = rawText ? safelyParseJson(rawText) : null;
     if (!response.ok) {

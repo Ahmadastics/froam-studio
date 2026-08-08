@@ -15,6 +15,7 @@ import { useFroamRoom } from '../collab/useFroamRoom'
 import { ROOM_PARAM, TOKEN_PARAM, type RoomComment, type RoomRevision } from '../collab/room'
 import { createAnchor } from '../collab/anchor'
 import type { FroamAnchor, FroamViewport } from '../collab/types'
+import FroamRoomChat from './FroamRoomChat'
 
 type Props = {
   routeKey: string
@@ -45,6 +46,7 @@ export default function FroamReview({ routeKey, viewport }: Props) {
   const [pending, setPending] = useState<RoomRevision | null>(null)
   const [asked, setAsked] = useState(false)
   const [deciding, setDeciding] = useState(false)
+  const [chatting, setChatting] = useState(false)
 
   const canComment = room.role === 'commenter' || room.role === 'owner' || room.role === 'editor'
   // Read inside the tap handler without re-subscribing it on every keystroke.
@@ -162,6 +164,10 @@ export default function FroamReview({ routeKey, viewport }: Props) {
     const timer = window.setInterval(() => { if (!document.hidden) void refreshNotes() }, 6_000)
     return () => window.clearInterval(timer)
   }, [refreshNotes])
+
+  useEffect(() => {
+    if (room.events.some((event) => event.type === 'comment' || event.type === 'revision')) void refreshNotes()
+  }, [room.events, refreshNotes])
 
   const decide = useCallback(async (decision: 'approved' | 'changes-requested') => {
     if (!pending || !room.client) return
@@ -314,6 +320,20 @@ export default function FroamReview({ routeKey, viewport }: Props) {
   }
 
   /* ── In the session ── */
+  if (chatting) {
+    return (
+      <div className="froam-review" data-chef-editor-root="true">
+        <div className="froam-review__sheet">
+          <div className="froam-review__row">
+            <strong className="froam-review__label">Room chat</strong>
+            <button type="button" className="froam-review__ghost" onClick={() => setChatting(false)}>Close</button>
+          </div>
+          <FroamRoomChat client={room.client} events={room.events} role={room.role} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="froam-review" data-chef-editor-root="true">
       {commenting ? (
@@ -334,6 +354,7 @@ export default function FroamReview({ routeKey, viewport }: Props) {
           {paused && room.someoneElseIsPresenting && !movingTo && (
             <button type="button" className="froam-review__ghost" onClick={() => setPaused(false)}>Rejoin</button>
           )}
+          <button type="button" className="froam-review__ghost" onClick={() => setChatting(true)}>Chat</button>
           {canComment && !pending && (
             <button type="button" className="froam-review__go" onClick={() => setCommenting(true)}>
               {notes.length ? `Notes · ${notes.length}` : 'Comment'}

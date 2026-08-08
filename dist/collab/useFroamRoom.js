@@ -10,11 +10,19 @@
  * poll, does not store anything, and does not render anything different.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { apiGetFresh, apiPost } from '../lib/api.js';
-import { createRoomClient, readRoomFromLocation, readOwnedRoom, rememberOwnedRoom, inviteLink, ROOM_BEAT_MS, } from './room.js';
+import { apiGetFresh, apiPost, resolveApiEndpoint } from '../lib/api.js';
+import { createRoomClient, readRoomFromLocation, readOwnedRoom, rememberOwnedRoom, rememberRoomIdentity, inviteLink, ROOM_BEAT_MS, } from './room.js';
 const defaultTransport = {
     get: (path) => apiGetFresh(path),
     post: (path, body) => apiPost(path, body),
+    subscribe: (path, wake) => {
+        if (typeof EventSource === 'undefined')
+            return () => { };
+        const source = new EventSource(resolveApiEndpoint(path), { withCredentials: true });
+        source.addEventListener('room', wake);
+        source.addEventListener('ready', wake);
+        return () => source.close();
+    },
 };
 export function useFroamRoom(options) {
     const { where, enabled = true, transport = defaultTransport, everyMs = ROOM_BEAT_MS, href, autoJoinAs } = options;
@@ -47,16 +55,31 @@ export function useFroamRoom(options) {
     const [room, setRoom] = useState(null);
     const [joining, setJoining] = useState(false);
     const [error, setError] = useState(null);
+    const [events, setEvents] = useState([]);
     // Heartbeats read this rather than closing over `where`, so a moving
     // selection doesn't tear down and restart the interval every keystroke.
     const whereRef = useRef(where);
     whereRef.current = where;
+    // Selection, lock and cursor changes are the part of presence another
+    // editor can feel. Send them promptly; the slower heartbeat remains the
+    // liveness fallback when nothing is moving.
+    useEffect(() => {
+        if (!client || !enabled || !client.joined)
+            return;
+        const timer = window.setTimeout(() => { void client.beat(whereRef.current); }, 50);
+        return () => window.clearTimeout(timer);
+    }, [client, enabled, where.routeKey, where.viewport, where.selectedPath, where.lockedPath, where.cursor?.x, where.cursor?.y]);
     useEffect(() => {
         if (!client || !enabled)
             return;
         const off = client.on(setRoom);
+        const offEvents = client.onEvents((next) => setEvents(next));
         let stop = null;
-        const begin = () => { stop = client.start(() => whereRef.current, everyMs); };
+        let stopLive = null;
+        const begin = () => {
+            stop = client.start(() => whereRef.current, everyMs);
+            stopLive = client.startLive();
+        };
         if (client.joined) {
             begin();
         }
@@ -81,7 +104,9 @@ export function useFroamRoom(options) {
         window.addEventListener('focus', wake);
         return () => {
             off();
+            offEvents();
             stop?.();
+            stopLive?.();
             document.removeEventListener('visibilitychange', wake);
             window.removeEventListener('focus', wake);
         };
@@ -97,6 +122,7 @@ export function useFroamRoom(options) {
             // otherwise the other side sees an empty room for fifteen seconds.
             await client.beat(whereRef.current);
             client.start(() => whereRef.current, everyMs);
+            client.startLive();
             return you;
         }
         catch (cause) {
@@ -123,6 +149,8 @@ export function useFroamRoom(options) {
             createdAt: Date.now(),
         };
         rememberOwnedRoom(owned);
+        if (payload.you)
+            rememberRoomIdentity(payload.room.id, payload.you);
         // The client is built from `invite`; bumping this rebuilds it against the
         // room that now exists.
         setOwnedTick((n) => n + 1);
@@ -151,6 +179,7 @@ export function useFroamRoom(options) {
         presenter,
         someoneElseIsPresenting: client?.someoneElseIsPresenting() ?? false,
         role: (client?.role() ?? null),
+        events,
     };
 }
 //# sourceMappingURL=useFroamRoom.js.map

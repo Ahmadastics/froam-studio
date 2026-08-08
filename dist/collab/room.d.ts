@@ -12,15 +12,21 @@
  * Transport and storage are injected so the whole thing can be tested without
  * a browser; the defaults are the ones a page actually wants.
  */
-import type { FroamRole, FroamViewport } from './types';
+import type { FroamChatMessage, FroamOp, FroamRevertProposal, FroamRole, FroamRoomEvent, FroamViewport } from './types';
 export type RoomMemberView = {
     actor: string;
     name: string;
     role: FroamRole;
+    color: string;
     here: boolean;
     routeKey: string | null;
     viewport: FroamViewport | null;
     selectedPath: string | null;
+    lockedPath: string | null;
+    cursor: {
+        x: number;
+        y: number;
+    } | null;
     seenAt: number | null;
 };
 export type RoomView = {
@@ -29,6 +35,7 @@ export type RoomView = {
     createdAt: number;
     members: RoomMemberView[];
     presenter: string | null;
+    sequence: number;
     you: {
         actor: string;
         role: FroamRole;
@@ -39,6 +46,7 @@ export type RoomIdentity = {
     actor: string;
     name: string;
     role: FroamRole;
+    session: string;
 };
 export type RoomComment = {
     id: string;
@@ -83,6 +91,8 @@ export type RoomRevision = {
 export type RoomTransport = {
     get: (path: string) => Promise<unknown>;
     post: (path: string, body: unknown) => Promise<unknown>;
+    /** Optional push wake-up. The event log is still read through `get`. */
+    subscribe?: (path: string, wake: () => void) => () => void;
 };
 export type RoomStorage = {
     read: (key: string) => string | null;
@@ -117,6 +127,7 @@ export type OwnedRoom = {
  */
 export declare function readOwnedRoom(): OwnedRoom | null;
 export declare function rememberOwnedRoom(room: OwnedRoom): void;
+export declare function rememberRoomIdentity(roomId: string, identity: RoomIdentity): void;
 export declare function forgetOwnedRoom(): void;
 /** The link you actually send someone, for a given role and page. */
 export declare function inviteLink(room: OwnedRoom, role?: FroamRole, href?: string): string;
@@ -132,9 +143,11 @@ export declare function createRoomClient(options: {
     readonly roomId: string;
     readonly identity: RoomIdentity | null;
     readonly room: RoomView | null;
+    readonly cursor: number;
     /** Have we already been someone in this room? Decides whether to ask for a name. */
     readonly joined: boolean;
     on(listener: (room: RoomView | null) => void): () => boolean;
+    onEvents(listener: (events: readonly FroamRoomEvent[]) => void): () => boolean;
     /**
      * Become somebody. Reuses the actor from a previous visit when there is
      * one, so a refresh keeps your comments yours instead of minting a
@@ -154,13 +167,33 @@ export declare function createRoomClient(options: {
         routeKey?: string;
         viewport?: FroamViewport;
         selectedPath?: string | null;
+        lockedPath?: string | null;
+        cursor?: {
+            x: number;
+            y: number;
+        } | null;
     }): Promise<RoomView | null>;
     start(where: () => {
         routeKey?: string;
         viewport?: FroamViewport;
         selectedPath?: string | null;
+        lockedPath?: string | null;
+        cursor?: {
+            x: number;
+            y: number;
+        } | null;
     }, everyMs?: number): () => void;
     stop(): void;
+    pollEvents(): Promise<FroamRoomEvent[]>;
+    startLive(everyMs?: number): () => void;
+    stopLive(): void;
+    pushOps(ops: readonly FroamOp[]): Promise<{
+        accepted: FroamOp[];
+        rejected: Array<{
+            id: string | null;
+            reason: string;
+        }>;
+    }>;
     /** Everyone but you. */
     others(): RoomMemberView[];
     /** Everyone but you, who is actually here. */
@@ -189,6 +222,15 @@ export declare function createRoomClient(options: {
     }): Promise<RoomRevision | null>;
     decide(revisionId: string, decision: "approved" | "changes-requested", note?: string): Promise<RoomRevision | null>;
     resolveComment(commentId: string, resolved?: boolean): Promise<RoomComment | null>;
+    chat(): Promise<FroamChatMessage[]>;
+    sendChat(body: string): Promise<FroamChatMessage | null>;
+    signalDesign(routeKey: string, viewport: FroamViewport): Promise<void>;
+    proposals(): Promise<FroamRevertProposal[]>;
+    decideProposal(proposalId: string, decision: "approved" | "declined"): Promise<{
+        proposal?: FroamRevertProposal;
+        accepted?: FroamOp[];
+        cursor?: number;
+    }>;
 };
 export type RoomClient = ReturnType<typeof createRoomClient>;
 //# sourceMappingURL=room.d.ts.map

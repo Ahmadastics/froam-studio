@@ -29,6 +29,8 @@ import { getFroamRootElement } from '../config.js';
 import { createOpLogSession } from '../collab/session.js';
 import { useFroamRoom } from '../collab/useFroamRoom.js';
 import FroamNotePins from './FroamNotePins.js';
+import FroamPresenceLayer from './FroamPresenceLayer.js';
+import FroamRoomChat from './FroamRoomChat.js';
 import { diffStores } from '../collab/oplog.js';
 import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist.js';
 import { findElementByPath, getElementPath, isSafeDraftPath, tagOfPath } from '../collab/paths.js';
@@ -1431,11 +1433,102 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
      * The editor is the presenter's side — it announces where it is so a client
      * following along knows which page to be on.
      */
+    const [roomLockedPath, setRoomLockedPath] = useState(null);
+    const [roomCursor, setRoomCursor] = useState(null);
     const room = useFroamRoom({
-        where: { routeKey, viewport: viewportMode, selectedPath: selection?.path ?? null },
+        where: {
+            routeKey,
+            viewport: viewportMode,
+            selectedPath: selection?.path ?? null,
+            lockedPath: roomLockedPath,
+            cursor: roomCursor,
+        },
         autoJoinAs: persona.name || 'Designer',
     });
     const roomPresence = room.present;
+    const roomSubmittedOpsRef = useRef(new Set());
+    const remoteLocks = useMemo(() => new Map(roomPresence.filter((member) => member.lockedPath).map((member) => [member.lockedPath, member])), [roomPresence]);
+    function guardRemoteLock(path) {
+        const member = remoteLocks.get(path) ?? [...remoteLocks.entries()]
+            .find(([locked]) => path.startsWith(`${locked}/`) || locked.startsWith(`${path}/`))?.[1];
+        if (!member)
+            return false;
+        showToast(`${member.name} is editing that`);
+        return true;
+    }
+    useEffect(() => {
+        roomSubmittedOpsRef.current.clear();
+    }, [room.roomId]);
+    useEffect(() => {
+        if (room.identity?.actor)
+            opLog.setActor(room.identity.actor);
+    }, [opLog, room.identity?.actor]);
+    useEffect(() => {
+        if (inlineEditing && selection?.path)
+            setRoomLockedPath(selection.path);
+        else if (!isResizing && !moveDragRef.current)
+            setRoomLockedPath(null);
+    }, [inlineEditing, isResizing, selection?.path]);
+    // A pointer is useful presence only in Studio mode. Five updates a second
+    // feels live without turning the room store into a mouse-movement database.
+    useEffect(() => {
+        if (!room.inRoom || (!panelOpen && !active)) {
+            setRoomCursor(null);
+            return;
+        }
+        let last = 0;
+        const move = (event) => {
+            const stamp = performance.now();
+            if (stamp - last < 180)
+                return;
+            last = stamp;
+            setRoomCursor({ x: event.clientX, y: event.clientY });
+        };
+        window.addEventListener('pointermove', move, { passive: true });
+        return () => window.removeEventListener('pointermove', move);
+    }, [room.inRoom, panelOpen, active]);
+    // Apply the room's canonical op order. Starting at event zero on each page
+    // is deliberate: a fresh browser can rebuild the shared design, while the
+    // session de-duplicates ids already present in local history.
+    useEffect(() => {
+        const incoming = room.events
+            .filter((event) => event.type === 'op')
+            .map((event) => event.op);
+        if (!incoming.length)
+            return;
+        opLog.observe(incoming);
+        for (const op of incoming)
+            roomSubmittedOpsRef.current.add(op.id);
+        applyLogToStore();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [room.events]);
+    // Offline-first queue: unsent local ops stay in the log. Any room refresh
+    // retries them; acknowledgements replace optimistic clocks by id.
+    useEffect(() => {
+        if (!room.client || !room.identity || (room.role !== 'owner' && room.role !== 'editor'))
+            return;
+        const pending = opLog.all()
+            .filter((op) => op.actor === room.identity?.actor && !roomSubmittedOpsRef.current.has(op.id))
+            .slice(0, 500);
+        if (!pending.length)
+            return;
+        for (const op of pending)
+            roomSubmittedOpsRef.current.add(op.id);
+        void room.client.pushOps(pending).then(({ accepted, rejected }) => {
+            opLog.observe(accepted);
+            const rejectedIds = rejected.map((item) => item.id).filter((id) => Boolean(id));
+            opLog.discard(rejectedIds);
+            applyLogToStore();
+            if (rejected.some((item) => item.reason === 'owner-approval-required'))
+                showToast('Sent to the owner for approval');
+            else if (rejected.length)
+                showToast('A concurrent owner edit was kept');
+        }).catch(() => {
+            for (const op of pending)
+                roomSubmittedOpsRef.current.delete(op.id);
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [store, logVersion, room.room, room.identity?.actor, room.role]);
     /**
      * Notes the client has left on this page.
      *
@@ -1449,9 +1542,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [sharing, setSharing] = useState(false);
     const [copied, setCopied] = useState(false);
     /** The link to hand over — a commenter one, since that is what a client is. */
-    const shareLink = useMemo(() => (room.owned ? room.inviteLink(room.owned, 'commenter') : null), 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [room.owned?.roomId, routeKey]);
+    const shareLink = room.owned ? room.inviteLink(room.owned, 'commenter') : null;
+    const editorLink = room.owned ? room.inviteLink(room.owned, 'editor') : null;
     const startSharing = useCallback(async (fresh = false) => {
         setSharing(true);
         try {
@@ -1483,6 +1575,18 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [shareLink]);
+    const copyEditorLink = useCallback(async () => {
+        if (!editorLink)
+            return;
+        try {
+            await navigator.clipboard.writeText(editorLink);
+            showToast('Editor invite copied');
+        }
+        catch {
+            showToast('Copy failed — select the link and copy it');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editorLink]);
     const refreshNotes = useCallback(async () => {
         if (!room.client || !room.inRoom)
             return;
@@ -1524,6 +1628,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             void refreshNotes(); }, 5_000);
         return () => window.clearInterval(timer);
     }, [room.inRoom, refreshNotes]);
+    useEffect(() => {
+        if (room.events.some((event) => event.type === 'comment' || event.type === 'revision'))
+            void refreshNotes();
+    }, [room.events, refreshNotes]);
     const resolveNote = useCallback(async (note) => {
         if (!room.client)
             return;
@@ -2383,7 +2491,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             if (computed.position === 'static')
                 target.style.position = 'relative';
             const path = getElementPath(target, root);
+            if (guardRemoteLock(path))
+                return;
             moveDragRef.current = { startX: e.clientX, startY: e.clientY, origTop, origLeft, target, path };
+            setRoomLockedPath(path);
             target.setPointerCapture(e.pointerId);
             updateSelectionsState([buildSelection(target, path)]);
             target.setAttribute('data-froam-moving', 'true');
@@ -2406,6 +2517,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             const newTop = drag.origTop + e.clientY - drag.startY;
             const newLeft = drag.origLeft + e.clientX - drag.startX;
             moveDragRef.current = null;
+            setRoomLockedPath(null);
             drag.target.removeAttribute('data-froam-moving');
             const computed = window.getComputedStyle(drag.target);
             const pos = computed.position === 'static' ? 'relative' : computed.position;
@@ -2617,7 +2729,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         applyStoreToDOM(next, { clearCurrent: true });
         refreshSelectedElementFromDOM();
         bumpLog();
-        showToast(toast);
+        if (toast)
+            showToast(toast);
     }
     function undo() {
         const session = opLog;
@@ -2812,6 +2925,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     function updateDraft(updater, nextSelection, historyLabel) {
         if (!selection)
             return;
+        if ((selections.length ? selections : [selection]).some((item) => guardRemoteLock(item.path)))
+            return;
         const root = getRoot();
         if (!root)
             return;
@@ -2989,6 +3104,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             return;
         const path = getElementPath(target, root);
         if (!isSafeDraftPath(path))
+            return;
+        if (guardRemoteLock(path))
             return;
         const originalRoute = originalsRef.current[viewportStoreKey] ?? {};
         if (!originalRoute[path]) {
@@ -3211,6 +3328,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 viewportMode,
                 store: stripPersonaDrafts(routeSnapshot),
             });
+            await room.client?.signalDesign(routeKey, viewportMode);
         }
         catch {
             /* The next settle publishes the same design. */
@@ -3872,6 +3990,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         const wrapper = document.createElement('div');
         wrapper.setAttribute('data-froam-injected', 'true');
         wrapper.setAttribute('data-froam-block', 'true');
+        wrapper.setAttribute('data-froam-wrapper', 'true');
         ensureFroamNodeId(wrapper);
         wrapper.style.display = 'flex';
         wrapper.style.flexDirection = 'column';
@@ -5001,7 +5120,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                     applyStoreToDOM(nextStore, { clearCurrent: true });
                                     showToast(`Loaded "${versionName}"`);
                                     toggleSection('versions');
-                                }, onClose: () => toggleSection('versions') }) }), _jsx(AccordionSection, { id: "history", icon: _jsx(Clock, { size: 14 }), title: "History", isOpen: openSections.history, onToggle: () => toggleSection('history'), children: changeLog.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Nothing changed here yet" })) : (_jsx("ul", { className: "fs-history-list", children: changeLog.map((change) => (_jsxs("li", { className: "fs-history-item", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "fs-history-meta", children: [_jsx("span", { children: describeChange(change) }), _jsx("small", { children: changeByline(change) })] }), _jsx("button", { type: "button", className: "fs-pill is-accent", title: `Undo ${describeChange(change)}`, onClick: () => revertChange(change), children: "Undo" })] }, change.id))) })) }), _jsx(AccordionSection, { id: "share", icon: _jsx(Share2, { size: 14 }), title: room.inRoom ? 'Shared for review' : 'Share for review', isOpen: openSections.share, onToggle: () => toggleSection('share'), children: !shareLink ? (_jsxs("div", { className: "froam-notes", children: [_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Open a room and send the link. They need no account \u2014 the link is the way in." }), _jsx("button", { type: "button", className: "fs-pill is-accent", disabled: sharing, onClick: () => void startSharing(), children: sharing ? 'Opening…' : 'Get a review link' })] })) : (_jsxs("div", { className: "froam-notes", children: [_jsx("div", { className: "froam-share__link", title: shareLink, children: shareLink }), _jsxs("div", { className: "froam-note__row", children: [_jsx("button", { type: "button", className: "fs-pill is-accent", onClick: () => void copyShareLink(), children: copied ? 'Copied' : 'Copy link' }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => void startSharing(true), children: "New link" })] }), _jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.7rem' }, children: roomPresence.length
+                                }, onClose: () => toggleSection('versions') }) }), _jsx(AccordionSection, { id: "history", icon: _jsx(Clock, { size: 14 }), title: "History", isOpen: openSections.history, onToggle: () => toggleSection('history'), children: changeLog.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Nothing changed here yet" })) : (_jsx("ul", { className: "fs-history-list", children: changeLog.map((change) => (_jsxs("li", { className: "fs-history-item", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "fs-history-meta", children: [_jsx("span", { children: describeChange(change) }), _jsx("small", { children: changeByline(change) })] }), _jsx("button", { type: "button", className: "fs-pill is-accent", title: `Undo ${describeChange(change)}`, onClick: () => revertChange(change), children: "Undo" })] }, change.id))) })) }), _jsx(AccordionSection, { id: "share", icon: _jsx(Share2, { size: 14 }), title: room.inRoom ? 'Shared for review' : 'Share for review', isOpen: openSections.share, onToggle: () => toggleSection('share'), children: !shareLink ? (_jsxs("div", { className: "froam-notes", children: [_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Open a room and send the link. They need no account \u2014 the link is the way in." }), _jsx("button", { type: "button", className: "fs-pill is-accent", disabled: sharing, onClick: () => void startSharing(), children: sharing ? 'Opening…' : 'Get a review link' })] })) : (_jsxs("div", { className: "froam-notes", children: [_jsx("div", { className: "froam-share__link", title: shareLink, children: shareLink }), _jsxs("div", { className: "froam-note__row", children: [_jsx("button", { type: "button", className: "fs-pill is-accent", onClick: () => void copyShareLink(), children: copied ? 'Copied' : 'Copy link' }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => void copyEditorLink(), title: "Invite another designer who can edit", children: "Invite editor" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => void startSharing(true), children: "New link" })] }), _jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.7rem' }, children: roomPresence.length
                                             ? `${roomPresence.map((m) => m.name).join(', ')} ${roomPresence.length === 1 ? 'is' : 'are'} here`
                                             : 'Nobody has opened it yet' })] })) }), room.inRoom && (_jsxs(AccordionSection, { id: "notes", icon: _jsx(MessageSquare, { size: 14 }), title: notes.some((n) => !n.resolved) ? `Notes · ${notes.filter((n) => !n.resolved).length}` : 'Notes', isOpen: openSections.notes, onToggle: () => toggleSection('notes'), children: [_jsxs("div", { className: "froam-note froam-revision", "data-chef-editor-root": "true", children: [(() => {
                                             const latest = revisions[0];
@@ -5020,7 +5139,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                             ? resolveAnchor(note.anchor, root).status === 'orphaned'
                                             : false;
                                         return (_jsxs("div", { className: `froam-note${note.resolved ? ' is-resolved' : ''}${orphaned ? ' is-orphaned' : ''}`, "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-note__head", children: [_jsx("span", { className: "froam-note__num", children: i + 1 }), _jsx("span", { className: "froam-note__who", children: note.name }), _jsx("span", { className: "froam-note__when", children: note.viewport === viewportMode ? relativeTime(note.createdAt) : `on ${note.viewport} · ${relativeTime(note.createdAt)}` })] }), note.quoted && _jsxs("div", { className: "froam-note__quote", children: ["\u201C", note.quoted, "\u201D"] }), _jsx("div", { className: "froam-note__body", children: note.body }), orphaned && (_jsx("div", { className: "froam-note__flag", children: "The element this was about is gone \u2014 kept, not deleted" })), _jsxs("div", { className: "froam-note__row", children: [!orphaned && (_jsx("button", { type: "button", className: "fs-pill", onClick: () => goToNote(note), children: "Show me" })), _jsx("button", { type: "button", className: note.resolved ? 'fs-pill' : 'fs-pill is-accent', onClick: () => void resolveNote(note), children: note.resolved ? 'Reopen' : 'Resolve' })] })] }, note.id));
-                                    }) }))] })), _jsx(AccordionSection, { id: "inspiration", icon: _jsx(ImagePlus, { size: 14 }), title: "Inspiration Board", isOpen: openSections.inspiration, onToggle: () => toggleSection('inspiration'), children: _jsx(FroamInspirationPanel, { onToast: showToast }) }), _jsx(AccordionSection, { id: "tokens", icon: _jsx(Coins, { size: 14 }), title: "Design Tokens", isOpen: openSections.tokens, onToggle: () => toggleSection('tokens'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Named values you can apply instantly to any element. Also injected as CSS variables." }), tokens.length > 0 && (_jsx("div", { className: "fs-tokens-grid", children: tokens.map((token) => (_jsxs("div", { className: "fs-token", "data-chef-editor-root": "true", children: [token.category === 'color' && (_jsx("span", { className: "fs-token__swatch", style: { background: token.value } })), _jsx("span", { className: "fs-token__name", title: `--${token.name.replace(/\s+/g, '-').toLowerCase()}`, children: token.name }), _jsx("span", { className: "fs-token__value", children: token.value }), _jsx("button", { type: "button", className: "fs-pill fs-token__apply", onClick: () => applyTokenToSelection(token), children: "Apply" }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", onClick: () => removeToken(token.id), children: _jsx(X, { size: 10 }) })] }, token.id))) })), _jsxs("div", { className: "fs-grid-2", style: { gap: 6 }, children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Category" }), _jsxs("select", { className: "fs-select", value: newTokenCategory, onChange: (e) => setNewTokenCategory(e.target.value), children: [_jsx("option", { value: "color", children: "Color" }), _jsx("option", { value: "spacing", children: "Spacing" }), _jsx("option", { value: "font-size", children: "Font size" }), _jsx("option", { value: "radius", children: "Radius" }), _jsx("option", { value: "shadow", children: "Shadow" }), _jsx("option", { value: "other", children: "Other" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Name" }), _jsx("input", { type: "text", className: "fs-input", value: newTokenName, onChange: (e) => setNewTokenName(e.target.value), placeholder: "brand-primary" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Value" }), _jsxs("div", { style: { display: 'flex', gap: 6 }, children: [newTokenCategory === 'color' && _jsx("input", { type: "color", className: "fs-color-input", value: newTokenValue || '#000000', onChange: (e) => setNewTokenValue(e.target.value), style: { width: 36 } }), _jsx("input", { type: "text", className: "fs-input", value: newTokenValue, onChange: (e) => setNewTokenValue(e.target.value), placeholder: newTokenCategory === 'color' ? '#5eead4' : newTokenCategory === 'spacing' ? '16px' : newTokenCategory === 'radius' ? '8px' : 'value', style: { flex: 1 } })] })] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: addToken, children: [_jsx(Plus, { size: 12 }), " Add token"] })] }) }), _jsx(AccordionSection, { id: "align", icon: _jsx(AlignCenterHorizontal, { size: 14 }), title: "Align & Distribute", isOpen: openSections.align, onToggle: () => toggleSection('align'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Shift-click multiple elements, then align. Works on 2+ selected elements." }), _jsxs("div", { className: "fs-align-grid", children: [_jsxs("button", { type: "button", className: "fs-pill", title: "Align left edges", onClick: () => alignSelections('left'), children: [_jsx(AlignLeft, { size: 13 }), " Left"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Center horizontally", onClick: () => alignSelections('center-h'), children: [_jsx(AlignCenterHorizontal, { size: 13 }), " Center H"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Align right edges", onClick: () => alignSelections('right'), children: [_jsx(AlignRight, { size: 13 }), " Right"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Align top edges", onClick: () => alignSelections('top'), children: [_jsx(AlignVerticalJustifyCenter, { size: 13 }), " Top"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Center vertically", onClick: () => alignSelections('center-v'), children: [_jsx(AlignCenterVertical, { size: 13 }), " Center V"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Align bottom edges", onClick: () => alignSelections('bottom'), children: [_jsx(AlignVerticalDistributeCenter, { size: 13 }), " Bottom"] })] }), _jsxs("div", { className: "fs-pill-group", style: { marginTop: 4 }, children: [_jsxs("button", { type: "button", className: "fs-pill is-accent", title: "Distribute horizontally", onClick: () => alignSelections('distribute-h'), children: [_jsx(AlignHorizontalDistributeCenter, { size: 13 }), " Distribute H"] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", title: "Distribute vertically", onClick: () => alignSelections('distribute-v'), children: [_jsx(AlignHorizontalJustifyCenter, { size: 13 }), " Distribute V"] })] }), _jsxs("p", { style: { fontSize: '0.7rem', color: 'var(--fs-text-tertiary)', margin: 0 }, children: [selections.length, " element", selections.length !== 1 ? 's' : '', " selected"] })] }) }), _jsx(AccordionSection, { id: "transitions", icon: _jsx(Timer, { size: 14 }), title: "Transitions & Motion", isOpen: openSections.transitions, onToggle: () => toggleSection('transitions'), children: _jsxs("div", { className: "fs-stack", children: [_jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Property" }), _jsx("select", { className: "fs-select", value: transitionProp, onChange: (e) => setTransitionProp(e.target.value), children: ['all', 'opacity', 'transform', 'background-color', 'color', 'box-shadow', 'border-radius', 'width', 'height', 'padding', 'margin', 'filter'].map((p) => (_jsx("option", { value: p, children: p }, p))) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Easing" }), _jsx("select", { className: "fs-select", value: transitionEasing, onChange: (e) => setTransitionEasing(e.target.value), children: ['ease', 'ease-in', 'ease-out', 'ease-in-out', 'linear', 'cubic-bezier(0.34,1.56,0.64,1)', 'cubic-bezier(0.4,0,0.2,1)'].map((e) => (_jsx("option", { value: e, children: e.startsWith('cubic') ? 'Spring' : e }, e))) })] })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Duration (ms)" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "50", max: "2000", step: "50", value: transitionDuration, onChange: (e) => setTransitionDuration(Number(e.target.value)) }), _jsx("span", { className: "fs-range-value", children: transitionDuration })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Delay (ms)" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "0", max: "1000", step: "50", value: transitionDelay, onChange: (e) => setTransitionDelay(Number(e.target.value)) }), _jsx("span", { className: "fs-range-value", children: transitionDelay })] })] })] }), _jsxs("div", { className: "fs-pill-group", children: [_jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('all'); setTransitionDuration(200); setTransitionEasing('ease'); setTransitionDelay(0); }, children: "Fast" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('all'); setTransitionDuration(400); setTransitionEasing('ease-in-out'); setTransitionDelay(0); }, children: "Smooth" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('transform'); setTransitionDuration(600); setTransitionEasing('cubic-bezier(0.34,1.56,0.64,1)'); setTransitionDelay(0); }, children: "Spring" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('opacity'); setTransitionDuration(300); setTransitionEasing('ease'); setTransitionDelay(0); }, children: "Fade" })] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: applyTransitionToSelection, disabled: !selection, children: [_jsx(Zap, { size: 12 }), " Apply to selected"] }), selection && (_jsxs("button", { type: "button", className: "fs-pill", onClick: () => applyStyle({ transition: 'none' }), children: [_jsx(Eraser, { size: 12 }), " Remove transition"] }))] }) }), _jsx(AccordionSection, { id: "assets", icon: _jsx(FileImage, { size: 14 }), title: "Asset Manager", isOpen: openSections.assets, onToggle: () => toggleSection('assets'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Save images and apply them to any element. Drag & drop or paste a URL." }), _jsxs("div", { className: "fs-row", style: { gap: 6 }, children: [_jsx("input", { type: "text", className: "fs-input", placeholder: "Paste image URL\u2026", style: { flex: 1 }, onKeyDown: (e) => {
+                                    }) }))] })), room.inRoom && (_jsx(AccordionSection, { id: "roomChat", icon: _jsx(MessageSquare, { size: 14 }), title: roomPresence.length ? `Room chat · ${roomPresence.length + 1} here` : 'Room chat', isOpen: openSections.roomChat, onToggle: () => toggleSection('roomChat'), children: _jsx(FroamRoomChat, { client: room.client, events: room.events, role: room.role }) })), _jsx(AccordionSection, { id: "inspiration", icon: _jsx(ImagePlus, { size: 14 }), title: "Inspiration Board", isOpen: openSections.inspiration, onToggle: () => toggleSection('inspiration'), children: _jsx(FroamInspirationPanel, { onToast: showToast }) }), _jsx(AccordionSection, { id: "tokens", icon: _jsx(Coins, { size: 14 }), title: "Design Tokens", isOpen: openSections.tokens, onToggle: () => toggleSection('tokens'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Named values you can apply instantly to any element. Also injected as CSS variables." }), tokens.length > 0 && (_jsx("div", { className: "fs-tokens-grid", children: tokens.map((token) => (_jsxs("div", { className: "fs-token", "data-chef-editor-root": "true", children: [token.category === 'color' && (_jsx("span", { className: "fs-token__swatch", style: { background: token.value } })), _jsx("span", { className: "fs-token__name", title: `--${token.name.replace(/\s+/g, '-').toLowerCase()}`, children: token.name }), _jsx("span", { className: "fs-token__value", children: token.value }), _jsx("button", { type: "button", className: "fs-pill fs-token__apply", onClick: () => applyTokenToSelection(token), children: "Apply" }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", onClick: () => removeToken(token.id), children: _jsx(X, { size: 10 }) })] }, token.id))) })), _jsxs("div", { className: "fs-grid-2", style: { gap: 6 }, children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Category" }), _jsxs("select", { className: "fs-select", value: newTokenCategory, onChange: (e) => setNewTokenCategory(e.target.value), children: [_jsx("option", { value: "color", children: "Color" }), _jsx("option", { value: "spacing", children: "Spacing" }), _jsx("option", { value: "font-size", children: "Font size" }), _jsx("option", { value: "radius", children: "Radius" }), _jsx("option", { value: "shadow", children: "Shadow" }), _jsx("option", { value: "other", children: "Other" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Name" }), _jsx("input", { type: "text", className: "fs-input", value: newTokenName, onChange: (e) => setNewTokenName(e.target.value), placeholder: "brand-primary" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Value" }), _jsxs("div", { style: { display: 'flex', gap: 6 }, children: [newTokenCategory === 'color' && _jsx("input", { type: "color", className: "fs-color-input", value: newTokenValue || '#000000', onChange: (e) => setNewTokenValue(e.target.value), style: { width: 36 } }), _jsx("input", { type: "text", className: "fs-input", value: newTokenValue, onChange: (e) => setNewTokenValue(e.target.value), placeholder: newTokenCategory === 'color' ? '#5eead4' : newTokenCategory === 'spacing' ? '16px' : newTokenCategory === 'radius' ? '8px' : 'value', style: { flex: 1 } })] })] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: addToken, children: [_jsx(Plus, { size: 12 }), " Add token"] })] }) }), _jsx(AccordionSection, { id: "align", icon: _jsx(AlignCenterHorizontal, { size: 14 }), title: "Align & Distribute", isOpen: openSections.align, onToggle: () => toggleSection('align'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Shift-click multiple elements, then align. Works on 2+ selected elements." }), _jsxs("div", { className: "fs-align-grid", children: [_jsxs("button", { type: "button", className: "fs-pill", title: "Align left edges", onClick: () => alignSelections('left'), children: [_jsx(AlignLeft, { size: 13 }), " Left"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Center horizontally", onClick: () => alignSelections('center-h'), children: [_jsx(AlignCenterHorizontal, { size: 13 }), " Center H"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Align right edges", onClick: () => alignSelections('right'), children: [_jsx(AlignRight, { size: 13 }), " Right"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Align top edges", onClick: () => alignSelections('top'), children: [_jsx(AlignVerticalJustifyCenter, { size: 13 }), " Top"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Center vertically", onClick: () => alignSelections('center-v'), children: [_jsx(AlignCenterVertical, { size: 13 }), " Center V"] }), _jsxs("button", { type: "button", className: "fs-pill", title: "Align bottom edges", onClick: () => alignSelections('bottom'), children: [_jsx(AlignVerticalDistributeCenter, { size: 13 }), " Bottom"] })] }), _jsxs("div", { className: "fs-pill-group", style: { marginTop: 4 }, children: [_jsxs("button", { type: "button", className: "fs-pill is-accent", title: "Distribute horizontally", onClick: () => alignSelections('distribute-h'), children: [_jsx(AlignHorizontalDistributeCenter, { size: 13 }), " Distribute H"] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", title: "Distribute vertically", onClick: () => alignSelections('distribute-v'), children: [_jsx(AlignHorizontalJustifyCenter, { size: 13 }), " Distribute V"] })] }), _jsxs("p", { style: { fontSize: '0.7rem', color: 'var(--fs-text-tertiary)', margin: 0 }, children: [selections.length, " element", selections.length !== 1 ? 's' : '', " selected"] })] }) }), _jsx(AccordionSection, { id: "transitions", icon: _jsx(Timer, { size: 14 }), title: "Transitions & Motion", isOpen: openSections.transitions, onToggle: () => toggleSection('transitions'), children: _jsxs("div", { className: "fs-stack", children: [_jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Property" }), _jsx("select", { className: "fs-select", value: transitionProp, onChange: (e) => setTransitionProp(e.target.value), children: ['all', 'opacity', 'transform', 'background-color', 'color', 'box-shadow', 'border-radius', 'width', 'height', 'padding', 'margin', 'filter'].map((p) => (_jsx("option", { value: p, children: p }, p))) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Easing" }), _jsx("select", { className: "fs-select", value: transitionEasing, onChange: (e) => setTransitionEasing(e.target.value), children: ['ease', 'ease-in', 'ease-out', 'ease-in-out', 'linear', 'cubic-bezier(0.34,1.56,0.64,1)', 'cubic-bezier(0.4,0,0.2,1)'].map((e) => (_jsx("option", { value: e, children: e.startsWith('cubic') ? 'Spring' : e }, e))) })] })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Duration (ms)" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "50", max: "2000", step: "50", value: transitionDuration, onChange: (e) => setTransitionDuration(Number(e.target.value)) }), _jsx("span", { className: "fs-range-value", children: transitionDuration })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Delay (ms)" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "0", max: "1000", step: "50", value: transitionDelay, onChange: (e) => setTransitionDelay(Number(e.target.value)) }), _jsx("span", { className: "fs-range-value", children: transitionDelay })] })] })] }), _jsxs("div", { className: "fs-pill-group", children: [_jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('all'); setTransitionDuration(200); setTransitionEasing('ease'); setTransitionDelay(0); }, children: "Fast" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('all'); setTransitionDuration(400); setTransitionEasing('ease-in-out'); setTransitionDelay(0); }, children: "Smooth" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('transform'); setTransitionDuration(600); setTransitionEasing('cubic-bezier(0.34,1.56,0.64,1)'); setTransitionDelay(0); }, children: "Spring" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => { setTransitionProp('opacity'); setTransitionDuration(300); setTransitionEasing('ease'); setTransitionDelay(0); }, children: "Fade" })] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: applyTransitionToSelection, disabled: !selection, children: [_jsx(Zap, { size: 12 }), " Apply to selected"] }), selection && (_jsxs("button", { type: "button", className: "fs-pill", onClick: () => applyStyle({ transition: 'none' }), children: [_jsx(Eraser, { size: 12 }), " Remove transition"] }))] }) }), _jsx(AccordionSection, { id: "assets", icon: _jsx(FileImage, { size: 14 }), title: "Asset Manager", isOpen: openSections.assets, onToggle: () => toggleSection('assets'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Save images and apply them to any element. Drag & drop or paste a URL." }), _jsxs("div", { className: "fs-row", style: { gap: 6 }, children: [_jsx("input", { type: "text", className: "fs-input", placeholder: "Paste image URL\u2026", style: { flex: 1 }, onKeyDown: (e) => {
                                                     if (e.key === 'Enter') {
                                                         const url = e.target.value.trim();
                                                         if (url) {
@@ -5042,8 +5161,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                                         reader.readAsDataURL(file);
                                                     };
                                                     input.click();
-                                                }, children: [_jsx(ImagePlus, { size: 12 }), " Upload"] })] }), assets.length > 0 && (_jsx("input", { type: "text", className: "fs-input", placeholder: "Search assets\u2026", value: assetSearch, onChange: (e) => setAssetSearch(e.target.value) })), _jsxs("div", { className: "fs-assets-grid", children: [assets.filter((a) => !assetSearch || a.name.toLowerCase().includes(assetSearch.toLowerCase())).map((asset) => (_jsxs("div", { className: "fs-asset-item", "data-chef-editor-root": "true", children: [_jsx("img", { src: asset.url, alt: asset.name, className: "fs-asset-item__thumb", onClick: () => applyAssetToSelection(asset.url), loading: "lazy" }), _jsx("span", { className: "fs-asset-item__name", title: asset.name, children: asset.name }), _jsx("button", { type: "button", className: "fs-asset-item__remove", onClick: () => removeAsset(asset.id), children: _jsx(X, { size: 10 }) })] }, asset.id))), assets.length === 0 && _jsx("p", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem', margin: 0 }, children: "No assets yet." })] })] }) }), _jsxs("div", { className: "froam-studio__quick-bar", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: "fs-pill", onClick: () => setCommandPaletteOpen(true), title: "Ctrl+K", children: [_jsx(Search, { size: 11 }), " Ctrl+K"] }), _jsx("span", { style: { flex: 1 } }), _jsxs("span", { style: { fontSize: '0.64rem', color: 'var(--fs-text-tertiary)' }, children: [draftCount, " ", viewportMode, " drafts"] })] })] }) })) : null, _jsx("input", { ref: fileInputRef, className: "fs-hidden-input", "data-chef-editor-root": "true", type: "file", accept: "image/*", onChange: handleImageUpload }), room.inRoom && (_jsx(FroamNotePins, { notes: notes, root: getRoot(), activeId: activeNoteId, onPick: goToNote })), showPanel && selection && !inlineEditing && (_jsx(FroamResizeHandles, { targetRect: selectionRect, visible: !!selectionRect, onResizeStart: () => {
+                                                }, children: [_jsx(ImagePlus, { size: 12 }), " Upload"] })] }), assets.length > 0 && (_jsx("input", { type: "text", className: "fs-input", placeholder: "Search assets\u2026", value: assetSearch, onChange: (e) => setAssetSearch(e.target.value) })), _jsxs("div", { className: "fs-assets-grid", children: [assets.filter((a) => !assetSearch || a.name.toLowerCase().includes(assetSearch.toLowerCase())).map((asset) => (_jsxs("div", { className: "fs-asset-item", "data-chef-editor-root": "true", children: [_jsx("img", { src: asset.url, alt: asset.name, className: "fs-asset-item__thumb", onClick: () => applyAssetToSelection(asset.url), loading: "lazy" }), _jsx("span", { className: "fs-asset-item__name", title: asset.name, children: asset.name }), _jsx("button", { type: "button", className: "fs-asset-item__remove", onClick: () => removeAsset(asset.id), children: _jsx(X, { size: 10 }) })] }, asset.id))), assets.length === 0 && _jsx("p", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem', margin: 0 }, children: "No assets yet." })] })] }) }), _jsxs("div", { className: "froam-studio__quick-bar", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: "fs-pill", onClick: () => setCommandPaletteOpen(true), title: "Ctrl+K", children: [_jsx(Search, { size: 11 }), " Ctrl+K"] }), _jsx("span", { style: { flex: 1 } }), _jsxs("span", { style: { fontSize: '0.64rem', color: 'var(--fs-text-tertiary)' }, children: [draftCount, " ", viewportMode, " drafts"] })] })] }) })) : null, _jsx("input", { ref: fileInputRef, className: "fs-hidden-input", "data-chef-editor-root": "true", type: "file", accept: "image/*", onChange: handleImageUpload }), room.inRoom && (_jsx(FroamNotePins, { notes: notes, root: getRoot(), activeId: activeNoteId, onPick: goToNote })), room.inRoom && (_jsx(FroamPresenceLayer, { members: roomPresence, routeKey: routeKey, viewport: viewportMode, root: getRoot() })), showPanel && selection && !inlineEditing && (_jsx(FroamResizeHandles, { targetRect: selectionRect, visible: !!selectionRect, onResizeStart: () => {
                     if (!selection)
+                        return;
+                    if (guardRemoteLock(selection.path))
                         return;
                     const root = getRoot();
                     if (!root)
@@ -5073,6 +5194,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         finalStyles: {},
                     };
                     setIsResizing(true);
+                    setRoomLockedPath(selection.path);
                 }, onResize: ({ direction, deltaWidth, deltaHeight, deltaX, deltaY, preserveAspectRatio, resizeFromCenter }) => {
                     if (!selection || !resizeBaseRef.current)
                         return;
@@ -5150,6 +5272,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     setSelectionRect(target.getBoundingClientRect());
                 }, onResizeEnd: () => {
                     setIsResizing(false);
+                    setRoomLockedPath(null);
                     const finalStyles = resizeBaseRef.current?.finalStyles ?? {};
                     resizeBaseRef.current = null;
                     if (!selection)

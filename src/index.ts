@@ -9,3 +9,26 @@ export {
   type FroamAuthUser,
   type FroamStudioConfig,
 } from './config'
+export {
+  createRoomClient,
+  inviteLink,
+  readOwnedRoom,
+  readRoomFromLocation,
+  type RoomClient,
+  type RoomIdentity,
+  type RoomMemberView,
+  type RoomTransport,
+  type RoomView,
+} from './collab/room'
+export { useFroamRoom, type RoomWhere } from './collab/useFroamRoom'
+export type {
+  FroamChatMessage,
+  FroamMember,
+  FroamOp,
+  FroamPresence,
+  FroamRevertProposal,
+  FroamRole,
+  FroamRoom,
+  FroamRoomEvent,
+  FroamStructuralChange,
+} from './collab/types'

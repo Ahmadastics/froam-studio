@@ -34,6 +34,10 @@ from READMEs, so canvas and WebGL are off the table there.
 
 ## ✨ What's new
 
+**6.1.0 — Froam Rooms.** Review a live site with a client or invite a second
+designer into the same room: ordered co-editing, presence, cursors, soft locks,
+chat, approvals, reconnect replay and per-actor undo share one small protocol.
+
 **4.9.3 — a save reaches everywhere.** Publish from a phone and it lands on
 every device *and*, with `createGitHubCommitter`, straight in your repo — no
 `froam dev` bridge on the other end. See
@@ -220,6 +224,38 @@ final. If you publish from devices that can't reach a repo, pass
 `prefer="newest"` to `FroamRuntime` and whichever is more recent wins instead —
 otherwise publishing to an already-committed route does nothing, with no
 feedback.
+
+## Froam Rooms — review and co-editing
+
+One room serves two products. Send the commenter link for a guided client
+review; send the editor link to open Studio mode with another designer. Roles,
+ordered ops, comments, revisions, presence, chat and reconnect replay all use
+the same contract.
+
+`froam dev` mounts a file-backed room store automatically. A hosted app mounts
+the identical rules over its own storage:
+
+```js
+import { createFroamRoomApi } from 'froam-studio/server'
+
+const rooms = createFroamRoomApi({
+  storage: {
+    get: (roomId) => database.rooms.get(roomId),
+    put: (room) => database.rooms.put(room.id, room),
+  },
+  authorize: async (req) => isDesigner(req),
+})
+```
+
+The live stream is only a wake-up signal. Every durable change is read from the
+server-ordered event log by cursor, so reconnects, duplicate submissions and a
+serverless stream timeout are safe. Hosts should make `put` concurrency-safe;
+the Run'Am adapter uses an optimistic database revision for this.
+
+Invite links grant a role, while joining mints a separate per-member session.
+Never treat the public actor id as authentication. Comments persist against
+fingerprinted DOM anchors; room chat and cursor presence are session chrome and
+never enter `froam.design.json`.
 
 ## 🚀 Publish straight to GitHub — no laptop required
 

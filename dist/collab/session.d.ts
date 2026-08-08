@@ -108,6 +108,8 @@ export declare function createOpLogSession(options?: {
      * everything we have already seen.
      */
     observe(remote: readonly FroamOp[]): void;
+    /** Remove optimistic ops the room refused, then converge on its log. */
+    discard(ids: readonly string[]): void;
     compact(keepRecent?: number): FroamOp[];
 };
 //# sourceMappingURL=session.d.ts.map

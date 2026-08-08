@@ -110,11 +110,13 @@ import { createOpLogSession, type OpLogSession } from '../collab/session'
 import { useFroamRoom } from '../collab/useFroamRoom'
 import type { RoomComment, RoomRevision } from '../collab/room'
 import FroamNotePins from './FroamNotePins'
+import FroamPresenceLayer from './FroamPresenceLayer'
+import FroamRoomChat from './FroamRoomChat'
 import { diffStores, type FroamChange } from '../collab/oplog'
 import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist'
 import { findElementByPath, getElementPath, isSafeDraftPath, tagOfPath } from '../collab/paths'
 import { createAnchor, resolveAnchor } from '../collab/anchor'
-import { LOCAL_ACTOR, scopeKey, type FroamAnchor, type FroamViewport } from '../collab/types'
+import { LOCAL_ACTOR, scopeKey, type FroamAnchor, type FroamOp, type FroamViewport } from '../collab/types'
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources'
 import { useFroamRouteKey } from '../routing'
 import {
@@ -1834,11 +1836,96 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
    * The editor is the presenter's side — it announces where it is so a client
    * following along knows which page to be on.
    */
+  const [roomLockedPath, setRoomLockedPath] = useState<string | null>(null)
+  const [roomCursor, setRoomCursor] = useState<{ x: number; y: number } | null>(null)
   const room = useFroamRoom({
-    where: { routeKey, viewport: viewportMode, selectedPath: selection?.path ?? null },
+    where: {
+      routeKey,
+      viewport: viewportMode,
+      selectedPath: selection?.path ?? null,
+      lockedPath: roomLockedPath,
+      cursor: roomCursor,
+    },
     autoJoinAs: persona.name || 'Designer',
   })
   const roomPresence = room.present
+  const roomSubmittedOpsRef = useRef<Set<string>>(new Set())
+  const remoteLocks = useMemo(
+    () => new Map(roomPresence.filter((member) => member.lockedPath).map((member) => [member.lockedPath as string, member])),
+    [roomPresence],
+  )
+
+  function guardRemoteLock(path: string) {
+    const member = remoteLocks.get(path) ?? [...remoteLocks.entries()]
+      .find(([locked]) => path.startsWith(`${locked}/`) || locked.startsWith(`${path}/`))?.[1]
+    if (!member) return false
+    showToast(`${member.name} is editing that`)
+    return true
+  }
+
+  useEffect(() => {
+    roomSubmittedOpsRef.current.clear()
+  }, [room.roomId])
+
+  useEffect(() => {
+    if (room.identity?.actor) opLog.setActor(room.identity.actor)
+  }, [opLog, room.identity?.actor])
+
+  useEffect(() => {
+    if (inlineEditing && selection?.path) setRoomLockedPath(selection.path)
+    else if (!isResizing && !moveDragRef.current) setRoomLockedPath(null)
+  }, [inlineEditing, isResizing, selection?.path])
+
+  // A pointer is useful presence only in Studio mode. Five updates a second
+  // feels live without turning the room store into a mouse-movement database.
+  useEffect(() => {
+    if (!room.inRoom || (!panelOpen && !active)) { setRoomCursor(null); return }
+    let last = 0
+    const move = (event: PointerEvent) => {
+      const stamp = performance.now()
+      if (stamp - last < 180) return
+      last = stamp
+      setRoomCursor({ x: event.clientX, y: event.clientY })
+    }
+    window.addEventListener('pointermove', move, { passive: true })
+    return () => window.removeEventListener('pointermove', move)
+  }, [room.inRoom, panelOpen, active])
+
+  // Apply the room's canonical op order. Starting at event zero on each page
+  // is deliberate: a fresh browser can rebuild the shared design, while the
+  // session de-duplicates ids already present in local history.
+  useEffect(() => {
+    const incoming = room.events
+      .filter((event) => event.type === 'op')
+      .map((event) => event.op)
+    if (!incoming.length) return
+    opLog.observe(incoming)
+    for (const op of incoming) roomSubmittedOpsRef.current.add(op.id)
+    applyLogToStore()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.events])
+
+  // Offline-first queue: unsent local ops stay in the log. Any room refresh
+  // retries them; acknowledgements replace optimistic clocks by id.
+  useEffect(() => {
+    if (!room.client || !room.identity || (room.role !== 'owner' && room.role !== 'editor')) return
+    const pending = opLog.all()
+      .filter((op) => op.actor === room.identity?.actor && !roomSubmittedOpsRef.current.has(op.id))
+      .slice(0, 500)
+    if (!pending.length) return
+    for (const op of pending) roomSubmittedOpsRef.current.add(op.id)
+    void room.client.pushOps(pending).then(({ accepted, rejected }) => {
+      opLog.observe(accepted)
+      const rejectedIds = rejected.map((item) => item.id).filter((id): id is string => Boolean(id))
+      opLog.discard(rejectedIds)
+      applyLogToStore()
+      if (rejected.some((item) => item.reason === 'owner-approval-required')) showToast('Sent to the owner for approval')
+      else if (rejected.length) showToast('A concurrent owner edit was kept')
+    }).catch(() => {
+      for (const op of pending) roomSubmittedOpsRef.current.delete(op.id)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, logVersion, room.room, room.identity?.actor, room.role])
 
   /**
    * Notes the client has left on this page.
@@ -1855,11 +1942,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [copied, setCopied] = useState(false)
 
   /** The link to hand over — a commenter one, since that is what a client is. */
-  const shareLink = useMemo(
-    () => (room.owned ? room.inviteLink(room.owned, 'commenter') : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [room.owned?.roomId, routeKey],
-  )
+  const shareLink = room.owned ? room.inviteLink(room.owned, 'commenter') : null
+  const editorLink = room.owned ? room.inviteLink(room.owned, 'editor') : null
 
   const startSharing = useCallback(async (fresh = false) => {
     setSharing(true)
@@ -1888,6 +1972,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareLink])
+
+  const copyEditorLink = useCallback(async () => {
+    if (!editorLink) return
+    try {
+      await navigator.clipboard.writeText(editorLink)
+      showToast('Editor invite copied')
+    } catch {
+      showToast('Copy failed — select the link and copy it')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorLink])
 
   const refreshNotes = useCallback(async () => {
     if (!room.client || !room.inRoom) return
@@ -1926,6 +2021,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const timer = window.setInterval(() => { if (!document.hidden) void refreshNotes() }, 5_000)
     return () => window.clearInterval(timer)
   }, [room.inRoom, refreshNotes])
+
+  useEffect(() => {
+    if (room.events.some((event) => event.type === 'comment' || event.type === 'revision')) void refreshNotes()
+  }, [room.events, refreshNotes])
 
   const resolveNote = useCallback(async (note: RoomComment) => {
     if (!room.client) return
@@ -2801,7 +2900,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       const origLeft = readNumber(computed.left, 0)
       if (computed.position === 'static') target.style.position = 'relative'
       const path = getElementPath(target, root!)
+      if (guardRemoteLock(path)) return
       moveDragRef.current = { startX: e.clientX, startY: e.clientY, origTop, origLeft, target, path }
+      setRoomLockedPath(path)
       target.setPointerCapture(e.pointerId)
       updateSelectionsState([buildSelection(target, path)])
       target.setAttribute('data-froam-moving', 'true')
@@ -2824,6 +2925,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       const newTop = drag.origTop + e.clientY - drag.startY
       const newLeft = drag.origLeft + e.clientX - drag.startX
       moveDragRef.current = null
+      setRoomLockedPath(null)
       drag.target.removeAttribute('data-froam-moving')
       const computed = window.getComputedStyle(drag.target)
       const pos = computed.position === 'static' ? 'relative' : computed.position
@@ -3039,7 +3141,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
    * take the log's word for it. The reconcile effect sees the store already
    * matches the log and stays quiet.
    */
-  function applyLogToStore(toast: string) {
+  function applyLogToStore(toast?: string) {
     const next = opLog.store()
     storeRef.current = next
     setStore(next)
@@ -3047,7 +3149,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     applyStoreToDOM(next, { clearCurrent: true })
     refreshSelectedElementFromDOM()
     bumpLog()
-    showToast(toast)
+    if (toast) showToast(toast)
   }
 
   function undo() {
@@ -3239,6 +3341,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   /* ─── Draft update ─── */
   function updateDraft(updater: (draft: ElementDraft) => ElementDraft, nextSelection?: Partial<SelectionState>, historyLabel?: string) {
     if (!selection) return
+    if ((selections.length ? selections : [selection]).some((item) => guardRemoteLock(item.path))) return
     const root = getRoot()
     if (!root) return
 
@@ -3455,6 +3558,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     if (!root) return
     const path = getElementPath(target, root)
     if (!isSafeDraftPath(path)) return
+    if (guardRemoteLock(path)) return
 
     const originalRoute = originalsRef.current[viewportStoreKey] ?? {}
     if (!originalRoute[path]) {
@@ -3680,6 +3784,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         viewportMode,
         store: stripPersonaDrafts(routeSnapshot),
       })
+      await room.client?.signalDesign(routeKey, viewportMode)
     } catch {
       /* The next settle publishes the same design. */
     }
@@ -4360,6 +4465,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const wrapper = document.createElement('div')
     wrapper.setAttribute('data-froam-injected', 'true')
     wrapper.setAttribute('data-froam-block', 'true')
+    wrapper.setAttribute('data-froam-wrapper', 'true')
     ensureFroamNodeId(wrapper)
     wrapper.style.display = 'flex'
     wrapper.style.flexDirection = 'column'
@@ -6704,6 +6810,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     <button type="button" className="fs-pill is-accent" onClick={() => void copyShareLink()}>
                       {copied ? 'Copied' : 'Copy link'}
                     </button>
+                    <button type="button" className="fs-pill" onClick={() => void copyEditorLink()} title="Invite another designer who can edit">
+                      Invite editor
+                    </button>
                     <button type="button" className="fs-pill" onClick={() => void startSharing(true)}>New link</button>
                   </div>
                   <span style={{ color: 'var(--fs-text-tertiary)', fontSize: '0.7rem' }}>
@@ -6799,6 +6908,18 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             )}
 
             {/* ─── Inspiration Board ─── */}
+            {room.inRoom && (
+              <AccordionSection
+                id="roomChat"
+                icon={<MessageSquare size={14} />}
+                title={roomPresence.length ? `Room chat · ${roomPresence.length + 1} here` : 'Room chat'}
+                isOpen={openSections.roomChat}
+                onToggle={() => toggleSection('roomChat')}
+              >
+                <FroamRoomChat client={room.client} events={room.events} role={room.role} />
+              </AccordionSection>
+            )}
+
             <AccordionSection
               id="inspiration"
               icon={<ImagePlus size={14} />}
@@ -7043,6 +7164,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         />
       )}
 
+      {room.inRoom && (
+        <FroamPresenceLayer
+          members={roomPresence}
+          routeKey={routeKey}
+          viewport={viewportMode}
+          root={getRoot()}
+        />
+      )}
+
       {/* v4: Resize handles on selected element */}
       {showPanel && selection && !inlineEditing && (
         <FroamResizeHandles
@@ -7050,6 +7180,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           visible={!!selectionRect}
           onResizeStart={() => {
             if (!selection) return
+            if (guardRemoteLock(selection.path)) return
             const root = getRoot()
             if (!root) return
             const target = findElementByPath(root, selection.path)
@@ -7076,6 +7207,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               finalStyles: {},
             }
             setIsResizing(true)
+            setRoomLockedPath(selection.path)
           }}
           onResize={({ direction, deltaWidth, deltaHeight, deltaX, deltaY, preserveAspectRatio, resizeFromCenter }) => {
             if (!selection || !resizeBaseRef.current) return
@@ -7158,6 +7290,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           }}
           onResizeEnd={() => {
             setIsResizing(false)
+            setRoomLockedPath(null)
             const finalStyles = resizeBaseRef.current?.finalStyles ?? {}
             resizeBaseRef.current = null
             if (!selection) return

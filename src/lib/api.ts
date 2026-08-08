@@ -27,7 +27,7 @@ function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, '')
 }
 
-function resolveEndpoint(endpoint: string) {
+export function resolveApiEndpoint(endpoint: string) {
   if (/^https?:\/\//i.test(endpoint)) return endpoint
 
   const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
@@ -69,7 +69,7 @@ export async function api<T = unknown>(endpoint: string, options: ApiOptions = {
     request.body = JSON.stringify(body)
   }
 
-  const response = await fetcher(resolveEndpoint(endpoint), request)
+  const response = await fetcher(resolveApiEndpoint(endpoint), request)
   const rawText = await response.text()
   const data = rawText ? safelyParseJson(rawText) : null
 

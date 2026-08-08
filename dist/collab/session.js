@@ -12,6 +12,40 @@
  */
 import { applyOp, buildRedo, buildRevert, buildUndo, listChanges, canRedo, canUndo, compactLog, createClock, deriveStore, diffDrafts, diffStores, highestClock, makeEdit, undoLabel, } from './oplog.js';
 import { BASELINE_ACTOR, compareOps, scopeKey, LOCAL_ACTOR, } from './types.js';
+const INJECTION_PATH_PREFIX = '__froam_injection__:';
+function readInjection(value) {
+    if (!value)
+        return null;
+    try {
+        const parsed = JSON.parse(value);
+        if (typeof parsed.parentPath !== 'string' || typeof parsed.order !== 'number' || typeof parsed.html !== 'string')
+            return null;
+        return { parentPath: parsed.parentPath, order: parsed.order, html: parsed.html };
+    }
+    catch {
+        return null;
+    }
+}
+function describeStructure(op) {
+    if (op.field !== 'text' || !op.path.startsWith(INJECTION_PATH_PREFIX))
+        return undefined;
+    const before = readInjection(op.before);
+    const after = readInjection(op.after);
+    const nodeId = op.path.slice(INJECTION_PATH_PREFIX.length);
+    if (!nodeId)
+        return undefined;
+    if (!before && after) {
+        const isWrapper = after.html.includes('data-froam-wrapper="true"') || after.html.includes('data-froam-merged="true"');
+        return { kind: isWrapper ? 'wrap' : 'insert', nodeId, parentPath: after.parentPath, index: after.order };
+    }
+    if (before && !after) {
+        return { kind: 'delete', nodeId, parentPath: before.parentPath, index: before.order };
+    }
+    if (before && after && (before.parentPath !== after.parentPath || before.order !== after.order)) {
+        return { kind: 'move', nodeId, parentPath: after.parentPath, index: after.order };
+    }
+    return undefined;
+}
 export function createOpLogSession(options = {}) {
     let actor = options.actor ?? LOCAL_ACTOR;
     let log = options.ops ? [...options.ops].sort(compareOps) : [];
@@ -44,6 +78,7 @@ export function createOpLogSession(options = {}) {
                 batch,
             });
             if (op) {
+                op.structure = describeStructure(op);
                 ops.push(op);
                 store = applyOp(store, op);
                 log.push(op);
@@ -208,16 +243,21 @@ export function createOpLogSession(options = {}) {
         observe(remote) {
             if (!remote.length)
                 return;
-            const top = highestClock(log);
             clock.observe(highestClock(remote));
-            const inOrder = remote.every((op) => op.clock >= top);
-            if (inOrder) {
-                append([...remote].sort(compareOps));
-                return;
-            }
             // An op arrived that belongs earlier in the order — re-fold rather than
             // guess, so the result matches every other device exactly.
-            log = [...log, ...remote].sort(compareOps);
+            const merged = new Map(log.map((op) => [op.id, op]));
+            for (const op of remote)
+                merged.set(op.id, op);
+            log = [...merged.values()].sort(compareOps);
+            store = deriveStore(log);
+        },
+        /** Remove optimistic ops the room refused, then converge on its log. */
+        discard(ids) {
+            if (!ids.length)
+                return;
+            const rejected = new Set(ids);
+            log = log.filter((op) => !rejected.has(op.id));
             store = deriveStore(log);
         },
         compact(keepRecent) {

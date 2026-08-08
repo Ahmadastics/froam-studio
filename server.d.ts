@@ -48,11 +48,14 @@ export type FroamRoomMember = {
   actor: string
   name: string
   role: FroamRole
+  color: string
   /** Heartbeat within the presence window. */
   here: boolean
   routeKey: string | null
   viewport: 'desktop' | 'tablet' | 'mobile' | null
   selectedPath: string | null
+  lockedPath: string | null
+  cursor: { x: number; y: number } | null
   seenAt: number | null
 }
 
@@ -63,24 +66,32 @@ export type FroamRoomView = {
   members: FroamRoomMember[]
   /** The highest-ranked editor currently present, or null if nobody is. */
   presenter: string | null
+  /** Latest ordered collaboration event. */
+  sequence: number
   you: { actor: string; role: FroamRole; name: string } | null
 }
 
 /** How long after a heartbeat someone still counts as present. */
 export const PRESENCE_TTL_MS: number
 
+export type FroamRoomStorage = {
+  get: (roomId: string) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null
+  put: (room: { id: string } & Record<string, unknown>) => Promise<void> | void
+}
+
 /**
  * A room is who may touch a design and what they may do with it.
  *
- * Four endpoints under the mount point: POST /rooms to open one,
- * GET /rooms/:id?token= to read it, POST /rooms/:id/join to become someone,
- * POST /rooms/:id/presence to say you are still here. An invite token carries
- * a role, so a client can be let in with no account, password or email.
+ * The room contract covers identity, presence, ordered events and ops,
+ * comments, revisions, chat, revert proposals, and an SSE wake-up stream.
+ * An invite token grants a role; joining mints a separate member session.
  *
  * `authorize` gates opening a room; tokens gate everything after that.
  */
 export function createFroamRoomApi(options: {
-  file: string
+  /** JSON persistence for `froam dev`; use `storage` on a hosted backend. */
+  file?: string
+  storage?: FroamRoomStorage
   authorize?: (req: IncomingMessage) => boolean | Promise<boolean>
   log?: (line: string) => void
   now?: () => number

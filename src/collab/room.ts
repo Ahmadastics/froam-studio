@@ -12,16 +12,26 @@
  * Transport and storage are injected so the whole thing can be tested without
  * a browser; the defaults are the ones a page actually wants.
  */
-import type { FroamRole, FroamViewport } from './types'
+import type {
+  FroamChatMessage,
+  FroamOp,
+  FroamRevertProposal,
+  FroamRole,
+  FroamRoomEvent,
+  FroamViewport,
+} from './types'
 
 export type RoomMemberView = {
   actor: string
   name: string
   role: FroamRole
+  color: string
   here: boolean
   routeKey: string | null
   viewport: FroamViewport | null
   selectedPath: string | null
+  lockedPath: string | null
+  cursor: { x: number; y: number } | null
   seenAt: number | null
 }
 
@@ -31,10 +41,11 @@ export type RoomView = {
   createdAt: number
   members: RoomMemberView[]
   presenter: string | null
+  sequence: number
   you: { actor: string; role: FroamRole; name: string } | null
 }
 
-export type RoomIdentity = { actor: string; name: string; role: FroamRole }
+export type RoomIdentity = { actor: string; name: string; role: FroamRole; session: string }
 
 export type RoomComment = {
   id: string
@@ -68,6 +79,8 @@ export type RoomRevision = {
 export type RoomTransport = {
   get: (path: string) => Promise<unknown>
   post: (path: string, body: unknown) => Promise<unknown>
+  /** Optional push wake-up. The event log is still read through `get`. */
+  subscribe?: (path: string, wake: () => void) => () => void
 }
 
 export type RoomStorage = {
@@ -136,6 +149,12 @@ export function rememberOwnedRoom(room: OwnedRoom) {
   } catch { /* private mode */ }
 }
 
+export function rememberRoomIdentity(roomId: string, identity: RoomIdentity) {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.setItem(`froam-room:${roomId}`, JSON.stringify(identity))
+  } catch { /* private mode */ }
+}
+
 export function forgetOwnedRoom() {
   try {
     if (typeof window !== 'undefined') window.localStorage.removeItem(OWNED_KEY)
@@ -182,14 +201,19 @@ export function createRoomClient(options: {
   let identity: RoomIdentity | null = readIdentity()
   let room: RoomView | null = null
   let timer: ReturnType<typeof setInterval> | null = null
+  let liveTimer: ReturnType<typeof setInterval> | null = null
+  let liveUnsubscribe: (() => void) | null = null
+  let cursor = 0
+  let polling = false
   const listeners = new Set<(room: RoomView | null) => void>()
+  const eventListeners = new Set<(events: readonly FroamRoomEvent[]) => void>()
 
   function readIdentity(): RoomIdentity | null {
     const raw = storage.read(key)
     if (!raw) return null
     try {
       const parsed = JSON.parse(raw) as RoomIdentity
-      return parsed?.actor && parsed?.name ? parsed : null
+      return parsed?.actor && parsed?.name && parsed?.session ? parsed : null
     } catch {
       return null
     }
@@ -202,6 +226,38 @@ export function createRoomClient(options: {
 
   function announce() {
     for (const listener of listeners) listener(room)
+  }
+
+  function announceEvents(events: readonly FroamRoomEvent[]) {
+    if (!events.length) return
+    for (const listener of eventListeners) listener(events)
+    if (typeof window !== 'undefined') {
+      for (const event of events) {
+        if (event.type === 'design') window.dispatchEvent(new CustomEvent('froam:design-published', { detail: event }))
+      }
+    }
+  }
+
+  function identityQuery() {
+    if (!identity) return ''
+    return `&actor=${encodeURIComponent(identity.actor)}&session=${encodeURIComponent(identity.session)}`
+  }
+
+  function credentials() {
+    if (!identity) throw new Error('Join the room first')
+    return { actor: identity.actor, session: identity.session }
+  }
+
+  async function post(path: string, body: unknown) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await transport.post(path, body)
+      } catch (error) {
+        if (Number((error as { status?: number })?.status) !== 409 || attempt === 2) throw error
+        await new Promise((resolve) => setTimeout(resolve, 40 * (attempt + 1)))
+      }
+    }
+    throw new Error('Could not update the room')
   }
 
   function adopt(payload: unknown) {
@@ -217,6 +273,7 @@ export function createRoomClient(options: {
     get roomId() { return roomId },
     get identity() { return identity },
     get room() { return room },
+    get cursor() { return cursor },
 
     /** Have we already been someone in this room? Decides whether to ask for a name. */
     get joined() { return identity !== null },
@@ -226,16 +283,22 @@ export function createRoomClient(options: {
       return () => listeners.delete(listener)
     },
 
+    onEvents(listener: (events: readonly FroamRoomEvent[]) => void) {
+      eventListeners.add(listener)
+      return () => eventListeners.delete(listener)
+    },
+
     /**
      * Become somebody. Reuses the actor from a previous visit when there is
      * one, so a refresh keeps your comments yours instead of minting a
      * stranger who happens to have the same name.
      */
     async join(name: string) {
-      const payload = await transport.post(`/api/froam/rooms/${roomId}/join`, {
+      const payload = await post(`/api/froam/rooms/${roomId}/join`, {
         token,
         name,
         actor: identity?.actor,
+        session: identity?.session,
       }) as { you?: RoomIdentity }
       if (!payload?.you?.actor) throw new Error('Could not join the room')
       remember(payload.you)
@@ -245,8 +308,7 @@ export function createRoomClient(options: {
 
     /** Read the room without changing anything. */
     async refresh() {
-      const query = identity ? `&actor=${encodeURIComponent(identity.actor)}` : ''
-      return adopt(await transport.get(`/api/froam/rooms/${roomId}?token=${encodeURIComponent(token)}${query}`))
+      return adopt(await transport.get(`/api/froam/rooms/${roomId}?token=${encodeURIComponent(token)}${identityQuery()}`))
     },
 
     /**
@@ -256,12 +318,18 @@ export function createRoomClient(options: {
      * looking", and a heartbeat from a buried tab would keep a phone following
      * a laptop nobody is sitting at.
      */
-    async beat(where: { routeKey?: string; viewport?: FroamViewport; selectedPath?: string | null } = {}) {
+    async beat(where: {
+      routeKey?: string
+      viewport?: FroamViewport
+      selectedPath?: string | null
+      lockedPath?: string | null
+      cursor?: { x: number; y: number } | null
+    } = {}) {
       if (!identity || isHidden()) return room
       try {
-        return adopt(await transport.post(`/api/froam/rooms/${roomId}/presence`, {
+        return adopt(await post(`/api/froam/rooms/${roomId}/presence`, {
           token,
-          actor: identity.actor,
+          ...credentials(),
           ...where,
         }))
       } catch {
@@ -271,7 +339,7 @@ export function createRoomClient(options: {
       }
     },
 
-    start(where: () => { routeKey?: string; viewport?: FroamViewport; selectedPath?: string | null }, everyMs = ROOM_BEAT_MS) {
+    start(where: () => { routeKey?: string; viewport?: FroamViewport; selectedPath?: string | null; lockedPath?: string | null; cursor?: { x: number; y: number } | null }, everyMs = ROOM_BEAT_MS) {
       this.stop()
       void this.beat(where())
       timer = setInterval(() => { void this.beat(where()) }, everyMs)
@@ -281,6 +349,55 @@ export function createRoomClient(options: {
     stop() {
       if (timer) clearInterval(timer)
       timer = null
+    },
+
+    async pollEvents() {
+      if (polling) return []
+      polling = true
+      try {
+        const payload = await transport.get(`/api/froam/rooms/${roomId}/events?token=${encodeURIComponent(token)}&after=${cursor}${identityQuery()}`) as {
+          events?: FroamRoomEvent[]
+          cursor?: number
+          hasMore?: boolean
+          room?: RoomView
+        }
+        adopt(payload)
+        const events = Array.isArray(payload.events) ? payload.events : []
+        if (Number.isFinite(payload.cursor)) cursor = Math.max(cursor, Number(payload.cursor))
+        announceEvents(events)
+        if (payload.hasMore) queueMicrotask(() => { void this.pollEvents() })
+        return events
+      } finally {
+        polling = false
+      }
+    },
+
+    startLive(everyMs = 4_000) {
+      this.stopLive()
+      void this.pollEvents()
+      if (transport.subscribe) {
+        const path = `/api/froam/rooms/${roomId}/stream?token=${encodeURIComponent(token)}${identityQuery()}`
+        liveUnsubscribe = transport.subscribe(path, () => { if (!isHidden()) void this.pollEvents() })
+      }
+      liveTimer = setInterval(() => { if (!isHidden()) void this.pollEvents() }, everyMs)
+      return () => this.stopLive()
+    },
+
+    stopLive() {
+      if (liveTimer) clearInterval(liveTimer)
+      liveTimer = null
+      liveUnsubscribe?.()
+      liveUnsubscribe = null
+    },
+
+    async pushOps(ops: readonly FroamOp[]) {
+      const pending = ops.filter((op) => op.actor === identity?.actor)
+      if (!pending.length) return { accepted: [] as FroamOp[], rejected: [] as Array<{ id: string | null; reason: string }> }
+      const payload = await post(`/api/froam/rooms/${roomId}/ops`, {
+        token, ...credentials(), baseSeq: cursor, ops: pending,
+      }) as { accepted?: FroamOp[]; rejected?: Array<{ id: string | null; reason: string }>; cursor?: number; room?: RoomView }
+      adopt(payload)
+      return { accepted: payload.accepted ?? [], rejected: payload.rejected ?? [] }
     },
 
     /* ─── derived ─── */
@@ -315,7 +432,10 @@ export function createRoomClient(options: {
 
     async comments(routeKey: string) {
       const params = new URLSearchParams({ token, routeKey })
-      if (identity) params.set('actor', identity.actor)
+      if (identity) {
+        params.set('actor', identity.actor)
+        params.set('session', identity.session)
+      }
       const payload = await transport.get(`/api/froam/rooms/${roomId}/comments?${params}`) as { comments?: RoomComment[] }
       return payload?.comments ?? []
     },
@@ -328,8 +448,8 @@ export function createRoomClient(options: {
       body: string
     }) {
       if (!identity) throw new Error('Join the room first')
-      const payload = await transport.post(`/api/froam/rooms/${roomId}/comments`, {
-        token, actor: identity.actor, ...input,
+      const payload = await post(`/api/froam/rooms/${roomId}/comments`, {
+        token, ...credentials(), ...input,
       }) as { comment?: RoomComment }
       return payload?.comment ?? null
     },
@@ -338,33 +458,70 @@ export function createRoomClient(options: {
 
     async revisions(routeKey: string) {
       const params = new URLSearchParams({ token, routeKey })
-      if (identity) params.set('actor', identity.actor)
+      if (identity) {
+        params.set('actor', identity.actor)
+        params.set('session', identity.session)
+      }
       const payload = await transport.get(`/api/froam/rooms/${roomId}/revisions?${params}`) as { revisions?: RoomRevision[] }
       return payload?.revisions ?? []
     },
 
     async sendRevision(input: { routeKey: string; viewport: FroamViewport; store: unknown; note?: string }) {
       if (!identity) throw new Error('Join the room first')
-      const payload = await transport.post(`/api/froam/rooms/${roomId}/revisions`, {
-        token, actor: identity.actor, ...input,
+      const payload = await post(`/api/froam/rooms/${roomId}/revisions`, {
+        token, ...credentials(), ...input,
       }) as { revision?: RoomRevision }
       return payload?.revision ?? null
     },
 
     async decide(revisionId: string, decision: 'approved' | 'changes-requested', note?: string) {
       if (!identity) throw new Error('Join the room first')
-      const payload = await transport.post(`/api/froam/rooms/${roomId}/revisions/${revisionId}/decision`, {
-        token, actor: identity.actor, decision, note,
+      const payload = await post(`/api/froam/rooms/${roomId}/revisions/${revisionId}/decision`, {
+        token, ...credentials(), decision, note,
       }) as { revision?: RoomRevision }
       return payload?.revision ?? null
     },
 
     async resolveComment(commentId: string, resolved = true) {
       if (!identity) throw new Error('Join the room first')
-      const payload = await transport.post(`/api/froam/rooms/${roomId}/comments/${commentId}/resolve`, {
-        token, actor: identity.actor, resolved,
+      const payload = await post(`/api/froam/rooms/${roomId}/comments/${commentId}/resolve`, {
+        token, ...credentials(), resolved,
       }) as { comment?: RoomComment }
       return payload?.comment ?? null
+    },
+
+    async chat() {
+      if (!identity) return []
+      const params = new URLSearchParams({ token, actor: identity.actor, session: identity.session })
+      const payload = await transport.get(`/api/froam/rooms/${roomId}/chat?${params}`) as { messages?: FroamChatMessage[] }
+      return payload.messages ?? []
+    },
+
+    async sendChat(body: string) {
+      const payload = await post(`/api/froam/rooms/${roomId}/chat`, {
+        token, ...credentials(), body,
+      }) as { message?: FroamChatMessage }
+      return payload.message ?? null
+    },
+
+    async signalDesign(routeKey: string, viewport: FroamViewport) {
+      await post(`/api/froam/rooms/${roomId}/signal`, {
+        token, ...credentials(), routeKey, viewport,
+      })
+    },
+
+    async proposals() {
+      if (!identity) return []
+      const params = new URLSearchParams({ token, actor: identity.actor, session: identity.session })
+      const payload = await transport.get(`/api/froam/rooms/${roomId}/proposals?${params}`) as { proposals?: FroamRevertProposal[] }
+      return payload.proposals ?? []
+    },
+
+    async decideProposal(proposalId: string, decision: 'approved' | 'declined') {
+      const payload = await post(`/api/froam/rooms/${roomId}/proposals/${proposalId}/decision`, {
+        token, ...credentials(), decision,
+      }) as { proposal?: FroamRevertProposal; accepted?: FroamOp[]; cursor?: number }
+      return payload
     },
   }
 }

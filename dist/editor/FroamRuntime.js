@@ -328,6 +328,12 @@ export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true
             }
         }
         void loadPublished();
+        const receiveLivePublish = (event) => {
+            const detail = event.detail;
+            if (detail?.routeKey === routeKey && detail.viewport === viewportMode && !document.hidden)
+                void loadPublished();
+        };
+        window.addEventListener('froam:design-published', receiveLivePublish);
         /**
          * In a session, keep asking.
          *
@@ -351,8 +357,9 @@ export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true
             cancelled = true;
             if (poll)
                 window.clearInterval(poll);
+            window.removeEventListener('froam:design-published', receiveLivePublish);
         };
-    }, [design, endpoint, isRuntimeRoute, prefer, routeKey, viewportMode]);
+    }, [design, endpoint, inSession, isRuntimeRoute, prefer, routeKey, viewportMode]);
     /* Fonts the design references must actually load with it. */
     useEffect(() => {
         if (!isRuntimeRoute || !publishedStore)

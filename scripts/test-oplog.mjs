@@ -352,6 +352,30 @@ test('reconcile records a deletion', () => {
   assert.equal(session.store()[SCOPE].hero.text, 'x', 'clearing drafts must be undoable')
 })
 
+test('reconcile tags structural inserts, moves, wraps and deletes', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  const path = '__froam_injection__:node-1'
+  const injected = (parentPath, order, html = '<section>New</section>') => JSON.stringify({ parentPath, order, html })
+
+  const [insert] = session.reconcile({ [SCOPE]: { [path]: { text: injected('__froam_root__', 0) } } })
+  assert.deepEqual(insert.structure, { kind: 'insert', nodeId: 'node-1', parentPath: '__froam_root__', index: 0 })
+
+  const [move] = session.reconcile({ [SCOPE]: { [path]: { text: injected('main:nth-of-type(1)', 2) } } })
+  assert.deepEqual(move.structure, { kind: 'move', nodeId: 'node-1', parentPath: 'main:nth-of-type(1)', index: 2 })
+
+  const wrapPath = '__froam_injection__:wrapper-1'
+  const [wrap] = session.reconcile({
+    [SCOPE]: {
+      [path]: { text: injected('main:nth-of-type(1)', 2) },
+      [wrapPath]: { text: injected('__froam_root__', 1, '<div data-froam-wrapper="true"></div>') },
+    },
+  })
+  assert.equal(wrap.structure?.kind, 'wrap')
+
+  const [deleted] = session.reconcile({ [SCOPE]: { [wrapPath]: { text: injected('__froam_root__', 1, '<div data-froam-wrapper="true"></div>') } } })
+  assert.equal(deleted.structure?.kind, 'delete')
+})
+
 test('diffStores sees adds, changes and removals across scopes', () => {
   const mobile = scopeKey(ROUTE, 'mobile')
   const changes = diffStores(

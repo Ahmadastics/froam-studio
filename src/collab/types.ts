@@ -118,6 +118,9 @@ export type FroamOp = {
 
   /** For kind 'undo' | 'redo': the id of the edit op this action acts on. */
   targets?: string
+
+  /** Present when this field edit represents a tree mutation. */
+  structure?: FroamStructuralChange
 }
 
 /** Total order across actors. Same result on every device. */
@@ -239,4 +242,52 @@ export type FroamPresence = {
   lockedPath?: string
   cursor?: { x: number; y: number }
   seenAt: number
+}
+
+/**
+ * A durable item on the room's ordered collaboration stream.
+ *
+ * `seq` belongs to the room server, not a device clock. Clients use it as a
+ * reconnect cursor and may therefore replay safely after going offline.
+ */
+export type FroamRoomEvent =
+  | { seq: number; type: 'op'; createdAt: number; actor: FroamActorId; op: FroamOp }
+  | { seq: number; type: 'chat'; createdAt: number; actor: FroamActorId; message: FroamChatMessage }
+  | { seq: number; type: 'comment'; createdAt: number; actor: FroamActorId; commentId: string }
+  | { seq: number; type: 'revision'; createdAt: number; actor: FroamActorId; revisionId: string }
+  | { seq: number; type: 'proposal'; createdAt: number; actor: FroamActorId; proposal: FroamRevertProposal }
+  | { seq: number; type: 'design'; createdAt: number; actor: FroamActorId; routeKey: string; viewport: FroamViewport }
+
+/** Session talk. Unlike an anchored comment it has no design lifecycle. */
+export type FroamChatMessage = {
+  id: string
+  actor: FroamActorId
+  name: string
+  body: string
+  createdAt: number
+}
+
+export type FroamRevertProposal = {
+  id: string
+  actor: FroamActorId
+  name: string
+  ops: readonly FroamOp[]
+  createdAt: number
+  status: 'pending' | 'approved' | 'declined'
+  decidedBy?: string | null
+  decidedAt?: number | null
+}
+
+/**
+ * Optional semantic detail for an edit that changes the document tree.
+ *
+ * The value still travels as an ordinary field op so old clients degrade to
+ * the resulting serialised injection draft. New clients can use this metadata
+ * to narrate and animate inserts, moves, deletes and wraps.
+ */
+export type FroamStructuralChange = {
+  kind: 'insert' | 'move' | 'delete' | 'wrap'
+  nodeId: string
+  parentPath?: string
+  index?: number
 }

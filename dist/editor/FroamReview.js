@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFroamRoom } from '../collab/useFroamRoom.js';
 import { ROOM_PARAM, TOKEN_PARAM } from '../collab/room.js';
 import { createAnchor } from '../collab/anchor.js';
+import FroamRoomChat from './FroamRoomChat.js';
 /** Carry the invite across a navigation, or the next page is not a session. */
 function urlForRoute(routeKey) {
     const url = new URL(window.location.href);
@@ -40,6 +41,7 @@ export default function FroamReview({ routeKey, viewport }) {
     const [pending, setPending] = useState(null);
     const [asked, setAsked] = useState(false);
     const [deciding, setDeciding] = useState(false);
+    const [chatting, setChatting] = useState(false);
     const canComment = room.role === 'commenter' || room.role === 'owner' || room.role === 'editor';
     // Read inside the tap handler without re-subscribing it on every keystroke.
     const draftRef = useRef(draft);
@@ -155,6 +157,10 @@ export default function FroamReview({ routeKey, viewport }) {
             void refreshNotes(); }, 6_000);
         return () => window.clearInterval(timer);
     }, [refreshNotes]);
+    useEffect(() => {
+        if (room.events.some((event) => event.type === 'comment' || event.type === 'revision'))
+            void refreshNotes();
+    }, [room.events, refreshNotes]);
     const decide = useCallback(async (decision) => {
         if (!pending || !room.client)
             return;
@@ -236,6 +242,9 @@ export default function FroamReview({ routeKey, viewport }) {
                             : `You asked for ${open} change${open === 1 ? '' : 's'}. ${pending.createdBy} will see ${open === 1 ? 'it' : 'them'} either way.` }), _jsxs("div", { className: "froam-review__row", children: [_jsx("button", { type: "button", className: "froam-review__ghost", disabled: deciding, onClick: () => void decide('changes-requested'), children: "Not yet" }), _jsx("button", { type: "button", className: "froam-review__go", disabled: deciding, onClick: () => void decide('approved'), children: deciding ? '…' : 'Approve' })] })] }) }));
     }
     /* ── In the session ── */
-    return (_jsx("div", { className: "froam-review", "data-chef-editor-root": "true", children: commenting ? (_jsxs("div", { className: "froam-review__bar is-commenting", children: [_jsxs("div", { className: "froam-review__who", children: [_jsx("b", { children: "Tap anything you want changed" }), _jsx("span", { children: notes.length ? `${notes.length} note${notes.length === 1 ? '' : 's'} so far` : 'Your notes go straight to them' })] }), _jsx("button", { type: "button", className: "froam-review__go", onClick: () => setCommenting(false), children: "Done" })] })) : (_jsxs("div", { className: `froam-review__bar${movingTo ? ' is-moving' : ''}`, children: [_jsx("span", { className: `froam-review__dot${following ? ' is-live' : ''}`, "aria-hidden": "true" }), _jsxs("div", { className: "froam-review__who", children: [_jsx("b", { children: label }), _jsx("span", { children: following ? 'They are showing you the site' : `${room.present.length + 1} here` })] }), paused && room.someoneElseIsPresenting && !movingTo && (_jsx("button", { type: "button", className: "froam-review__ghost", onClick: () => setPaused(false), children: "Rejoin" })), canComment && !pending && (_jsx("button", { type: "button", className: "froam-review__go", onClick: () => setCommenting(true), children: notes.length ? `Notes · ${notes.length}` : 'Comment' })), canComment && pending && (_jsxs(_Fragment, { children: [_jsx("button", { type: "button", className: "froam-review__ghost", onClick: () => setCommenting(true), children: notes.length ? `Notes · ${notes.length}` : 'Comment' }), _jsx("button", { type: "button", className: "froam-review__go", onClick: () => setAsked(true), children: "Review" })] }))] })) }));
+    if (chatting) {
+        return (_jsx("div", { className: "froam-review", "data-chef-editor-root": "true", children: _jsxs("div", { className: "froam-review__sheet", children: [_jsxs("div", { className: "froam-review__row", children: [_jsx("strong", { className: "froam-review__label", children: "Room chat" }), _jsx("button", { type: "button", className: "froam-review__ghost", onClick: () => setChatting(false), children: "Close" })] }), _jsx(FroamRoomChat, { client: room.client, events: room.events, role: room.role })] }) }));
+    }
+    return (_jsx("div", { className: "froam-review", "data-chef-editor-root": "true", children: commenting ? (_jsxs("div", { className: "froam-review__bar is-commenting", children: [_jsxs("div", { className: "froam-review__who", children: [_jsx("b", { children: "Tap anything you want changed" }), _jsx("span", { children: notes.length ? `${notes.length} note${notes.length === 1 ? '' : 's'} so far` : 'Your notes go straight to them' })] }), _jsx("button", { type: "button", className: "froam-review__go", onClick: () => setCommenting(false), children: "Done" })] })) : (_jsxs("div", { className: `froam-review__bar${movingTo ? ' is-moving' : ''}`, children: [_jsx("span", { className: `froam-review__dot${following ? ' is-live' : ''}`, "aria-hidden": "true" }), _jsxs("div", { className: "froam-review__who", children: [_jsx("b", { children: label }), _jsx("span", { children: following ? 'They are showing you the site' : `${room.present.length + 1} here` })] }), paused && room.someoneElseIsPresenting && !movingTo && (_jsx("button", { type: "button", className: "froam-review__ghost", onClick: () => setPaused(false), children: "Rejoin" })), _jsx("button", { type: "button", className: "froam-review__ghost", onClick: () => setChatting(true), children: "Chat" }), canComment && !pending && (_jsx("button", { type: "button", className: "froam-review__go", onClick: () => setCommenting(true), children: notes.length ? `Notes · ${notes.length}` : 'Comment' })), canComment && pending && (_jsxs(_Fragment, { children: [_jsx("button", { type: "button", className: "froam-review__ghost", onClick: () => setCommenting(true), children: notes.length ? `Notes · ${notes.length}` : 'Comment' }), _jsx("button", { type: "button", className: "froam-review__go", onClick: () => setAsked(true), children: "Review" })] }))] })) }));
 }
 //# sourceMappingURL=FroamReview.js.map

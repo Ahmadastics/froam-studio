@@ -32,10 +32,17 @@ function res() {
   }
 }
 
+const memberSessions = new Map()
+
 async function call(api, method, url, body) {
   const r = res()
-  const handled = await api({ method, url, body }, r)
-  return { handled, status: r.statusCode, ...JSON.parse(r.body || '{}') }
+  const authenticatedBody = body?.actor && !body.session && memberSessions.has(body.actor)
+    ? { ...body, session: memberSessions.get(body.actor) }
+    : body
+  const handled = await api({ method, url, body: authenticatedBody }, r)
+  const payload = { handled, status: r.statusCode, ...JSON.parse(r.body || '{}') }
+  if (payload.you?.actor && payload.you?.session) memberSessions.set(payload.you.actor, payload.you.session)
+  return payload
 }
 
 const open = (api, name = 'Ahmad') => call(api, 'POST', '/api/froam/rooms', { name })
@@ -118,6 +125,19 @@ test('a guest link cannot demote the owner on rejoin', async () => {
     token: invites.viewer, name: 'Ahmad', actor: created.you.actor,
   })
   assert.equal(rejoined.you.role, 'owner', 'role comes from the membership, not the link you happened to click')
+})
+
+test('an actor id without its member session cannot impersonate the owner', async () => {
+  const { api } = await freshApi()
+  const created = await open(api)
+  const joined = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, {
+    token: created.invites.commenter,
+    name: 'Mallory',
+    actor: created.you.actor,
+    session: 'not-the-owner-session',
+  })
+  assert.notEqual(joined.you.actor, created.you.actor)
+  assert.equal(joined.you.role, 'commenter')
 })
 
 test('presence says who is here', async () => {
@@ -466,6 +486,140 @@ test('revisions come back newest first, per page', async () => {
   const home = await call(api, 'GET', `/api/froam/rooms/${id}/revisions?token=${created.invites.owner}&routeKey=%2F`)
   assert.equal(home.revisions.length, 2)
   assert.ok(home.revisions[0].createdAt > home.revisions[1].createdAt, 'the current question first')
+})
+
+/* ── v6 ordered ops, authority, chat and replay ── */
+
+function edit(actor, id, after, field = 'style:color') {
+  return {
+    id, kind: 'edit', actor, clock: 1, ts: now(), routeKey: '/', viewport: 'desktop',
+    path: 'main:1/h1:1', field, before: undefined, after, label: 'Colour', batch: id,
+  }
+}
+
+test('the room assigns a canonical order and replays it by cursor', async () => {
+  const { api } = await freshApi()
+  const created = await open(api)
+  const first = edit(created.you.actor, 'owner-red', 'red')
+  const pushed = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/ops`, {
+    token: created.invites.owner, actor: created.you.actor, baseSeq: 0, ops: [first],
+  })
+  assert.equal(pushed.accepted[0].clock, 1, 'server sequence is the canonical Lamport clock')
+
+  const replay = await call(api, 'GET', `/api/froam/rooms/${created.room.id}/events?token=${created.invites.viewer}&after=0`)
+  assert.deepEqual(replay.events.map((event) => event.seq), [1])
+  const caughtUp = await call(api, 'GET', `/api/froam/rooms/${created.room.id}/events?token=${created.invites.viewer}&after=${replay.cursor}`)
+  assert.deepEqual(caughtUp.events, [])
+})
+
+test('the owner wins a genuinely concurrent field conflict, but not a later causal edit', async () => {
+  const { api } = await freshApi()
+  const created = await open(api)
+  const guest = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, {
+    token: created.invites.editor, name: 'Zainab',
+  })
+  await call(api, 'POST', `/api/froam/rooms/${created.room.id}/ops`, {
+    token: created.invites.owner, actor: created.you.actor, baseSeq: 0,
+    ops: [edit(created.you.actor, 'owner-green', 'green')],
+  })
+  const concurrent = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/ops`, {
+    token: created.invites.editor, actor: guest.you.actor, baseSeq: 0,
+    ops: [edit(guest.you.actor, 'guest-blue', 'blue')],
+  })
+  assert.deepEqual(concurrent.rejected.map((item) => item.reason), ['higher-authority-concurrent-write'])
+
+  const later = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/ops`, {
+    token: created.invites.editor, actor: guest.you.actor, baseSeq: 1,
+    ops: [edit(guest.you.actor, 'guest-after-seeing', 'blue')],
+  })
+  assert.equal(later.accepted.length, 1, 'rank never beats a change made after seeing the owner write')
+})
+
+test('commenters cannot push design operations', async () => {
+  const { api } = await freshApi()
+  const created = await open(api)
+  const guest = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, {
+    token: created.invites.commenter, name: 'Amina',
+  })
+  const denied = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/ops`, {
+    token: created.invites.commenter, actor: guest.you.actor, baseSeq: 0,
+    ops: [edit(guest.you.actor, 'commenter-edit', 'pink')],
+  })
+  assert.equal(denied.status, 403)
+})
+
+test('room chat is ephemeral conversation on the same event stream', async () => {
+  const { api } = await freshApi()
+  const created = await open(api)
+  const guest = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, {
+    token: created.invites.commenter, name: 'Amina',
+  })
+  const sent = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/chat`, {
+    token: created.invites.commenter, actor: guest.you.actor, body: 'Try the quieter green',
+  })
+  assert.equal(sent.message.name, 'Amina')
+  const messages = await call(api, 'GET', `/api/froam/rooms/${created.room.id}/chat?token=${created.invites.commenter}&actor=${guest.you.actor}&session=${guest.you.session}`)
+  assert.deepEqual(messages.messages.map((message) => message.body), ['Try the quieter green'])
+  const events = await call(api, 'GET', `/api/froam/rooms/${created.room.id}/events?token=${created.invites.viewer}&after=0`)
+  assert.equal(events.events.at(-1).type, 'chat')
+})
+
+test('the live stream wakes a connected room without carrying mutable state itself', async () => {
+  const { api } = await freshApi()
+  const created = await open(api)
+  const frames = []
+  let closeStream = () => {}
+  const request = {
+    method: 'GET',
+    url: `/api/froam/rooms/${created.room.id}/stream?token=${created.invites.viewer}`,
+    on(event, listener) { if (event === 'close') closeStream = listener },
+  }
+  const response = {
+    statusCode: 0,
+    setHeader() {},
+    flushHeaders() {},
+    write(frame) { frames.push(frame) },
+    on() {},
+  }
+  assert.equal(await api(request, response), true)
+
+  const guest = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, {
+    token: created.invites.commenter, name: 'Amina',
+  })
+  await call(api, 'POST', `/api/froam/rooms/${created.room.id}/chat`, {
+    token: created.invites.commenter, actor: guest.you.actor, body: 'Wake the room',
+  })
+  assert.ok(frames.some((frame) => frame.includes('event: room')))
+  assert.ok(frames.every((frame) => !frame.includes('Wake the room')), 'the durable event endpoint remains the source of truth')
+  closeStream()
+})
+
+test('a guest-editor cross-user undo becomes a proposal the owner decides', async () => {
+  const { api } = await freshApi()
+  const created = await open(api)
+  const guest = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, {
+    token: created.invites.editor, name: 'Zainab',
+  })
+  const ownerEdit = edit(created.you.actor, 'owner-radius', '20px', 'style:borderRadius')
+  await call(api, 'POST', `/api/froam/rooms/${created.room.id}/ops`, {
+    token: created.invites.owner, actor: created.you.actor, baseSeq: 0, ops: [ownerEdit],
+  })
+  const requested = {
+    ...ownerEdit, id: 'guest-undo-owner', kind: 'undo', actor: guest.you.actor,
+    before: '20px', after: undefined, targets: ownerEdit.id,
+  }
+  const proposed = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/ops`, {
+    token: created.invites.editor, actor: guest.you.actor, baseSeq: 1, ops: [requested],
+  })
+  assert.deepEqual(proposed.rejected.map((item) => item.reason), ['owner-approval-required'])
+
+  const listed = await call(api, 'GET', `/api/froam/rooms/${created.room.id}/proposals?token=${created.invites.owner}&actor=${created.you.actor}&session=${created.you.session}`)
+  assert.equal(listed.proposals[0].status, 'pending')
+  const decided = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/proposals/${listed.proposals[0].id}/decision`, {
+    token: created.invites.owner, actor: created.you.actor, decision: 'approved',
+  })
+  assert.equal(decided.proposal.status, 'approved')
+  assert.equal(decided.accepted[0].actor, created.you.actor, 'the enactment belongs to the owner who allowed it')
 })
 
 let failed = 0

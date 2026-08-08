@@ -1,6 +1,11 @@
 # Froam Rooms — roadmap to v6
 
-**Where we are:** v4.9.3 · **Where this goes:** v6, more than one person in a design.
+**Where we are:** v6.1.0 · **Status:** shipped — more than one person can now work in a design.
+
+The roadmap is retained below as the architectural record. Phase 0 and the
+v5 review track shipped first; v6.0/v6.1 complete the same room with ordered
+multi-writer ops, presence, cursors, soft locks, room chat, reconnect replay,
+authority-aware conflicts and structural edits carried by the shared op log.
 
 The v6 goal in one sentence: **two or more people open the same Froam design
 from different devices — whether that's a designer and their client, or two

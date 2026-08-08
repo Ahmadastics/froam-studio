@@ -2,6 +2,38 @@
 
 All notable changes to froam-studio are documented here.
 
+## 6.1.0 — 2026-08-08
+
+**Froam Rooms is complete.** The review room introduced across v5 is now the
+same room two designers can edit together. The page remains owned by the host
+repo; only Froam's small design and collaboration layers travel over the wire.
+
+### Added
+- Server-ordered, idempotent operation streaming with cursor replay and an
+  offline-first client queue. Reconnects start from the room log and duplicate
+  submissions stay singular.
+- Studio invites, live member presence, selection halos, cursors and soft locks.
+- Authority-aware conflict handling: a concurrent owner write wins; an editor
+  may still make a later change after observing it.
+- Cross-user undo proposals. Guest editors propose; owners approve or decline;
+  an approved revert is attributed to the owner who enacted it.
+- Ephemeral room chat, distinct from persistent anchored review comments.
+- Structural edit metadata on ordinary field ops, allowing insert, move,
+  delete and wrap changes to travel through the same ordered log.
+- Optimistic-concurrency support in the reusable room storage contract, used by
+  the Run'Am reference host to avoid lost serverless writes.
+
+### Security
+- Room identities now receive a per-member session credential. A public actor
+  id is no longer sufficient to impersonate another member.
+- Op payloads, cursors, fields, roles and batch sizes are validated server-side.
+
+### Changed
+- Review, comments and revisions receive room events immediately; polling is a
+  reconnect fallback rather than the source of truth.
+- The package version now reflects the collaboration architecture already
+  developed through the v5 commits.
+
 ## 4.9.3 — 2026-07-29
 
 **A save reaches everywhere.** Publishing already worked end to end — client,
