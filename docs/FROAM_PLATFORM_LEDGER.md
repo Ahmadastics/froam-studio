@@ -1,5 +1,40 @@
 # Froam Platform Implementation Ledger
 
+## v8.0.4 — Personal Froam and expressive motion
+
+- **Completed systems:** versioned browser-local UI preferences; right-click
+  UI customizer; toolbar top/bottom placement; attached/floating navigation;
+  standard/mirrored panels; panel sizing; compact/comfortable density; UI
+  scale; label visibility; surface and accent selection; 34 searchable Animator
+  quick motions; shared preset-to-interaction adapter; Gravity force diagram,
+  strength/radius controls and temporary live preview.
+- **Partially completed systems:** the interaction runtime continues to support
+  only the compiler/runtime targets already implemented. Preset authoring is
+  broader, but not every possible host trigger or physical relationship has a
+  production runtime adapter yet.
+- **Experimental prototypes:** Interaction Library, Design Physics and UI
+  Gravity remain independently flagged and disabled by default. Their visible
+  previews are real and deterministic, but the maturity label has not changed.
+- **Architecture-only foundations:** animation quick options adapt into the
+  shared `FroamInteraction` model; no parallel behavior format was introduced.
+- **Research-only features:** unchanged; Reality, external Sampling and other
+  previously bounded experiments were not promoted by this release.
+- **Migrations introduced:** none. UI preference version 1 is separate from the
+  project envelope; project schema remains v2 and legacy path output is intact.
+- **Tests added:** UI preference sanitization/persistence/quota tolerance,
+  motion family/catalog coverage, preset interaction adaptation, right-click
+  customizer reachability and Physics preview wiring. Existing deterministic
+  Gravity tests cover direction and Lab-only safeguards.
+- **Known limitations:** Gravity still needs an explicit runtime target/host
+  relationship for deployed multi-object force behavior; preview uses a safe,
+  temporary Web Animations effect on the current selection. UI customization is
+  local to the browser by design and does not sync through project Rooms.
+- **Architectural decisions:** editor chrome preferences never mutate canvas
+  content; animation and Interaction Library share one preset vocabulary;
+  physical preview and persisted metadata use the same `gravityForce` inputs.
+- **Remaining work:** harden additional host runtime adapters and relationship
+  pickers before promoting Gravity or the Interaction Library from Experimental.
+
 ## v8.0.3 — Connected structure workspace
 
 - **Completed:** Plan/Layers reorganized as Build/Outline; selection-aware

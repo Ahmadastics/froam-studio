@@ -4,12 +4,16 @@
 
 /* ─── WRAPPER: full-frame layout when editor is active ─── */
 .froam-figma-layout {
+  --froam-left-width: 240px;
+  --froam-planner-width: 420px;
+  --froam-inspector-width: 300px;
+  --froam-ui-scale: 1;
   position: fixed;
   inset: 0;
   z-index: 1188;
   display: grid;
-  grid-template-rows: 86px 1fr;
-  grid-template-columns: 240px 1fr 300px;
+  grid-template-rows: calc(86px * var(--froam-ui-scale)) 1fr;
+  grid-template-columns: var(--froam-left-width) 1fr var(--froam-inspector-width);
   grid-template-areas:
     "toolbar toolbar toolbar"
     "layers  canvas  design";
@@ -21,11 +25,11 @@
 }
 
 .froam-figma-layout.is-planning {
-  grid-template-columns: minmax(320px, 420px) 1fr 300px;
+  grid-template-columns: minmax(320px, var(--froam-planner-width)) 1fr var(--froam-inspector-width);
 }
 
 .froam-figma-layout.is-left-collapsed {
-  grid-template-columns: 0 minmax(0, 1fr) 300px;
+  grid-template-columns: 0 minmax(0, 1fr) var(--froam-inspector-width);
 }
 
 .froam-figma-layout.is-right-collapsed {
@@ -33,7 +37,7 @@
 }
 
 .froam-figma-layout.is-planning.is-right-collapsed {
-  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr) 0;
+  grid-template-columns: minmax(320px, var(--froam-planner-width)) minmax(0, 1fr) 0;
 }
 
 .froam-figma-layout.is-left-collapsed.is-right-collapsed,
@@ -42,17 +46,33 @@
 }
 
 .froam-figma-layout.has-context-inspector {
-  grid-template-columns: 240px minmax(0, 1fr) 382px;
+  grid-template-columns: var(--froam-left-width) minmax(0, 1fr) max(382px, var(--froam-inspector-width));
 }
 
 .froam-figma-layout.is-planning.has-context-inspector {
-  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr) 382px;
+  grid-template-columns: minmax(320px, var(--froam-planner-width)) minmax(0, 1fr) max(382px, var(--froam-inspector-width));
 }
 
 .froam-figma-layout.is-left-collapsed.has-context-inspector,
 .froam-figma-layout.is-planning.is-left-collapsed.has-context-inspector {
-  grid-template-columns: 0 minmax(0, 1fr) 382px;
+  grid-template-columns: 0 minmax(0, 1fr) max(382px, var(--froam-inspector-width));
 }
+
+.froam-figma-layout.is-toolbar-bottom { grid-template-rows:1fr calc(86px * var(--froam-ui-scale)); grid-template-areas:"layers canvas design" "toolbar toolbar toolbar"; }
+.froam-figma-layout.is-panels-mirrored { grid-template-columns: var(--froam-inspector-width) 1fr var(--froam-left-width); grid-template-areas:"toolbar toolbar toolbar" "design canvas layers"; }
+.froam-figma-layout.is-panels-mirrored.is-toolbar-bottom { grid-template-areas:"design canvas layers" "toolbar toolbar toolbar"; }
+.froam-figma-layout.is-panels-mirrored.is-planning { grid-template-columns:var(--froam-inspector-width) 1fr minmax(320px,var(--froam-planner-width)); }
+.froam-figma-layout.is-panels-mirrored.is-left-collapsed { grid-template-columns:var(--froam-inspector-width) minmax(0,1fr) 0; }
+.froam-figma-layout.is-panels-mirrored.is-right-collapsed { grid-template-columns:0 minmax(0,1fr) var(--froam-left-width); }
+.froam-figma-layout.is-panels-mirrored.is-planning.is-right-collapsed { grid-template-columns:0 minmax(0,1fr) minmax(320px,var(--froam-planner-width)); }
+.froam-figma-layout.is-panels-mirrored.is-left-collapsed.is-right-collapsed { grid-template-columns:0 minmax(0,1fr) 0; }
+.froam-figma-layout.is-panels-mirrored.has-context-inspector { grid-template-columns:max(382px,var(--froam-inspector-width)) minmax(0,1fr) var(--froam-left-width); }
+.froam-figma-layout.is-panels-mirrored.is-planning.has-context-inspector { grid-template-columns:max(382px,var(--froam-inspector-width)) minmax(0,1fr) minmax(320px,var(--froam-planner-width)); }
+.froam-figma-layout.is-panels-mirrored.is-left-collapsed.has-context-inspector { grid-template-columns:max(382px,var(--froam-inspector-width)) minmax(0,1fr) 0; }
+
+.froam-figma-layout > .froam-chrome,.froam-figma-layout > .froam-figma-left,.froam-figma-layout > .froam-figma-design { zoom:var(--froam-ui-scale); }
+.froam-figma-layout > .froam-chrome { transform-origin:top center; }
+.froam-figma-layout.is-toolbar-bottom > .froam-chrome { transform-origin:bottom center; }
 
 .froam-figma-layout > * {
   pointer-events: auto;

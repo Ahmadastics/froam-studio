@@ -18,9 +18,14 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
+  max-height: 430px;
+  overflow: auto;
 }
 .fs-animator__template-btn {
-  padding: 6px 10px;
+  display: grid;
+  gap: 3px;
+  min-height: 70px;
+  padding: 8px 9px;
   font-size: 0.72rem;
   font-weight: 600;
   border-radius: var(--fs-radius-sm);
@@ -31,6 +36,14 @@
   transition: all var(--fs-transition-fast);
   text-align: left;
 }
+.fs-animator__template-btn strong { color: var(--fs-text-primary); font-size: .72rem; }
+.fs-animator__template-btn small { color: var(--fs-accent-control); font-size: .55rem; text-transform: uppercase; }
+.fs-animator__template-btn span { color: var(--fs-text-tertiary); font-size: .61rem; line-height: 1.35; }
+.fs-animator__preset-search { display:flex;align-items:center;gap:6px;padding:7px 8px;border:1px solid var(--fs-border);border-radius:7px;color:var(--fs-text-tertiary);background:rgba(0,0,0,.14) }
+.fs-animator__preset-search input { min-width:0;flex:1;border:0;outline:0;background:transparent;color:var(--fs-text-primary);font:inherit;font-size:.7rem }
+.fs-animator__preset-categories { display:flex;gap:4px;overflow:auto;scrollbar-width:none }
+.fs-animator__preset-categories button { flex:0 0 auto;padding:4px 7px;border:1px solid var(--fs-border);border-radius:999px;background:transparent;color:var(--fs-text-tertiary);font:inherit;font-size:.58rem;cursor:pointer }
+.fs-animator__preset-categories button.is-active { border-color:rgba(var(--fs-accent-control-rgb),.3);background:rgba(var(--fs-accent-control-rgb),.12);color:var(--fs-text-primary) }
 .fs-animator__template-btn:hover {
   background: var(--fs-bg-hover);
   border-color: var(--fs-border-hover);

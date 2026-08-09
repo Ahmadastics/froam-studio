@@ -1,5 +1,12 @@
 # Froam Rooms — roadmap to v6
 
+> **v8.0.4 status (2026-08-09):** Froam UI can be arranged from the canvas
+> right-click menu without modifying project output. Animator has 34 searchable
+> quick motions; the Interaction Library consumes the same preset vocabulary;
+> Physics/Gravity exposes strength, radius, direction and live attract/repel
+> previews before deterministic compilation. Experimental flags remain honest
+> and off by default.
+
 > **v8.0.3 status (2026-08-09):** the v2-era Plan/Layers surface is now a
 > connected Build/Outline workspace. Plans project into shared graph/history,
 > Archive reuse and quick insertion live beside the catalog, and the live DOM

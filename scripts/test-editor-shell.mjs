@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 import { defaultFroamLabsFlags } from '../dist/project/experiments.js'
+import { animationPresetInteraction, FROAM_ANIMATION_PRESETS } from '../dist/editor/FroamAnimationPresets.js'
+import { DEFAULT_FROAM_UI_PREFERENCE, froamUIPanelWidth, readFroamUIPreference, sanitizeFroamUIPreference, writeFroamUIPreference } from '../dist/editor/froamUIPreferences.js'
 import {
   FROAM_WORKSPACE_MODES,
   readWorkspacePreference,
@@ -77,6 +79,39 @@ test('command search understands user-facing aliases', () => {
   const breakpoint = workspaceSections('understand', defaultFroamLabsFlags(), true).find(({ id }) => id === 'responsive')
   assert.equal(workspaceCommandMatches(breakpoint, 'breakpoint cinema'), true)
   assert.equal(workspaceCommandMatches(breakpoint, 'mutagen'), false)
+})
+
+test('Froam UI preferences are versioned, recoverable, and quota tolerant', () => {
+  const values = new Map()
+  const storage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) }
+  const custom = sanitizeFroamUIPreference({ toolbar: 'bottom', workspace: 'floating-bottom', panels: 'mirrored', accent: 'violet', scale: 1.1, labels: false })
+  assert.equal(writeFroamUIPreference(storage, custom), true)
+  assert.deepEqual(readFroamUIPreference(storage), custom)
+  assert.equal(sanitizeFroamUIPreference({ toolbar: 'sideways' }).toolbar, DEFAULT_FROAM_UI_PREFERENCE.toolbar)
+  assert.equal(froamUIPanelWidth('wide', 'inspector'), 380)
+  assert.equal(writeFroamUIPreference({ setItem: () => { throw new Error('quota') } }, custom), false)
+})
+
+test('quick motion catalog covers reusable motion families', () => {
+  assert.ok(FROAM_ANIMATION_PRESETS.length >= 25)
+  assert.deepEqual(new Set(FROAM_ANIMATION_PRESETS.map(({ category }) => category)), new Set(['Entrance', 'Reveal', 'Emphasis', 'Motion', 'Exit']))
+  const interaction = animationPresetInteraction(FROAM_ANIMATION_PRESETS.find(({ id }) => id === 'button-press'), 'node:button')
+  assert.equal(interaction.sourceId, 'node:button')
+  assert.deepEqual(interaction.targetIds, ['node:button'])
+  assert.equal(interaction.trigger, 'click')
+  assert.ok(interaction.timeline.length >= 2)
+})
+
+test('right click exposes UI customization and labs expose force preview', () => {
+  const menu = fs.readFileSync(new URL('../src/editor/FroamContextMenu.tsx', import.meta.url), 'utf8')
+  const customizer = fs.readFileSync(new URL('../src/editor/FroamUICustomizer.tsx', import.meta.url), 'utf8')
+  const labs = fs.readFileSync(new URL('../src/editor/FroamLabs.tsx', import.meta.url), 'utf8')
+  assert.match(menu, /Customize Froam UI/)
+  assert.match(customizer, /Make Froam yours/)
+  assert.match(customizer, /role="dialog"/)
+  assert.match(labs, /previewGravity/)
+  assert.match(labs, /gravityStrength/)
+  assert.match(labs, /Quick behaviors/)
 })
 
 test('keyboard, mobile, reduced-motion, and legacy surfaces stay reachable', () => {

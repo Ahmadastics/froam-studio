@@ -1,5 +1,22 @@
 # Changelog
 
+## 8.0.4 - 2026-08-09
+
+**Personal Froam + expressive motion.** Right-click now opens a versioned UI
+customizer for toolbar position, attached or floating workspace navigation,
+panel sides and widths, density, scale, labels, surface and accent. Preferences
+are browser-local, recover safely from invalid data or quota pressure, and do
+not enter the project or alter generated output.
+
+Animator now offers 34 searchable motions across Entrance, Reveal, Emphasis,
+Motion and Exit. The experimental Interaction Library can apply the shared
+presets directly to the selected stable node. Design Physics now explains each
+Gravity mode, exposes force and radius, draws the direction, previews the force
+temporarily on the live selection, and compiles the same deterministic values
+into the shared interaction model. Attract and repel are tested as opposite
+vectors. Existing live-DOM editing, Blueprint, collaboration, undo/redo and
+path-based selectors are unchanged.
+
 ## 8.0.3 - 2026-08-09
 
 **Connected structure workspace.** The legacy Plan/Layers pair is now Build/

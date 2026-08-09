@@ -11,6 +11,7 @@ import {
   Trash2,
   Box,
   ImagePlus,
+  SlidersHorizontal,
 } from 'lucide-react'
 
 type ContextAction =
@@ -26,6 +27,7 @@ type ContextAction =
   | 'upload-image'
   | 'group-elements'
   | 'ungroup-elements'
+  | 'customize-ui'
 
 type Props = {
   position: { x: number; y: number } | null
@@ -126,6 +128,16 @@ export default function FroamContextMenu({
           <ClipboardPaste size={14} />
           <span>Paste styles</span>
           <kbd>Ctrl+Alt+V</kbd>
+        </button>
+      </div>
+
+      <div className="froam-context-menu__divider" />
+
+      <div className="froam-context-menu__group">
+        <button type="button" className="froam-context-menu__item is-froam-action" onClick={() => handleAction('customize-ui')}>
+          <SlidersHorizontal size={14} />
+          <span>Customize Froam UI</span>
+          <kbd>Studio</kbd>
         </button>
       </div>
 

@@ -10,10 +10,12 @@ import {
   Zap,
   Clock,
   MoveHorizontal,
+  Search,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { legacyAnimatorToInteraction } from '../project/animator-adapter'
 import type { FroamInteraction } from '../project/types'
+import { FROAM_ANIMATION_PRESETS, type FroamAnimationCategory, type FroamAnimationPreset } from './FroamAnimationPresets'
 
 /* ═══════════════════════════════════════════════════════════════
    Types
@@ -85,7 +87,7 @@ const EASING_PRESETS: { label: string; value: string }[] = [
   { label: 'Smooth', value: 'cubic-bezier(0.4, 0, 0.2, 1)' },
 ]
 
-const TEMPLATE_ANIMATIONS: { label: string; config: Partial<AnimationConfig> }[] = [
+const LEGACY_TEMPLATE_ANIMATIONS: { label: string; config: Partial<AnimationConfig> }[] = [
   {
     label: 'Fade In',
     config: {
@@ -186,6 +188,12 @@ const TEMPLATE_ANIMATIONS: { label: string; config: Partial<AnimationConfig> }[]
   },
 ]
 
+const TEMPLATE_ANIMATIONS: FroamAnimationPreset[] = [
+  ...LEGACY_TEMPLATE_ANIMATIONS.map((preset, index) => ({ id: `essential-${index}`, category: 'Entrance' as const, description: 'Froam essential', ...preset })),
+  ...FROAM_ANIMATION_PRESETS,
+]
+const TEMPLATE_CATEGORIES: Array<'All' | FroamAnimationCategory> = ['All', 'Entrance', 'Reveal', 'Emphasis', 'Motion', 'Exit']
+
 /* ═══════════════════════════════════════════════════════════════
    Helpers
    ═══════════════════════════════════════════════════════════════ */
@@ -237,6 +245,8 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
   const [previewing, setPreviewing] = useState(false)
   const [expandedKeyframe, setExpandedKeyframe] = useState<string | null>(null)
   const [showTemplates, setShowTemplates] = useState(true)
+  const [templateSearch, setTemplateSearch] = useState('')
+  const [templateCategory, setTemplateCategory] = useState<'All' | FroamAnimationCategory>('All')
   const previewTimerRef = useRef<number>(0)
   const mountedRef = useRef(true)
 
@@ -358,7 +368,7 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
     onToast('Animation applied')
   }, [config, onApplyAnimation, onToast])
 
-  const loadTemplate = useCallback((tpl: typeof TEMPLATE_ANIMATIONS[number]) => {
+  const loadTemplate = useCallback((tpl: FroamAnimationPreset) => {
     const base = defaultConfig()
     setConfig({ ...base, ...tpl.config, keyframes: tpl.config.keyframes ?? base.keyframes })
     setShowTemplates(false)
@@ -372,6 +382,11 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
   }, [config, onToast])
 
   const sortedKeyframes = [...config.keyframes].sort((a, b) => a.offset - b.offset)
+  const filteredTemplates = TEMPLATE_ANIMATIONS.filter((template) => {
+    const query = templateSearch.trim().toLowerCase()
+    return (templateCategory === 'All' || template.category === templateCategory)
+      && (!query || `${template.label} ${template.description} ${template.category}`.toLowerCase().includes(query))
+  })
 
   return (
     <div className="fs-animator" data-chef-editor-root="true">
@@ -385,17 +400,19 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
         <div className="fs-animator__templates">
           <div className="fs-export__section-title" style={{ marginBottom: 6 }}>
             <Zap size={12} />
-            Quick Templates
+            {TEMPLATE_ANIMATIONS.length} Quick motions
           </div>
+          <label className="fs-animator__preset-search"><Search size={12}/><input value={templateSearch} onChange={(event) => setTemplateSearch(event.target.value)} placeholder="Search motion…"/></label>
+          <div className="fs-animator__preset-categories">{TEMPLATE_CATEGORIES.map((item) => <button type="button" key={item} className={templateCategory === item ? 'is-active' : ''} onClick={() => setTemplateCategory(item)}>{item}</button>)}</div>
           <div className="fs-animator__template-grid">
-            {TEMPLATE_ANIMATIONS.map((tpl) => (
+            {filteredTemplates.map((tpl) => (
               <button
-                key={tpl.label}
+                key={tpl.id}
                 type="button"
                 className="fs-animator__template-btn"
                 onClick={() => loadTemplate(tpl)}
               >
-                {tpl.label}
+                <strong>{tpl.label}</strong><small>{tpl.category} · {tpl.config.duration ?? 600}ms</small><span>{tpl.description}</span>
               </button>
             ))}
           </div>
@@ -583,6 +600,9 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
             </button>
             <button type="button" className="fs-pill" onClick={() => { setConfig(defaultConfig()); setShowTemplates(true) }}>
               <RotateCw size={12} /> Reset
+            </button>
+            <button type="button" className="fs-pill" onClick={() => setShowTemplates(true)}>
+              <Zap size={12} /> Motions
             </button>
           </div>
         </>

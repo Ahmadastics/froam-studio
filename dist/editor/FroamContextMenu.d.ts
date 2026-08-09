@@ -1,4 +1,4 @@
-type ContextAction = 'copy-styles' | 'paste-styles' | 'duplicate' | 'clear' | 'delete-element' | 'bring-to-front' | 'send-to-back' | 'toggle-visibility' | 'wrap-container' | 'upload-image' | 'group-elements' | 'ungroup-elements';
+type ContextAction = 'copy-styles' | 'paste-styles' | 'duplicate' | 'clear' | 'delete-element' | 'bring-to-front' | 'send-to-back' | 'toggle-visibility' | 'wrap-container' | 'upload-image' | 'group-elements' | 'ungroup-elements' | 'customize-ui';
 type Props = {
     position: {
         x: number;

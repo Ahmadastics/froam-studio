@@ -115,6 +115,8 @@ import FroamConnectedCanvas, { type FroamConnectedCanvasTab } from './FroamConne
 import FroamIntelligence, { type FroamIntelligenceTab } from './FroamIntelligence'
 import FroamLabs, { type FroamLab } from './FroamLabs'
 import FroamWorkspaceShell from './FroamWorkspaceShell'
+import FroamUICustomizer from './FroamUICustomizer'
+import { froamUIPanelWidth, readFroamUIPreference, writeFroamUIPreference } from './froamUIPreferences'
 import { FROAM_WORKSPACE_SECTIONS, readWorkspacePreference, workspaceCommandMatches, writeWorkspacePreference, type FroamTemporalOwner, type FroamWorkspaceMode, type FroamWorkspaceSection } from './workspace-shell-model'
 import { readFroamLabsFlags, writeFroamLabsFlags } from '../project/experiments'
 import { appendProjectEvents, createProjectEvent, deriveBranchState, switchProjectBranch } from '../project/event-log'
@@ -1700,6 +1702,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   })
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [workspacePreference, setWorkspacePreference] = useState(() => readWorkspacePreference(typeof localStorage === 'undefined' ? undefined : localStorage))
+  const [uiPreference, setUIPreference] = useState(() => readFroamUIPreference(typeof localStorage === 'undefined' ? undefined : localStorage))
+  const [uiCustomizerOpen, setUICustomizerOpen] = useState(false)
   const [leftWorkspaceMode, setLeftWorkspaceMode] = useState<'plan' | 'layers'>(() => workspacePreference.sections.create === 'layers' ? 'layers' : 'plan')
   // v4: phone-first editing — compact chrome on small viewports, touch behaviors on coarse pointers
   const isMobileUI = useMediaQuery(MOBILE_UI_QUERY)
@@ -1730,6 +1734,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [measureRect, setMeasureRect] = useState<DOMRect | null>(null)
 
   useEffect(() => { writeWorkspacePreference(typeof localStorage === 'undefined' ? undefined : localStorage, workspacePreference) }, [workspacePreference])
+  useEffect(() => { writeFroamUIPreference(typeof localStorage === 'undefined' ? undefined : localStorage, uiPreference) }, [uiPreference])
+  useEffect(() => {
+    if (!portalContainer) return
+    portalContainer.dataset.froamUiAppearance = uiPreference.appearance
+    portalContainer.dataset.froamUiAccent = uiPreference.accent
+    portalContainer.dataset.froamUiDensity = uiPreference.density
+    portalContainer.dataset.froamUiLabels = uiPreference.labels ? 'shown' : 'hidden'
+  }, [portalContainer, uiPreference])
   useEffect(() => { writeFroamLabsFlags(typeof localStorage === 'undefined' ? undefined : localStorage, labsFlags) }, [labsFlags])
 
   // v4: New feature state
@@ -5843,7 +5855,16 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             leftPanelOpen ? '' : 'is-left-collapsed',
             connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen ? 'has-context-inspector' : '',
             (workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen ? '' : 'is-right-collapsed',
+            `is-toolbar-${uiPreference.toolbar}`,
+            `is-workspace-${uiPreference.workspace}`,
+            `is-panels-${uiPreference.panels}`,
           ].filter(Boolean).join(' ')}
+          style={{
+            '--froam-left-width': `${froamUIPanelWidth(uiPreference.leftSize, 'left')}px`,
+            '--froam-planner-width': `${Math.max(320, froamUIPanelWidth(uiPreference.leftSize, 'left') + 150)}px`,
+            '--froam-inspector-width': `${froamUIPanelWidth(uiPreference.inspectorSize, 'inspector')}px`,
+            '--froam-ui-scale': uiPreference.scale,
+          } as React.CSSProperties}
           data-chef-editor-root="true"
         >
           <FroamSectionBoundary name="Toolbar">
@@ -7978,9 +7999,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             }
             case 'wrap-container': actionsRef.current.wrapInContainer(); break
             case 'upload-image': actionsRef.current.openSelectedImageUpload(); break
+            case 'customize-ui': setUICustomizerOpen(true); break
           }
         }}
         onClose={() => setContextMenuPos(null)}
+      />
+
+      <FroamUICustomizer
+        open={uiCustomizerOpen}
+        value={uiPreference}
+        onChange={setUIPreference}
+        onClose={() => setUICustomizerOpen(false)}
       />
 
       {/* v4: Smart guides */}

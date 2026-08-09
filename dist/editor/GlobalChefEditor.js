@@ -34,6 +34,8 @@ import FroamConnectedCanvas from './FroamConnectedCanvas.js';
 import FroamIntelligence from './FroamIntelligence.js';
 import FroamLabs from './FroamLabs.js';
 import FroamWorkspaceShell from './FroamWorkspaceShell.js';
+import FroamUICustomizer from './FroamUICustomizer.js';
+import { froamUIPanelWidth, readFroamUIPreference, writeFroamUIPreference } from './froamUIPreferences.js';
 import { FROAM_WORKSPACE_SECTIONS, readWorkspacePreference, workspaceCommandMatches, writeWorkspacePreference } from './workspace-shell-model.js';
 import { readFroamLabsFlags, writeFroamLabsFlags } from '../project/experiments.js';
 import { appendProjectEvents, createProjectEvent, deriveBranchState, switchProjectBranch } from '../project/event-log.js';
@@ -1301,6 +1303,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     });
     const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
     const [workspacePreference, setWorkspacePreference] = useState(() => readWorkspacePreference(typeof localStorage === 'undefined' ? undefined : localStorage));
+    const [uiPreference, setUIPreference] = useState(() => readFroamUIPreference(typeof localStorage === 'undefined' ? undefined : localStorage));
+    const [uiCustomizerOpen, setUICustomizerOpen] = useState(false);
     const [leftWorkspaceMode, setLeftWorkspaceMode] = useState(() => workspacePreference.sections.create === 'layers' ? 'layers' : 'plan');
     // v4: phone-first editing — compact chrome on small viewports, touch behaviors on coarse pointers
     const isMobileUI = useMediaQuery(MOBILE_UI_QUERY);
@@ -1335,6 +1339,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [inlineEditing, setInlineEditing] = useState(false);
     const [measureRect, setMeasureRect] = useState(null);
     useEffect(() => { writeWorkspacePreference(typeof localStorage === 'undefined' ? undefined : localStorage, workspacePreference); }, [workspacePreference]);
+    useEffect(() => { writeFroamUIPreference(typeof localStorage === 'undefined' ? undefined : localStorage, uiPreference); }, [uiPreference]);
+    useEffect(() => {
+        if (!portalContainer)
+            return;
+        portalContainer.dataset.froamUiAppearance = uiPreference.appearance;
+        portalContainer.dataset.froamUiAccent = uiPreference.accent;
+        portalContainer.dataset.froamUiDensity = uiPreference.density;
+        portalContainer.dataset.froamUiLabels = uiPreference.labels ? 'shown' : 'hidden';
+    }, [portalContainer, uiPreference]);
     useEffect(() => { writeFroamLabsFlags(typeof localStorage === 'undefined' ? undefined : localStorage, labsFlags); }, [labsFlags]);
     // v4: New feature state
     const [showShortcutOverlay, setShowShortcutOverlay] = useState(false);
@@ -5349,7 +5362,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     leftPanelOpen ? '' : 'is-left-collapsed',
                     connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen ? 'has-context-inspector' : '',
                     (workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen ? '' : 'is-right-collapsed',
-                ].filter(Boolean).join(' '), "data-chef-editor-root": "true", children: [_jsx(FroamSectionBoundary, { name: "Toolbar", children: _jsx(FroamToolbar, { viewportMode: viewportMode, onViewportChange: setViewportMode, activeTool: activeTool, onToolChange: (tool) => {
+                    `is-toolbar-${uiPreference.toolbar}`,
+                    `is-workspace-${uiPreference.workspace}`,
+                    `is-panels-${uiPreference.panels}`,
+                ].filter(Boolean).join(' '), style: {
+                    '--froam-left-width': `${froamUIPanelWidth(uiPreference.leftSize, 'left')}px`,
+                    '--froam-planner-width': `${Math.max(320, froamUIPanelWidth(uiPreference.leftSize, 'left') + 150)}px`,
+                    '--froam-inspector-width': `${froamUIPanelWidth(uiPreference.inspectorSize, 'inspector')}px`,
+                    '--froam-ui-scale': uiPreference.scale,
+                }, "data-chef-editor-root": "true", children: [_jsx(FroamSectionBoundary, { name: "Toolbar", children: _jsx(FroamToolbar, { viewportMode: viewportMode, onViewportChange: setViewportMode, activeTool: activeTool, onToolChange: (tool) => {
                                 if (tool === 'shape') {
                                     setActiveTool('shape');
                                     setMoveMode(false);
@@ -5896,7 +5917,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         case 'upload-image':
                             actionsRef.current.openSelectedImageUpload();
                             break;
+                        case 'customize-ui':
+                            setUICustomizerOpen(true);
+                            break;
                     }
-                }, onClose: () => setContextMenuPos(null) }), _jsx(FroamSmartGuides, { guides: smartGuides, visible: smartGuides.length > 0 }), _jsx(FroamShortcutOverlay, { visible: showShortcutOverlay, onClose: () => setShowShortcutOverlay(false) })] }), portalContainer);
+                }, onClose: () => setContextMenuPos(null) }), _jsx(FroamUICustomizer, { open: uiCustomizerOpen, value: uiPreference, onChange: setUIPreference, onClose: () => setUICustomizerOpen(false) }), _jsx(FroamSmartGuides, { guides: smartGuides, visible: smartGuides.length > 0 }), _jsx(FroamShortcutOverlay, { visible: showShortcutOverlay, onClose: () => setShowShortcutOverlay(false) })] }), portalContainer);
 }
 //# sourceMappingURL=GlobalChefEditor.js.map
