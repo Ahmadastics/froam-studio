@@ -2,16 +2,25 @@
    FROAM STUDIO — TOP TOOLBAR (froam-tb)
    =============================================================== */
 
-.froam-tb {
+.froam-chrome {
   grid-area: toolbar;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 48px 38px;
+  background: var(--fs-surface-toolbar);
+  border-bottom: 1px solid var(--fs-border-muted);
+  z-index: 20;
+}
+
+.froam-tb {
+  grid-area: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   height: 48px;
   padding: 0 12px;
   background: var(--fs-surface-toolbar);
-  border-bottom: 1px solid var(--fs-border-muted);
-  backdrop-filter: blur(20px);
+  border-bottom: 1px solid color-mix(in srgb, var(--fs-border-muted) 72%, transparent);
   z-index: 10;
   gap: 8px;
   color: var(--fs-text-primary);

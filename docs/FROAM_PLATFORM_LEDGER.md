@@ -1,5 +1,33 @@
 # Froam Platform Implementation Ledger
 
+## v8.0.2 unified-chrome status — 2026-08-09
+
+- **Completed:** toolbar/workspace merge; single contextual rail; one docked
+  inspector lane for Intelligence, Connected Canvas, Labs and Advanced; shared
+  panel-toggle semantics; mode/panel restoration; neutral Laboratory home;
+  feature-flag-derived Experiment tools; desktop, narrow and mobile geometry.
+- **Partially completed:** Advanced remains the preserved legacy editor surface,
+  now reachable and docked, but its internal controls have not been rewritten.
+- **Experimental prototypes:** unchanged. Existing v8 flags and maturity labels
+  remain authoritative; no experiment was promoted by this release.
+- **Architecture-only foundations:** contextual modes select a single visual
+  owner while Connected Canvas retains its necessary history/graph sub-tabs.
+- **Research-only features:** unchanged; Synthetic UX and Reality remain
+  explicitly research-labelled and disabled by default.
+- **Migrations:** none. Project schema remains v2; workspace/Labs preferences
+  remain additive, browser-local and quota-safe.
+- **Tests added:** neutral Laboratory availability, merged chrome ownership,
+  duplicate-action removal, inspector reservation and hidden redundant panel
+  tabs. Full project/collaboration suites remain green.
+- **Known limitations:** the narrow chrome rail intentionally scrolls when all
+  enabled capabilities cannot fit. Advanced still carries its legacy v4 label
+  internally for compatibility.
+- **Decisions:** preserve live-DOM editing and existing feature internals; merge
+  navigation and ownership around them. Only one context inspector owns the
+  right lane at a time; mobile uses a bounded panel above the bottom rail.
+- **Remaining:** deeper semantic contextuality and arbitrary graph/archive
+  command indexing remain future hardening, not part of this organization pass.
+
 ## v8.0.1 editor-shell status — 2026-08-09
 
 - **Completed:** one Create / Understand / Experiment workspace shell; persistent

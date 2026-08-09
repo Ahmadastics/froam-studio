@@ -33,6 +33,7 @@ test('contextual selection tools disable without hiding their meaning', () => {
 
 test('Lab flags control tool visibility independently', () => {
   const off = defaultFroamLabsFlags()
+  assert.equal(workspaceSections('experiment', off, true).some(({ id }) => id === 'laboratory'), true)
   assert.equal(workspaceSections('experiment', off, true).some(({ id }) => id === 'mutate'), false)
   assert.equal(workspaceSections('experiment', { ...off, mutate: true }, true).some(({ id }) => id === 'mutate'), true)
 })
@@ -74,6 +75,8 @@ test('command search understands user-facing aliases', () => {
 
 test('keyboard, mobile, reduced-motion, and legacy surfaces stay reachable', () => {
   const shell = fs.readFileSync(new URL('../src/editor/FroamWorkspaceShell.tsx', import.meta.url), 'utf8')
+  const toolbar = fs.readFileSync(new URL('../src/editor/FroamToolbar.tsx', import.meta.url), 'utf8')
+  const labs = fs.readFileSync(new URL('../src/editor/FroamLabs.tsx', import.meta.url), 'utf8')
   const editor = fs.readFileSync(new URL('../src/editor/GlobalChefEditor.tsx', import.meta.url), 'utf8')
   const css = fs.readFileSync(new URL('../src/editor/styles/workspace-shell.css', import.meta.url), 'utf8')
   assert.match(shell, /ArrowLeft/)
@@ -81,9 +84,16 @@ test('keyboard, mobile, reduced-motion, and legacy surfaces stay reachable', () 
   assert.match(editor, /role="dialog"/)
   assert.match(editor, /workspacePreference\.advancedOpen/)
   assert.match(editor, /FroamBlueprint/)
+  assert.match(toolbar, /className="froam-chrome"/)
+  assert.match(toolbar, /\{workspace\}/)
+  assert.match(editor, /workspace=\{\(/)
+  assert.match(editor, /has-context-inspector/)
+  assert.match(labs, /'overview', 'Laboratory'/)
+  assert.doesNotMatch(shell, /onOpenCommands|onOpenProfile/)
   assert.match(css, /prefers-reduced-motion:reduce/)
   assert.match(css, /max-width:768px/)
   assert.match(css, /position:fixed/)
+  assert.match(css, /froam-intelligence>nav,.froam-labs>nav\{display:none\}/)
 })
 
 console.log(`\n${count} editor-shell tests passed.`)

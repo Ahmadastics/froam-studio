@@ -1,4 +1,4 @@
-import { Archive, Beaker, Boxes, Braces, Clapperboard, Command, DraftingCompass, FlaskConical, GitBranch, History, Layers, MousePointer2, Network, ScanSearch, Sparkles, UserRound, Users, Waves, Zap } from 'lucide-react'
+import { Archive, Beaker, Boxes, Braces, Clapperboard, DraftingCompass, FlaskConical, GitBranch, History, Layers, MousePointer2, Network, ScanSearch, Sparkles, UserRound, Waves, Zap } from 'lucide-react'
 import type { FroamLabsFlags } from '../project/experiments'
 import { FROAM_WORKSPACE_MODES, workspacePresenceSummary, workspaceProjectLabel, workspaceSections, workspaceStatus, workspaceTemporalSurface, type FroamTemporalOwner, type FroamWorkspaceMode, type FroamWorkspaceSection } from './workspace-shell-model'
 
@@ -19,8 +19,6 @@ type Props = {
   onToggleAdvanced: () => void
   onOpenPrototypes: () => void
   onOpenReplay: () => void
-  onOpenProfile: () => void
-  onOpenCommands: () => void
   temporalOwner: FroamTemporalOwner
   activity?: 'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | null
 }
@@ -54,8 +52,6 @@ export default function FroamWorkspaceShell(props: Props) {
       <div className="froam-workspace__global-actions">
         <button type="button" onClick={props.onOpenReplay} aria-label="Open Replay and history" title="Replay and history"><History size={14}/></button>
         <button type="button" onClick={props.onToggleAdvanced} aria-pressed={props.advancedOpen} className={props.advancedOpen ? 'is-active' : ''} aria-label="Toggle Advanced editor surfaces" title="Advanced editor surfaces"><Braces size={14}/></button>
-        <button type="button" onClick={props.onOpenCommands} aria-label="Open command palette" title="Command palette (Ctrl+K)"><Command size={14}/></button>
-        <button type="button" onClick={props.onOpenProfile} aria-label="Open Froam profile" title="Froam profile"><Users size={14}/></button>
       </div>
       <nav className="froam-workspace__rail" aria-label={`${props.mode} tools`}>
         {sections.map((section) => { const Icon = icons[section.id] ?? Sparkles; return <button type="button" key={`${section.mode}:${section.id}`} className={props.activeSection === section.id ? 'is-active' : ''} aria-pressed={props.activeSection === section.id} disabled={!section.contextual} onClick={() => props.onSectionChange(section.id)} title={!section.contextual ? `Select an element to use ${section.label}` : section.description}><Icon size={13}/><span>{section.label}</span>{section.maturity !== 'production' && <em data-maturity={section.maturity}>{section.maturity === 'experimental' ? 'Lab' : section.maturity}</em>}</button> })}

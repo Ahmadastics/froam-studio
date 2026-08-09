@@ -8,11 +8,10 @@
   inset: 0;
   z-index: 1188;
   display: grid;
-  grid-template-rows: 48px 76px 1fr;
+  grid-template-rows: 86px 1fr;
   grid-template-columns: 240px 1fr 300px;
   grid-template-areas:
     "toolbar toolbar toolbar"
-    "workspace workspace workspace"
     "layers  canvas  design";
   font-family: var(--fs-font);
   font-size: 0.82rem;
@@ -40,6 +39,19 @@
 .froam-figma-layout.is-left-collapsed.is-right-collapsed,
 .froam-figma-layout.is-planning.is-left-collapsed.is-right-collapsed {
   grid-template-columns: 0 minmax(0, 1fr) 0;
+}
+
+.froam-figma-layout.has-context-inspector {
+  grid-template-columns: 240px minmax(0, 1fr) 382px;
+}
+
+.froam-figma-layout.is-planning.has-context-inspector {
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr) 382px;
+}
+
+.froam-figma-layout.is-left-collapsed.has-context-inspector,
+.froam-figma-layout.is-planning.is-left-collapsed.has-context-inspector {
+  grid-template-columns: 0 minmax(0, 1fr) 382px;
 }
 
 .froam-figma-layout > * {

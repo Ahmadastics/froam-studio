@@ -1,7 +1,7 @@
 import { type Dispatch, type SetStateAction } from 'react';
 import { type FroamLabsFlags } from '../project/experiments';
 import type { FroamProjectDocument } from '../project/types';
-export type FroamLab = 'mutate' | 'interactions' | 'sample' | 'physics' | 'break' | 'user' | 'sound' | 'trailer' | 'reality';
+export type FroamLab = 'overview' | 'mutate' | 'interactions' | 'sample' | 'physics' | 'break' | 'user' | 'sound' | 'trailer' | 'reality';
 type Props = {
     open: boolean;
     onClose: () => void;

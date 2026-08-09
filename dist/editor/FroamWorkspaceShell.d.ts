@@ -22,8 +22,6 @@ type Props = {
     onToggleAdvanced: () => void;
     onOpenPrototypes: () => void;
     onOpenReplay: () => void;
-    onOpenProfile: () => void;
-    onOpenCommands: () => void;
     temporalOwner: FroamTemporalOwner;
     activity?: 'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | null;
 };

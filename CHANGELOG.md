@@ -1,5 +1,21 @@
 # Changelog
 
+## 8.0.2 - 2026-08-09
+
+**Unified editor chrome.** The primary toolbar and workspace rail now form one
+compact two-tier control surface. Duplicate Command/Profile actions were
+removed, restored workspace modes reopen their matching panels, and the left
+and right toolbar controls route consistently across Create, Intelligence,
+Connected Canvas, Labs and the explicit Advanced surface.
+
+Intelligence, Connected Canvas, Labs and Advanced now share one reserved,
+docked inspector lane instead of covering the designer canvas. Laboratory has
+a neutral experiment-control home and exposes only enabled tools; disabled
+experiments no longer fall through to MUTATE. Desktop, narrow and mobile grid
+tracks, panel overflow, contrast, fixed positioning and temporal ownership were
+validated in the standalone editor. No project migration or output change is
+introduced.
+
 ## 8.0.1 - 2026-08-09
 
 **Froam workspace shell.** The main editor now exposes Create, Understand and

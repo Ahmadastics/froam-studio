@@ -32,6 +32,7 @@ type ViewportMode = 'desktop' | 'tablet' | 'mobile'
 type ToolMode = 'pointer' | 'hand' | 'text' | 'frame' | 'shape' | 'move'
 
 type Props = {
+  workspace?: ReactNode
   viewportMode: ViewportMode
   onViewportChange: (mode: ViewportMode) => void
   activeTool: ToolMode
@@ -93,6 +94,7 @@ function ToolButton({
 }
 
 export default function FroamToolbar({
+  workspace,
   viewportMode,
   onViewportChange,
   activeTool,
@@ -125,6 +127,7 @@ export default function FroamToolbar({
   onClose,
 }: Props) {
   return (
+    <header className="froam-chrome" data-chef-editor-root="true">
     <div className="froam-tb" data-chef-editor-root="true">
       {/* Left: Brand */}
       <div className="froam-tb__left" data-chef-editor-root="true">
@@ -346,6 +349,8 @@ export default function FroamToolbar({
         <span className="froam-tb__draft-count">{draftCount}</span>
       </div>
     </div>
+    {workspace}
+    </header>
   )
 }
 

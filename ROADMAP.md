@@ -1,5 +1,11 @@
 # Froam Rooms — roadmap to v6
 
+> **v8.0.2 status (2026-08-09):** the top toolbar and workspace rail are one
+> two-tier Froam chrome. Intelligence, Connected Canvas, Labs and Advanced use
+> one reserved inspector lane; mode restoration and panel controls are unified,
+> and the Laboratory now has a neutral flag home. No project migration or
+> runtime/code-generation selector change was introduced.
+
 > **v8.0.1 status (2026-08-09):** the editor root now organizes existing systems
 > as Create / Understand / Experiment in one workspace, with explicit project
 > context, contextual rails, native presence and single temporal ownership.

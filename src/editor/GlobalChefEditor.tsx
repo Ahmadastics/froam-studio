@@ -140,6 +140,9 @@ import {
   isFroamPersonaPath,
 } from './froamPersona'
 
+const intelligenceTabs: Partial<Record<FroamWorkspaceSection, FroamIntelligenceTab>> = { scan: 'scan', dna: 'dna', archive: 'archive', archaeology: 'archaeology', flow: 'flow', attention: 'attention', rhythm: 'rhythm', responsive: 'responsive', screenshot: 'screenshot' }
+const labTabs: Partial<Record<FroamWorkspaceSection, FroamLab>> = { laboratory: 'overview', mutate: 'mutate', sample: 'sample', interactions: 'interactions', 'interactions-create': 'interactions', physics: 'physics', gravity: 'physics', break: 'break', 'test-user': 'user', sound: 'sound', trailer: 'trailer', reality: 'reality' }
+
 /* ═══════════════════════════════════════════════════════════════
    Types
    ═══════════════════════════════════════════════════════════════ */
@@ -1689,23 +1692,23 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     assets: false,
   })
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
-  const [leftWorkspaceMode, setLeftWorkspaceMode] = useState<'plan' | 'layers'>('plan')
+  const [workspacePreference, setWorkspacePreference] = useState(() => readWorkspacePreference(typeof localStorage === 'undefined' ? undefined : localStorage))
+  const [leftWorkspaceMode, setLeftWorkspaceMode] = useState<'plan' | 'layers'>(() => workspacePreference.sections.create === 'layers' ? 'layers' : 'plan')
   // v4: phone-first editing — compact chrome on small viewports, touch behaviors on coarse pointers
   const isMobileUI = useMediaQuery(MOBILE_UI_QUERY)
   const isTouchDevice = useMediaQuery(COARSE_POINTER_QUERY)
   const [sheetDetent, setSheetDetent] = useState<SheetDetent>('peek')
-  const [leftPanelOpen, setLeftPanelOpen] = useState(() => !matchesMedia(MOBILE_UI_QUERY))
-  const [rightPanelOpen, setRightPanelOpen] = useState(true)
+  const [leftPanelOpen, setLeftPanelOpen] = useState(() => !matchesMedia(MOBILE_UI_QUERY) && workspacePreference.mode === 'create')
+  const [rightPanelOpen, setRightPanelOpen] = useState(() => workspacePreference.mode === 'create')
   const [studioMinimized, setStudioMinimized] = useState(false)
   const [scanActive, setScanActive] = useState(false)
   const [blueprintOpen, setBlueprintOpen] = useState(false)
   const [connectedCanvasOpen, setConnectedCanvasOpen] = useState(false)
-  const [intelligenceOpen, setIntelligenceOpen] = useState(() => readWorkspacePreference(typeof localStorage === 'undefined' ? undefined : localStorage).mode === 'understand')
-  const [labsOpen, setLabsOpen] = useState(() => readWorkspacePreference(typeof localStorage === 'undefined' ? undefined : localStorage).mode === 'experiment')
-  const [workspacePreference, setWorkspacePreference] = useState(() => readWorkspacePreference(typeof localStorage === 'undefined' ? undefined : localStorage))
+  const [intelligenceOpen, setIntelligenceOpen] = useState(() => workspacePreference.mode === 'understand')
+  const [labsOpen, setLabsOpen] = useState(() => workspacePreference.mode === 'experiment')
   const [labsFlags, setLabsFlags] = useState(() => readFroamLabsFlags(typeof localStorage === 'undefined' ? undefined : localStorage))
-  const [requestedIntelligenceTab, setRequestedIntelligenceTab] = useState<FroamIntelligenceTab>('scan')
-  const [requestedLab, setRequestedLab] = useState<FroamLab>('mutate')
+  const [requestedIntelligenceTab, setRequestedIntelligenceTab] = useState<FroamIntelligenceTab>(() => intelligenceTabs[workspacePreference.sections.understand ?? 'scan'] ?? 'scan')
+  const [requestedLab, setRequestedLab] = useState<FroamLab>(() => labTabs[workspacePreference.sections.experiment ?? 'laboratory'] ?? 'overview')
   const [requestedConnectedTab, setRequestedConnectedTab] = useState<FroamConnectedCanvasTab>('replay')
   const [temporalOwner, setTemporalOwner] = useState<FroamTemporalOwner>(null)
   const [workspaceActivity, setWorkspaceActivity] = useState<'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | null>(null)
@@ -5309,9 +5312,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   /* ─── Command palette ─── */
   const workspaceMode = workspacePreference.mode
   const activeWorkspaceSection = workspacePreference.sections[workspaceMode] ?? (workspaceMode === 'create' ? 'design' : workspaceMode === 'understand' ? 'scan' : 'laboratory')
-  const intelligenceTabs: Partial<Record<FroamWorkspaceSection, FroamIntelligenceTab>> = { scan: 'scan', dna: 'dna', archive: 'archive', archaeology: 'archaeology', flow: 'flow', attention: 'attention', rhythm: 'rhythm', responsive: 'responsive', screenshot: 'screenshot' }
-  const labTabs: Partial<Record<FroamWorkspaceSection, FroamLab>> = { mutate: 'mutate', sample: 'sample', interactions: 'interactions', 'interactions-create': 'interactions', physics: 'physics', gravity: 'physics', break: 'break', 'test-user': 'user', sound: 'sound', trailer: 'trailer', reality: 'reality' }
-
   function setWorkspaceMode(mode: FroamWorkspaceMode) {
     const section = workspacePreference.sections[mode] ?? (mode === 'create' ? 'design' : mode === 'understand' ? 'scan' : 'laboratory')
     setWorkspacePreference((current) => ({ ...current, mode }))
@@ -5328,21 +5328,33 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     setWorkspacePreference((current) => ({ ...current, mode, sections: { ...current.sections, [mode]: section } }))
     setWorkspaceActivity(null)
     setTemporalOwner(definition?.temporalOwner ?? null)
+    setIntelligenceOpen(false)
+    setLabsOpen(false)
+    setConnectedCanvasOpen(false)
     if (section === 'blueprint') { setBlueprintOpen(true); return }
     if (mode === 'create') {
-      setIntelligenceOpen(false); setLabsOpen(false)
       if (section === 'plan' || section === 'layers') { setLeftPanelOpen(true); setLeftWorkspaceMode(section); return }
       if (section === 'animator') { setRequestedConnectedTab('interaction'); setConnectedCanvasOpen(true); return }
       if (section === 'interactions-create') { setRequestedLab('interactions'); setLabsOpen(true); return }
       setRightPanelOpen(true)
       return
     }
-    if (mode === 'understand') { setLabsOpen(false); setConnectedCanvasOpen(false); setLeftPanelOpen(false); setRightPanelOpen(false); setRequestedIntelligenceTab(intelligenceTabs[section] ?? 'scan'); setIntelligenceOpen(true); return }
-    setIntelligenceOpen(false); setConnectedCanvasOpen(false); setLeftPanelOpen(false); setRightPanelOpen(false); setLabsOpen(true); if (labTabs[section]) setRequestedLab(labTabs[section]!)
+    if (mode === 'understand') { setLeftPanelOpen(false); setRightPanelOpen(false); setRequestedIntelligenceTab(intelligenceTabs[section] ?? 'scan'); setIntelligenceOpen(true); return }
+    setLeftPanelOpen(false); setRightPanelOpen(false); setLabsOpen(true); if (labTabs[section]) setRequestedLab(labTabs[section]!)
   }
 
-  function toggleAdvancedWorkspace() { setWorkspacePreference((current) => ({ ...current, advancedOpen: !current.advancedOpen })) }
-  function openConnectedWorkspace(tab: FroamConnectedCanvasTab) { setRequestedConnectedTab(tab); setConnectedCanvasOpen(true); setTemporalOwner(tab === 'replay' ? 'replay' : tab === 'interaction' ? 'animator' : null) }
+  function toggleAdvancedWorkspace() {
+    const opening = !workspacePreference.advancedOpen
+    setWorkspacePreference((current) => ({ ...current, advancedOpen: opening }))
+    if (opening) {
+      setConnectedCanvasOpen(false)
+      setIntelligenceOpen(false)
+      setLabsOpen(false)
+      setRightPanelOpen(false)
+      setTemporalOwner(null)
+    }
+  }
+  function openConnectedWorkspace(tab: FroamConnectedCanvasTab) { setIntelligenceOpen(false); setLabsOpen(false); setRightPanelOpen(false); setRequestedConnectedTab(tab); setConnectedCanvasOpen(true); setTemporalOwner(tab === 'replay' ? 'replay' : tab === 'interaction' ? 'animator' : null) }
   function switchWorkspaceBranch(branchId: string) { try { const next = switchProjectBranch(projectSession.project, branchId); projectSession.setProject(next); materializeConnectedBranch(deriveBranchState(next, branchId).legacyStore); showToast(`Switched to ${next.branches[branchId].name}`) } catch (error) { showToast(error instanceof Error ? error.message : 'Could not switch prototype') } }
 
   const paletteCommands: PaletteCommand[] = [
@@ -5748,7 +5760,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             isMobileUI ? 'is-mobile' : '',
             leftWorkspaceMode === 'plan' ? 'is-planning' : '',
             leftPanelOpen ? '' : 'is-left-collapsed',
-            rightPanelOpen ? '' : 'is-right-collapsed',
+            connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen ? 'has-context-inspector' : '',
+            (workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen ? '' : 'is-right-collapsed',
           ].filter(Boolean).join(' ')}
           data-chef-editor-root="true"
         >
@@ -5796,9 +5809,47 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               zoom={zoom}
               setZoom={setZoom}
               leftPanelOpen={leftPanelOpen}
-              rightPanelOpen={rightPanelOpen}
-              onToggleLeftPanel={() => setLeftPanelOpen((value) => !value)}
-              onToggleRightPanel={() => setRightPanelOpen((value) => !value)}
+              rightPanelOpen={(workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen}
+              onToggleLeftPanel={() => {
+                if (workspaceMode !== 'create') {
+                  setWorkspaceMode('create')
+                  setLeftPanelOpen(true)
+                  return
+                }
+                setLeftPanelOpen((value) => !value)
+              }}
+              onToggleRightPanel={() => {
+                if (connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen) {
+                  setConnectedCanvasOpen(false)
+                  setIntelligenceOpen(false)
+                  setLabsOpen(false)
+                  setWorkspacePreference((current) => ({ ...current, advancedOpen: false }))
+                  setTemporalOwner(null)
+                  return
+                }
+                setRightPanelOpen((value) => !value)
+              }}
+              workspace={(
+                <FroamWorkspaceShell
+                  mode={workspaceMode}
+                  activeSection={activeWorkspaceSection}
+                  onModeChange={setWorkspaceMode}
+                  onSectionChange={openWorkspaceSection}
+                  projectName={projectSession.project.name}
+                  branchId={projectSession.project.activeBranchId}
+                  branchName={projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId}
+                  members={roomPresence}
+                  hasSelection={Boolean(selection)}
+                  selectionLabel={selection?.label}
+                  flags={labsFlags}
+                  advancedOpen={workspacePreference.advancedOpen}
+                  onToggleAdvanced={toggleAdvancedWorkspace}
+                  onOpenPrototypes={() => openConnectedWorkspace('branches')}
+                  onOpenReplay={() => openConnectedWorkspace('replay')}
+                  temporalOwner={temporalOwner}
+                  activity={workspaceActivity}
+                />
+              )}
               onMinimize={() => {
                 setStudioMinimized(true)
                 showToast(`${persona.name} minimized — editing is still active`)
@@ -5810,27 +5861,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               }}
             />
           </FroamSectionBoundary>
-          <FroamWorkspaceShell
-            mode={workspaceMode}
-            activeSection={activeWorkspaceSection}
-            onModeChange={setWorkspaceMode}
-            onSectionChange={(section) => openWorkspaceSection(section)}
-            projectName={projectSession.project.name}
-            branchId={projectSession.project.activeBranchId}
-            branchName={projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId}
-            members={roomPresence}
-            hasSelection={Boolean(selection)}
-            selectionLabel={selection?.label}
-            flags={labsFlags}
-            advancedOpen={workspacePreference.advancedOpen}
-            onToggleAdvanced={toggleAdvancedWorkspace}
-            onOpenPrototypes={() => openConnectedWorkspace('branches')}
-            onOpenReplay={() => openConnectedWorkspace('replay')}
-            onOpenProfile={openPersonaEditor}
-            onOpenCommands={() => setCommandPaletteOpen(true)}
-            temporalOwner={temporalOwner}
-            activity={workspaceActivity}
-          />
           {leftPanelOpen && <div className="froam-figma-left" data-chef-editor-root="true">
             <div className="froam-figma-left__tabs" data-chef-editor-root="true">
               <button
@@ -5969,7 +5999,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       {/* Main panel */}
       {showPanel && !studioMinimized && workspacePreference.advancedOpen ? (
         <aside
-          className={`froam-studio ${showPanel ? 'is-open' : ''} ${viewportMode !== 'desktop' ? 'is-device-mode' : ''}`}
+          className={`froam-studio is-advanced-surface ${showPanel ? 'is-open' : ''} ${viewportMode !== 'desktop' ? 'is-device-mode' : ''}`}
           data-chef-editor-root="true"
           style={getDefaultPanelStyle()}
           onPointerMove={handlePanelPointerMove}
