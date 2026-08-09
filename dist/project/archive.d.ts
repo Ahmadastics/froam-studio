@@ -1,4 +1,12 @@
-import type { FroamArchiveItem, FroamDNA, FroamNode } from './types';
+import { type FroamArchiveItem, type FroamDNA, type FroamInteraction, type FroamNode } from './types';
+export type FroamArchiveKind = NonNullable<FroamArchiveItem['kind']>;
+export declare function archiveItemKind(item: FroamArchiveItem): FroamArchiveKind;
+export declare function minimalArchiveDna(nodeId: string, input?: {
+    role?: string;
+    tagName?: string;
+    styles?: Record<string, string>;
+    motion?: FroamInteraction;
+}): FroamDNA;
 export declare function createArchiveItem(input: {
     id: string;
     nodeId: string;
@@ -13,6 +21,12 @@ export declare function createArchiveItem(input: {
     interactionIds?: string[];
     variantOf?: string;
     now?: number;
+    kind?: FroamArchiveKind;
+    description?: string;
+    tags?: string[];
+    styles?: Record<string, string>;
+    interaction?: FroamInteraction;
+    includes?: Array<'structure' | 'styles' | 'motion' | 'behavior'>;
 }): FroamArchiveItem;
 export declare function upsertArchive(archive: Record<string, FroamArchiveItem>, item: FroamArchiveItem): {
     [x: string]: FroamArchiveItem;
@@ -28,6 +42,7 @@ export declare function reuseArchiveItem(item: FroamArchiveItem, input: {
     path?: string;
 }): FroamNode;
 export declare function recordArchiveUsage(item: FroamArchiveItem, nodeId: string): FroamArchiveItem;
+export declare function recordArchiveArtifactUse(item: FroamArchiveItem, nodeId?: string, now?: number): FroamArchiveItem;
 export declare function similarArchiveItems(archive: Record<string, FroamArchiveItem>): {
     left: string;
     right: string;

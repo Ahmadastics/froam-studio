@@ -1,6 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Play, Pause, Plus, Trash2, RotateCw, Copy, ChevronDown, Zap, Clock, MoveHorizontal, Search, } from 'lucide-react';
+import { Play, Pause, Plus, Trash2, RotateCw, Copy, ChevronDown, Zap, Clock, MoveHorizontal, Search, Archive, } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { legacyAnimatorToInteraction } from '../project/animator-adapter.js';
 import { FROAM_ANIMATION_PRESETS } from './FroamAnimationPresets.js';
@@ -177,7 +177,7 @@ function defaultConfig() {
 /* ═══════════════════════════════════════════════════════════════
    Component
    ═══════════════════════════════════════════════════════════════ */
-export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast, sourceNodeId, onInteractionChange }) {
+export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast, sourceNodeId, onInteractionChange, onSaveToArchive }) {
     const [config, setConfig] = useState(defaultConfig);
     const [previewing, setPreviewing] = useState(false);
     const [expandedKeyframe, setExpandedKeyframe] = useState(null);
@@ -318,6 +318,6 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
                                                             updateKeyframeProp(kf.id, e.target.value, '');
                                                             e.target.value = '';
                                                         }
-                                                    }, children: [_jsx("option", { value: "", children: "+ Add property\u2026" }), PROPERTY_OPTIONS.filter((p) => !(p.id in kf.properties)).map((p) => (_jsx("option", { value: p.id, children: p.label }, p.id)))] }), _jsxs("button", { type: "button", className: "fs-pill is-danger", onClick: () => removeKeyframe(kf.id), style: { marginTop: 4 }, children: [_jsx(Trash2, { size: 10 }), " Remove keyframe"] })] })) })] }, kf.id)))] }), _jsxs("div", { className: "fs-pill-group", style: { marginTop: 8 }, children: [_jsxs("button", { type: "button", className: `fs-pill ${previewing ? 'is-danger' : 'is-accent'}`, onClick: previewing ? stopPreview : previewAnimation, children: [previewing ? _jsx(Pause, { size: 12 }) : _jsx(Play, { size: 12 }), previewing ? 'Stop' : 'Preview'] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: applyAnimation, children: [_jsx(Zap, { size: 12 }), " Apply"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: copyCSS, children: [_jsx(Copy, { size: 12 }), " Copy CSS"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => { setConfig(defaultConfig()); setShowTemplates(true); }, children: [_jsx(RotateCw, { size: 12 }), " Reset"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => setShowTemplates(true), children: [_jsx(Zap, { size: 12 }), " Motions"] })] })] }))] }));
+                                                    }, children: [_jsx("option", { value: "", children: "+ Add property\u2026" }), PROPERTY_OPTIONS.filter((p) => !(p.id in kf.properties)).map((p) => (_jsx("option", { value: p.id, children: p.label }, p.id)))] }), _jsxs("button", { type: "button", className: "fs-pill is-danger", onClick: () => removeKeyframe(kf.id), style: { marginTop: 4 }, children: [_jsx(Trash2, { size: 10 }), " Remove keyframe"] })] })) })] }, kf.id)))] }), _jsxs("div", { className: "fs-pill-group", style: { marginTop: 8 }, children: [_jsxs("button", { type: "button", className: `fs-pill ${previewing ? 'is-danger' : 'is-accent'}`, onClick: previewing ? stopPreview : previewAnimation, children: [previewing ? _jsx(Pause, { size: 12 }) : _jsx(Play, { size: 12 }), previewing ? 'Stop' : 'Preview'] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: applyAnimation, children: [_jsx(Zap, { size: 12 }), " Apply"] }), onSaveToArchive && _jsxs("button", { type: "button", className: "fs-pill", onClick: onSaveToArchive, disabled: !sourceNodeId, children: [_jsx(Archive, { size: 12 }), " Save to Archive"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: copyCSS, children: [_jsx(Copy, { size: 12 }), " Copy CSS"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => { setConfig(defaultConfig()); setShowTemplates(true); }, children: [_jsx(RotateCw, { size: 12 }), " Reset"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => setShowTemplates(true), children: [_jsx(Zap, { size: 12 }), " Motions"] })] })] }))] }));
 }
 //# sourceMappingURL=FroamAnimator.js.map

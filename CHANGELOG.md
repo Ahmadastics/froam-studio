@@ -1,5 +1,22 @@
 # Changelog
 
+## 8.0.5 - 2026-08-09
+
+**Unified Archive and project memory.** Archive now stores backward-compatible
+components plus visual styles, motion, interactions and complete interface
+patterns. Any selected element exposes these capture choices from right-click.
+Animator and Interface Laboratory remain distinct authoring experiences, but
+both now persist through the same `FroamInteraction` and Archive model.
+
+Froam Intelligence now summarizes observed artifact kinds, semantic roles,
+interaction triggers and actual reuse. Its recommendations are deterministic
+project-memory signals with explicit limitations, not invented AI conclusions.
+Archive items can be filtered, inserted or applied to the current selection.
+The duplicate Understand-mode Blueprint entry was removed; the existing 2D/3D
+Blueprint remains canonically available under Create. Project schema v2,
+legacy component Archive records, live-DOM editing and path-based output remain
+compatible.
+
 ## 8.0.4 - 2026-08-09
 
 **Personal Froam + expressive motion.** Right-click now opens a versioned UI

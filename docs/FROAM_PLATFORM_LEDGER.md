@@ -1,5 +1,38 @@
 # Froam Platform Implementation Ledger
 
+## v8.0.5 — Unified Archive and honest project memory
+
+- **Completed systems:** Archive artifact kinds for component, style, motion,
+  interaction and complete interface pattern; right-click capture; shared Save
+  to Archive paths from Animator and Interface Laboratory; Archive filtering,
+  insertion/application and reuse tracking; local Intelligence memory for
+  observed kinds, roles and triggers; one canonical Blueprint workspace entry.
+- **Partially completed systems:** complete patterns apply captured DOM, styles
+  and a single attached interaction. Asset dependency packaging and multi-node
+  interaction binding remain future hardening.
+- **Experimental prototypes:** Laboratory-authored Physics and Interaction
+  Library artifacts remain experimental even when archived. Persistence does
+  not promote their deployed runtime maturity.
+- **Architecture-only foundations:** all behavior artifacts reuse
+  `FroamInteraction`; Archive v2 extends each record additively without adding
+  another library or intelligence database.
+- **Research-only features:** unchanged. Project memory is deterministic local
+  aggregation and is deliberately not described as predictive AI.
+- **Migrations introduced:** no project-envelope migration. Archive record v2
+  is additive; missing `kind` on v1 records resolves to `component`.
+- **Tests added:** multi-kind Archive creation/search/use, v1 compatibility,
+  observed Intelligence memory, right-click reachability, and single canonical
+  Blueprint navigation.
+- **Known limitations:** direct-capture artifacts have shallow DNA until their
+  source is scanned; inserted component IDs are still refreshed by the existing
+  insertion path; complete patterns currently carry at most one primary
+  interaction payload.
+- **Architectural decisions:** Animator owns precise keyframes; Laboratory owns
+  experimental composition; Archive owns reuse; Intelligence owns explanation.
+  They share data rather than duplicate controls.
+- **Remaining work:** dependency-aware asset bundles, multi-target binding UI,
+  richer similarity ranking, and explicit archive rename/tag editing.
+
 ## v8.0.4 — Personal Froam and expressive motion
 
 - **Completed systems:** versioned browser-local UI preferences; right-click

@@ -11,6 +11,7 @@ import {
   Clock,
   MoveHorizontal,
   Search,
+  Archive,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { legacyAnimatorToInteraction } from '../project/animator-adapter'
@@ -57,6 +58,7 @@ type Props = {
   onToast: (msg: string) => void
   sourceNodeId?: string | null
   onInteractionChange?: (interaction: FroamInteraction) => void
+  onSaveToArchive?: () => void
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -240,7 +242,7 @@ function defaultConfig(): AnimationConfig {
 /* ═══════════════════════════════════════════════════════════════
    Component
    ═══════════════════════════════════════════════════════════════ */
-export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast, sourceNodeId, onInteractionChange }: Props) {
+export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast, sourceNodeId, onInteractionChange, onSaveToArchive }: Props) {
   const [config, setConfig] = useState<AnimationConfig>(defaultConfig)
   const [previewing, setPreviewing] = useState(false)
   const [expandedKeyframe, setExpandedKeyframe] = useState<string | null>(null)
@@ -595,6 +597,9 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
             <button type="button" className="fs-pill is-accent" onClick={applyAnimation}>
               <Zap size={12} /> Apply
             </button>
+            {onSaveToArchive && <button type="button" className="fs-pill" onClick={onSaveToArchive} disabled={!sourceNodeId}>
+              <Archive size={12} /> Save to Archive
+            </button>}
             <button type="button" className="fs-pill" onClick={copyCSS}>
               <Copy size={12} /> Copy CSS
             </button>

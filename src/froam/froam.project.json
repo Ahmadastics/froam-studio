@@ -1,0 +1,5127 @@
+{
+  "kind": "froam-project",
+  "schemaVersion": 2,
+  "project": {
+    "schemaVersion": 2,
+    "id": "project:127.0.0.1:4766",
+    "name": "Froam project",
+    "activeBranchId": "main",
+    "createdAt": 1786303651140,
+    "updatedAt": 1786304299136,
+    "branches": {
+      "main": {
+        "id": "main",
+        "name": "Main",
+        "parentBranchId": null,
+        "forkEventId": null,
+        "baseCheckpointId": "2daf9c8c-b9fa-4afe-81fa-bc16080cb86a",
+        "headEventId": "531e0614-c950-454c-be2f-167e6b679e2f",
+        "createdAt": 1786303651140,
+        "createdBy": "local",
+        "rootCheckpointId": "2daf9c8c-b9fa-4afe-81fa-bc16080cb86a"
+      }
+    },
+    "checkpoints": {
+      "2daf9c8c-b9fa-4afe-81fa-bc16080cb86a": {
+        "id": "2daf9c8c-b9fa-4afe-81fa-bc16080cb86a",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "createdAt": 1786303651140,
+        "createdBy": "local",
+        "label": "Initial state",
+        "eventIds": [],
+        "state": {
+          "legacyStore": {},
+          "nodes": {},
+          "relations": {},
+          "flows": {},
+          "interactions": {},
+          "dna": {},
+          "assets": {},
+          "scans": {},
+          "archive": {},
+          "analyses": {},
+          "responsive": {}
+        }
+      }
+    },
+    "events": [
+      {
+        "schemaVersion": 2,
+        "id": "e2129b85-3c23-40b3-8154-95e418f5ec7b",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 1,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "home"
+        ],
+        "payload": {
+          "node": {
+            "id": "home",
+            "kind": "page",
+            "name": "Home",
+            "parentId": null,
+            "source": "froam",
+            "locator": {
+              "routeKey": "/"
+            },
+            "metadata": {
+              "status": "ready",
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "d70791a0-62db-4592-9f86-0fca4f0402c3",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 2,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w31-o0c2d"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w31-o0c2d",
+            "kind": "frame",
+            "name": "Compact navbar",
+            "parentId": "home",
+            "componentId": "navigation-01",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "b5c1cb3a-6e6d-4570-82fc-19c2b2f4dc84",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 3,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w31-rcx0y"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w31-rcx0y",
+            "kind": "frame",
+            "name": "Split media hero",
+            "parentId": "home",
+            "componentId": "hero-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "01c78dee-28a9-43fc-b7d0-5fbd728acbca",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 4,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w31-uo86j"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w31-uo86j",
+            "kind": "frame",
+            "name": "Bento features",
+            "parentId": "home",
+            "componentId": "features-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "fa7ffdc0-0b16-4443-b622-1be09a172cb4",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 5,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-no7gf"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-no7gf",
+            "kind": "frame",
+            "name": "Process timeline",
+            "parentId": "home",
+            "componentId": "content-03",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "19ebf03f-793a-49fd-990c-4f74de6d5d8b",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 6,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-54c23"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-54c23",
+            "kind": "frame",
+            "name": "Story statement",
+            "parentId": "home",
+            "componentId": "content-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "f3412110-2ca4-4ee0-827c-aefdee34a00c",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 7,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-16gs5"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-16gs5",
+            "kind": "frame",
+            "name": "Metrics and proof",
+            "parentId": "home",
+            "componentId": "social-proof-03",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "06381fd4-0d01-4d2c-85c0-dee6fc069c9b",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 8,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-7vmzr"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-7vmzr",
+            "kind": "frame",
+            "name": "Testimonial spotlight",
+            "parentId": "home",
+            "componentId": "social-proof-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "3104411b-e770-477b-bd25-1d5c93a2cbcc",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 9,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-7lp2o"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-7lp2o",
+            "kind": "frame",
+            "name": "Action band",
+            "parentId": "home",
+            "componentId": "cta-01",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "8b9db338-ad7a-42c5-83c0-698cf5dc9466",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 10,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-q2bym"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-q2bym",
+            "kind": "frame",
+            "name": "Compact footer",
+            "parentId": "home",
+            "componentId": "footer-01",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "c34342c8-3288-43e3-b517-c8e78b2f42fb",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 11,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "services"
+        ],
+        "payload": {
+          "node": {
+            "id": "services",
+            "kind": "page",
+            "name": "Services",
+            "parentId": "home",
+            "source": "froam",
+            "locator": {
+              "routeKey": "/services"
+            },
+            "metadata": {
+              "status": "draft",
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "643568fa-106b-4ecc-a169-9fa2ef638917",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 12,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-vow4d"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-vow4d",
+            "kind": "frame",
+            "name": "Compact navbar",
+            "parentId": "services",
+            "componentId": "navigation-01",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "c782b4c6-5264-4847-b38b-32d0afd88b69",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 13,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-a273u"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-a273u",
+            "kind": "frame",
+            "name": "Split media hero",
+            "parentId": "services",
+            "componentId": "hero-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "1b08ad8f-74f1-458a-889f-cff788a2c649",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 14,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-vl31s"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-vl31s",
+            "kind": "frame",
+            "name": "Numbered feature list",
+            "parentId": "services",
+            "componentId": "features-03",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "ff5e36c9-6dd1-4fa9-b5a3-187b45cb9df8",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 15,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-lii79"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-lii79",
+            "kind": "frame",
+            "name": "Process timeline",
+            "parentId": "services",
+            "componentId": "content-03",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "a21fe9eb-63b9-498e-bae4-3566f2a34cc2",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 16,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-3kn3q"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-3kn3q",
+            "kind": "frame",
+            "name": "Split call to action",
+            "parentId": "services",
+            "componentId": "cta-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "f0df4676-b8cc-4301-95b9-4b889b4f8cad",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 17,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-59tha"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-59tha",
+            "kind": "frame",
+            "name": "Mega footer",
+            "parentId": "services",
+            "componentId": "footer-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "e3223612-b43a-4ee9-a2f7-d28258061125",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 18,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "about"
+        ],
+        "payload": {
+          "node": {
+            "id": "about",
+            "kind": "page",
+            "name": "About",
+            "parentId": "home",
+            "source": "froam",
+            "locator": {
+              "routeKey": "/about"
+            },
+            "metadata": {
+              "status": "draft",
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "8b3b3eaf-6d2a-4b42-9c73-52fa47d660f5",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 19,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-jmd65"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-jmd65",
+            "kind": "frame",
+            "name": "Centered navbar",
+            "parentId": "about",
+            "componentId": "navigation-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "1128bca0-ee51-4bae-84eb-105a42864481",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 20,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-2mk88"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-2mk88",
+            "kind": "frame",
+            "name": "Editorial hero",
+            "parentId": "about",
+            "componentId": "hero-03",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "ded53890-93a3-46c6-972a-9696bdd4be22",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 21,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-6dogm"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-6dogm",
+            "kind": "frame",
+            "name": "Story statement",
+            "parentId": "about",
+            "componentId": "content-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "c38ad4f6-72c6-4a5f-b079-1934cf9a5717",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 22,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-idrzg"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-idrzg",
+            "kind": "frame",
+            "name": "Team grid",
+            "parentId": "about",
+            "componentId": "team-01",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "85930354-bbd1-4da0-8ac7-7c540b23a86b",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 23,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-wi504"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-wi504",
+            "kind": "frame",
+            "name": "Metrics and proof",
+            "parentId": "about",
+            "componentId": "social-proof-03",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "449af865-0915-450a-806e-41f5455ae254",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 24,
+        "createdAt": 1786303663936,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w32-znby8"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w32-znby8",
+            "kind": "frame",
+            "name": "Compact footer",
+            "parentId": "about",
+            "componentId": "footer-01",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "08a657ca-c118-4f48-bcb0-0bda18ec547f",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 25,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w31-o0c2d"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w31-o0c2d",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w31-o0c2d",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "41ab5d34-8ed0-4d22-bf53-631c933d2731",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 26,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w31-o0c2d",
+          "navigation-01"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w31-o0c2d:navigation-01",
+            "kind": "instance-of",
+            "from": "section-msm72w31-o0c2d",
+            "to": "navigation-01",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "305ef0fb-fd68-424e-a9a9-16c720e38697",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 27,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w31-rcx0y"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w31-rcx0y",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w31-rcx0y",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "5d482516-e44f-4ac6-aa52-3dc01f7696f0",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 28,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w31-rcx0y",
+          "hero-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w31-rcx0y:hero-02",
+            "kind": "instance-of",
+            "from": "section-msm72w31-rcx0y",
+            "to": "hero-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "62c558b5-ac13-44d3-a013-1d0f26e86064",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 29,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w31-uo86j"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w31-uo86j",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w31-uo86j",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "2cbb5f8d-f53f-4382-b3d0-734adb96e81c",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 30,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w31-uo86j",
+          "features-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w31-uo86j:features-02",
+            "kind": "instance-of",
+            "from": "section-msm72w31-uo86j",
+            "to": "features-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "5e5db733-7220-403f-9625-a30553a4be95",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 31,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w32-no7gf"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w32-no7gf",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w32-no7gf",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "e17a36d7-d1db-4930-acd6-d2e1de63227f",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 32,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-no7gf",
+          "content-03"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-no7gf:content-03",
+            "kind": "instance-of",
+            "from": "section-msm72w32-no7gf",
+            "to": "content-03",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "55d38235-33c2-424e-b96e-3f2608247540",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 33,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w32-54c23"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w32-54c23",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w32-54c23",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "ae9d80ea-e9c0-4cee-b744-252ad0317203",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 34,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-54c23",
+          "content-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-54c23:content-02",
+            "kind": "instance-of",
+            "from": "section-msm72w32-54c23",
+            "to": "content-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "202a8049-4721-4f99-ad5c-c084804f9f55",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 35,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w32-16gs5"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w32-16gs5",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w32-16gs5",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "58f44c0f-aaec-4110-ad5d-601ccf7e367a",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 36,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-16gs5",
+          "social-proof-03"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-16gs5:social-proof-03",
+            "kind": "instance-of",
+            "from": "section-msm72w32-16gs5",
+            "to": "social-proof-03",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "52a258c3-38c2-4d85-a159-7eec1e470da5",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 37,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w32-7vmzr"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w32-7vmzr",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w32-7vmzr",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "9b152902-0e4d-4176-97a4-51270f302b25",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 38,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-7vmzr",
+          "social-proof-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-7vmzr:social-proof-02",
+            "kind": "instance-of",
+            "from": "section-msm72w32-7vmzr",
+            "to": "social-proof-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "fab6c197-20cd-46a1-9ad3-6c14be6b83ad",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 39,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w32-7lp2o"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w32-7lp2o",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w32-7lp2o",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "d657329b-fb84-451d-89fa-2d8c530c8cfa",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 40,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-7lp2o",
+          "cta-01"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-7lp2o:cta-01",
+            "kind": "instance-of",
+            "from": "section-msm72w32-7lp2o",
+            "to": "cta-01",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "132e8ff8-d782-498e-b116-fcbbb7b5385e",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 41,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w32-q2bym"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w32-q2bym",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w32-q2bym",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "6ba71fbe-b67c-4948-b424-d53541c685e5",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 42,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-q2bym",
+          "footer-01"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-q2bym:footer-01",
+            "kind": "instance-of",
+            "from": "section-msm72w32-q2bym",
+            "to": "footer-01",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "24344a81-6b3a-4717-9fdd-ecf5bc01a450",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 43,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "services"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:services",
+            "kind": "contains",
+            "from": "home",
+            "to": "services",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "075d497d-bf8f-44cb-8a17-636d5402577a",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 44,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "services",
+          "section-msm72w32-vow4d"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:services:section-msm72w32-vow4d",
+            "kind": "contains",
+            "from": "services",
+            "to": "section-msm72w32-vow4d",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "ac8496e9-7ea5-4105-a5c5-bbf39ac155bb",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 45,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-vow4d",
+          "navigation-01"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-vow4d:navigation-01",
+            "kind": "instance-of",
+            "from": "section-msm72w32-vow4d",
+            "to": "navigation-01",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "4286782a-c170-4c1c-b2a3-11f8954a7d0e",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 46,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "services",
+          "section-msm72w32-a273u"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:services:section-msm72w32-a273u",
+            "kind": "contains",
+            "from": "services",
+            "to": "section-msm72w32-a273u",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "e2017c9e-3f14-4fc5-a0fc-1704fcce7905",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 47,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-a273u",
+          "hero-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-a273u:hero-02",
+            "kind": "instance-of",
+            "from": "section-msm72w32-a273u",
+            "to": "hero-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "82b00792-ffc3-4b04-b38e-7715f2908401",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 48,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "services",
+          "section-msm72w32-vl31s"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:services:section-msm72w32-vl31s",
+            "kind": "contains",
+            "from": "services",
+            "to": "section-msm72w32-vl31s",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "6131f8aa-9020-4000-8bc4-d08d8d30a4df",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 49,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-vl31s",
+          "features-03"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-vl31s:features-03",
+            "kind": "instance-of",
+            "from": "section-msm72w32-vl31s",
+            "to": "features-03",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "4476a558-39f0-48c7-b146-f77d79b128c8",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 50,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "services",
+          "section-msm72w32-lii79"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:services:section-msm72w32-lii79",
+            "kind": "contains",
+            "from": "services",
+            "to": "section-msm72w32-lii79",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "4bc32b20-3871-4c93-a1d4-341c413b9e55",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 51,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-lii79",
+          "content-03"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-lii79:content-03",
+            "kind": "instance-of",
+            "from": "section-msm72w32-lii79",
+            "to": "content-03",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "53999769-8be9-447c-83ac-0322b50affc7",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 52,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "services",
+          "section-msm72w32-3kn3q"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:services:section-msm72w32-3kn3q",
+            "kind": "contains",
+            "from": "services",
+            "to": "section-msm72w32-3kn3q",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "4796d7c9-1bb9-48d7-bf1e-3b2dfed81963",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 53,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-3kn3q",
+          "cta-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-3kn3q:cta-02",
+            "kind": "instance-of",
+            "from": "section-msm72w32-3kn3q",
+            "to": "cta-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "caeb9347-a4df-4555-9d23-c58f228bf033",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 54,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "services",
+          "section-msm72w32-59tha"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:services:section-msm72w32-59tha",
+            "kind": "contains",
+            "from": "services",
+            "to": "section-msm72w32-59tha",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "85d18ce7-350f-4cdf-862d-a94d823295f1",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 55,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-59tha",
+          "footer-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-59tha:footer-02",
+            "kind": "instance-of",
+            "from": "section-msm72w32-59tha",
+            "to": "footer-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "ff4eb8f2-12c5-4448-a2cc-f9f85b01be30",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 56,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "about"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:about",
+            "kind": "contains",
+            "from": "home",
+            "to": "about",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "d9727770-22dc-4645-abeb-2599bc605ab2",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 57,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "about",
+          "section-msm72w32-jmd65"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:about:section-msm72w32-jmd65",
+            "kind": "contains",
+            "from": "about",
+            "to": "section-msm72w32-jmd65",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "8c98720b-60d3-407f-a3ea-d3938201d456",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 58,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-jmd65",
+          "navigation-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-jmd65:navigation-02",
+            "kind": "instance-of",
+            "from": "section-msm72w32-jmd65",
+            "to": "navigation-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "3bbf0c2c-e3aa-428e-9161-4f3ffb381261",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 59,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "about",
+          "section-msm72w32-2mk88"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:about:section-msm72w32-2mk88",
+            "kind": "contains",
+            "from": "about",
+            "to": "section-msm72w32-2mk88",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "2cc82c57-85c1-4c6e-b647-9ab105ae2c2b",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 60,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-2mk88",
+          "hero-03"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-2mk88:hero-03",
+            "kind": "instance-of",
+            "from": "section-msm72w32-2mk88",
+            "to": "hero-03",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "bdd5a10e-1937-4fa3-8bb5-f1ddbfa99594",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 61,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "about",
+          "section-msm72w32-6dogm"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:about:section-msm72w32-6dogm",
+            "kind": "contains",
+            "from": "about",
+            "to": "section-msm72w32-6dogm",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "b45ac15e-7739-4b76-a3c1-803ffb8a759e",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 62,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-6dogm",
+          "content-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-6dogm:content-02",
+            "kind": "instance-of",
+            "from": "section-msm72w32-6dogm",
+            "to": "content-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "f32a22c4-578c-4b5f-b7f2-9bae61570640",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 63,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "about",
+          "section-msm72w32-idrzg"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:about:section-msm72w32-idrzg",
+            "kind": "contains",
+            "from": "about",
+            "to": "section-msm72w32-idrzg",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "4eb1a5f4-c2ae-430b-8c1c-b0cba6deb067",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 64,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-idrzg",
+          "team-01"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-idrzg:team-01",
+            "kind": "instance-of",
+            "from": "section-msm72w32-idrzg",
+            "to": "team-01",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "f8b65b3e-4523-49b4-aa32-60718dbee765",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 65,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "about",
+          "section-msm72w32-wi504"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:about:section-msm72w32-wi504",
+            "kind": "contains",
+            "from": "about",
+            "to": "section-msm72w32-wi504",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "68246182-d64b-4e4a-8483-5d20cdc519e4",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 66,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-wi504",
+          "social-proof-03"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-wi504:social-proof-03",
+            "kind": "instance-of",
+            "from": "section-msm72w32-wi504",
+            "to": "social-proof-03",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "09a6114a-8fc0-4bfa-93e9-63a2d376ec48",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 67,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "about",
+          "section-msm72w32-znby8"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:about:section-msm72w32-znby8",
+            "kind": "contains",
+            "from": "about",
+            "to": "section-msm72w32-znby8",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "e801a173-4af0-4721-866d-a03212672c70",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 68,
+        "createdAt": 1786303663936,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w32-znby8",
+          "footer-01"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w32-znby8:footer-01",
+            "kind": "instance-of",
+            "from": "section-msm72w32-znby8",
+            "to": "footer-01",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wcg",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "b6c92bbc-c861-41a8-943e-2614225d07aa",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 69,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-lo3kj"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-lo3kj",
+            "kind": "frame",
+            "name": "Compact navbar",
+            "parentId": "home",
+            "componentId": "navigation-01",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "0b7879e1-eb57-408e-86c0-6da56bda449c",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 70,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-cbzgd"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-cbzgd",
+            "kind": "frame",
+            "name": "Split media hero",
+            "parentId": "home",
+            "componentId": "hero-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "8ded71c9-618f-4719-a167-2da883094d1a",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 71,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-51d9t"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-51d9t",
+            "kind": "frame",
+            "name": "Bento features",
+            "parentId": "home",
+            "componentId": "features-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "b7653e39-7fd0-49cb-9001-510c2203f208",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 72,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-ovluz"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-ovluz",
+            "kind": "frame",
+            "name": "Process timeline",
+            "parentId": "home",
+            "componentId": "content-03",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "fa23b4a9-7521-45ec-a927-d4214b6da781",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 73,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-y3s9f"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-y3s9f",
+            "kind": "frame",
+            "name": "Story statement",
+            "parentId": "home",
+            "componentId": "content-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "d87146e8-fae7-408a-80e3-485f6cd780f9",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 74,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-wgv2p"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-wgv2p",
+            "kind": "frame",
+            "name": "Metrics and proof",
+            "parentId": "home",
+            "componentId": "social-proof-03",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "d348403c-4978-4dd9-b076-e7b30d5e746b",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 75,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-6lcro"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-6lcro",
+            "kind": "frame",
+            "name": "Testimonial spotlight",
+            "parentId": "home",
+            "componentId": "social-proof-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "340fe6da-6db5-4241-84bb-919784f75106",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 76,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-zstwd"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-zstwd",
+            "kind": "frame",
+            "name": "Action band",
+            "parentId": "home",
+            "componentId": "cta-01",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "1dddfff1-e38c-4cd7-819d-5317df78673c",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 77,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-5ei3s"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-5ei3s",
+            "kind": "frame",
+            "name": "Compact footer",
+            "parentId": "home",
+            "componentId": "footer-01",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "abaf1ed7-50f0-492a-ad54-7eebb44600a6",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 78,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-gtzzb"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-gtzzb",
+            "kind": "frame",
+            "name": "Compact navbar",
+            "parentId": "services",
+            "componentId": "navigation-01",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "ee8e9568-dc60-45ca-a191-219919a6f15b",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 79,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-ut5gi"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-ut5gi",
+            "kind": "frame",
+            "name": "Split media hero",
+            "parentId": "services",
+            "componentId": "hero-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "053f84de-a22d-49d7-b0c4-dfeba3260276",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 80,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-zu0v0"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-zu0v0",
+            "kind": "frame",
+            "name": "Numbered feature list",
+            "parentId": "services",
+            "componentId": "features-03",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "74fb7d04-a974-42c2-bef6-5284a28e2817",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 81,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-wumvi"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-wumvi",
+            "kind": "frame",
+            "name": "Process timeline",
+            "parentId": "services",
+            "componentId": "content-03",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "05997d8b-10a8-41c6-81e8-fc6ee116b2a9",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 82,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-6hgtc"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-6hgtc",
+            "kind": "frame",
+            "name": "Split call to action",
+            "parentId": "services",
+            "componentId": "cta-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "5597dbdd-c301-4f6d-b0d3-e1f9c4977cbe",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 83,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-f05v2"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-f05v2",
+            "kind": "frame",
+            "name": "Mega footer",
+            "parentId": "services",
+            "componentId": "footer-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "0258b95e-8a53-4175-aa27-eca58e62e7b1",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 84,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-scl6o"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-scl6o",
+            "kind": "frame",
+            "name": "Centered navbar",
+            "parentId": "about",
+            "componentId": "navigation-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "ddc37202-eb67-4f4c-8cd7-0383caa10cc6",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 85,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-ycovj"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-ycovj",
+            "kind": "frame",
+            "name": "Editorial hero",
+            "parentId": "about",
+            "componentId": "hero-03",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "5f0f6057-8888-49d6-9582-14c7b738bf20",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 86,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-iw27i"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-iw27i",
+            "kind": "frame",
+            "name": "Story statement",
+            "parentId": "about",
+            "componentId": "content-02",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "afced4e1-2f70-41b2-b2da-4ca52f4874f2",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 87,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-fef7l"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-fef7l",
+            "kind": "frame",
+            "name": "Team grid",
+            "parentId": "about",
+            "componentId": "team-01",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "c50c3f10-51bd-4463-a231-b1a3d49c56fd",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 88,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-t3lc6"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-t3lc6",
+            "kind": "frame",
+            "name": "Metrics and proof",
+            "parentId": "about",
+            "componentId": "social-proof-03",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "87df8fda-7780-4d77-abaf-e5c57d105faa",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 89,
+        "createdAt": 1786303664005,
+        "type": "node.upserted",
+        "targetIds": [
+          "section-msm72w4f-bfz6t"
+        ],
+        "payload": {
+          "node": {
+            "id": "section-msm72w4f-bfz6t",
+            "kind": "frame",
+            "name": "Compact footer",
+            "parentId": "about",
+            "componentId": "footer-01",
+            "source": "froam",
+            "metadata": {
+              "frame": {
+                "preset": "responsive",
+                "width": 1200,
+                "height": 720,
+                "background": "#ffffff"
+              },
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "5693bc18-9b63-4019-b7cb-164fa00708c7",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 90,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w4f-lo3kj"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w4f-lo3kj",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w4f-lo3kj",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "8ec747cd-df01-4008-9403-7e0cf8d537ae",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 91,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-lo3kj",
+          "navigation-01"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-lo3kj:navigation-01",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-lo3kj",
+            "to": "navigation-01",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "d7e84c92-7baf-4227-8e1d-68721eeb1002",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 92,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w4f-cbzgd"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w4f-cbzgd",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w4f-cbzgd",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "18596f48-6eae-46ae-b1c6-d1250ec485a9",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 93,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-cbzgd",
+          "hero-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-cbzgd:hero-02",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-cbzgd",
+            "to": "hero-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "b2ca1bd8-a39b-4cf7-820e-a5738c0ed422",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 94,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w4f-51d9t"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w4f-51d9t",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w4f-51d9t",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "398b6800-dfe3-426d-a02b-b66820a11fb0",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 95,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-51d9t",
+          "features-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-51d9t:features-02",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-51d9t",
+            "to": "features-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "4e87c013-6f9d-4879-8791-9e83744402ee",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 96,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w4f-ovluz"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w4f-ovluz",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w4f-ovluz",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "f620ea14-d82b-411c-a4c2-7333caace6f9",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 97,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-ovluz",
+          "content-03"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-ovluz:content-03",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-ovluz",
+            "to": "content-03",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "92644d47-ee63-404e-a538-70500cde5a72",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 98,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w4f-y3s9f"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w4f-y3s9f",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w4f-y3s9f",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "aea19317-b722-49ed-94a6-a08eefffaec3",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 99,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-y3s9f",
+          "content-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-y3s9f:content-02",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-y3s9f",
+            "to": "content-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "ec4d0dec-3d8b-4562-b5f8-80c507dff49e",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 100,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w4f-wgv2p"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w4f-wgv2p",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w4f-wgv2p",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "8a6b9b5a-dab9-4ece-86dd-b9ab3bbc6d61",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 101,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-wgv2p",
+          "social-proof-03"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-wgv2p:social-proof-03",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-wgv2p",
+            "to": "social-proof-03",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "a2ac131b-5683-478d-80a2-793ac9da7448",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 102,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w4f-6lcro"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w4f-6lcro",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w4f-6lcro",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "331d7312-9187-4507-9b7c-669940b1e16c",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 103,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-6lcro",
+          "social-proof-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-6lcro:social-proof-02",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-6lcro",
+            "to": "social-proof-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "98b959d2-3b4b-496f-8369-c110b4c26931",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 104,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w4f-zstwd"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w4f-zstwd",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w4f-zstwd",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "d0049878-c53c-4674-8a16-d1e01eec091e",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 105,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-zstwd",
+          "cta-01"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-zstwd:cta-01",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-zstwd",
+            "to": "cta-01",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "b1365229-27c0-44a0-a0d7-8f55f6835891",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 106,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "home",
+          "section-msm72w4f-5ei3s"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:home:section-msm72w4f-5ei3s",
+            "kind": "contains",
+            "from": "home",
+            "to": "section-msm72w4f-5ei3s",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "d38e0f6e-542e-4ca6-86d4-50e4e2069f77",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 107,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-5ei3s",
+          "footer-01"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-5ei3s:footer-01",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-5ei3s",
+            "to": "footer-01",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "dbfc7538-29bc-4dde-8a07-dca9946b0af0",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 108,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "services",
+          "section-msm72w4f-gtzzb"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:services:section-msm72w4f-gtzzb",
+            "kind": "contains",
+            "from": "services",
+            "to": "section-msm72w4f-gtzzb",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "3a37fdca-3ae1-4092-854a-d2273138adb5",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 109,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-gtzzb",
+          "navigation-01"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-gtzzb:navigation-01",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-gtzzb",
+            "to": "navigation-01",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "e89fa66e-4c36-485d-9beb-3a5c4bb1577d",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 110,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "services",
+          "section-msm72w4f-ut5gi"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:services:section-msm72w4f-ut5gi",
+            "kind": "contains",
+            "from": "services",
+            "to": "section-msm72w4f-ut5gi",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "2d932fda-cf85-4e48-a6fe-613fe7cb101f",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 111,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-ut5gi",
+          "hero-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-ut5gi:hero-02",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-ut5gi",
+            "to": "hero-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "c26a7d34-2fa8-41f8-a3ab-4675c8b98c42",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 112,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "services",
+          "section-msm72w4f-zu0v0"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:services:section-msm72w4f-zu0v0",
+            "kind": "contains",
+            "from": "services",
+            "to": "section-msm72w4f-zu0v0",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "1d6fd224-c33a-4a95-b319-5edcc5aec6a7",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 113,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-zu0v0",
+          "features-03"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-zu0v0:features-03",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-zu0v0",
+            "to": "features-03",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "bbe44552-1233-4970-98c0-0a153592ed6c",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 114,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "services",
+          "section-msm72w4f-wumvi"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:services:section-msm72w4f-wumvi",
+            "kind": "contains",
+            "from": "services",
+            "to": "section-msm72w4f-wumvi",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "44498831-b18f-4c99-8424-9d2bdb1b2070",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 115,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-wumvi",
+          "content-03"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-wumvi:content-03",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-wumvi",
+            "to": "content-03",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "47d87f98-490a-41e0-9911-b18ca335b05b",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 116,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "services",
+          "section-msm72w4f-6hgtc"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:services:section-msm72w4f-6hgtc",
+            "kind": "contains",
+            "from": "services",
+            "to": "section-msm72w4f-6hgtc",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "afa026d2-cd08-451a-b0ab-176c0396a686",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 117,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-6hgtc",
+          "cta-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-6hgtc:cta-02",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-6hgtc",
+            "to": "cta-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "4cb565fa-4958-456d-bf9c-27b37f7d1870",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 118,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "services",
+          "section-msm72w4f-f05v2"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:services:section-msm72w4f-f05v2",
+            "kind": "contains",
+            "from": "services",
+            "to": "section-msm72w4f-f05v2",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "656907e0-d115-4bf7-9677-92e9df349e01",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 119,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-f05v2",
+          "footer-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-f05v2:footer-02",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-f05v2",
+            "to": "footer-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "daed0cad-20ce-4761-8bff-ca39b4865f17",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 120,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "about",
+          "section-msm72w4f-scl6o"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:about:section-msm72w4f-scl6o",
+            "kind": "contains",
+            "from": "about",
+            "to": "section-msm72w4f-scl6o",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "b5b61a66-8b76-44f2-9c05-ab882162a53e",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 121,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-scl6o",
+          "navigation-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-scl6o:navigation-02",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-scl6o",
+            "to": "navigation-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "3cd77794-ca71-44cc-91bc-50902667069f",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 122,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "about",
+          "section-msm72w4f-ycovj"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:about:section-msm72w4f-ycovj",
+            "kind": "contains",
+            "from": "about",
+            "to": "section-msm72w4f-ycovj",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "1e2cef8f-1d61-4edb-b148-27a2a39c2ee8",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 123,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-ycovj",
+          "hero-03"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-ycovj:hero-03",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-ycovj",
+            "to": "hero-03",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "8d0da3d7-0f09-41c0-82b8-fc3e9caaa384",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 124,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "about",
+          "section-msm72w4f-iw27i"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:about:section-msm72w4f-iw27i",
+            "kind": "contains",
+            "from": "about",
+            "to": "section-msm72w4f-iw27i",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "549128cd-9d1c-4f85-bc23-8b1b03fe884a",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 125,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-iw27i",
+          "content-02"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-iw27i:content-02",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-iw27i",
+            "to": "content-02",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "eae7dbbb-e391-4aa4-8036-349c5e7adf5b",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 126,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "about",
+          "section-msm72w4f-fef7l"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:about:section-msm72w4f-fef7l",
+            "kind": "contains",
+            "from": "about",
+            "to": "section-msm72w4f-fef7l",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "61d9e817-9b21-4fb4-b1f9-eee03ce2b2ac",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 127,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-fef7l",
+          "team-01"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-fef7l:team-01",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-fef7l",
+            "to": "team-01",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "66706eff-ab84-4e31-b23a-669162783edd",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 128,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "about",
+          "section-msm72w4f-t3lc6"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:about:section-msm72w4f-t3lc6",
+            "kind": "contains",
+            "from": "about",
+            "to": "section-msm72w4f-t3lc6",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "2ba4f756-1cf9-4a0e-ad15-95106e544ab1",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 129,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-t3lc6",
+          "social-proof-03"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-t3lc6:social-proof-03",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-t3lc6",
+            "to": "social-proof-03",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "209aec37-0ae9-45c4-b37e-bc4335966f2c",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 130,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "about",
+          "section-msm72w4f-bfz6t"
+        ],
+        "payload": {
+          "relation": {
+            "id": "contains:about:section-msm72w4f-bfz6t",
+            "kind": "contains",
+            "from": "about",
+            "to": "section-msm72w4f-bfz6t",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "2da90245-84b9-4d99-912a-83c51683aa85",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 131,
+        "createdAt": 1786303664005,
+        "type": "relation.upserted",
+        "targetIds": [
+          "section-msm72w4f-bfz6t",
+          "footer-01"
+        ],
+        "payload": {
+          "relation": {
+            "id": "instance:section-msm72w4f-bfz6t:footer-01",
+            "kind": "instance-of",
+            "from": "section-msm72w4f-bfz6t",
+            "to": "footer-01",
+            "metadata": {
+              "sitePlanner": true
+            }
+          }
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "988b469f-021d-4913-8c12-3d97586c8bf2",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 132,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w31-o0c2d"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w31-o0c2d"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "7560b8bb-54cf-4526-918f-569ef50d8563",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 133,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w31-rcx0y"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w31-rcx0y"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "9157a07c-a106-4f74-99f9-6331281a0ff2",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 134,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w31-uo86j"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w31-uo86j"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "75aade72-61f8-4b4d-901e-fedf1501ea85",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 135,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-no7gf"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-no7gf"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "3c7ea650-8377-47aa-993c-b46450888c20",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 136,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-54c23"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-54c23"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "7c06be82-878a-46e5-b2a7-8c8a103f8d88",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 137,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-16gs5"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-16gs5"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "4fbcccee-9657-4cce-afe8-c45d4e6df52f",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 138,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-7vmzr"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-7vmzr"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "75d52727-6a34-4ba9-a295-f4c2ed25f02a",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 139,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-7lp2o"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-7lp2o"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "b4db0634-6197-45f8-87e6-c14813f5e8a4",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 140,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-q2bym"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-q2bym"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "44ced695-9681-4596-a8ac-789000b4e665",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 141,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-vow4d"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-vow4d"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "50753c24-1168-434f-b55c-2ec5e0ba43c2",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 142,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-a273u"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-a273u"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "bd6421ad-69ef-4514-b568-d2c21db7a8b8",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 143,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-vl31s"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-vl31s"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "03e8dd6d-ba0a-4b98-88c7-22ac2e1e6084",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 144,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-lii79"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-lii79"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "f93c8a58-77ac-4614-8a0c-4ed93d891093",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 145,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-3kn3q"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-3kn3q"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "8e0bdbeb-7240-4049-bc06-561121f042ed",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 146,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-59tha"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-59tha"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "61c661c4-c178-4c68-9b76-5fecaccfe5d6",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 147,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-jmd65"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-jmd65"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "d2a6b73c-e00d-46a3-8776-b28a34dfdd11",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 148,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-2mk88"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-2mk88"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "3bc94a3f-f613-4592-a769-f296ec8edbd1",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 149,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-6dogm"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-6dogm"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "ef110083-8f68-4e01-ad2b-3c0fe35a67ad",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 150,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-idrzg"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-idrzg"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "3355ea4e-6f55-4093-a204-420d9c320911",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 151,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-wi504"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-wi504"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "b8816323-4041-4563-adb3-c9abefe0ba43",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 152,
+        "createdAt": 1786303664005,
+        "type": "node.removed",
+        "targetIds": [
+          "section-msm72w32-znby8"
+        ],
+        "payload": {
+          "nodeId": "section-msm72w32-znby8"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "9b58da39-ee1a-4e22-8a96-8013c7a961fd",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 153,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "home",
+          "section-msm72w31-o0c2d"
+        ],
+        "payload": {
+          "relationId": "contains:home:section-msm72w31-o0c2d"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "b51515e8-d1fc-45e8-b55d-f400b22175f8",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 154,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w31-o0c2d",
+          "navigation-01"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w31-o0c2d:navigation-01"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "3d8aa123-4a62-4bc3-bdd7-24e0abc5babb",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 155,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "home",
+          "section-msm72w31-rcx0y"
+        ],
+        "payload": {
+          "relationId": "contains:home:section-msm72w31-rcx0y"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "5eaaca7f-8665-4814-90b1-2c21e3b94f55",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 156,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w31-rcx0y",
+          "hero-02"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w31-rcx0y:hero-02"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "855672f2-a5e5-415e-88bb-25ba41e13649",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 157,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "home",
+          "section-msm72w31-uo86j"
+        ],
+        "payload": {
+          "relationId": "contains:home:section-msm72w31-uo86j"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "1abfb7da-a075-4764-9a02-c2a4d0d2f84c",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 158,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w31-uo86j",
+          "features-02"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w31-uo86j:features-02"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "a32f5272-aed9-4675-bb2d-a2a24c48340c",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 159,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "home",
+          "section-msm72w32-no7gf"
+        ],
+        "payload": {
+          "relationId": "contains:home:section-msm72w32-no7gf"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "8a0016d9-6cdf-4b1d-8480-3905fb601861",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 160,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-no7gf",
+          "content-03"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-no7gf:content-03"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "c50e9b28-469d-4b2c-b011-583b6d774125",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 161,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "home",
+          "section-msm72w32-54c23"
+        ],
+        "payload": {
+          "relationId": "contains:home:section-msm72w32-54c23"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "87f59035-9bc8-43a8-855f-7b7f1548d393",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 162,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-54c23",
+          "content-02"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-54c23:content-02"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "d06b55c6-8cc8-473f-b531-52f4db14661d",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 163,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "home",
+          "section-msm72w32-16gs5"
+        ],
+        "payload": {
+          "relationId": "contains:home:section-msm72w32-16gs5"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "d101eaf2-1997-44be-aea6-c17d7226a59b",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 164,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-16gs5",
+          "social-proof-03"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-16gs5:social-proof-03"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "e6186fc9-90fc-43e9-adff-ea95c77f5f66",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 165,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "home",
+          "section-msm72w32-7vmzr"
+        ],
+        "payload": {
+          "relationId": "contains:home:section-msm72w32-7vmzr"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "b449177c-4b34-4074-bcc7-6f6572a53deb",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 166,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-7vmzr",
+          "social-proof-02"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-7vmzr:social-proof-02"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "cbbdb97a-8e60-4c17-8420-ea06f7d20d29",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 167,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "home",
+          "section-msm72w32-7lp2o"
+        ],
+        "payload": {
+          "relationId": "contains:home:section-msm72w32-7lp2o"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "ac4e340f-4c48-4551-8c39-f79ad0b13d2c",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 168,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-7lp2o",
+          "cta-01"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-7lp2o:cta-01"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "b8c6bf50-0aee-4f72-ba91-e4ac2735aaac",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 169,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "home",
+          "section-msm72w32-q2bym"
+        ],
+        "payload": {
+          "relationId": "contains:home:section-msm72w32-q2bym"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "d4f1912b-3de9-4fa6-ba8b-b93a085b54b7",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 170,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-q2bym",
+          "footer-01"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-q2bym:footer-01"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "4a975805-bff1-435c-bab8-8e96bfdf5826",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 171,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "services",
+          "section-msm72w32-vow4d"
+        ],
+        "payload": {
+          "relationId": "contains:services:section-msm72w32-vow4d"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "1e7f884d-bc46-40af-b407-00245bd1d3d3",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 172,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-vow4d",
+          "navigation-01"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-vow4d:navigation-01"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "681b67ac-7814-4826-968e-c62c86216519",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 173,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "services",
+          "section-msm72w32-a273u"
+        ],
+        "payload": {
+          "relationId": "contains:services:section-msm72w32-a273u"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "6bb208ed-1dcf-48b7-8ad2-5f34433b3149",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 174,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-a273u",
+          "hero-02"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-a273u:hero-02"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "823a4dcd-1527-47bb-aaeb-7b531477fc57",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 175,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "services",
+          "section-msm72w32-vl31s"
+        ],
+        "payload": {
+          "relationId": "contains:services:section-msm72w32-vl31s"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "68777494-3ce8-4c98-af98-3f9c4257c604",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 176,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-vl31s",
+          "features-03"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-vl31s:features-03"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "deb3bbc3-d672-4d0d-b667-d350868abcca",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 177,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "services",
+          "section-msm72w32-lii79"
+        ],
+        "payload": {
+          "relationId": "contains:services:section-msm72w32-lii79"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "0ffa8c21-7d8b-4e6f-a2f0-1283e802c2b9",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 178,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-lii79",
+          "content-03"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-lii79:content-03"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "657d3b56-159f-42a6-abb1-311451088f07",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 179,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "services",
+          "section-msm72w32-3kn3q"
+        ],
+        "payload": {
+          "relationId": "contains:services:section-msm72w32-3kn3q"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "6f3895ce-55cd-42e5-8bba-326663404694",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 180,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-3kn3q",
+          "cta-02"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-3kn3q:cta-02"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "c66e84d6-d7ce-4b72-a17c-1e959250f33d",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 181,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "services",
+          "section-msm72w32-59tha"
+        ],
+        "payload": {
+          "relationId": "contains:services:section-msm72w32-59tha"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "ef652ffa-2708-41c1-b840-e781c1849157",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 182,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-59tha",
+          "footer-02"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-59tha:footer-02"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "e52f623d-82e0-42d8-9795-7ee5e85232dc",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 183,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "about",
+          "section-msm72w32-jmd65"
+        ],
+        "payload": {
+          "relationId": "contains:about:section-msm72w32-jmd65"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "bd52fdf2-e5d4-4748-a471-8892c8ff59d6",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 184,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-jmd65",
+          "navigation-02"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-jmd65:navigation-02"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "b4d508a8-57b0-4d1e-9d8b-1d6d0803a7b2",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 185,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "about",
+          "section-msm72w32-2mk88"
+        ],
+        "payload": {
+          "relationId": "contains:about:section-msm72w32-2mk88"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "bb197794-65b3-4ae5-abaf-b434820c12da",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 186,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-2mk88",
+          "hero-03"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-2mk88:hero-03"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "161e6ccd-0b34-468b-a23d-a22b95113e94",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 187,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "about",
+          "section-msm72w32-6dogm"
+        ],
+        "payload": {
+          "relationId": "contains:about:section-msm72w32-6dogm"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "bbca9556-7cc4-4366-8099-ff509364f042",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 188,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-6dogm",
+          "content-02"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-6dogm:content-02"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "e259ac2e-3f25-44f0-bc53-02bd9eaa3ca3",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 189,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "about",
+          "section-msm72w32-idrzg"
+        ],
+        "payload": {
+          "relationId": "contains:about:section-msm72w32-idrzg"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "9739fe1f-c30a-45bc-8d6a-e86c980a848e",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 190,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-idrzg",
+          "team-01"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-idrzg:team-01"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "b07b1efc-7f02-47f4-8fac-d6a0df57b883",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 191,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "about",
+          "section-msm72w32-wi504"
+        ],
+        "payload": {
+          "relationId": "contains:about:section-msm72w32-wi504"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "1243425c-7181-4c9f-b713-4f1a57ba5677",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 192,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-wi504",
+          "social-proof-03"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-wi504:social-proof-03"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "a3b8714c-8e11-41e5-bf1b-1bd5393e31d2",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 193,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "about",
+          "section-msm72w32-znby8"
+        ],
+        "payload": {
+          "relationId": "contains:about:section-msm72w32-znby8"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "14f4640c-8129-41a8-9bf1-bbcbcb9f7abf",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 194,
+        "createdAt": 1786303664005,
+        "type": "relation.removed",
+        "targetIds": [
+          "section-msm72w32-znby8",
+          "footer-01"
+        ],
+        "payload": {
+          "relationId": "instance:section-msm72w32-znby8:footer-01"
+        },
+        "batchId": "site-plan:msm72wed",
+        "label": "Update page structure"
+      },
+      {
+        "schemaVersion": 2,
+        "id": "531e0614-c950-454c-be2f-167e6b679e2f",
+        "projectId": "project:127.0.0.1:4766",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 195,
+        "createdAt": 1786304299136,
+        "type": "interaction.upserted",
+        "targetIds": [
+          "b79a9dbc-e890-4b90-b7ec-455049cc9d2b"
+        ],
+        "payload": {
+          "interaction": {
+            "id": "preset:fade-up-soft:b79a9dbc-e890-4b90-b7ec-455049cc9d2b",
+            "name": "Soft rise",
+            "sourceId": "b79a9dbc-e890-4b90-b7ec-455049cc9d2b",
+            "targetIds": [
+              "b79a9dbc-e890-4b90-b7ec-455049cc9d2b"
+            ],
+            "trigger": "load",
+            "timeline": [
+              {
+                "at": 0,
+                "values": {
+                  "transform": "translateY(18px)",
+                  "opacity": "0"
+                },
+                "easing": "cubic-bezier(.22,1,.36,1)"
+              },
+              {
+                "at": 1,
+                "values": {
+                  "transform": "translateY(0)",
+                  "opacity": "1"
+                },
+                "easing": "cubic-bezier(.22,1,.36,1)"
+              }
+            ],
+            "durationMs": 650,
+            "delayMs": 0,
+            "metadata": {
+              "presetId": "fade-up-soft",
+              "category": "Entrance",
+              "iterations": 1,
+              "direction": "normal",
+              "fillMode": "both"
+            }
+          }
+        },
+        "label": "Applied Soft rise"
+      }
+    ]
+  },
+  "design": {
+    "version": 3,
+    "updatedAt": "2026-08-09T19:38:19.987Z",
+    "routes": {}
+  }
+}

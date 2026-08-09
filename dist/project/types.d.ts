@@ -141,10 +141,14 @@ export type FroamDNA = {
     knowledge?: Record<string, FroamKnowledge>;
 };
 export type FroamArchiveItem = {
-    schemaVersion: 1;
+    /** v1 items deserialize as components. v2 adds portable non-DOM artifacts. */
+    schemaVersion: 1 | 2;
     id: FroamId;
     nodeId: FroamId;
     name: string;
+    kind?: 'component' | 'style' | 'motion' | 'interaction' | 'interface-pattern';
+    description?: string;
+    tags?: string[];
     createdAt: number;
     createdBy: FroamActorId;
     snapshot?: {
@@ -162,6 +166,12 @@ export type FroamArchiveItem = {
         sourceNodeId: FroamId;
     };
     usageNodeIds: FroamId[];
+    artifact?: {
+        styles?: Record<string, string>;
+        interaction?: FroamInteraction;
+        interactionIds?: FroamId[];
+        includes?: Array<'structure' | 'styles' | 'motion' | 'behavior'>;
+    };
     metadata?: Record<string, unknown>;
 };
 export type FroamAnalysisKind = 'predicted-attention' | 'visual-rhythm' | 'responsive-observation' | 'screenshot-reconstruction' | 'chaos-result' | 'synthetic-ux-run' | 'trailer-storyboard' | 'sampling-session';

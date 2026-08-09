@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateActio
 import { Archive, Brain, Clapperboard, Eye, GitFork, History, Network, Play, Pause, ScanSearch, Smartphone, Upload, Waves, X } from 'lucide-react'
 import { appendProjectEvents, createProjectEvent, deriveBranchState } from '../project/event-log'
 import { scanDomTree, dnaFromScan } from '../project/scan'
-import { createArchiveItem, searchArchive } from '../project/archive'
+import { archiveItemKind, createArchiveItem, recordArchiveArtifactUse, searchArchive, type FroamArchiveKind } from '../project/archive'
+import { buildIntelligenceMemory } from '../project/intelligence-memory'
 import { archaeologyForNode } from '../project/archaeology'
 import { createFlowGraph } from '../project/product-flow'
 import { predictAttention, type FroamAttentionRank } from '../project/attention'
@@ -10,7 +11,7 @@ import { analyzeVisualRhythm } from '../project/rhythm'
 import { cinemaWidths, defaultResponsivePolicy, observeResponsiveState, responsiveSuggestions, type FroamResponsiveObservation } from '../project/responsive'
 import { applyVisualDiff, compareScreenshotPixels, localScreenshotProvider, type FroamScreenshotReconstruction, type FroamScreenshotRegion } from '../project/screenshot-reconstruction'
 import type { FroamNodeRegistry } from '../project/node-registry'
-import type { FroamProjectDocument, FroamProjectEventPayload, FroamProjectEventType, FroamResponsivePolicy, FroamScanRecord } from '../project/types'
+import type { FroamArchiveItem, FroamProjectDocument, FroamProjectEventPayload, FroamProjectEventType, FroamResponsivePolicy, FroamScanRecord } from '../project/types'
 
 type SelectionRef = { nodeId?: string; path: string; label: string } | null
 export type FroamIntelligenceTab = 'scan' | 'dna' | 'archive' | 'archaeology' | 'flow' | 'attention' | 'rhythm' | 'responsive' | 'screenshot'
@@ -20,6 +21,7 @@ type Props = {
   actorId: string; root: HTMLElement | null; registry: FroamNodeRegistry; onRegistryChange: (registry: FroamNodeRegistry) => void
   routeKey: string; viewport: 'desktop' | 'tablet' | 'mobile'; selection: SelectionRef; selectedElement: HTMLElement | null
   onSelectNode: (nodeId: string, path?: string) => void; onInsertArchived: (html: string) => void
+  onApplyArchivedStyle: (styles: Record<string, string>) => void
   onInsertReconstruction: (regions: FroamScreenshotRegion[], width: number, height: number, rootNodeId: string) => HTMLElement
   onPreviewWidth: (width: number | null) => void; onToast: (message: string) => void
   requestedTab?: FroamIntelligenceTab; onTemporalOwnerChange?: (owner: 'breakpoint-cinema' | null) => void
@@ -32,6 +34,7 @@ export default function FroamIntelligence(props: Props) {
   const [tab, setTab] = useState<FroamIntelligenceTab>(() => { try { return (localStorage.getItem('froam-intelligence-tab-v1') as FroamIntelligenceTab | null) ?? 'scan' } catch { return 'scan' } })
   const [scanning, setScanning] = useState(false)
   const [archiveQuery, setArchiveQuery] = useState('')
+  const [archiveKind, setArchiveKind] = useState<'all' | FroamArchiveKind>('all')
   const [flowName, setFlowName] = useState('Primary journey')
   const [flowNodeName, setFlowNodeName] = useState('New screen')
   const [flowRoute, setFlowRoute] = useState('')
@@ -54,6 +57,7 @@ export default function FroamIntelligence(props: Props) {
   }, [state.scans])
   const latestAttention = Object.values(state.analyses).filter((analysis) => analysis.kind === 'predicted-attention').sort((a, b) => b.createdAt - a.createdAt)[0]
   const ranking = (latestAttention?.result.ranking ?? []) as FroamAttentionRank[]
+  const memory = useMemo(() => buildIntelligenceMemory(state), [state])
 
   useEffect(() => { if (props.requestedTab) setTab(props.requestedTab) }, [props.requestedTab])
   useEffect(() => { try { localStorage.setItem('froam-intelligence-tab-v1', tab) } catch { /* optional preference */ }; props.onTemporalOwnerChange?.(props.open && tab === 'responsive' ? 'breakpoint-cinema' : null) }, [tab, props.open, props.onTemporalOwnerChange])
@@ -92,6 +96,21 @@ export default function FroamIntelligence(props: Props) {
   }
 
   function removeArchive(id: string) { commit([{ type: 'archive.removed', payload: { archiveItemId: id }, label: 'Removed from Archive' }]) }
+
+  function useArchiveItem(item: FroamArchiveItem) {
+    const kind = archiveItemKind(item)
+    const targetNodeId = props.selection?.nodeId ?? item.nodeId
+    if ((kind === 'component' || kind === 'interface-pattern') && item.snapshot?.html) props.onInsertArchived(item.snapshot.html)
+    if ((kind === 'style' || kind === 'interface-pattern') && item.artifact?.styles) props.onApplyArchivedStyle(item.artifact.styles)
+    if ((kind === 'motion' || kind === 'interaction' || kind === 'interface-pattern') && item.artifact?.interaction) {
+      const source = item.artifact.interaction
+      const interaction = { ...source, id: `archive-use:${Date.now().toString(36)}`, sourceId: targetNodeId, targetIds: [targetNodeId], metadata: { ...source.metadata, archiveItemId: item.id, derivedFromInteractionId: source.id } }
+      commit([{ type: 'interaction.upserted', payload: { interaction }, targetIds: [targetNodeId], label: `Applied Archive behavior: ${item.name}` }])
+      if (props.selectedElement && interaction.timeline.length) props.selectedElement.animate(interaction.timeline.map((frame) => ({ ...frame.values, offset: frame.at })), { duration: interaction.durationMs ?? 600, delay: interaction.delayMs ?? 0, fill: 'both' })
+    }
+    commit([{ type: 'archive.upserted', payload: { archiveItem: recordArchiveArtifactUse(item, props.selection?.nodeId) }, targetIds: [item.nodeId], label: `Used Archive ${kind}: ${item.name}` }])
+    props.onToast(`${item.name} applied from Archive`)
+  }
 
   function addFlowNode() {
     const existing = Object.values(state.flows)[0]
@@ -165,7 +184,7 @@ export default function FroamIntelligence(props: Props) {
   const rhythm = Object.values(state.analyses).filter((analysis) => analysis.kind === 'visual-rhythm').sort((a, b) => b.createdAt - a.createdAt)[0]
   const flow = Object.values(state.flows)[0]
   const flowNodes = flow?.nodeIds.map((id) => state.nodes[id]).filter(Boolean) ?? []
-  const archiveItems = searchArchive(state.archive, archiveQuery)
+  const archiveItems = searchArchive(state.archive, archiveQuery).filter((item) => archiveKind === 'all' || archiveItemKind(item) === archiveKind)
   const suggestions = responsiveSuggestions(latestScans, state.responsive, cinemaWidth)
   return <>
     <aside className="froam-intelligence" data-chef-editor-root="true">
@@ -175,7 +194,7 @@ export default function FroamIntelligence(props: Props) {
       <main>
         {tab === 'scan' && <section><h3>Understand this interface</h3><p>Scan measures the live DOM, maps stable identity and separates observed facts from conservative inference.</p><button className="is-primary" type="button" onClick={runScan} disabled={scanning}>{scanning ? 'Scanning…' : props.selectedElement ? `Scan ${props.selection?.label ?? 'selection'}` : 'Scan page'}</button><div className="froam-intelligence__stats"><b>{latestScans.length}</b><span>understood nodes</span><b>{Object.keys(state.dna).length}</b><span>DNA records</span></div></section>}
         {tab === 'dna' && <section><h3>Component DNA</h3>{selectedDna ? <>{(['identity','structure','visual','layout','semantics','behavior','responsive','accessibility','history','usage'] as const).map((key) => selectedDna[key] && <details key={key} open={key === 'identity' || key === 'semantics'}><summary>{key}</summary><pre>{JSON.stringify(selectedDna[key], null, 2)}</pre></details>)}<details><summary>Advanced / Raw</summary><pre>{JSON.stringify(selectedDna, null, 2)}</pre></details></> : <p>Select and scan a node to inspect its DNA. Unknown fields remain unknown.</p>}</section>}
-        {tab === 'archive' && <section><div className="froam-intelligence__row"><input placeholder="Search Archive" value={archiveQuery} onChange={(event) => setArchiveQuery(event.target.value)} /><button type="button" onClick={archiveSelection}>Add selected</button></div><div className="froam-intelligence__list">{archiveItems.map((item) => <article key={item.id}><div><strong>{item.name}</strong><small>{String(item.dna.semantics?.role ?? 'component')} · used {item.usageNodeIds.length} times</small></div><button type="button" disabled={!item.snapshot?.html} onClick={() => item.snapshot?.html && props.onInsertArchived(item.snapshot.html)}>Insert</button><button type="button" onClick={() => removeArchive(item.id)}>Remove</button></article>)}</div>{!archiveItems.length && <p>No archived components match.</p>}</section>}
+        {tab === 'archive' && <section><h3>Archive & project memory</h3><p>One library for reusable structure, appearance, motion, behavior, and complete interface patterns.</p><div className="froam-intelligence__memory">{Object.entries(memory.artifactCounts).map(([kind,count]) => <button type="button" className={archiveKind === kind ? 'is-active' : ''} key={kind} onClick={() => setArchiveKind(archiveKind === kind ? 'all' : kind as FroamArchiveKind)}><b>{count}</b><span>{kind.replace('-', ' ')}</span></button>)}</div><div className="froam-intelligence__row"><input placeholder="Search every artifact" value={archiveQuery} onChange={(event) => setArchiveQuery(event.target.value)} /><button type="button" onClick={archiveSelection}>Add component</button></div><div className="froam-intelligence__insights">{memory.insights.map((insight) => <article key={insight.id} data-tone={insight.tone}><strong>{insight.title}</strong><small>{insight.detail}</small></article>)}</div><div className="froam-intelligence__list">{archiveItems.map((item) => <article key={item.id}><div><em>{archiveItemKind(item).replace('-', ' ')}</em><strong>{item.name}</strong><small>{String(item.dna.semantics?.role ?? 'unknown')} · used {Number(item.metadata?.useCount ?? item.usageNodeIds.length)} times</small></div><button type="button" disabled={archiveItemKind(item) === 'component' && !item.snapshot?.html} onClick={() => useArchiveItem(item)}>{archiveItemKind(item) === 'component' ? 'Insert' : 'Apply'}</button><button type="button" onClick={() => removeArchive(item.id)}>Remove</button></article>)}</div>{!archiveItems.length && <p>No saved artifacts match this view. Right-click any selected element to add one.</p>}</section>}
         {tab === 'archaeology' && <section><h3>Design Archaeology</h3>{archaeology ? <><dl><dt>Creation</dt><dd>{archaeology.creation ? `${archaeology.creation.actorId} · ${archaeology.creation.branchId}` : 'Unknown — no recorded creation event'}</dd><dt>Branch lineage</dt><dd>{archaeology.branchLineage.join(' → ')}</dd><dt>Authors</dt><dd>{archaeology.authors.join(', ') || 'Unknown'}</dd><dt>Checkpoint ancestry</dt><dd>{archaeology.checkpointLineage.map((checkpoint) => checkpoint.label ?? checkpoint.id).join(' ← ') || 'No recorded checkpoints'}</dd><dt>Derived from</dt><dd>{archaeology.derivedFrom.join(', ') || 'No recorded origin'}</dd></dl><div className="froam-intelligence__list">{archaeology.edits.slice().reverse().map((edit) => <article key={edit.eventId}><div><strong>{edit.label}</strong><small>{edit.actorId} · {edit.branchId}</small>{edit.rationale && <em>Recorded reason: {edit.rationale.text}</em>}</div></article>)}</div></> : <p>Select a node to trace recorded origins. Froam never invents rationale.</p>}</section>}
         {tab === 'flow' && <section><h3>Product Flow</h3><div className="froam-intelligence__grid"><input value={flowName} onChange={(event) => setFlowName(event.target.value)} placeholder="Flow name" /><input value={flowNodeName} onChange={(event) => setFlowNodeName(event.target.value)} placeholder="Screen name" /><input value={flowRoute} onChange={(event) => setFlowRoute(event.target.value)} placeholder="Route, e.g. /checkout" /><button type="button" onClick={addFlowNode}>Add screen</button></div><div className="froam-intelligence__flow">{flowNodes.map((node, index) => <div key={node.id}><button type="button" onClick={() => node.locator?.routeKey ? window.location.assign(node.locator.routeKey) : props.onSelectNode(node.id, node.locator?.path)}>{node.name}<small>{node.locator?.routeKey ?? node.kind}</small></button>{index < flowNodes.length - 1 && <button className="froam-intelligence__edge" type="button" onClick={() => connectFlow(node.id, flowNodes[index + 1].id)}>→ connect</button>}</div>)}</div></section>}
         {tab === 'attention' && <section><h3>Predicted Attention</h3><p>Local heuristic estimate—not eye tracking or scientific measurement.</p><button type="button" className="is-primary" onClick={runAttention} disabled={!latestScans.length}>Analyze attention</button><label><input type="checkbox" checked={attentionOverlay} onChange={(event) => setAttentionOverlay(event.target.checked)} /> Heat overlay</label><ol>{ranking.slice(0, 12).map((item) => <li key={item.nodeId} onClick={() => props.onSelectNode(item.nodeId)}><b>{item.score}</b><span>{item.role}</span><small>{item.reasons.join(', ')}</small></li>)}</ol>{((latestAttention?.result.warnings ?? []) as string[]).map((warning) => <aside className="froam-intelligence__warning" key={warning}>{warning}</aside>)}</section>}
