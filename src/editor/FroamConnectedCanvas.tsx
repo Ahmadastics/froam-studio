@@ -13,7 +13,7 @@ import { interactionInspectorRecord } from '../project/animator-adapter'
 import FroamAnimator from './FroamAnimator'
 
 type SelectionRef = { nodeId?: string; path: string; label: string } | null
-type Tab = 'replay' | 'branches' | 'node' | 'graph' | 'interaction'
+export type FroamConnectedCanvasTab = 'replay' | 'branches' | 'node' | 'graph' | 'interaction'
 
 type Props = {
   open: boolean
@@ -36,6 +36,8 @@ type Props = {
   onToast: (message: string) => void
   project: FroamProjectDocument
   onProjectChange: Dispatch<SetStateAction<FroamProjectDocument>>
+  requestedTab?: FroamConnectedCanvasTab
+  onTemporalOwnerChange?: (owner: 'replay' | 'animator' | null) => void
 }
 
 function mergeRegistryState(state: FroamProjectState, registry: FroamNodeRegistry): FroamProjectState {
@@ -48,7 +50,7 @@ function mergeRegistryState(state: FroamProjectState, registry: FroamNodeRegistr
 }
 
 export default function FroamConnectedCanvas(props: Props) {
-  const [tab, setTab] = useState<Tab>('replay')
+  const [tab, setTab] = useState<FroamConnectedCanvasTab>(() => { try { return (localStorage.getItem('froam-connected-tab-v1') as FroamConnectedCanvasTab | null) ?? 'replay' } catch { return 'replay' } })
   const project = props.project
   const setProject = props.onProjectChange
   const [cursor, setCursor] = useState(0)
@@ -59,6 +61,9 @@ export default function FroamConnectedCanvas(props: Props) {
   const [branchName, setBranchName] = useState('Prototype 01')
   const [draftInteraction, setDraftInteraction] = useState<FroamInteraction | null>(null)
   const previewing = useRef(false)
+
+  useEffect(() => { if (props.requestedTab) setTab(props.requestedTab) }, [props.requestedTab])
+  useEffect(() => { try { localStorage.setItem('froam-connected-tab-v1', tab) } catch { /* optional preference */ }; props.onTemporalOwnerChange?.(props.open && tab === 'replay' ? 'replay' : props.open && tab === 'interaction' ? 'animator' : null) }, [tab, props.open, props.onTemporalOwnerChange])
 
   useEffect(() => () => { if (previewing.current) props.onPreviewStore(null) }, [props.onPreviewStore])
 
@@ -140,7 +145,7 @@ export default function FroamConnectedCanvas(props: Props) {
   }
 
   if (!props.open) return null
-  const tabs: Array<[Tab, string, typeof History]> = [
+  const tabs: Array<[FroamConnectedCanvasTab, string, typeof History]> = [
     ['replay', 'Replay', History], ['branches', 'Prototypes', GitBranch], ['node', 'Node', Bug], ['graph', 'Graph', Boxes], ['interaction', 'Interaction', Zap],
   ]
   return (

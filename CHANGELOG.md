@@ -1,5 +1,20 @@
 # Changelog
 
+## 8.0.1 - 2026-08-09
+
+**Froam workspace shell.** The main editor now exposes Create, Understand and
+Experiment as three capabilities of one live-product workspace. Project/
+prototype context, avatar-first presence, contextual mode rails, status,
+feature maturity and one temporal-owner dock organize the existing v6–v8
+systems without changing their models.
+
+The command palette now searches enabled workspace capabilities and project
+prototypes. Keyboard semantics, Escape behavior, browser-local panel/tab
+persistence, reduced motion and a compact mobile bottom shell were hardened.
+The complete legacy Studio surface remains available through Advanced. Project
+schema, live-DOM editing, Rooms, Blueprint 2D/3D, operation-log undo/redo,
+Animator and path-based output are unchanged.
+
 ## 8.0.0 - 2026-08-09
 
 **Interface Laboratory.** MUTATE now creates deterministic, protected and

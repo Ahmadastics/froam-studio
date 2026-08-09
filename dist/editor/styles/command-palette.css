@@ -59,15 +59,32 @@
 }
 
 .fs-command-palette__item {
+  border-radius: var(--fs-radius-sm);
+  transition: background var(--fs-transition-fast);
+  font-size: 0.82rem;
+  color: var(--fs-text-secondary);
+}
+
+.fs-command-palette__item > button {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: var(--fs-radius-sm);
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
-  transition: background var(--fs-transition-fast);
-  font-size: 0.82rem;
-  color: var(--fs-text-secondary);
+}
+
+.fs-command-palette__empty {
+  padding: 12px;
+  color: var(--fs-text-tertiary);
+  text-align: center;
+  font-size: 0.78rem;
 }
 
 .fs-command-palette__item:hover,

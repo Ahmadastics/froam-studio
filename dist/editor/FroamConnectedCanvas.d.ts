@@ -8,6 +8,7 @@ type SelectionRef = {
     path: string;
     label: string;
 } | null;
+export type FroamConnectedCanvasTab = 'replay' | 'branches' | 'node' | 'graph' | 'interaction';
 type Props = {
     open: boolean;
     onClose: () => void;
@@ -29,6 +30,8 @@ type Props = {
     onToast: (message: string) => void;
     project: FroamProjectDocument;
     onProjectChange: Dispatch<SetStateAction<FroamProjectDocument>>;
+    requestedTab?: FroamConnectedCanvasTab;
+    onTemporalOwnerChange?: (owner: 'replay' | 'animator' | null) => void;
 };
 export default function FroamConnectedCanvas(props: Props): import("react").JSX.Element | null;
 export {};

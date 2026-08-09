@@ -7,6 +7,7 @@ type SelectionRef = {
     path: string;
     label: string;
 } | null;
+export type FroamIntelligenceTab = 'scan' | 'dna' | 'archive' | 'archaeology' | 'flow' | 'attention' | 'rhythm' | 'responsive' | 'screenshot';
 type Props = {
     open: boolean;
     onClose: () => void;
@@ -25,6 +26,9 @@ type Props = {
     onInsertReconstruction: (regions: FroamScreenshotRegion[], width: number, height: number, rootNodeId: string) => HTMLElement;
     onPreviewWidth: (width: number | null) => void;
     onToast: (message: string) => void;
+    requestedTab?: FroamIntelligenceTab;
+    onTemporalOwnerChange?: (owner: 'breakpoint-cinema' | null) => void;
+    onActivityChange?: (activity: 'scanning' | 'screenshot' | null) => void;
 };
 export default function FroamIntelligence(props: Props): import("react").JSX.Element | null;
 export {};

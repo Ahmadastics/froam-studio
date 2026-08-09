@@ -62,3 +62,6 @@ export function defaultFroamFeatureFlags(): Record<FroamRoadmapFeature, boolean>
 
 export type FroamLabsFlags = { mutate: boolean; interactionLibrary: boolean; uiSampling: boolean; externalSampling: boolean; designPhysics: boolean; uiGravity: boolean; chaosTesting: boolean; syntheticUx: boolean; uiSound: boolean; trailerGenerator: boolean; realityMode: boolean }
 export const defaultFroamLabsFlags = (): FroamLabsFlags => ({ mutate: false, interactionLibrary: false, uiSampling: false, externalSampling: false, designPhysics: false, uiGravity: false, chaosTesting: false, syntheticUx: false, uiSound: false, trailerGenerator: false, realityMode: false })
+export const FROAM_LABS_FLAGS_KEY = 'froam-labs-flags-v2'
+export function readFroamLabsFlags(storage?: Pick<Storage, 'getItem'>): FroamLabsFlags { try { return { ...defaultFroamLabsFlags(), ...JSON.parse(storage?.getItem(FROAM_LABS_FLAGS_KEY) ?? '{}') } as FroamLabsFlags } catch { return defaultFroamLabsFlags() } }
+export function writeFroamLabsFlags(storage: Pick<Storage, 'setItem'> | undefined, flags: FroamLabsFlags) { try { storage?.setItem(FROAM_LABS_FLAGS_KEY, JSON.stringify(flags)); return true } catch { return false } }

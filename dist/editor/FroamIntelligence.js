@@ -11,7 +11,12 @@ import { analyzeVisualRhythm } from '../project/rhythm.js';
 import { defaultResponsivePolicy, observeResponsiveState, responsiveSuggestions } from '../project/responsive.js';
 import { applyVisualDiff, compareScreenshotPixels, localScreenshotProvider } from '../project/screenshot-reconstruction.js';
 export default function FroamIntelligence(props) {
-    const [tab, setTab] = useState('scan');
+    const [tab, setTab] = useState(() => { try {
+        return localStorage.getItem('froam-intelligence-tab-v1') ?? 'scan';
+    }
+    catch {
+        return 'scan';
+    } });
     const [scanning, setScanning] = useState(false);
     const [archiveQuery, setArchiveQuery] = useState('');
     const [flowName, setFlowName] = useState('Primary journey');
@@ -38,6 +43,12 @@ export default function FroamIntelligence(props) {
     }, [state.scans]);
     const latestAttention = Object.values(state.analyses).filter((analysis) => analysis.kind === 'predicted-attention').sort((a, b) => b.createdAt - a.createdAt)[0];
     const ranking = (latestAttention?.result.ranking ?? []);
+    useEffect(() => { if (props.requestedTab)
+        setTab(props.requestedTab); }, [props.requestedTab]);
+    useEffect(() => { try {
+        localStorage.setItem('froam-intelligence-tab-v1', tab);
+    }
+    catch { /* optional preference */ } ; props.onTemporalOwnerChange?.(props.open && tab === 'responsive' ? 'breakpoint-cinema' : null); }, [tab, props.open, props.onTemporalOwnerChange]);
     function commit(inputs) {
         props.onProjectChange((current) => {
             let clock = Math.max(0, ...current.events.map((event) => event.clock));
@@ -49,6 +60,7 @@ export default function FroamIntelligence(props) {
         if (!props.root)
             return;
         setScanning(true);
+        props.onActivityChange?.('scanning');
         try {
             const bundle = scanDomTree(props.root, props.registry, { routeKey: props.routeKey, viewport: props.viewport, selectedRoot: props.selectedElement ?? undefined, maxNodes: props.selectedElement ? 260 : 600 });
             props.onRegistryChange(bundle.registry);
@@ -69,6 +81,7 @@ export default function FroamIntelligence(props) {
         }
         finally {
             setScanning(false);
+            props.onActivityChange?.(null);
         }
     }
     function archiveSelection() {
@@ -128,6 +141,7 @@ export default function FroamIntelligence(props) {
     useEffect(() => () => props.onPreviewWidth(null), []);
     async function importScreenshot(file) {
         setScreenshotBusy(true);
+        props.onActivityChange?.('screenshot');
         try {
             if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type))
                 throw new Error('Use a PNG, JPEG or WebP screenshot');
@@ -171,6 +185,7 @@ export default function FroamIntelligence(props) {
         }
         finally {
             setScreenshotBusy(false);
+            props.onActivityChange?.(null);
         }
     }
     if (!props.open)

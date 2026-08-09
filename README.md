@@ -1,5 +1,10 @@
 # Froam Studio
 
+> **8.0.1 — Froam Workspace:** Create / Understand / Experiment now organize the
+> existing live editor, Intelligence and Interface Laboratory around one canvas,
+> with explicit project/prototype context, native presence and temporal ownership.
+> Project schema remains v2. See `docs/FROAM_V8_EDITOR_SHELL.md`.
+>
 > **8.0.0 — Interface Laboratory:** protected branch-isolated MUTATE, portable
 > Interaction recipes, observable Sampling, deterministic Physics and Gravity,
 > isolated Chaos, research Synthetic UX, UI Sound and real-project Trailer

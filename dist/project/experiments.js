@@ -26,4 +26,18 @@ export function defaultFroamFeatureFlags() {
     return Object.fromEntries(FROAM_ROADMAP_FEATURES.map((feature) => [feature.id, feature.defaultEnabled]));
 }
 export const defaultFroamLabsFlags = () => ({ mutate: false, interactionLibrary: false, uiSampling: false, externalSampling: false, designPhysics: false, uiGravity: false, chaosTesting: false, syntheticUx: false, uiSound: false, trailerGenerator: false, realityMode: false });
+export const FROAM_LABS_FLAGS_KEY = 'froam-labs-flags-v2';
+export function readFroamLabsFlags(storage) { try {
+    return { ...defaultFroamLabsFlags(), ...JSON.parse(storage?.getItem(FROAM_LABS_FLAGS_KEY) ?? '{}') };
+}
+catch {
+    return defaultFroamLabsFlags();
+} }
+export function writeFroamLabsFlags(storage, flags) { try {
+    storage?.setItem(FROAM_LABS_FLAGS_KEY, JSON.stringify(flags));
+    return true;
+}
+catch {
+    return false;
+} }
 //# sourceMappingURL=experiments.js.map

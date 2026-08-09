@@ -1,5 +1,27 @@
 # Froam Platform Implementation Ledger
 
+## v8.0.1 editor-shell status — 2026-08-09
+
+- **Completed:** one Create / Understand / Experiment workspace shell; persistent
+  mode/section state; project/prototype anchor; native compact presence;
+  selection-contextual rails; explicit maturity; shared temporal ownership;
+  workspace/prototype command search; keyboard, reduced-motion and mobile shell.
+- **Preserved through Advanced:** history, review, notes, chat, tokens, assets,
+  transitions, diagnostics and Connected Canvas developer inspection remain
+  reachable without competing with normal editing by default.
+- **Architecture-only:** temporal tools share shell ownership and status, not
+  incompatible internal models. Command entity indexing is deliberately bounded.
+- **Migrations:** none. Project schema remains v2. Shell and Labs preferences are
+  browser-local, quota-safe, additive keys.
+- **Tests:** mode switching, contextual selection, independent flag visibility,
+  project/prototype identity, avatar overflow/accessibility, temporal switching,
+  preference recovery/quota behavior, command aliases, keyboard semantics,
+  reduced motion, mobile behavior and legacy reachability.
+- **Known limitations:** arbitrary graph/archive entity search and deeper semantic
+  contextuality remain future hardening work. No v8.1 feature work was started.
+
+See `FROAM_V8_EDITOR_SHELL.md`.
+
 ## v8.0 release status — 2026-08-09
 
 - **Completed foundations:** one Interface Laboratory shell; shared provider,

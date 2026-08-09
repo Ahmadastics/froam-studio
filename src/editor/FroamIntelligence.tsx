@@ -13,7 +13,7 @@ import type { FroamNodeRegistry } from '../project/node-registry'
 import type { FroamProjectDocument, FroamProjectEventPayload, FroamProjectEventType, FroamResponsivePolicy, FroamScanRecord } from '../project/types'
 
 type SelectionRef = { nodeId?: string; path: string; label: string } | null
-type Tab = 'scan' | 'dna' | 'archive' | 'archaeology' | 'flow' | 'attention' | 'rhythm' | 'responsive' | 'screenshot'
+export type FroamIntelligenceTab = 'scan' | 'dna' | 'archive' | 'archaeology' | 'flow' | 'attention' | 'rhythm' | 'responsive' | 'screenshot'
 
 type Props = {
   open: boolean; onClose: () => void; project: FroamProjectDocument; onProjectChange: Dispatch<SetStateAction<FroamProjectDocument>>
@@ -22,12 +22,14 @@ type Props = {
   onSelectNode: (nodeId: string, path?: string) => void; onInsertArchived: (html: string) => void
   onInsertReconstruction: (regions: FroamScreenshotRegion[], width: number, height: number, rootNodeId: string) => HTMLElement
   onPreviewWidth: (width: number | null) => void; onToast: (message: string) => void
+  requestedTab?: FroamIntelligenceTab; onTemporalOwnerChange?: (owner: 'breakpoint-cinema' | null) => void
+  onActivityChange?: (activity: 'scanning' | 'screenshot' | null) => void
 }
 
 type EventInput = { type: FroamProjectEventType; payload: FroamProjectEventPayload; targetIds?: string[]; label?: string }
 
 export default function FroamIntelligence(props: Props) {
-  const [tab, setTab] = useState<Tab>('scan')
+  const [tab, setTab] = useState<FroamIntelligenceTab>(() => { try { return (localStorage.getItem('froam-intelligence-tab-v1') as FroamIntelligenceTab | null) ?? 'scan' } catch { return 'scan' } })
   const [scanning, setScanning] = useState(false)
   const [archiveQuery, setArchiveQuery] = useState('')
   const [flowName, setFlowName] = useState('Primary journey')
@@ -53,6 +55,9 @@ export default function FroamIntelligence(props: Props) {
   const latestAttention = Object.values(state.analyses).filter((analysis) => analysis.kind === 'predicted-attention').sort((a, b) => b.createdAt - a.createdAt)[0]
   const ranking = (latestAttention?.result.ranking ?? []) as FroamAttentionRank[]
 
+  useEffect(() => { if (props.requestedTab) setTab(props.requestedTab) }, [props.requestedTab])
+  useEffect(() => { try { localStorage.setItem('froam-intelligence-tab-v1', tab) } catch { /* optional preference */ }; props.onTemporalOwnerChange?.(props.open && tab === 'responsive' ? 'breakpoint-cinema' : null) }, [tab, props.open, props.onTemporalOwnerChange])
+
   function commit(inputs: EventInput[]) {
     props.onProjectChange((current) => {
       let clock = Math.max(0, ...current.events.map((event) => event.clock))
@@ -64,6 +69,7 @@ export default function FroamIntelligence(props: Props) {
   function runScan() {
     if (!props.root) return
     setScanning(true)
+    props.onActivityChange?.('scanning')
     try {
       const bundle = scanDomTree(props.root, props.registry, { routeKey: props.routeKey, viewport: props.viewport, selectedRoot: props.selectedElement ?? undefined, maxNodes: props.selectedElement ? 260 : 600 })
       props.onRegistryChange(bundle.registry)
@@ -76,7 +82,7 @@ export default function FroamIntelligence(props: Props) {
       for (const relation of bundle.relations) events.push({ type: 'relation.upserted', payload: { relation }, targetIds: [relation.from, relation.to] })
       commit(events)
       props.onToast(`Scan understood ${bundle.records.length} nodes${bundle.families.length ? ` and ${bundle.families.length} repeated families` : ''}`)
-    } catch (error) { props.onToast(error instanceof Error ? error.message : 'Scan failed') } finally { setScanning(false) }
+    } catch (error) { props.onToast(error instanceof Error ? error.message : 'Scan failed') } finally { setScanning(false); props.onActivityChange?.(null) }
   }
 
   function archiveSelection() {
@@ -131,6 +137,7 @@ export default function FroamIntelligence(props: Props) {
 
   async function importScreenshot(file: File) {
     setScreenshotBusy(true)
+    props.onActivityChange?.('screenshot')
     try {
       if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('Use a PNG, JPEG or WebP screenshot')
       const bitmap = await createImageBitmap(file); const imageWidth = bitmap.width; const imageHeight = bitmap.height; const canvas = document.createElement('canvas'); canvas.width = imageWidth; canvas.height = imageHeight
@@ -149,11 +156,11 @@ export default function FroamIntelligence(props: Props) {
       for (const relation of result.relations) events.push({ type: 'relation.upserted', payload: { relation }, targetIds: [relation.from, relation.to] })
       for (const dna of result.dna) events.push({ type: 'dna.captured', payload: { dna }, targetIds: [dna.nodeId] })
       commit(events); setLastReconstruction(result); const validation = result.analysis.result.validation as { comparable?: boolean; pixelSimilarity?: number } | null; props.onToast(`Reconstructed ${result.regions.length} editable regions${validation?.comparable ? ` · measured ${Math.round((validation.pixelSimilarity ?? 0) * 100)}% RGB similarity` : ''}`)
-    } catch (error) { props.onToast(error instanceof Error ? error.message : 'Screenshot reconstruction failed') } finally { setScreenshotBusy(false) }
+    } catch (error) { props.onToast(error instanceof Error ? error.message : 'Screenshot reconstruction failed') } finally { setScreenshotBusy(false); props.onActivityChange?.(null) }
   }
 
   if (!props.open) return null
-  const tabs: Array<[Tab, string, typeof Brain]> = [['scan', 'Scan', ScanSearch], ['dna', 'DNA', Brain], ['archive', 'Archive', Archive], ['archaeology', 'Origins', History], ['flow', 'Flow', Network], ['attention', 'Attention', Eye], ['rhythm', 'Rhythm', Waves], ['responsive', 'Responsive', Clapperboard], ['screenshot', 'Screenshot', Upload]]
+  const tabs: Array<[FroamIntelligenceTab, string, typeof Brain]> = [['scan', 'Scan', ScanSearch], ['dna', 'DNA', Brain], ['archive', 'Archive', Archive], ['archaeology', 'Origins', History], ['flow', 'Flow', Network], ['attention', 'Attention', Eye], ['rhythm', 'Rhythm', Waves], ['responsive', 'Responsive', Clapperboard], ['screenshot', 'Screenshot', Upload]]
   const archaeology = props.selection?.nodeId ? archaeologyForNode(props.project, props.selection.nodeId) : null
   const rhythm = Object.values(state.analyses).filter((analysis) => analysis.kind === 'visual-rhythm').sort((a, b) => b.createdAt - a.createdAt)[0]
   const flow = Object.values(state.flows)[0]

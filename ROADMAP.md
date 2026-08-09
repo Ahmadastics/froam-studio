@@ -1,5 +1,11 @@
 # Froam Rooms — roadmap to v6
 
+> **v8.0.1 status (2026-08-09):** the editor root now organizes existing systems
+> as Create / Understand / Experiment in one workspace, with explicit project
+> context, contextual rails, native presence and single temporal ownership.
+> This is an additive shell release; project schema remains v2 and v8.1 has not
+> begun. See `docs/FROAM_V8_EDITOR_SHELL.md`.
+
 > **v8.0 status (2026-08-09):** the Interface Laboratory now unifies MUTATE,
 > Interaction Library, native and external Sampling boundaries, Physics,
 > Gravity, Chaos, Synthetic UX, Sound, Trailer and screenshot-state intelligence

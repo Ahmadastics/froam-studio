@@ -18,7 +18,12 @@ function mergeRegistryState(state, registry) {
     };
 }
 export default function FroamConnectedCanvas(props) {
-    const [tab, setTab] = useState('replay');
+    const [tab, setTab] = useState(() => { try {
+        return localStorage.getItem('froam-connected-tab-v1') ?? 'replay';
+    }
+    catch {
+        return 'replay';
+    } });
     const project = props.project;
     const setProject = props.onProjectChange;
     const [cursor, setCursor] = useState(0);
@@ -29,6 +34,12 @@ export default function FroamConnectedCanvas(props) {
     const [branchName, setBranchName] = useState('Prototype 01');
     const [draftInteraction, setDraftInteraction] = useState(null);
     const previewing = useRef(false);
+    useEffect(() => { if (props.requestedTab)
+        setTab(props.requestedTab); }, [props.requestedTab]);
+    useEffect(() => { try {
+        localStorage.setItem('froam-connected-tab-v1', tab);
+    }
+    catch { /* optional preference */ } ; props.onTemporalOwnerChange?.(props.open && tab === 'replay' ? 'replay' : props.open && tab === 'interaction' ? 'animator' : null); }, [tab, props.open, props.onTemporalOwnerChange]);
     useEffect(() => () => { if (previewing.current)
         props.onPreviewStore(null); }, [props.onPreviewStore]);
     const replayEvents = useMemo(() => branchReplayEvents(project, project.activeBranchId, {

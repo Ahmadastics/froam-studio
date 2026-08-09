@@ -22,4 +22,7 @@ export type FroamLabsFlags = {
     realityMode: boolean;
 };
 export declare const defaultFroamLabsFlags: () => FroamLabsFlags;
+export declare const FROAM_LABS_FLAGS_KEY = "froam-labs-flags-v2";
+export declare function readFroamLabsFlags(storage?: Pick<Storage, 'getItem'>): FroamLabsFlags;
+export declare function writeFroamLabsFlags(storage: Pick<Storage, 'setItem'> | undefined, flags: FroamLabsFlags): boolean;
 //# sourceMappingURL=experiments.d.ts.map
