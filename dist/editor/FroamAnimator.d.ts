@@ -23,7 +23,8 @@ type Props = {
     onToast: (msg: string) => void;
     sourceNodeId?: string | null;
     onInteractionChange?: (interaction: FroamInteraction) => void;
+    onSaveToArchive?: () => void;
 };
-export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast, sourceNodeId, onInteractionChange }: Props): import("react").JSX.Element;
+export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast, sourceNodeId, onInteractionChange, onSaveToArchive }: Props): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=FroamAnimator.d.ts.map

@@ -10,6 +10,7 @@ import type { FroamFrameworkFinding } from '../project/framework-identity'
 import { aggregateIdentityDiagnostics, identityTelemetryRates } from '../project/identity-telemetry'
 import type { FroamInteraction, FroamProjectDocument, FroamProjectState } from '../project/types'
 import { interactionInspectorRecord } from '../project/animator-adapter'
+import { createArchiveItem, minimalArchiveDna } from '../project/archive'
 import FroamAnimator from './FroamAnimator'
 
 type SelectionRef = { nodeId?: string; path: string; label: string } | null
@@ -144,6 +145,14 @@ export default function FroamConnectedCanvas(props: Props) {
     })]))
   }
 
+  function saveDraftToArchive() {
+    if (!draftInteraction || !props.selection?.nodeId) return props.onToast('Select a node and create motion before archiving it')
+    const dna = projectState.dna[props.selection.nodeId] ?? minimalArchiveDna(props.selection.nodeId, { role: props.selectedElement?.getAttribute('role') ?? props.selectedElement?.tagName.toLowerCase(), tagName: props.selectedElement?.tagName.toLowerCase(), motion: draftInteraction })
+    const item = createArchiveItem({ id: `archive:motion:${Date.now().toString(36)}`, nodeId: props.selection.nodeId, name: draftInteraction.name, actorId: props.actorId, projectId: project.id, branchId: project.activeBranchId, dna, kind: 'motion', interaction: draftInteraction, interactionIds: [draftInteraction.id], includes: ['motion'], description: 'Precision keyframe motion authored in Animator.' })
+    setProject((current) => appendProjectEvents(current, [createProjectEvent({ projectId: current.id, branchId: current.activeBranchId, actorId: props.actorId, clock: Math.max(0, ...current.events.map((event) => event.clock)) + 1, type: 'archive.upserted', payload: { archiveItem: item }, targetIds: [item.nodeId], label: `Archived Animator motion: ${item.name}` })]))
+    props.onToast(`${item.name} saved to Archive`)
+  }
+
   if (!props.open) return null
   const tabs: Array<[FroamConnectedCanvasTab, string, typeof History]> = [
     ['replay', 'Replay', History], ['branches', 'Prototypes', GitBranch], ['node', 'Node', Bug], ['graph', 'Graph', Boxes], ['interaction', 'Interaction', Zap],
@@ -214,7 +223,7 @@ export default function FroamConnectedCanvas(props: Props) {
         </section>}
 
         {tab === 'interaction' && <section className="froam-connected__section">
-          <FroamAnimator selectedElement={props.selectedElement} selectionLabel={props.selection?.label ?? 'node'} sourceNodeId={props.selection?.nodeId} onInteractionChange={setDraftInteraction} onApplyAnimation={commitAnimation} onToast={props.onToast} />
+          <FroamAnimator selectedElement={props.selectedElement} selectionLabel={props.selection?.label ?? 'node'} sourceNodeId={props.selection?.nodeId} onInteractionChange={setDraftInteraction} onSaveToArchive={saveDraftToArchive} onApplyAnimation={commitAnimation} onToast={props.onToast} />
           {draftInteraction && <pre className="froam-connected__interaction">{JSON.stringify(interactionInspectorRecord(draftInteraction), null, 2)}</pre>}
         </section>}
       </div>

@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 import { defaultFroamLabsFlags } from '../dist/project/experiments.js'
+import { archiveItemKind, createArchiveItem, minimalArchiveDna, recordArchiveArtifactUse, searchArchive } from '../dist/project/archive.js'
+import { buildIntelligenceMemory } from '../dist/project/intelligence-memory.js'
+import { emptyProjectState } from '../dist/project/event-log.js'
 import { animationPresetInteraction, FROAM_ANIMATION_PRESETS } from '../dist/editor/FroamAnimationPresets.js'
 import { DEFAULT_FROAM_UI_PREFERENCE, froamUIPanelWidth, readFroamUIPreference, sanitizeFroamUIPreference, writeFroamUIPreference } from '../dist/editor/froamUIPreferences.js'
 import {
@@ -37,6 +40,11 @@ test('Create names the connected structure surfaces consistently', () => {
   const create = workspaceSections('create', defaultFroamLabsFlags(), true)
   assert.equal(create.find(({ id }) => id === 'plan')?.label, 'Build')
   assert.equal(create.find(({ id }) => id === 'layers')?.label, 'Outline')
+})
+
+test('Blueprint has one canonical workspace home', () => {
+  const flags = defaultFroamLabsFlags()
+  assert.equal(['create', 'understand', 'experiment'].flatMap((mode) => workspaceSections(mode, flags, true)).filter(({ id }) => id === 'blueprint').length, 1)
 })
 
 test('Lab flags control tool visibility independently', () => {
@@ -107,11 +115,37 @@ test('right click exposes UI customization and labs expose force preview', () =>
   const customizer = fs.readFileSync(new URL('../src/editor/FroamUICustomizer.tsx', import.meta.url), 'utf8')
   const labs = fs.readFileSync(new URL('../src/editor/FroamLabs.tsx', import.meta.url), 'utf8')
   assert.match(menu, /Customize Froam UI/)
+  assert.match(menu, /Add to Archive/)
+  assert.match(menu, /archive-pattern/)
   assert.match(customizer, /Make Froam yours/)
   assert.match(customizer, /role="dialog"/)
   assert.match(labs, /previewGravity/)
   assert.match(labs, /gravityStrength/)
   assert.match(labs, /Quick behaviors/)
+})
+
+test('Archive v2 stores multiple artifact kinds and preserves legacy components', () => {
+  const dna = minimalArchiveDna('node:button', { role: 'button' })
+  const interaction = { id: 'motion:press', name: 'Press', sourceId: 'node:button', targetIds: ['node:button'], trigger: 'click', timeline: [{ at: 0, values: { transform: 'scale(1)' } }, { at: 1, values: { transform: 'scale(.96)' } }] }
+  const motion = createArchiveItem({ id: 'archive:motion', nodeId: 'node:button', name: 'Press motion', actorId: 'actor', projectId: 'project', branchId: 'main', dna, kind: 'motion', interaction, interactionIds: [interaction.id], includes: ['motion'] })
+  const legacy = { ...motion, id: 'archive:legacy', schemaVersion: 1, kind: undefined, artifact: undefined }
+  assert.equal(archiveItemKind(motion), 'motion')
+  assert.equal(archiveItemKind(legacy), 'component')
+  assert.equal(searchArchive({ [motion.id]: motion }, 'motion').length, 1)
+  assert.equal(recordArchiveArtifactUse(motion, 'node:hero', 20).metadata.useCount, 1)
+})
+
+test('Intelligence memory reports observed Archive patterns without invented claims', () => {
+  const state = emptyProjectState()
+  const dna = minimalArchiveDna('node:button', { role: 'button' })
+  const interaction = { id: 'motion:hover', name: 'Lift', sourceId: 'node:button', targetIds: ['node:button'], trigger: 'hover', timeline: [] }
+  const item = createArchiveItem({ id: 'archive:hover', nodeId: 'node:button', name: 'Hover lift', actorId: 'actor', projectId: 'project', branchId: 'main', dna, kind: 'motion', interaction })
+  state.archive[item.id] = recordArchiveArtifactUse(item, 'node:card', 10)
+  const memory = buildIntelligenceMemory(state)
+  assert.equal(memory.artifactCounts.motion, 1)
+  assert.deepEqual(memory.learnedTriggers[0], { trigger: 'hover', count: 1 })
+  assert.equal(memory.totalUses, 1)
+  assert.ok(memory.insights.some(({ id }) => id === 'trigger-pattern'))
 })
 
 test('keyboard, mobile, reduced-motion, and legacy surfaces stay reachable', () => {

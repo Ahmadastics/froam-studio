@@ -45,8 +45,6 @@ export const FROAM_WORKSPACE_SECTIONS: readonly FroamWorkspaceSectionDefinition[
   { id: 'rhythm', mode: 'understand', label: 'Rhythm', description: 'Inspect compositional repetition', maturity: 'experimental' },
   { id: 'responsive', mode: 'understand', label: 'Responsive', description: 'Priority metadata and Breakpoint Cinema', maturity: 'beta', temporalOwner: 'breakpoint-cinema', aliases: ['breakpoint cinema'] },
   { id: 'screenshot', mode: 'understand', label: 'Screenshot → UI', description: 'Reconstruct observable visual structure', maturity: 'experimental', aliases: ['screenshot', 'reconstruction'] },
-  { id: 'blueprint', mode: 'understand', label: 'Blueprint', description: 'Visualize structure in 2D or 3D', maturity: 'production' },
-
   { id: 'laboratory', mode: 'experiment', label: 'Laboratory', description: 'Configure independently flagged experiments', maturity: 'experimental', aliases: ['labs', 'flags'] },
   { id: 'mutate', mode: 'experiment', label: '☣ MUTATE', description: 'Fork an alternate prototype reality', maturity: 'experimental', requiresSelection: true, labFlag: 'mutate' },
   { id: 'sample', mode: 'experiment', label: '◉ SAMPLE', description: 'Record observable interaction behavior', maturity: 'experimental', requiresSelection: true, labFlag: 'uiSampling', temporalOwner: 'sampling' },

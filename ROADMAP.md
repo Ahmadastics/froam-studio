@@ -1,5 +1,10 @@
 # Froam Rooms — roadmap to v6
 
+> **v8.0.5 status (2026-08-09):** Froam now has one artifact Archive and local
+> project memory shared by right-click capture, Animator, Interface Laboratory,
+> and Intelligence. Blueprint has one canonical workspace home. The project
+> schema remains v2 and experimental runtime maturity is unchanged.
+>
 > **v8.0.4 status (2026-08-09):** Froam UI can be arranged from the canvas
 > right-click menu without modifying project output. Animator has 34 searchable
 > quick motions; the Interaction Library consumes the same preset vocabulary;

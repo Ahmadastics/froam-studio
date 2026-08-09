@@ -12,6 +12,11 @@ import {
   Box,
   ImagePlus,
   SlidersHorizontal,
+  Archive,
+  Component,
+  Palette,
+  Clapperboard,
+  Boxes,
 } from 'lucide-react'
 
 type ContextAction =
@@ -28,6 +33,10 @@ type ContextAction =
   | 'group-elements'
   | 'ungroup-elements'
   | 'customize-ui'
+  | 'archive-component'
+  | 'archive-style'
+  | 'archive-motion'
+  | 'archive-pattern'
 
 type Props = {
   position: { x: number; y: number } | null
@@ -128,6 +137,24 @@ export default function FroamContextMenu({
           <ClipboardPaste size={14} />
           <span>Paste styles</span>
           <kbd>Ctrl+Alt+V</kbd>
+        </button>
+      </div>
+
+      <div className="froam-context-menu__divider" />
+
+      <div className="froam-context-menu__group">
+        <div className="froam-context-menu__section-label"><Archive size={12} /><span>Add to Archive</span></div>
+        <button type="button" className="froam-context-menu__item is-froam-action" onClick={() => handleAction('archive-component')}>
+          <Component size={14} /><span>Component</span><kbd>Structure</kbd>
+        </button>
+        <button type="button" className="froam-context-menu__item" onClick={() => handleAction('archive-style')}>
+          <Palette size={14} /><span>Visual style</span><kbd>Appearance</kbd>
+        </button>
+        <button type="button" className="froam-context-menu__item" onClick={() => handleAction('archive-motion')}>
+          <Clapperboard size={14} /><span>Motion & behavior</span><kbd>Interaction</kbd>
+        </button>
+        <button type="button" className="froam-context-menu__item" onClick={() => handleAction('archive-pattern')}>
+          <Boxes size={14} /><span>Complete pattern</span><kbd>All</kbd>
         </button>
       </div>
 

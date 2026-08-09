@@ -48,6 +48,7 @@ import { findElementByPath, getElementPath, isSafeDraftPath, tagOfPath } from '.
 import { createAnchor, resolveAnchor } from '../collab/anchor.js';
 import { LOCAL_ACTOR, scopeKey } from '../collab/types.js';
 import { captureNodeRef, resolveNodeRef } from '../project/node-registry.js';
+import { archiveItemKind, createArchiveItem, minimalArchiveDna } from '../project/archive.js';
 import { createFrameworkIdentityObserver } from '../project/framework-identity.js';
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources.js';
 import { useFroamRouteKey } from '../routing.js';
@@ -2940,6 +2941,32 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         persistLiveRouteSnapshot();
         showToast('Inserted from Component Archive');
     }
+    function archiveCurrentSelection(kind) {
+        if (!selection?.nodeId || !currentSelectionRef.current)
+            return showToast('Select an element before adding it to Archive');
+        const nodeId = selection.nodeId;
+        const element = currentSelectionRef.current;
+        const computed = window.getComputedStyle(element);
+        const visualKeys = ['color', 'backgroundColor', 'borderColor', 'borderRadius', 'boxShadow', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'padding', 'margin', 'gap', 'display', 'alignItems', 'justifyContent'];
+        const styles = Object.fromEntries(visualKeys.map((key) => [key, computed[key]]).filter(([, value]) => Boolean(value)));
+        const interaction = Object.values(activeProjectState.interactions).filter((item) => item.sourceId === nodeId || item.targetIds.includes(nodeId)).at(-1);
+        if (kind === 'motion' && !interaction)
+            return showToast('This element has no saved motion yet. Apply it in Animator or Laboratory first.');
+        const dna = activeProjectState.dna[nodeId] ?? minimalArchiveDna(nodeId, { role: element.getAttribute('role') ?? element.tagName.toLowerCase(), tagName: element.tagName.toLowerCase(), styles, motion: interaction });
+        const suffix = kind === 'component' ? 'Component' : kind === 'style' ? 'Style' : kind === 'motion' ? 'Motion' : 'Pattern';
+        const item = createArchiveItem({
+            id: `archive:${kind}:${Date.now().toString(36)}`, nodeId, name: `${selection.label} ${suffix}`,
+            actorId: projectActorId, projectId: projectSession.project.id, branchId: projectSession.project.activeBranchId, dna, kind,
+            html: kind === 'component' || kind === 'interface-pattern' ? element.outerHTML : undefined,
+            legacyPath: selection.path, styles: kind === 'style' || kind === 'interface-pattern' ? styles : undefined,
+            interaction: kind === 'motion' || kind === 'interface-pattern' ? interaction : undefined,
+            interactionIds: interaction ? [interaction.id] : [],
+            includes: kind === 'interface-pattern' ? ['structure', 'styles', ...(interaction ? ['motion', 'behavior'] : [])] : kind === 'component' ? ['structure'] : kind === 'style' ? ['styles'] : ['motion', 'behavior'],
+            description: kind === 'interface-pattern' ? 'Structure, visual styling, and available behavior captured as one reusable pattern.' : undefined,
+        });
+        projectSession.setProject((current) => appendProjectEvents(current, [createProjectEvent({ projectId: current.id, branchId: current.activeBranchId, actorId: projectActorId, clock: Math.max(0, ...current.events.map((event) => event.clock)) + 1, type: 'archive.upserted', payload: { archiveItem: item }, targetIds: [item.nodeId], label: `Archived ${archiveItemKind(item)}: ${item.name}` })]));
+        showToast(`${item.name} added to Archive`);
+    }
     function insertScreenshotReconstruction(regions, width, height, rootNodeId) {
         const frame = document.createElement('section');
         frame.setAttribute('data-froam-injected', 'true');
@@ -5591,7 +5618,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     }
                     style.textContent = `${style.textContent ?? ''}\n${css}`;
                     applyStyle({ animation: inline }, undefined, 'Animation');
-                }, onToast: showToast, project: projectSession.project, onProjectChange: projectSession.setProject, requestedTab: requestedConnectedTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'replay' || current === 'animator' ? null : current)) }), _jsx(FroamIntelligence, { open: showPanel && intelligenceOpen, onClose: () => { setIntelligenceOpen(false); setTemporalOwner((owner) => owner === 'breakpoint-cinema' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, root: getRoot(), registry: nodeRegistryRef.current, onRegistryChange: (registry) => { nodeRegistryRef.current = registry; saveNodeRegistry(registry); }, routeKey: routeKey, viewport: viewportMode, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, selectedElement: currentSelectionRef.current, onSelectNode: selectConnectedNode, onInsertArchived: insertArchivedHtml, onInsertReconstruction: insertScreenshotReconstruction, onPreviewWidth: previewIntelligenceWidth, onToast: showToast, requestedTab: requestedIntelligenceTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'breakpoint-cinema' ? null : current)), onActivityChange: setWorkspaceActivity }), _jsx(FroamLabs, { open: showPanel && labsOpen, onClose: () => { setLabsOpen(false); setTemporalOwner((owner) => owner === 'sampling' || owner === 'trailer' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, selectedNodeId: selection?.nodeId, selectedElement: currentSelectionRef.current, onToast: showToast, requestedLab: requestedLab, flags: labsFlags, onFlagsChange: setLabsFlags, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'sampling' || current === 'trailer' ? null : current)), onActivityChange: setWorkspaceActivity }), showPanel && selection && !inlineEditing && (_jsx(FroamResizeHandles, { targetRect: selectionRect, visible: !!selectionRect, onResizeStart: () => {
+                }, onToast: showToast, project: projectSession.project, onProjectChange: projectSession.setProject, requestedTab: requestedConnectedTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'replay' || current === 'animator' ? null : current)) }), _jsx(FroamIntelligence, { open: showPanel && intelligenceOpen, onClose: () => { setIntelligenceOpen(false); setTemporalOwner((owner) => owner === 'breakpoint-cinema' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, root: getRoot(), registry: nodeRegistryRef.current, onRegistryChange: (registry) => { nodeRegistryRef.current = registry; saveNodeRegistry(registry); }, routeKey: routeKey, viewport: viewportMode, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, selectedElement: currentSelectionRef.current, onSelectNode: selectConnectedNode, onInsertArchived: insertArchivedHtml, onApplyArchivedStyle: (styles) => applyStyle(styles, undefined, 'Archive style'), onInsertReconstruction: insertScreenshotReconstruction, onPreviewWidth: previewIntelligenceWidth, onToast: showToast, requestedTab: requestedIntelligenceTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'breakpoint-cinema' ? null : current)), onActivityChange: setWorkspaceActivity }), _jsx(FroamLabs, { open: showPanel && labsOpen, onClose: () => { setLabsOpen(false); setTemporalOwner((owner) => owner === 'sampling' || owner === 'trailer' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, selectedNodeId: selection?.nodeId, selectedElement: currentSelectionRef.current, onToast: showToast, requestedLab: requestedLab, flags: labsFlags, onFlagsChange: setLabsFlags, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'sampling' || current === 'trailer' ? null : current)), onActivityChange: setWorkspaceActivity }), showPanel && selection && !inlineEditing && (_jsx(FroamResizeHandles, { targetRect: selectionRect, visible: !!selectionRect, onResizeStart: () => {
                     if (!selection)
                         return;
                     if (guardRemoteLock(selection.path))
@@ -5919,6 +5946,18 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                             break;
                         case 'customize-ui':
                             setUICustomizerOpen(true);
+                            break;
+                        case 'archive-component':
+                            archiveCurrentSelection('component');
+                            break;
+                        case 'archive-style':
+                            archiveCurrentSelection('style');
+                            break;
+                        case 'archive-motion':
+                            archiveCurrentSelection('motion');
+                            break;
+                        case 'archive-pattern':
+                            archiveCurrentSelection('interface-pattern');
                             break;
                     }
                 }, onClose: () => setContextMenuPos(null) }), _jsx(FroamUICustomizer, { open: uiCustomizerOpen, value: uiPreference, onChange: setUIPreference, onClose: () => setUICustomizerOpen(false) }), _jsx(FroamSmartGuides, { guides: smartGuides, visible: smartGuides.length > 0 }), _jsx(FroamShortcutOverlay, { visible: showShortcutOverlay, onClose: () => setShowShortcutOverlay(false) })] }), portalContainer);
