@@ -1,7 +1,20 @@
 # Froam Intelligence: privacy and model boundary
 
-Froam 7 ships no AI model and sends no Scan, DNA, screenshot, source code,
+Froam 8 ships no AI model and sends no Scan, DNA, screenshot, source code,
 credentials or project data to a remote service.
+
+The v8 Interface Laboratory remains local by default. Native Sampling observes
+only the live DOM controlled by Froam. The optional unpacked External Sampling
+prototype requires a user action on the active origin, visibly indicates the
+session, excludes source code and sensitive form values, sanitizes styles and
+geometry, applies size limits and stores only a bounded extension-local result.
+Its output records the origin and unsupported signals, not page contents.
+
+Imported UI Sound assets remain project assets; preview requires a user gesture.
+Chaos and Synthetic UX operate through local adapters and project state. Reality
+rectification processes supplied pixels locally. Worker packing transfers the
+canonical project to a local browser Worker and writes the same-origin
+IndexedDB; it is not a network transport.
 
 ## Local analyses in v7
 

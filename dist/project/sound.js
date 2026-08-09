@@ -1,0 +1,11 @@
+export function importSoundAsset(collection, input) { if (!input.mimeType.startsWith('audio/'))
+    throw new Error('Froam Sound accepts audio assets only'); if (!/^(blob:|data:audio\/|https?:\/\/|\/)/.test(input.url))
+    throw new Error('Unsupported sound asset URL'); const asset = { id: input.id, kind: 'audio', name: input.name.trim().slice(0, 100), url: input.url, mimeType: input.mimeType, hash: input.hash, metadata: { durationMs: input.durationMs, projectSound: true } }; return { ...collection, [asset.id]: asset }; }
+export function removeSoundAsset(collection, id, interactions = []) { if (interactions.some((interaction) => interaction.feedback?.soundAssetId === id))
+    throw new Error('Detach this sound from interactions before removing it'); const next = { ...collection }; delete next[id]; return next; }
+export function attachSoundToInteraction(interaction, cue, collection) { if (!collection[cue.assetId])
+    throw new Error('Unknown Froam sound asset'); const normalized = { assetId: cue.assetId, offsetMs: Math.max(0, cue.offsetMs ?? 0), volume: Math.max(0, Math.min(1, cue.volume ?? 1)), pitch: Math.max(.5, Math.min(2, cue.pitch ?? 1)), timing: cue.timing ?? 'start', keyframeAt: cue.keyframeAt }; return { ...interaction, feedback: { ...interaction.feedback, soundAssetId: normalized.assetId, soundOffsetMs: normalized.offsetMs, volume: normalized.volume, pitch: normalized.pitch }, metadata: { ...interaction.metadata, soundCue: normalized } }; }
+export function attachHapticIntent(interaction, haptic) { return { ...interaction, feedback: { ...interaction.feedback, haptic }, metadata: { ...interaction.metadata, hapticPortableIntent: true, hapticGuarantee: 'platform-dependent' } }; }
+export function soundPreviewContract(asset, input) { if (!input.userGesture)
+    throw new Error('Sound preview requires a user gesture because of browser autoplay policy'); return { assetId: asset.id, url: asset.url, volume: Math.max(0, Math.min(1, input.volume ?? 1)), autoplay: false, requiresUserGesture: true }; }
+//# sourceMappingURL=sound.js.map

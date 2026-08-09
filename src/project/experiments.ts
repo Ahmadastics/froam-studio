@@ -17,6 +17,7 @@ export type FroamRoadmapFeature =
   | 'chaos-testing'
   | 'synthetic-ux'
   | 'reality-mode'
+  | 'trailer-generator'
   | 'mutate'
   | 'froam-space'
   | 'make-it-froam'
@@ -49,6 +50,7 @@ export const FROAM_ROADMAP_FEATURES: readonly FroamFeatureDefinition[] = [
   { id: 'chaos-testing', maturity: 'experimental', defaultEnabled: false, prerequisites: ['simulation adapter'] },
   { id: 'synthetic-ux', maturity: 'research-only', defaultEnabled: false, prerequisites: ['simulation adapter', 'flow graph'] },
   { id: 'reality-mode', maturity: 'research-only', defaultEnabled: false, prerequisites: ['simulation adapter', 'privacy model'] },
+  { id: 'trailer-generator', maturity: 'experimental', defaultEnabled: false, prerequisites: ['Product Flow', 'interaction model', 'real render capture'] },
   { id: 'mutate', maturity: 'experimental', defaultEnabled: false, prerequisites: ['branches', 'history', 'DNA'] },
   { id: 'froam-space', maturity: 'architecture-only', defaultEnabled: false, prerequisites: ['project graph', 'stable identity'] },
   { id: 'make-it-froam', maturity: 'research-only', defaultEnabled: false, prerequisites: ['brand model'] },
@@ -58,5 +60,5 @@ export function defaultFroamFeatureFlags(): Record<FroamRoadmapFeature, boolean>
   return Object.fromEntries(FROAM_ROADMAP_FEATURES.map((feature) => [feature.id, feature.defaultEnabled])) as Record<FroamRoadmapFeature, boolean>
 }
 
-export type FroamLabsFlags = { mutate: boolean; interactionLibrary: boolean; uiSampling: boolean; designPhysics: boolean; uiGravity: boolean }
-export const defaultFroamLabsFlags = (): FroamLabsFlags => ({ mutate: false, interactionLibrary: false, uiSampling: false, designPhysics: false, uiGravity: false })
+export type FroamLabsFlags = { mutate: boolean; interactionLibrary: boolean; uiSampling: boolean; externalSampling: boolean; designPhysics: boolean; uiGravity: boolean; chaosTesting: boolean; syntheticUx: boolean; uiSound: boolean; trailerGenerator: boolean; realityMode: boolean }
+export const defaultFroamLabsFlags = (): FroamLabsFlags => ({ mutate: false, interactionLibrary: false, uiSampling: false, externalSampling: false, designPhysics: false, uiGravity: false, chaosTesting: false, syntheticUx: false, uiSound: false, trailerGenerator: false, realityMode: false })

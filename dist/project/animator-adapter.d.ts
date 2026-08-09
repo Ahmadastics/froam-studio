@@ -33,6 +33,11 @@ export declare function interactionInspectorRecord(interaction: FroamInteraction
         stiffness?: number;
         damping?: number;
         mass?: number;
+        friction?: number;
+        bounce?: number;
+        velocity?: number;
+        resistance?: number;
+        attraction?: number;
     } | null;
     sound: string | null;
     compilerTarget: string;

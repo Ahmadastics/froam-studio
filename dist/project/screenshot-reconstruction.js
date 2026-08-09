@@ -26,6 +26,7 @@ function averageColor(input, x, y, width, height) {
     return `rgb(${Math.round(r / Math.max(1, count))},${Math.round(g / Math.max(1, count))},${Math.round(b / Math.max(1, count))})`;
 }
 function intersects(a, b) { return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y; }
+function containsRegion(parent, child) { return parent.id !== child.id && parent.x <= child.x && parent.y <= child.y && parent.x + parent.width >= child.x + child.width && parent.y + parent.height >= child.y + child.height && parent.width * parent.height > child.width * child.height; }
 function inferTextRole(line, viewportHeight) {
     if (!line.text || line.confidence < .45)
         return 'unknown';
@@ -172,11 +173,13 @@ export function createLocalScreenshotProvider(ocrProvider = browserTextDetectorO
             for (const familyId of new Set(regions.map((region) => region.componentFamilyId).filter((id) => Boolean(id))))
                 nodes.push({ id: familyId, kind: 'component-definition', name: 'Reconstructed repeated component', source: 'imported', metadata: { inferred: true } });
             for (const region of regions) {
-                nodes.push({ id: region.nodeId, kind: 'element', name: region.text || region.semanticRole || region.kind, parentId: rootNodeId, source: 'imported', metadata: { reconstructionRegion: region, componentFamilyId: region.componentFamilyId } });
-                relations.push({ id: `contains:${rootNodeId}:${region.nodeId}`, kind: 'contains', from: rootNodeId, to: region.nodeId });
+                const parentRegion = regions.filter((candidate) => containsRegion(candidate, region)).sort((a, b) => a.width * a.height - b.width * b.height)[0];
+                const parentId = parentRegion?.nodeId ?? rootNodeId;
+                nodes.push({ id: region.nodeId, kind: 'element', name: region.text || region.semanticRole || region.kind, parentId, source: 'imported', metadata: { reconstructionRegion: region, componentFamilyId: region.componentFamilyId, hierarchyInferred: true } });
+                relations.push({ id: `contains:${parentId}:${region.nodeId}`, kind: 'contains', from: parentId, to: region.nodeId, metadata: { inferred: true, confidence: parentRegion ? .58 : .9 } });
                 if (region.componentFamilyId)
                     relations.push({ id: `belongs:${region.nodeId}:${region.componentFamilyId}`, kind: 'belongs-to', from: region.nodeId, to: region.componentFamilyId });
-                dna.push({ schemaVersion: 1, nodeId: region.nodeId, capturedAt: now, identity: { source: 'screenshot', stable: true }, structure: { parentId: rootNodeId, componentFamilyId: region.componentFamilyId }, layout: { position: 'absolute', x: region.x, y: region.y, width: region.width, height: region.height }, visual: { averageColor: region.averageColor }, semantics: { role: region.semanticRole ?? region.kind, confidence: region.textConfidence ?? region.confidence, text: region.text, uncertain: region.textConfidence !== undefined && region.textConfidence < .5 }, responsive: { referenceMetadata: primary.metadata }, provenance: { source: 'screenshot', provider: this.id, referenceId: primary.referenceId } });
+                dna.push({ schemaVersion: 1, nodeId: region.nodeId, capturedAt: now, identity: { source: 'screenshot', stable: true }, structure: { parentId, componentFamilyId: region.componentFamilyId, hierarchyInferred: true }, layout: { position: 'absolute', x: region.x, y: region.y, width: region.width, height: region.height }, visual: { averageColor: region.averageColor }, semantics: { role: region.semanticRole ?? region.kind, confidence: region.textConfidence ?? region.confidence, text: region.text, uncertain: region.textConfidence !== undefined && region.textConfidence < .5 }, responsive: { referenceMetadata: primary.metadata }, provenance: { source: 'screenshot', provider: this.id, referenceId: primary.referenceId } });
             }
             const confidence = regions.reduce((sum, region) => sum + region.confidence, 0) / Math.max(1, regions.length);
             const analysis = { schemaVersion: 1, id: `screenshot:${now}`, kind: 'screenshot-reconstruction', targetIds: nodes.map((node) => node.id), createdAt: now, provider: this.id, local: true, confidence, result: { width: primary.width, height: primary.height, regionCount: regions.length, referenceCount: references.length, ocr: ocrResults.map((result) => ({ provider: result.provider, available: result.available, lines: result.lines.length, warnings: result.warnings })), validation: null, disclaimer: 'Experimental visual/structural reconstruction; original source code is not recovered.' } };

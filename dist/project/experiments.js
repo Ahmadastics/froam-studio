@@ -17,6 +17,7 @@ export const FROAM_ROADMAP_FEATURES = [
     { id: 'chaos-testing', maturity: 'experimental', defaultEnabled: false, prerequisites: ['simulation adapter'] },
     { id: 'synthetic-ux', maturity: 'research-only', defaultEnabled: false, prerequisites: ['simulation adapter', 'flow graph'] },
     { id: 'reality-mode', maturity: 'research-only', defaultEnabled: false, prerequisites: ['simulation adapter', 'privacy model'] },
+    { id: 'trailer-generator', maturity: 'experimental', defaultEnabled: false, prerequisites: ['Product Flow', 'interaction model', 'real render capture'] },
     { id: 'mutate', maturity: 'experimental', defaultEnabled: false, prerequisites: ['branches', 'history', 'DNA'] },
     { id: 'froam-space', maturity: 'architecture-only', defaultEnabled: false, prerequisites: ['project graph', 'stable identity'] },
     { id: 'make-it-froam', maturity: 'research-only', defaultEnabled: false, prerequisites: ['brand model'] },
@@ -24,5 +25,5 @@ export const FROAM_ROADMAP_FEATURES = [
 export function defaultFroamFeatureFlags() {
     return Object.fromEntries(FROAM_ROADMAP_FEATURES.map((feature) => [feature.id, feature.defaultEnabled]));
 }
-export const defaultFroamLabsFlags = () => ({ mutate: false, interactionLibrary: false, uiSampling: false, designPhysics: false, uiGravity: false });
+export const defaultFroamLabsFlags = () => ({ mutate: false, interactionLibrary: false, uiSampling: false, externalSampling: false, designPhysics: false, uiGravity: false, chaosTesting: false, syntheticUx: false, uiSound: false, trailerGenerator: false, realityMode: false });
 //# sourceMappingURL=experiments.js.map

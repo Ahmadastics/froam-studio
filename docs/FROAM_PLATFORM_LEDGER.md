@@ -1,5 +1,38 @@
 # Froam Platform Implementation Ledger
 
+## v8.0 release status — 2026-08-09
+
+- **Completed foundations:** one Interface Laboratory shell; shared provider,
+  provenance, branch, graph, analysis and interaction boundaries; worker-backed
+  exact project packing with latest-write coalescing; screenshot-state comparison.
+- **Experimental implementations:** protected/conflict-aware MUTATE; Interaction
+  Library; native observable Sampling; explicit-permission External Sampling
+  extension prototype; Physics; Gravity; isolated Chaos; UI Sound; real-state
+  Trailer storyboards.
+- **Research implementations:** deterministic Synthetic UX provider/runner and
+  bounded probable-screen Reality rectification. Neither is represented as
+  production intelligence.
+- **Migrations:** none. Project schema remains v2; added relation/analysis kinds
+  and metadata are additive. Old full and packed documents remain readable.
+- **Tests:** mutation isolation/protection/adoption/conflicts; library CRUD/search/
+  preview/rebinding; native/external sampling privacy and limits; deterministic
+  physics/gravity; chaos restoration and critical priority; synthetic replay;
+  sound safeguards; trailer editing; screenshot-state inference; Reality bounds;
+  exact async packing.
+- **Known limits:** external sampling cannot recover source or inaccessible DOM;
+  physics is approximate; Synthetic UX is not human evidence; Reality needs
+  manual confirmation; Worker cloning and peak transient allocation remain
+  measurable; runtime export adapters are not universal.
+- **Decisions:** all Labs default off independently; mutation prototypes fork
+  before events; adoption refuses diverged targets; observable sampling never
+  claims original implementation; v9/Froam Space remains untouched.
+- **Remaining:** browser corpus/e2e evaluation, distributed external-sampling
+  privacy review, incremental/transferable packing, evaluated synthetic agents,
+  broader sound/runtime export, and screenshot-state accuracy fixtures.
+
+See `FROAM_V8_EXPERIMENTS.md`, `FROAM_V8_PERFORMANCE.md`, and
+`FROAM_UI_SAMPLING_FEASIBILITY.md`.
+
 ## v7.2 release status — 2026-08-09
 
 - **Production/Beta:** exact-round-trip packed storage, scan-derived DNA

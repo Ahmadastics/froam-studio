@@ -104,6 +104,7 @@ const {
   createProjectEvent,
   deleteProjectBranch,
   deriveBranchState,
+  emptyProjectState,
   renameProjectBranch,
   switchProjectBranch,
 } = await import('../dist/project/event-log.js')
@@ -130,14 +131,21 @@ const { LOCAL_HEURISTIC_PROVIDER, assertRemoteProviderConsent } = await import('
 const { identityHealthReport } = await import('../dist/project/node-registry.js')
 const { detectFrameworkHost } = await import('../dist/project/framework-identity.js')
 const { profileIntelligence } = await import('../dist/project/performance.js')
-const { compactProjectForLocalStorage, persistProjectToLocalStorage } = await import('../dist/project/local-project-store.js')
+const { compactProjectForLocalStorage, packProjectOffThread, persistProjectToLocalStorage } = await import('../dist/project/local-project-store.js')
 const { compactProjectHistory } = await import('../dist/project/history-compaction.js')
 const { packProjectDocument, profileProjectSize, unpackProjectDocument } = await import('../dist/project/storage-codec.js')
 const { aggregateIdentityDiagnostics, createIdentityTelemetry } = await import('../dist/project/identity-telemetry.js')
-const { createMutationPrototype, deterministicMutationProvider } = await import('../dist/project/mutation.js')
-const { applyInteractionRecipe, deleteInteractionRecipe, duplicateInteractionRecipe, renameInteractionRecipe, saveInteractionRecipe } = await import('../dist/project/interaction-library.js')
-const { createSamplingSession, recordSamplingFrame, samplingSessionToRecipe } = await import('../dist/project/ui-sampling.js')
-const { compilePhysicsRuntime, interactionWithPhysics, stepSpring } = await import('../dist/project/physics.js')
+const { adoptMutationChanges, compareMutationBranches, createMutationPrototype, deterministicMutationProvider, normalizeMutationConstraints, previewMutation } = await import('../dist/project/mutation.js')
+const { applyInteractionRecipe, deleteInteractionRecipe, duplicateInteractionRecipe, previewInteractionRecipe, renameInteractionRecipe, saveInteractionRecipe, searchInteractionLibrary, updateInteractionRecipe } = await import('../dist/project/interaction-library.js')
+const { createSamplingSession, recordSamplingEvent, recordSamplingFrame, recordSamplingMutation, samplingSessionToRecipe, samplingTimeline, trimSamplingSession } = await import('../dist/project/ui-sampling.js')
+const { externalObservationsToRecipe, isSensitiveSamplingElement, sanitizeExternalObservation, validateExternalSamplerMessage } = await import('../dist/project/external-sampling.js')
+const { compilePhysicsRuntime, FROAM_PHYSICS_PRESETS, gravityForce, interactionWithGravity, interactionWithPhysics, physicsPreset, simulateThrow, stepSpring } = await import('../dist/project/physics.js')
+const { createDefaultChaosScenarios, evaluateChaosSnapshot, runChaosTesting } = await import('../dist/project/chaos.js')
+const { deterministicSyntheticUxProvider, runSyntheticUx, syntheticReplay } = await import('../dist/project/synthetic-ux.js')
+const { attachHapticIntent, attachSoundToInteraction, importSoundAsset, removeSoundAsset, soundPreviewContract } = await import('../dist/project/sound.js')
+const { createTrailerStoryboard, removeTrailerShot, reorderTrailerShot } = await import('../dist/project/trailer.js')
+const { compareScreenshotStates, inferResponsiveScreenshotReferences } = await import('../dist/project/screenshot-state.js')
+const { detectProbableScreenRegion, rectifyScreenRegion } = await import('../dist/project/reality.js')
 const { evaluateScreenshotReconstruction } = await import('../dist/project/screenshot-evaluation.js')
 const { factorComponentFamilies } = await import('../dist/project/structural-deduplication.js')
 
@@ -223,7 +231,7 @@ test('MUTATE creates an isolated branch with deterministic provenance', () => {
   assert.equal(result.project.activeBranchId, 'mutation-001')
   assert.equal(result.provenance.sourceBranchId, 'main')
   assert.ok(result.project.events.every((event) => event.branchId === 'mutation-001'))
-  const request = { state: result.project.checkpoints[result.project.branches.main.baseCheckpointId].state, scopeNodeIds: ['hero'], level: 'safe', seed: 1, now: 10 }
+  const request = { state: result.project.checkpoints[result.project.branches.main.baseCheckpointId].state, scopeNodeIds: ['hero'], level: 'safe', constraints: normalizeMutationConstraints('safe'), seed: 1, now: 10 }
   assert.deepEqual(deterministicMutationProvider.propose(request), deterministicMutationProvider.propose(request))
 })
 
@@ -254,6 +262,82 @@ test('screenshot corpus metrics keep text geometry structure and pixels separate
   const metrics = evaluateScreenshotReconstruction({ id: 'case', reference: { width: 100, height: 100, data: new Uint8ClampedArray(40000), mimeType: 'image/png' }, viewport: { width: 100, height: 100 }, expectedText: ['Hello'], expectedRegions: [{ kind: 'text', x: 10, y: 10, width: 100, height: 20 }], expectedStructure: { groups: 0 }, tags: ['gradient', 'overlap', 'transparency', 'large-type', 'icon-only', 'card-grid', 'nested-cards', 'navigation', 'modal', 'dark-mode', 'light-mode', 'unusual-font', 'image-heavy', 'small-text', 'low-contrast', 'responsive'] }, reconstruction, { timingMs: 12 })
   assert.equal(metrics.text.accuracy, 1); assert.equal(metrics.geometry.meanIoU, 1); assert.equal(metrics.structure.observedGroups, 0); assert.equal(metrics.visual.typographyApproximation, 'not-measured')
   assert.ok(metrics.limitations.some((item) => item.includes('z-order'))); assert.ok(metrics.limitations.some((item) => item.includes('responsive behavior')))
+})
+
+test('MUTATE levels, protections, comparison and safe selective adoption share branch history', () => {
+  const base = createProjectDocument({ id: 'mutation-v8', name: 'Mutation v8', actorId: 'a', now: 1, idFactory: (() => { let i=0; return () => `m${++i}` })() })
+  const state = base.checkpoints[base.branches.main.baseCheckpointId].state; state.nodes.nav = { id: 'nav', kind: 'element', name: 'Navigation', source: 'host-dom' }; state.dna.nav = { schemaVersion: 1, nodeId: 'nav', capturedAt: 1, semantics: { role: 'navigation', text: 'Keep me' }, visual: { color: 'brand' } }
+  const protectedPreview = previewMutation(deterministicMutationProvider, { state, scopeNodeIds: ['nav'], level: 'unhinged', constraints: normalizeMutationConstraints('unhinged', { protect: ['navigation','copy','brand-colors'] }), now: 2 })
+  assert.equal(protectedPreview.proposals.length, 0)
+  const result = createMutationPrototype(base, { branchId: 'mutation-001', actorId: 'a', level: 'unhinged', scopeNodeIds: ['nav'], constraints: { protect: ['copy'], allow: ['visual','navigation','interactions','composition'] }, now: 3, idFactory: (() => { let i=20; return () => `m${++i}` })() })
+  const comparison = compareMutationBranches(result.project, 'main', 'mutation-001'); assert.ok(comparison.structural > 0); assert.ok(comparison.interactions > 0)
+  const adopted = adoptMutationChanges(result.project, { mutationBranchId: 'mutation-001', targetBranchId: 'main', eventIds: comparison.eventIds, actorId: 'a', now: 20, idFactory: (() => { let i=50; return () => `m${++i}` })() })
+  assert.equal(adopted.status, 'adopted'); assert.ok(adopted.adoptedEventIds.length > 0); assert.equal(result.project.events.filter((event) => event.branchId === 'main').length, 0)
+  const changedMain = appendProjectEvents(result.project, [createProjectEvent({ id: 'main-change', projectId: base.id, branchId: 'main', actorId: 'b', clock: 99, createdAt: 21, type: 'node.upserted', targetIds: ['nav'], payload: { node: { ...state.nodes.nav, name: 'Changed concurrently' } } })])
+  assert.equal(adoptMutationChanges(changedMain, { mutationBranchId: 'mutation-001', targetBranchId: 'main', eventIds: comparison.eventIds, actorId: 'a' }).status, 'refused')
+})
+
+test('Interaction Library searches edits previews and rebinds without original IDs', () => {
+  const recipe = { id: 'drawer', name: 'Elastic Drawer', category: 'Navigation', tags: ['spring','panel'], description: 'Reveal a navigation panel', interaction: { id: 'drawer', name: 'Drawer', sourceId: 'old', targetIds: ['panel'], trigger: 'click', durationMs: 300, timeline: [{ at: 0, values: { opacity: 0, x: -20 } }, { at: 1, values: { opacity: 1, x: 0 } }] }, bindings: { source: { role: 'menu-control', required: true }, targets: [{ role: 'menu-panel', required: true }] }, provenance: { kind: 'native', source: 'froam', projectId: 'p', branchId: 'main', createdAt: 1, originalImplementation: 'froam' } }
+  let library = saveInteractionRecipe({}, recipe); library = updateInteractionRecipe(library, 'drawer', { category: 'Reveal', interaction: { durationMs: 420 } })
+  assert.equal(searchInteractionLibrary(library, { query: 'spring' })[0].id, 'drawer'); assert.equal(previewInteractionRecipe(library.drawer, { samples: 6 }).length, 7)
+  const applied = applyInteractionRecipe(library.drawer, { sourceId: 'new-button', targetIds: { 'menu-panel': 'new-panel' } }); assert.equal(applied.sourceId, 'new-button'); assert.deepEqual(applied.targetIds, ['new-panel'])
+})
+
+test('Native Sampling records events mutations timing and editable reconstruction provenance', () => {
+  let session = createSamplingSession({ id: 'capture', trigger: 'click', sourceRole: 'trigger', startedAt: 100 })
+  session = recordSamplingEvent(session, { atMs: 0, targetRole: 'trigger', event: 'click' }); session = recordSamplingMutation(session, { atMs: 20, targetRole: 'panel', kind: 'attributes', attributeName: 'class' }); session = recordSamplingFrame(session, { atMs: 20, targetRole: 'panel', styles: { opacity: 0, transform: 'translateX(-20px)' }, visible: true }); session = recordSamplingFrame(session, { atMs: 430, targetRole: 'panel', styles: { opacity: 1, transform: 'none' }, visible: true })
+  const trimmed = trimSamplingSession(session, 10, 430); const recipe = samplingSessionToRecipe(trimmed, { recipeId: 'captured', name: 'Captured', projectId: 'p', branchId: 'main' })
+  assert.equal(samplingTimeline(session)[0].label, 'click trigger'); assert.equal(recipe.provenance.originalImplementation, 'unknown'); assert.equal(recipe.interaction.durationMs, 420); assert.ok(recipe.provenance.confidence > .5)
+})
+
+test('External Sampling enforces explicit permission and strips sensitive or unsupported fields', () => {
+  const permission = { origin: 'https://example.com', grantedAt: 1, activeTab: true, userInitiated: true }
+  assert.throws(() => validateExternalSamplerMessage({ version: 1, sessionId: 'x', type: 'session-start', origin: 'https://evil.example', elapsedMs: 0 }, permission), /permission/)
+  assert.throws(() => validateExternalSamplerMessage({ version: 1, sessionId: 'x', type: 'session-start', origin: 'javascript:alert(1)', elapsedMs: 0 }, { ...permission, origin: 'null' }), /HTTP/)
+  assert.equal(isSensitiveSamplingElement({ tagName: 'input', type: 'password' }), true)
+  assert.deepEqual(sanitizeExternalObservation({ elapsedMs: 1, type: 'frame', role: 'panel', styles: { opacity: '1', secretValue: 'nope' } }).styles, { opacity: '1' })
+  const recipe = externalObservationsToRecipe({ sessionId: 'external', origin: 'https://example.com/path?secret=x', startedAt: 1, observations: [{ elapsedMs: 0, type: 'event', role: 'button', event: 'click' }, { elapsedMs: 20, type: 'frame', role: 'panel', styles: { opacity: 0 } }, { elapsedMs: 200, type: 'frame', role: 'panel', styles: { opacity: 1 } }], limitations: ['cross-origin-iframe'], recipeId: 'external-recipe', name: 'External menu', projectId: 'p', branchId: 'main' })
+  assert.equal(recipe.provenance.source, 'external'); assert.equal(recipe.metadata.sourceOrigin, 'https://example.com'); assert.equal(recipe.metadata.sensitiveValuesCaptured, false)
+})
+
+test('Physics presets differ materially and Gravity remains deterministic and bounded', () => {
+  assert.equal(new Set(Object.values(FROAM_PHYSICS_PRESETS).map((value) => JSON.stringify(value))).size, 8)
+  const elastic = physicsPreset('Elastic'); const a = simulateThrow({ velocity: 12, target: 1, physics: elastic, frames: 20 }); const b = simulateThrow({ velocity: 12, target: 1, physics: elastic, frames: 20 }); assert.deepEqual(a,b)
+  assert.deepEqual(gravityForce({ mode: 'attract', strength: 10, radius: 100 }, { x: 0, y: 0 }, { x: 50, y: 0 }), { x: 5, y: 0 })
+  assert.throws(() => interactionWithGravity({ id:'i',name:'i',sourceId:'a',targetIds:['a'],trigger:'drag',timeline:[] }, { mode:'group',strength:1,radius:10 }), /Lab-only/)
+})
+
+test('Chaos Testing isolates scenarios and elevates hidden critical responsive failures', async () => {
+  const scenario = createDefaultChaosScenarios()[0]; const state = { responsive: { cta: { schemaVersion: 1, nodeId: 'cta', priority: 'critical', canHide: false, canCollapse: false, canWrap: true, canTruncate: false, canCrop: false, canReposition: true, updatedAt: 1, updatedBy: 'a' } } }; let restored = 0
+  const report = await runChaosTesting({ scenarios: [scenario], state, now: 1, adapter: { apply() {}, capture: () => ({ viewport: { width: 320, height: 720 }, nodes: [{ nodeId: 'cta', rect: { x: 0, y: 0, width: 100, height: 40 }, visible: false }] }), restore: () => { restored += 1 } } })
+  assert.equal(report.failed, 1); assert.equal(report.scenarios[0].failures[0].kind, 'hidden-critical'); assert.equal(report.scenarios[0].failures[0].severity, 'critical'); assert.equal(restored, 1)
+  const adapterFailure = await runChaosTesting({ scenarios: [scenario, createDefaultChaosScenarios()[1]], state, now: 2, adapter: { apply() { throw new Error('fixture failure') }, capture: () => ({ viewport: { width: 0, height: 0 }, nodes: [] }), restore: () => { restored += 1 } } })
+  assert.equal(adapterFailure.total, 2); assert.equal(adapterFailure.failed, 2); assert.ok(adapterFailure.scenarios.every((item) => item.failures[0].kind === 'invalid-state')); assert.equal(restored, 3)
+  assert.equal(evaluateChaosSnapshot(scenario, { viewport: { width: 320, height: 720 }, nodes: [] }, state).length, 0)
+})
+
+test('Synthetic UX executes Product Flow goals and produces Replay-compatible steps', async () => {
+  const graph = createFlowGraph('Checkout', [{ id:'start',name:'Start' },{ id:'cart',name:'Cart' },{ id:'done',name:'Done' }],[{id:'a',from:'start',to:'cart'},{id:'b',from:'cart',to:'done'}]); const state = emptyProjectState(); state.flows[graph.flow.id] = graph.flow; graph.nodes.forEach((node) => state.nodes[node.id] = node); graph.relations.forEach((relation) => state.relations[relation.id] = relation)
+  const run = await runSyntheticUx({ id:'checkout',goal:'Complete checkout',startNodeId:'start',successNodeIds:['done'] }, { flow: graph.flow, state, now: 10 })
+  assert.equal(run.success,true); assert.equal(run.steps.length,2); assert.deepEqual(syntheticReplay(run).map((step) => step.nodeId),['cart','done']); assert.equal(deterministicSyntheticUxProvider.local,true)
+})
+
+test('UI Sound persists optional timing and haptic intent with autoplay safeguards', () => {
+  const sounds = importSoundAsset({}, { id:'click',name:'Click',url:'data:audio/wav;base64,AA==',mimeType:'audio/wav' }); const base = { id:'i',name:'Click',sourceId:'a',targetIds:['a'],trigger:'click',timeline:[] }; const attached = attachHapticIntent(attachSoundToInteraction(base,{assetId:'click',offsetMs:20,volume:.5},sounds),'light')
+  assert.equal(attached.feedback.soundOffsetMs,20); assert.equal(attached.feedback.haptic,'light'); assert.throws(() => soundPreviewContract(sounds.click,{userGesture:false}),/user gesture/); assert.throws(() => removeSoundAsset(sounds,'click',[attached]),/Detach/)
+})
+
+test('Trailer storyboard uses real project nodes and remains editable', () => {
+  const state = emptyProjectState(); state.nodes.hero = { id:'hero',kind:'screen',name:'Hero',source:'froam' }; state.flows.flow = { id:'flow',name:'Flow',nodeIds:['hero'],edgeIds:[],entryNodeId:'hero' }; const trailer = createTrailerStoryboard({ state, branchId:'main', durationSeconds:10, now:1 }); assert.equal(trailer.source.realProjectState,true); assert.ok(trailer.shots.some((shot) => shot.nodeId === 'hero')); const reordered = reorderTrailerShot(trailer,'brand-end',0); assert.equal(reordered.shots[0].id,'brand-end'); assert.equal(removeTrailerShot(reordered,'brand-end').shots.some((shot) => shot.id === 'brand-end'),false)
+})
+
+test('Screenshot state bridge reports hypotheses without claiming recovered interaction source', () => {
+  const reconstruction = (id, regions, width=100) => ({ references:[{id,width,height:100}],regions,ocr:[],analysis:{},nodes:[],relations:[],dna:[],rootNodeId:'root',correctionPasses:[] }); const closed = reconstruction('closed',[{id:'a',nodeId:'a',kind:'container',semanticRole:'menu',x:0,y:0,width:100,height:20,confidence:.5,averageColor:'black'}]); const open = reconstruction('open',[{id:'b',nodeId:'b',kind:'container',semanticRole:'menu',x:0,y:0,width:100,height:20,confidence:.5,averageColor:'black'},{id:'panel',nodeId:'panel',kind:'container',semanticRole:'unknown',x:0,y:20,width:100,height:80,confidence:.5,averageColor:'white'}]); const difference = compareScreenshotStates(closed,open); assert.ok(difference.interactionHypotheses.some((item) => item.kind === 'reveal')); assert.ok(difference.limitations.some((item) => item.includes('No Interaction Recipe'))); assert.equal(inferResponsiveScreenshotReferences([open,closed]).observations.length,1)
+})
+
+test('asynchronous project packing preserves exact canonical state', async () => {
+  const project = createProjectDocument({ id:'async-pack',name:'Async',actorId:'a',idFactory:()=> 'cp' }); project.metadata = { repeated:['large'.repeat(300),'large'.repeat(300)] }; assert.deepEqual(unpackProjectDocument(await packProjectOffThread(project)),project)
 })
 
 test('stable identity survives DOM reordering', () => {
@@ -707,6 +791,18 @@ test('Visual diff uses transparent RGB error and correction is strictly bounded'
   assert.equal(diff.comparable, true); assert.ok(diff.pixelSimilarity < 1 && diff.pixelSimilarity > .99); assert.equal(diff.metric, 'normalized-rgb-mae-v1')
   const corrected = boundedGeometryCorrection([{ id: 'a', nodeId: 'a', x: 0, y: 0, width: 10, height: 10, kind: 'container', confidence: .5 }], [{ id: 'a', x: 16, y: 8, width: 20, height: 20 }], 99)
   assert.equal(corrected.passes.length, 4); assert.ok(corrected.regions[0].x < 16)
+})
+
+test('Reality research detects only probable screens and requires an explicit rectification target', () => {
+  const width = 64; const height = 64; const data = new Uint8ClampedArray(width * height * 4)
+  for (let y = 12; y < 52; y += 1) for (let x = 10; x < 54; x += 1) { const at = (y * width + x) * 4; data[at] = 240; data[at + 1] = 240; data[at + 2] = 240; data[at + 3] = 255 }
+  const photo = { width, height, data, mimeType: 'image/jpeg' }
+  const probable = detectProbableScreenRegion(photo)
+  assert.ok(probable && probable.confidence <= .55)
+  const rectified = rectifyScreenRegion(photo, probable, 32, 24)
+  assert.equal(rectified.width, 32); assert.equal(rectified.height, 24)
+  assert.equal(rectified.metadata.realityResearch, true)
+  assert.ok(rectified.metadata.limitations.some((item) => item.includes('manual confirmation')))
 })
 
 test('Incremental Scan invalidates only changed regions', () => {

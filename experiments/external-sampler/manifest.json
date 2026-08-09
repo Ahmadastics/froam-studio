@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Froam External Sampler Prototype",
+  "version": "0.1.0",
+  "description": "User-initiated observable DOM/CSS interaction sampling for Froam experiments.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "action": { "default_title": "Start Froam Sampler" },
+  "background": { "service_worker": "background.js" }
+}

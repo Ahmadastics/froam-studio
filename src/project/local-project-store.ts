@@ -4,7 +4,9 @@ import { packProjectDocument, unpackProjectDocument, type FroamPackedProject } f
 export const FROAM_LOCAL_PROJECT_INLINE_LIMIT = 1_500_000
 const DATABASE_NAME = 'froam-projects-v1'
 const STORE_NAME = 'projects'
-const saveQueues = new Map<string, Promise<boolean>>()
+const saveSlots = new Map<string, { running: boolean; pending?: { project: FroamProjectDocument; resolve: Array<(value: boolean) => void> } }>()
+let storageWorker: Worker | null | undefined; let workerRequestId = 0
+const workerRequests = new Map<number, { resolve: (value: FroamPackedProject) => void; reject: (reason: unknown) => void }>()
 const DERIVED_EVENT_TYPES = new Set<FroamProjectEvent['type']>([
   'scan.captured',
   'dna.captured',
@@ -128,12 +130,12 @@ export async function loadProjectFromIndexedDb(projectId: string): Promise<Froam
 }
 
 async function writeProjectToIndexedDb(project: FroamProjectDocument): Promise<boolean> {
+  const packed = await packProjectOffThread(project); const stored = JSON.stringify(packed).length < JSON.stringify(project).length ? packed : project
   const database = await openProjectDatabase()
   if (!database) return false
   return new Promise<boolean>((resolve) => {
     try {
       const transaction = database.transaction(STORE_NAME, 'readwrite')
-      const packed = packProjectDocument(project); const stored = JSON.stringify(packed).length < JSON.stringify(project).length ? packed : project
       transaction.objectStore(STORE_NAME).put(stored, project.id)
       transaction.oncomplete = () => resolve(true)
       transaction.onerror = () => resolve(false)
@@ -142,11 +144,17 @@ async function writeProjectToIndexedDb(project: FroamProjectDocument): Promise<b
   }).finally(() => database.close())
 }
 
-/** Serialize writes per project so a slower older transaction cannot overwrite newer state. */
+function getStorageWorker() {
+  if (storageWorker !== undefined) return storageWorker
+  if (typeof Worker === 'undefined') return storageWorker = null
+  try { const worker = new Worker(new URL('./storage-worker.js', import.meta.url), { type: 'module', name: 'froam-project-storage' }); worker.onmessage = (event: MessageEvent<{ id: number; packed?: FroamPackedProject; error?: string }>) => { const pending = workerRequests.get(event.data.id); if (!pending) return; workerRequests.delete(event.data.id); event.data.packed ? pending.resolve(event.data.packed) : pending.reject(new Error(event.data.error ?? 'Project packing failed')) }; worker.onerror = () => { for (const pending of workerRequests.values()) pending.reject(new Error('Froam storage worker failed')); workerRequests.clear(); worker.terminate(); storageWorker = null }; return storageWorker = worker } catch { return storageWorker = null }
+}
+export async function packProjectOffThread(project: FroamProjectDocument): Promise<FroamPackedProject> { const worker = getStorageWorker(); if (!worker) { await new Promise<void>((resolve) => setTimeout(resolve, 0)); return packProjectDocument(project) } const id = ++workerRequestId; return new Promise<FroamPackedProject>((resolve, reject) => { workerRequests.set(id, { resolve, reject }); worker.postMessage({ id, project }) }).catch(async () => { await new Promise<void>((resolve) => setTimeout(resolve, 0)); return packProjectDocument(project) }) }
+
+/** Coalesce pending writes and pack in a module Worker so older large saves cannot block or overwrite the latest state. */
 export function saveProjectToIndexedDb(project: FroamProjectDocument): Promise<boolean> {
-  const previous = saveQueues.get(project.id) ?? Promise.resolve(true)
-  const queued = previous.catch(() => false).then(() => writeProjectToIndexedDb(project))
-  saveQueues.set(project.id, queued)
-  void queued.finally(() => { if (saveQueues.get(project.id) === queued) saveQueues.delete(project.id) })
-  return queued
+  let slot = saveSlots.get(project.id); if (!slot) { slot = { running: false }; saveSlots.set(project.id, slot) }
+  const promise = new Promise<boolean>((resolve) => { if (slot!.pending) { slot!.pending.project = project; slot!.pending.resolve.push(resolve) } else slot!.pending = { project, resolve: [resolve] } })
+  if (!slot.running) { slot.running = true; void (async () => { while (slot!.pending) { const pending = slot!.pending; slot!.pending = undefined; const result = await writeProjectToIndexedDb(pending.project).catch(() => false); pending.resolve.forEach((resolve) => resolve(result)) } slot!.running = false; saveSlots.delete(project.id) })() }
+  return promise
 }

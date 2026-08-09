@@ -57,6 +57,13 @@ export type FroamRelationKind =
   | 'variant-of'
   | 'belongs-to'
   | 'connected-to'
+  | 'mutated-from'
+  | 'uses-interaction'
+  | 'sampled-from'
+  | 'governed-by'
+  | 'tested-by'
+  | 'performed-by'
+  | 'uses-sound'
   | 'custom'
 
 export type FroamRelation = {
@@ -86,8 +93,8 @@ export type FroamInteraction = {
   timeline: FroamTimelineKeyframe[]
   durationMs?: number
   delayMs?: number
-  physics?: { preset?: string; stiffness?: number; damping?: number; mass?: number }
-  feedback?: { soundAssetId?: FroamId; haptic?: string }
+  physics?: { preset?: string; stiffness?: number; damping?: number; mass?: number; friction?: number; bounce?: number; velocity?: number; resistance?: number; attraction?: number }
+  feedback?: { soundAssetId?: FroamId; soundOffsetMs?: number; volume?: number; pitch?: number; haptic?: 'light' | 'medium' | 'heavy' | 'success' }
   metadata?: Record<string, unknown>
 }
 
@@ -186,7 +193,7 @@ export type FroamArchiveItem = {
   metadata?: Record<string, unknown>
 }
 
-export type FroamAnalysisKind = 'predicted-attention' | 'visual-rhythm' | 'responsive-observation' | 'screenshot-reconstruction'
+export type FroamAnalysisKind = 'predicted-attention' | 'visual-rhythm' | 'responsive-observation' | 'screenshot-reconstruction' | 'chaos-result' | 'synthetic-ux-run' | 'trailer-storyboard' | 'sampling-session'
 export type FroamAnalysis = {
   schemaVersion: 1
   id: FroamId

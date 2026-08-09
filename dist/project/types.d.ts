@@ -25,7 +25,7 @@ export type FroamNode = {
     locator?: FroamNodeLocator;
     metadata?: Record<string, unknown>;
 };
-export type FroamRelationKind = 'contains' | 'instance-of' | 'navigates-to' | 'transitions-to' | 'uses-asset' | 'derived-from' | 'variant-of' | 'belongs-to' | 'connected-to' | 'custom';
+export type FroamRelationKind = 'contains' | 'instance-of' | 'navigates-to' | 'transitions-to' | 'uses-asset' | 'derived-from' | 'variant-of' | 'belongs-to' | 'connected-to' | 'mutated-from' | 'uses-interaction' | 'sampled-from' | 'governed-by' | 'tested-by' | 'performed-by' | 'uses-sound' | 'custom';
 export type FroamRelation = {
     id: FroamId;
     kind: FroamRelationKind;
@@ -56,10 +56,18 @@ export type FroamInteraction = {
         stiffness?: number;
         damping?: number;
         mass?: number;
+        friction?: number;
+        bounce?: number;
+        velocity?: number;
+        resistance?: number;
+        attraction?: number;
     };
     feedback?: {
         soundAssetId?: FroamId;
-        haptic?: string;
+        soundOffsetMs?: number;
+        volume?: number;
+        pitch?: number;
+        haptic?: 'light' | 'medium' | 'heavy' | 'success';
     };
     metadata?: Record<string, unknown>;
 };
@@ -156,7 +164,7 @@ export type FroamArchiveItem = {
     usageNodeIds: FroamId[];
     metadata?: Record<string, unknown>;
 };
-export type FroamAnalysisKind = 'predicted-attention' | 'visual-rhythm' | 'responsive-observation' | 'screenshot-reconstruction';
+export type FroamAnalysisKind = 'predicted-attention' | 'visual-rhythm' | 'responsive-observation' | 'screenshot-reconstruction' | 'chaos-result' | 'synthetic-ux-run' | 'trailer-storyboard' | 'sampling-session';
 export type FroamAnalysis = {
     schemaVersion: 1;
     id: FroamId;

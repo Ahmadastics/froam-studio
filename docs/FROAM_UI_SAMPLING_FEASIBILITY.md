@@ -1,8 +1,10 @@
 # External UI Sampling feasibility
 
-Status: research/interface contract only in v7.2. The shipped Labs sampler is
-limited to Froam-controlled DOM. Froam reconstructs observable behavior; it
-does not claim to recover or copy another site's implementation.
+Status: native Froam-controlled sampling is Experimental in v8.0. A
+permission-minimal unpacked Manifest V3 prototype now lives in
+`experiments/external-sampler`; it is not silently installed or enabled. Froam
+reconstructs observable behavior and does not claim to recover or copy another
+site's implementation.
 
 ## Proposed extension boundary
 
@@ -45,7 +47,9 @@ be transient unless the user explicitly keeps them.
 - Private data can appear in text, attributes, state, and forms. Recording needs an indicator, origin allowlist, review, and deletion.
 - Reconstruction must not ingest source code, hidden assets, proprietary data, or bypass access controls.
 
-No external sampler ships in v7.2. The next justified experiment is a
-permission-minimal extension against owned test pages, followed by privacy
-review and an observable-behavior accuracy corpus.
-
+The v8 prototype injects only after the user clicks the extension action on the
+active tab, keeps a visible recording indicator, excludes sensitive input
+values and source, and stores a bounded sanitized result in extension-local
+storage. It must be evaluated against owned test pages before distribution.
+Cross-origin frames, closed Shadow DOM, canvas/WebGL intent, original easing,
+framework state and inaccessible content remain explicitly unsupported.

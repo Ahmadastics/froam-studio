@@ -1,5 +1,19 @@
 # Changelog
 
+## 8.0.0 - 2026-08-09
+
+**Interface Laboratory.** MUTATE now creates deterministic, protected and
+conflict-aware branch prototypes. Interaction Library, native and explicit-
+permission external Sampling, deterministic Physics and Gravity, isolated
+Chaos Testing, research Synthetic UX, UI Sound, real-state Trailer storyboards,
+screenshot-state hypotheses and bounded Reality research share the existing
+identity, graph, branch, history, flow and interaction foundations.
+
+All Laboratory capabilities remain independently disabled by default. Packed
+project saves move off the main thread when Worker support is available and
+coalesce pending writes; exact full/packed compatibility is preserved. No
+Froam Space work, live-DOM rewrite, schema bump or selector migration occurred.
+
 ## 7.2.0 - 2026-08-09
 
 **Production Hardening + v8 Labs.** Canonical project history remains intact

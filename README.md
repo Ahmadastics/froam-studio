@@ -1,11 +1,10 @@
 # Froam Studio
 
-> **7.2.0 — Production Hardening + v8 Labs:** exact-round-trip packed project
-> storage, transactional hosted-sync boundaries, aggregate identity health, and
-> a separate disabled-by-default Labs surface for branch-isolated MUTATE,
-> portable Interaction recipes, native observable Sampling, and deterministic
-> Design Physics. Labs remain Experimental; Rooms and path-based output are
-> unchanged.
+> **8.0.0 — Interface Laboratory:** protected branch-isolated MUTATE, portable
+> Interaction recipes, observable Sampling, deterministic Physics and Gravity,
+> isolated Chaos, research Synthetic UX, UI Sound and real-project Trailer
+> storyboards in one independently flagged Laboratory. Worker-backed exact
+> project saves improve responsiveness; Rooms and path-based output are unchanged.
 
 [![CI](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-14b8a0.svg)](LICENSE)

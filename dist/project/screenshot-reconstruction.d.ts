@@ -5,6 +5,11 @@ export type FroamScreenshotReferenceMeta = {
     state?: string;
     route?: string;
     label?: string;
+    realityResearch?: boolean;
+    sourceWidth?: number;
+    sourceHeight?: number;
+    quad?: unknown;
+    limitations?: string[];
 };
 export type FroamScreenshotPixels = {
     width: number;

@@ -1,19 +1,19 @@
 # Froam Rooms — roadmap to v6
 
-> **v7.2 transition status (2026-08-09):** the v7 platform now has measured
-> packed storage, durable revisioned hosted-sync boundaries, aggregate identity
-> telemetry, and a reusable screenshot corpus harness. Bounded v8 Labs for
-> MUTATE, Interaction Library, native Sampling, and Design Physics are real but
-> disabled-by-default Experimental systems. Formal v8.0 product work has not
-> begun.
+> **v8.0 status (2026-08-09):** the Interface Laboratory now unifies MUTATE,
+> Interaction Library, native and external Sampling boundaries, Physics,
+> Gravity, Chaos, Synthetic UX, Sound, Trailer and screenshot-state intelligence
+> over the v6/v7 substrate. Every Lab remains independently disabled by default.
+> Reality remains bounded research; Froam Space/v9 has not begun.
 
-**Where we are:** v7.1.0 · **Status:** Froam Intelligence is hardened with measurable screenshot validation, OCR/provider boundaries, identity health, checkpoint ancestry, incremental Scan, profiling and limited hosted project synchronization. Experimental systems remain honestly experimental; v8 has not begun.
+**Where we are:** v8.0.0 · **Status:** stable identity, graph, history, Rooms and intelligence foundations now power an experimental Interface Laboratory without replacing live-DOM editing or path-based output.
 
 v7 adds one shared understanding layer over the v6 identity, graph, history,
 branch and interaction substrate. It does not replace live-DOM editing or the
 legacy path-based output pipeline. See `docs/FROAM_PLATFORM_LEDGER.md` for the
 implementation/maturity ledger and `docs/FROAM_INTELLIGENCE_PRIVACY.md` for
-the local/remote processing boundary. v8 work has not begun.
+the local/remote processing boundary. See `docs/FROAM_V8_EXPERIMENTS.md` for
+the v8 system and maturity boundary.
 
 The roadmap is retained below as the architectural record. Phase 0 and the
 v5 review track shipped first; v6.0/v6.1 complete the same room with ordered
