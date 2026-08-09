@@ -1,5 +1,26 @@
 # Froam Platform Implementation Ledger
 
+## v8.0.3 — Connected structure workspace
+
+- **Completed:** Plan/Layers reorganized as Build/Outline; selection-aware
+  quick insertion; project/branch/route context; Archive reuse inside Build;
+  deeper live hierarchy; keyboard tree semantics; direct DNA, Responsive,
+  Interaction and Archive routes from a selected layer.
+- **Architecture:** the existing Site Planner adapter now writes owned page,
+  frame and relation records into the active event-sourced project branch.
+  Outline reads stable DOM identity and decorates it from the same materialized
+  graph, DNA, interaction, responsive and archive state.
+- **Compatibility:** `froam-site-plan-v1` still loads and saves. Planner writes
+  tolerate quota failure. Live DOM, Blueprint 2D/3D, collaboration, operation-
+  log undo/redo and path-based runtime/code generation are unchanged.
+- **Migration:** none. Project schema remains v2; the adapter marks its graph
+  records for safe updates/removals.
+- **Tests:** Site Planner graph ownership, shared-graph wiring, connected labels,
+  Archive shelf, stable identity presentation and keyboard tree reachability.
+- **Known limitation:** a host node only shows project knowledge after it has a
+  stable ID (selection or Scan captures one). The planner keeps its small local
+  authoring model as a compatibility view over the shared graph for now.
+
 ## v8.0.2 unified-chrome status — 2026-08-09
 
 - **Completed:** toolbar/workspace merge; single contextual rail; one docked

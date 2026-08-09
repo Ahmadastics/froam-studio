@@ -4,6 +4,28 @@
   color: var(--fs-text-primary);
 }
 
+.fsp-context { display: grid; gap: 7px; padding: 10px; border-bottom: 1px solid var(--fs-border); background: linear-gradient(135deg, rgba(var(--fs-accent-control-rgb), .09), rgba(255,255,255,.015) 58%); }
+.fsp-context__project, .fsp-context__selection { display: flex; align-items: center; min-width: 0; gap: 7px; }
+.fsp-context__project > span { display: grid; flex: 1; min-width: 0; }
+.fsp-context__project strong, .fsp-context__selection strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fs-text-primary); font-size: .72rem; }
+.fsp-context__project small, .fsp-context__selection span, .fsp-context__selection small { color: var(--fs-text-tertiary); font-size: .6rem; }
+.fsp-context__project em, .fsp-context__selection small { padding: 2px 5px; border: 1px solid rgba(var(--fs-accent-control-rgb), .2); border-radius: 999px; color: var(--fs-accent-control); font-size: .54rem; font-style: normal; white-space: nowrap; }
+.fsp-context__selection { padding: 7px 8px; border: 1px solid rgba(255,255,255,.06); border-radius: 7px; background: rgba(0,0,0,.13); }
+.fsp-context__selection > span { margin-right: auto; }
+.fsp-context__selection.has-selection { border-color: rgba(var(--fs-accent-control-rgb), .18); }
+
+.fsp-quick-add, .fsp-archive-shelf { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--fs-border); border-radius: 9px; background: rgba(255,255,255,.02); }
+.fsp-quick-add > div:first-child { display: flex; align-items: baseline; justify-content: space-between; }
+.fsp-quick-add span, .fsp-archive-shelf strong { color: var(--fs-text-primary); font-size: .7rem; font-weight: 750; }
+.fsp-quick-add small, .fsp-archive-shelf small { color: var(--fs-text-tertiary); font-size: .58rem; }
+.fsp-quick-add__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.fsp-quick-add__grid button, .fsp-archive-shelf__items button { min-width: 0; display: flex; align-items: center; gap: 5px; padding: 7px; border: 1px solid var(--fs-border); border-radius: 6px; background: rgba(255,255,255,.025); color: var(--fs-text-secondary); text-transform: capitalize; }
+.fsp-quick-add__grid button:hover, .fsp-archive-shelf__items button:hover { border-color: var(--fs-border-hover); color: var(--fs-text-primary); }
+.fsp-archive-shelf__items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.fsp-archive-shelf__items button { display: grid; text-align: left; text-transform: none; }
+.fsp-archive-shelf__items span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fsp-archive-shelf__items button:disabled { opacity: .45; }
+
 .fsp button,
 .fsp input,
 .fsp textarea {

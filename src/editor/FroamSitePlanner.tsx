@@ -11,6 +11,7 @@ import {
   Heart,
   LayoutTemplate,
   ListTree,
+  Network,
   Plus,
   RefreshCw,
   Search,
@@ -71,9 +72,16 @@ type BlueprintPreset = {
 
 type Props = {
   routeKey: string
+  projectName: string
+  branchName: string
+  selection: { nodeId?: string; label: string } | null
+  archiveItems: Array<{ id: string; name: string; html?: string }>
   onInsertComponent: (componentId: string, placement: FroamInsertPlacement, frame: FroamFrameSpec) => void
   onInsertBlankFrame: (placement: FroamInsertPlacement, frame: FroamFrameSpec) => void
+  onInsertBlock: (kind: 'section' | 'container' | 'grid' | 'text' | 'image' | 'button', placement: 'inside' | 'after') => void
+  onInsertArchived: (html: string, placement: FroamInsertPlacement) => void
   onBuildPage: (sections: FroamWireframeSection[]) => void
+  onPlanChange: (pages: SitePage[]) => void
   onToast: (message: string) => void
 }
 
@@ -455,7 +463,7 @@ function ComponentPreview({ componentId }: { componentId: string }) {
   )
 }
 
-export default function FroamSitePlanner({ routeKey, onInsertComponent, onInsertBlankFrame, onBuildPage, onToast }: Props) {
+export default function FroamSitePlanner({ routeKey, projectName, branchName, selection, archiveItems, onInsertComponent, onInsertBlankFrame, onInsertBlock, onInsertArchived, onBuildPage, onPlanChange, onToast }: Props) {
   const [plan, setPlan] = useState<SitePlan>(() => loadPlan(routeKey))
   const [blueprintDraft, setBlueprintDraft] = useState<BlueprintDraft>(() => loadBlueprintDraft(routeKey))
   const [planningPrompt, setPlanningPrompt] = useState('')
@@ -472,12 +480,14 @@ export default function FroamSitePlanner({ routeKey, onInsertComponent, onInsert
   }, [routeKey])
 
   useEffect(() => {
-    window.localStorage.setItem(storageKey(routeKey), JSON.stringify(plan))
+    try { window.localStorage.setItem(storageKey(routeKey), JSON.stringify(plan)) } catch { /* project graph remains authoritative when browser preferences are full */ }
   }, [plan, routeKey])
 
   useEffect(() => {
-    window.localStorage.setItem(blueprintStorageKey(routeKey), JSON.stringify(blueprintDraft))
+    try { window.localStorage.setItem(blueprintStorageKey(routeKey), JSON.stringify(blueprintDraft)) } catch { /* optional planning draft */ }
   }, [blueprintDraft, routeKey])
+
+  useEffect(() => { onPlanChange(plan.pages) }, [plan.pages, onPlanChange])
 
   const selectedPage = plan.pages.find((page) => page.id === plan.selectedPageId) ?? plan.pages[0]
   const rootPages = plan.pages.filter((page) => page.parentId === null)
@@ -780,18 +790,30 @@ export default function FroamSitePlanner({ routeKey, onInsertComponent, onInsert
 
   return (
     <div className="fsp" data-chef-editor-root="true">
+      <header className="fsp-context">
+        <div className="fsp-context__project">
+          <Network size={14} />
+          <span><strong>{projectName}</strong><small>{branchName} · {routeKey}</small></span>
+          <em>Graph synced</em>
+        </div>
+        <div className={`fsp-context__selection ${selection ? 'has-selection' : ''}`}>
+          <span>{selection ? 'Insert relative to' : 'Canvas target'}</span>
+          <strong>{selection?.label ?? 'Page end'}</strong>
+          {selection?.nodeId && <small title={selection.nodeId}>stable ID</small>}
+        </div>
+      </header>
       <div className="fsp-tabs" role="tablist" aria-label="Froam planning tools">
         <button type="button" className={tab === 'blueprint' ? 'is-active' : ''} onClick={() => setTab('blueprint')}>
-          <Frame size={14} /> Blueprint
+          <Frame size={14} /> Draft
         </button>
         <button type="button" className={tab === 'sitemap' ? 'is-active' : ''} onClick={() => setTab('sitemap')}>
-          <ListTree size={14} /> Sitemap
+          <ListTree size={14} /> Pages
         </button>
         <button type="button" className={tab === 'wireframe' ? 'is-active' : ''} onClick={() => setTab('wireframe')}>
-          <LayoutTemplate size={14} /> Wireframe
+          <LayoutTemplate size={14} /> Compose
         </button>
         <button type="button" className={tab === 'library' ? 'is-active' : ''} onClick={() => setTab('library')}>
-          <Grid2X2 size={14} /> Library
+          <Grid2X2 size={14} /> Add
         </button>
       </div>
 
@@ -943,14 +965,6 @@ export default function FroamSitePlanner({ routeKey, onInsertComponent, onInsert
             </button>
           </div>
 
-          <label className="fsp-project-name">
-            <span>Project</span>
-            <input
-              value={plan.projectName}
-              onChange={(event) => setPlan((current) => ({ ...current, projectName: event.target.value }))}
-            />
-          </label>
-
           <div className="fsp-sitemap">
             {rootPages.map((page) => renderPageCard(page))}
           </div>
@@ -1078,6 +1092,16 @@ export default function FroamSitePlanner({ routeKey, onInsertComponent, onInsert
 
       {tab === 'library' && (
         <div className="fsp-pane">
+          <section className="fsp-quick-add" aria-label="Quick building blocks">
+            <div><span>Quick add</span><small>{selection ? `to ${selection.label}` : 'to page end'}</small></div>
+            <div className="fsp-quick-add__grid">
+              {(['section', 'container', 'grid', 'text', 'image', 'button'] as const).map((kind) => (
+                <button type="button" key={kind} onClick={() => onInsertBlock(kind, selection ? 'inside' : 'after')}>
+                  <Plus size={11} /> {kind}
+                </button>
+              ))}
+            </div>
+          </section>
           {frameControls}
           <button type="button" className="fsp-blank-page-btn" onClick={() => addBlankPage(true)}>
             <Frame size={15} />
@@ -1097,6 +1121,19 @@ export default function FroamSitePlanner({ routeKey, onInsertComponent, onInsert
               <Heart size={14} fill={favoritesOnly ? 'currentColor' : 'none'} />
             </button>
           </div>
+
+          {archiveItems.length > 0 && (
+            <section className="fsp-archive-shelf" aria-label="Component Archive">
+              <div className="fsp-library-count"><strong>Saved in this project</strong><span>{archiveItems.length} reusable</span></div>
+              <div className="fsp-archive-shelf__items">
+                {archiveItems.slice(0, 8).map((item) => (
+                  <button type="button" key={item.id} disabled={!item.html} onClick={() => item.html && onInsertArchived(item.html, placement)}>
+                    <span>{item.name}</span><small>{item.html ? 'Insert archive' : 'DNA only'}</small>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
 
           <div className="fsp-category-row">
             {FROAM_CATEGORIES.map((item) => (

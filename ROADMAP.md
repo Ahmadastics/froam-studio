@@ -1,5 +1,11 @@
 # Froam Rooms — roadmap to v6
 
+> **v8.0.3 status (2026-08-09):** the v2-era Plan/Layers surface is now a
+> connected Build/Outline workspace. Plans project into shared graph/history,
+> Archive reuse and quick insertion live beside the catalog, and the live DOM
+> outline exposes stable identity plus v7 knowledge without changing path-based
+> output. The historical roadmap below remains an architectural record.
+
 > **v8.0.2 status (2026-08-09):** the top toolbar and workspace rail are one
 > two-tier Froam chrome. Intelligence, Connected Canvas, Labs and Advanced use
 > one reserved inspector lane; mode restoration and panel controls are unified,

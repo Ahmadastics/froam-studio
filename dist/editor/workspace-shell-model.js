@@ -5,8 +5,8 @@ export const FROAM_WORKSPACE_MODES = [
 ];
 export const FROAM_WORKSPACE_SECTIONS = [
     { id: 'design', mode: 'create', label: 'Design', description: 'Style and layout the selection', maturity: 'production', aliases: ['style', 'typography', 'layout'] },
-    { id: 'plan', mode: 'create', label: 'Insert', description: 'Plan pages and insert components', maturity: 'production', aliases: ['site planner', 'components'] },
-    { id: 'layers', mode: 'create', label: 'Layers', description: 'Navigate the live DOM structure', maturity: 'production' },
+    { id: 'plan', mode: 'create', label: 'Build', description: 'Draft pages, compose structure and add reusable components', maturity: 'production', aliases: ['insert', 'site planner', 'components', 'compose'] },
+    { id: 'layers', mode: 'create', label: 'Outline', description: 'Navigate the identity-aware live DOM structure', maturity: 'production', aliases: ['layers', 'structure', 'tree'] },
     { id: 'blueprint', mode: 'create', label: 'Blueprint', description: 'Open the existing 2D/3D structural view', maturity: 'production', aliases: ['blueprint 2d', 'blueprint 3d'] },
     { id: 'animator', mode: 'create', label: 'Animator', description: 'Edit time-based interaction motion', maturity: 'production', requiresSelection: true, temporalOwner: 'animator', aliases: ['animation', 'timeline'] },
     { id: 'interactions-create', mode: 'create', label: 'Interactions', description: 'Apply behavior to the selection', maturity: 'experimental', requiresSelection: true, labFlag: 'interactionLibrary' },

@@ -1,5 +1,20 @@
 # Changelog
 
+## 8.0.3 - 2026-08-09
+
+**Connected structure workspace.** The legacy Plan/Layers pair is now Build/
+Outline. Build keeps Draft, Pages, Compose and the component catalog, while
+adding selection-aware quick blocks, project/branch context and direct reuse
+from Component Archive. Its existing browser-local plan remains compatible,
+but page and frame changes now also enter the shared project graph and history.
+
+Outline now presents the deeper live DOM hierarchy as an accessible keyboard
+tree. Stable identity and available DNA, interaction, responsive and archive
+knowledge are visible in place, with direct routes into the corresponding
+Froam workspace. Live-DOM selection, Blueprint, undo/redo and path-based
+runtime/code generation are unchanged. Optional planner storage now tolerates
+browser quota exhaustion.
+
 ## 8.0.2 - 2026-08-09
 
 **Unified editor chrome.** The primary toolbar and workspace rail now form one

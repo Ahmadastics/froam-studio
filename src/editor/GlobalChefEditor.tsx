@@ -100,7 +100,7 @@ import {
 } from './FroamPlannerTypes'
 import FroamToolbar from './FroamToolbar'
 import FroamIntel from './FroamIntel'
-import FroamLayersPanel from './FroamLayersPanel'
+import FroamLayersPanel, { type LayerKnowledge } from './FroamLayersPanel'
 import FroamDesignPanel from './FroamDesignPanel'
 import FroamInspirationPanel from './FroamInspirationPanel'
 import FroamShapeLibrary from './FroamShapeLibrary'
@@ -117,7 +117,8 @@ import FroamLabs, { type FroamLab } from './FroamLabs'
 import FroamWorkspaceShell from './FroamWorkspaceShell'
 import { FROAM_WORKSPACE_SECTIONS, readWorkspacePreference, workspaceCommandMatches, writeWorkspacePreference, type FroamTemporalOwner, type FroamWorkspaceMode, type FroamWorkspaceSection } from './workspace-shell-model'
 import { readFroamLabsFlags, writeFroamLabsFlags } from '../project/experiments'
-import { deriveBranchState, switchProjectBranch } from '../project/event-log'
+import { appendProjectEvents, createProjectEvent, deriveBranchState, switchProjectBranch } from '../project/event-log'
+import { sitePlanGraphRecords, type LegacySitePage } from '../project/adapters'
 import { useFroamProjectDocument } from './useFroamProjectDocument'
 import type { FroamScreenshotRegion } from '../project/screenshot-reconstruction'
 import FroamRoomChat from './FroamRoomChat'
@@ -255,6 +256,7 @@ type LayerNode = {
   hidden: boolean
   hasChildren: boolean
   childCount: number
+  nodeId?: string
 }
 
 type FroamBlockKind =
@@ -1231,7 +1233,7 @@ function buildGradientCSS(type: 'linear' | 'radial', angle: number, stops: Gradi
     : `radial-gradient(circle, ${stopStr})`
 }
 
-function collectLayers(root: HTMLElement, maxDepth = 4): LayerNode[] {
+function collectLayers(root: HTMLElement, maxDepth = 8): LayerNode[] {
   const nodes: LayerNode[] = []
   function walk(el: HTMLElement, depth: number) {
     if (depth > maxDepth) return
@@ -1243,13 +1245,18 @@ function collectLayers(root: HTMLElement, maxDepth = 4): LayerNode[] {
       element: el,
       path,
       tag: el.tagName.toLowerCase(),
-      label: el.dataset.froamMerged === 'true' ? 'Stamp group' : el.dataset.froamShape === 'true' ? 'Shape' : el.tagName.toLowerCase(),
+      label: el.dataset.froamMerged === 'true'
+        ? 'Stamp group'
+        : el.dataset.froamShape === 'true'
+          ? 'Shape'
+          : el.dataset.froamFrameLabel || el.getAttribute('aria-label') || el.dataset.froamComponentCategory || el.tagName.toLowerCase(),
       kind: el.dataset.froamMerged === 'true' ? 'stamp' : el.dataset.froamShape === 'true' ? 'shape' : 'element',
       className: typeof el.className === 'string' ? el.className.split(' ').filter(Boolean).slice(0, 2).join(' ') : '',
       depth,
       hidden: computed.display === 'none',
       hasChildren: elementChildren.length > 0,
       childCount: elementChildren.length,
+      nodeId: el.dataset.froamId || undefined,
     })
     elementChildren.forEach((child) => walk(child, depth + 1))
   }
@@ -1909,6 +1916,75 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const roomPresence = room.present
   const froamProjectId = `project:${typeof window !== 'undefined' ? window.location.host : 'froam'}`
   const projectSession = useFroamProjectDocument({ projectId: froamProjectId, actorId: room.identity?.actor ?? LOCAL_ACTOR, ops: opLog.all(), store, revision: logVersion })
+  const activeProjectState = useMemo(
+    () => deriveBranchState(projectSession.project),
+    [projectSession.project],
+  )
+  const layerKnowledge = useMemo(() => {
+    const result: Record<string, LayerKnowledge> = {}
+    const interactionCounts = new Map<string, number>()
+    Object.values(activeProjectState.interactions).forEach((interaction) => {
+      interactionCounts.set(interaction.sourceId, (interactionCounts.get(interaction.sourceId) ?? 0) + 1)
+      interaction.targetIds.forEach((nodeId) => interactionCounts.set(nodeId, (interactionCounts.get(nodeId) ?? 0) + 1))
+    })
+    const archived = new Set(Object.values(activeProjectState.archive).map((item) => item.nodeId))
+    const ids = new Set([
+      ...Object.keys(activeProjectState.nodes),
+      ...Object.keys(activeProjectState.dna),
+      ...Object.keys(activeProjectState.responsive),
+      ...interactionCounts.keys(),
+      ...archived,
+    ])
+    ids.forEach((nodeId) => {
+      result[nodeId] = {
+        graph: Boolean(activeProjectState.nodes[nodeId]),
+        dna: Boolean(activeProjectState.dna[nodeId]),
+        interactions: interactionCounts.get(nodeId) ?? 0,
+        responsive: activeProjectState.responsive[nodeId]?.priority,
+        archived: archived.has(nodeId),
+      }
+    })
+    return result
+  }, [activeProjectState])
+  const plannerArchiveItems = useMemo(() => Object.values(activeProjectState.archive).map((item) => ({
+    id: item.id,
+    name: item.name,
+    html: item.snapshot?.html,
+  })), [activeProjectState.archive])
+  const projectActorId = room.identity?.actor ?? LOCAL_ACTOR
+  const syncSitePlanGraph = useCallback((pages: readonly LegacySitePage[]) => {
+    projectSession.setProject((current) => {
+      const state = deriveBranchState(current)
+      const graph = sitePlanGraphRecords(pages)
+      const nodeIds = new Set(graph.nodes.map((node) => node.id))
+      const relationIds = new Set(graph.relations.map((relation) => relation.id))
+      const changes: Array<{ type: 'node.upserted' | 'node.removed' | 'relation.upserted' | 'relation.removed'; payload: { node: typeof graph.nodes[number] } | { nodeId: string } | { relation: typeof graph.relations[number] } | { relationId: string }; targetIds: string[] }> = []
+      graph.nodes.forEach((node) => {
+        if (JSON.stringify(state.nodes[node.id]) !== JSON.stringify(node)) changes.push({ type: 'node.upserted', payload: { node }, targetIds: [node.id] })
+      })
+      graph.relations.forEach((relation) => {
+        if (JSON.stringify(state.relations[relation.id]) !== JSON.stringify(relation)) changes.push({ type: 'relation.upserted', payload: { relation }, targetIds: [relation.from, relation.to] })
+      })
+      Object.values(state.nodes).filter((node) => node.metadata?.sitePlanner === true && !nodeIds.has(node.id)).forEach((node) => changes.push({ type: 'node.removed', payload: { nodeId: node.id }, targetIds: [node.id] }))
+      Object.values(state.relations).filter((relation) => relation.metadata?.sitePlanner === true && !relationIds.has(relation.id)).forEach((relation) => changes.push({ type: 'relation.removed', payload: { relationId: relation.id }, targetIds: [relation.from, relation.to] }))
+      if (!changes.length) return current
+      let clock = Math.max(0, ...current.events.map((event) => event.clock))
+      const createdAt = Date.now()
+      const batchId = `site-plan:${createdAt.toString(36)}`
+      return appendProjectEvents(current, changes.map((change) => createProjectEvent({
+        projectId: current.id,
+        branchId: current.activeBranchId,
+        actorId: projectActorId,
+        clock: ++clock,
+        createdAt,
+        type: change.type,
+        payload: change.payload,
+        targetIds: change.targetIds,
+        batchId,
+        label: 'Update page structure',
+      })))
+    })
+  }, [projectActorId, projectSession.setProject])
   const roomSubmittedOpsRef = useRef<Set<string>>(new Set())
   const remoteLocks = useMemo(
     () => new Map(roomPresence.filter((member) => member.lockedPath).map((member) => [member.lockedPath as string, member])),
@@ -3259,7 +3335,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
   }
 
-  function insertArchivedHtml(html: string) {
+  function insertArchivedHtml(html: string, placement: FroamInsertPlacement = 'end') {
     const template = document.createElement('template')
     template.innerHTML = html.trim()
     const node = template.content.firstElementChild as HTMLElement | null
@@ -3271,7 +3347,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     node.setAttribute('data-froam-injected', 'true')
     node.setAttribute('data-froam-block', 'true')
     assignFreshFroamNodeIds(node)
-    placeInsertedNode(node, 'end')
+    placeInsertedNode(node, placement)
     selectInsertedElement(node)
     persistLiveRouteSnapshot()
     showToast('Inserted from Component Archive')
@@ -5333,7 +5409,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     setConnectedCanvasOpen(false)
     if (section === 'blueprint') { setBlueprintOpen(true); return }
     if (mode === 'create') {
-      if (section === 'plan' || section === 'layers') { setLeftPanelOpen(true); setLeftWorkspaceMode(section); return }
+      if (section === 'plan' || section === 'layers') {
+        setLeftPanelOpen(true)
+        setLeftWorkspaceMode(section)
+        if (section === 'layers') { const root = getRoot(); if (root) setLayers(collectLayers(root)) }
+        return
+      }
       if (section === 'animator') { setRequestedConnectedTab('interaction'); setConnectedCanvasOpen(true); return }
       if (section === 'interactions-create') { setRequestedLab('interactions'); setLabsOpen(true); return }
       setRightPanelOpen(true)
@@ -5866,16 +5947,16 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               <button
                 type="button"
                 className={leftWorkspaceMode === 'plan' ? 'is-active' : ''}
-                onClick={() => setLeftWorkspaceMode('plan')}
+                onClick={() => openWorkspaceSection('plan', 'create')}
               >
-                <LayoutGrid size={13} /> Plan
+                <LayoutGrid size={13} /> Build
               </button>
               <button
                 type="button"
                 className={leftWorkspaceMode === 'layers' ? 'is-active' : ''}
-                onClick={() => setLeftWorkspaceMode('layers')}
+                onClick={() => openWorkspaceSection('layers', 'create')}
               >
-                <Layers size={13} /> Layers
+                <Layers size={13} /> Outline
               </button>
             </div>
             <div className="froam-figma-left__body" data-chef-editor-root="true">
@@ -5883,9 +5964,16 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 <FroamSectionBoundary name="SitePlanner">
                   <FroamSitePlanner
                     routeKey={routeKey}
+                    projectName={projectSession.project.name}
+                    branchName={projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId}
+                    selection={selection ? { nodeId: selection.nodeId, label: selection.label } : null}
+                    archiveItems={plannerArchiveItems}
                     onInsertComponent={insertLibraryComponent}
                     onInsertBlankFrame={insertBlankFrame}
+                    onInsertBlock={addStructureBlock}
+                    onInsertArchived={insertArchivedHtml}
                     onBuildPage={buildLibraryPage}
+                    onPlanChange={syncSitePlanGraph}
                     onToast={showToast}
                   />
                 </FroamSectionBoundary>
@@ -5899,6 +5987,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     onToggleVisibility={toggleLayerVisibility}
                     onRefresh={() => { const root = getRoot(); if (root) setLayers(collectLayers(root)) }}
                     routeKey={routeKey}
+                    projectName={projectSession.project.name}
+                    branchName={projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId}
+                    knowledgeByNodeId={layerKnowledge}
+                    onOpenKnowledge={(node, section) => { selectLayerNode(node); openWorkspaceSection(section) }}
                   />
                 </FroamSectionBoundary>
               )}

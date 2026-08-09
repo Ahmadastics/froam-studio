@@ -65,10 +65,10 @@ export function sitePlanGraphRecords(pages: readonly LegacySitePage[]) {
       parentId: page.parentId,
       source: 'froam',
       locator: { routeKey: page.path },
-      metadata: { status: page.status },
+      metadata: { status: page.status, sitePlanner: true },
     })
     if (page.parentId) {
-      relations.push({ id: `contains:${page.parentId}:${page.id}`, kind: 'contains', from: page.parentId, to: page.id })
+      relations.push({ id: `contains:${page.parentId}:${page.id}`, kind: 'contains', from: page.parentId, to: page.id, metadata: { sitePlanner: true } })
     }
     for (const section of page.sections) {
       nodes.push({
@@ -78,11 +78,11 @@ export function sitePlanGraphRecords(pages: readonly LegacySitePage[]) {
         parentId: page.id,
         componentId: section.componentId,
         source: 'froam',
-        metadata: { frame: section.frame },
+        metadata: { frame: section.frame, sitePlanner: true },
       })
-      relations.push({ id: `contains:${page.id}:${section.id}`, kind: 'contains', from: page.id, to: section.id })
+      relations.push({ id: `contains:${page.id}:${section.id}`, kind: 'contains', from: page.id, to: section.id, metadata: { sitePlanner: true } })
       if (section.componentId) {
-        relations.push({ id: `instance:${section.id}:${section.componentId}`, kind: 'instance-of', from: section.id, to: section.componentId })
+        relations.push({ id: `instance:${section.id}:${section.componentId}`, kind: 'instance-of', from: section.id, to: section.componentId, metadata: { sitePlanner: true } })
       }
     }
   }

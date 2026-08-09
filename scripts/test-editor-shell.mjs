@@ -31,6 +31,12 @@ test('contextual selection tools disable without hiding their meaning', () => {
   assert.equal(workspaceSections('create', flags, true).find(({ id }) => id === 'animator')?.contextual, true)
 })
 
+test('Create names the connected structure surfaces consistently', () => {
+  const create = workspaceSections('create', defaultFroamLabsFlags(), true)
+  assert.equal(create.find(({ id }) => id === 'plan')?.label, 'Build')
+  assert.equal(create.find(({ id }) => id === 'layers')?.label, 'Outline')
+})
+
 test('Lab flags control tool visibility independently', () => {
   const off = defaultFroamLabsFlags()
   assert.equal(workspaceSections('experiment', off, true).some(({ id }) => id === 'laboratory'), true)
@@ -94,6 +100,22 @@ test('keyboard, mobile, reduced-motion, and legacy surfaces stay reachable', () 
   assert.match(css, /max-width:768px/)
   assert.match(css, /position:fixed/)
   assert.match(css, /froam-intelligence>nav,.froam-labs>nav\{display:none\}/)
+})
+
+test('Build and Outline use the connected project and accessible live structure', () => {
+  const planner = fs.readFileSync(new URL('../src/editor/FroamSitePlanner.tsx', import.meta.url), 'utf8')
+  const layers = fs.readFileSync(new URL('../src/editor/FroamLayersPanel.tsx', import.meta.url), 'utf8')
+  const editor = fs.readFileSync(new URL('../src/editor/GlobalChefEditor.tsx', import.meta.url), 'utf8')
+  assert.match(planner, /Graph synced/)
+  assert.match(planner, /onPlanChange\(plan\.pages\)/)
+  assert.match(planner, /Saved in this project/)
+  assert.match(layers, /role="tree"/)
+  assert.match(layers, /role="treeitem"/)
+  assert.match(layers, /Stable identity connected/)
+  assert.match(layers, /event\.key === 'ArrowDown'/)
+  assert.match(editor, /sitePlanGraphRecords\(pages\)/)
+  assert.match(editor, /LayoutGrid size=\{13\} \/> Build/)
+  assert.match(editor, /Layers size=\{13\} \/> Outline/)
 })
 
 console.log(`\n${count} editor-shell tests passed.`)

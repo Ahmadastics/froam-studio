@@ -24,6 +24,15 @@ type LayerNode = {
   hidden: boolean
   hasChildren: boolean
   childCount: number
+  nodeId?: string
+}
+
+export type LayerKnowledge = {
+  dna: boolean
+  interactions: number
+  responsive?: string
+  archived: boolean
+  graph: boolean
 }
 
 type Props = {
@@ -34,6 +43,10 @@ type Props = {
   onToggleVisibility: (node: LayerNode) => void
   onRefresh: () => void
   routeKey: string
+  projectName: string
+  branchName: string
+  knowledgeByNodeId: Record<string, LayerKnowledge>
+  onOpenKnowledge: (node: LayerNode, section: 'dna' | 'archive' | 'responsive' | 'interactions-create') => void
 }
 
 function getElementIcon(tag: string) {
@@ -66,6 +79,10 @@ export default function FroamLayersPanel({
   onToggleVisibility,
   onRefresh,
   routeKey,
+  projectName,
+  branchName,
+  knowledgeByNodeId,
+  onOpenKnowledge,
 }: Props) {
   const [searchQuery, setSearchQuery] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -84,6 +101,7 @@ export default function FroamLayersPanel({
         n.label.toLowerCase().includes(q) ||
         n.kind.includes(q) ||
         n.className.toLowerCase().includes(q) ||
+        n.nodeId?.toLowerCase().includes(q) ||
         n.path.toLowerCase().includes(q),
     )
   }, [layers, searchQuery])
@@ -122,13 +140,22 @@ export default function FroamLayersPanel({
     return result
   }, [filteredLayers, collapsed, searchQuery])
 
+  const selectedNode = layers.find((node) => node.path === selectedPath)
+  const selectedKnowledge = selectedNode?.nodeId ? knowledgeByNodeId[selectedNode.nodeId] : undefined
+
+  function moveTreeFocus(current: HTMLElement, direction: -1 | 1) {
+    const items = Array.from(current.closest('[role="tree"]')?.querySelectorAll<HTMLElement>('[role="treeitem"]') ?? [])
+    const index = items.indexOf(current)
+    items[index + direction]?.focus()
+  }
+
   return (
     <div className="froam-lp" data-chef-editor-root="true">
       {/* Header */}
       <div className="froam-lp__header" data-chef-editor-root="true">
         <div className="froam-lp__header-title">
           <Layers size={14} />
-          <span>Layers</span>
+          <span>Outline</span>
         </div>
         <button
           type="button"
@@ -144,7 +171,7 @@ export default function FroamLayersPanel({
       {/* Route info */}
       <div className="froam-lp__route" data-chef-editor-root="true">
         <span className="froam-lp__route-dot" />
-        <span>{routeKey}</span>
+        <span className="froam-lp__route-copy"><strong>{projectName}</strong><small>{branchName} · {routeKey}</small></span>
         {selections.length > 1 && (
           <span className="froam-lp__selection-count">{selections.length} selected</span>
         )}
@@ -164,7 +191,7 @@ export default function FroamLayersPanel({
       </div>
 
       {/* Layer tree */}
-      <div className="froam-lp__tree" data-chef-editor-root="true">
+      <div className="froam-lp__tree" role="tree" aria-label="Live page structure" data-chef-editor-root="true">
         {visibleLayers.length === 0 ? (
           <div className="froam-lp__empty">
             <Layers size={20} />
@@ -174,13 +201,25 @@ export default function FroamLayersPanel({
           visibleLayers.map((node) => {
             const isSelected = selectedPath === node.path || selectedPaths.has(node.path)
             const isCollapsed = collapsed.has(node.path)
+            const knowledge = node.nodeId ? knowledgeByNodeId[node.nodeId] : undefined
 
             return (
               <div
                 key={node.path}
+                role="treeitem"
+                aria-level={node.depth + 1}
+                aria-selected={isSelected}
+                aria-expanded={node.hasChildren ? !isCollapsed : undefined}
+                tabIndex={isSelected ? 0 : -1}
                 className={`froam-lp__node ${isSelected ? 'is-selected' : ''} ${node.hidden ? 'is-hidden-layer' : ''}`}
                 style={{ paddingLeft: `${12 + node.depth * 16}px` }}
                 onClick={() => onSelectLayer(node)}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); moveTreeFocus(event.currentTarget, event.key === 'ArrowDown' ? 1 : -1) }
+                  if (event.key === 'ArrowRight' && node.hasChildren && isCollapsed) { event.preventDefault(); toggleCollapse(node.path) }
+                  if (event.key === 'ArrowLeft' && node.hasChildren && !isCollapsed) { event.preventDefault(); toggleCollapse(node.path) }
+                  if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelectLayer(node) }
+                }}
                 data-chef-editor-root="true"
               >
                 {/* Expand/collapse toggle */}
@@ -216,6 +255,11 @@ export default function FroamLayersPanel({
                 {node.kind === 'stamp' && (
                   <span className="froam-lp__node-badge">stamp</span>
                 )}
+                {node.nodeId && <span className="froam-lp__node-badge is-identity" title={node.nodeId}>id</span>}
+                {knowledge?.dna && <span className="froam-lp__node-signal" title="DNA captured">D</span>}
+                {knowledge?.interactions ? <span className="froam-lp__node-signal" title={`${knowledge.interactions} interactions`}>I{knowledge.interactions}</span> : null}
+                {knowledge?.responsive && <span className="froam-lp__node-signal" title={`Responsive priority: ${knowledge.responsive}`}>R</span>}
+                {knowledge?.archived && <span className="froam-lp__node-signal" title="Saved in Component Archive">A</span>}
                 {node.className && (
                   <span className="froam-lp__node-class">
                     .{node.className.replace(/ /g, '.')}
@@ -242,6 +286,21 @@ export default function FroamLayersPanel({
           })
         )}
       </div>
+      {selectedNode && (
+        <footer className="froam-lp__inspector" data-chef-editor-root="true">
+          <div>
+            <span>Selected structure</span>
+            <strong>{selectedNode.label}</strong>
+            <small>{selectedNode.nodeId ? 'Stable identity connected' : 'Legacy path · select or scan to connect'}</small>
+          </div>
+          <div className="froam-lp__knowledge-actions">
+            <button type="button" onClick={() => onOpenKnowledge(selectedNode, 'dna')}>DNA{selectedKnowledge?.dna ? ' ✓' : ''}</button>
+            <button type="button" onClick={() => onOpenKnowledge(selectedNode, 'responsive')}>Responsive</button>
+            <button type="button" onClick={() => onOpenKnowledge(selectedNode, 'interactions-create')}>Interactions{selectedKnowledge?.interactions ? ` ${selectedKnowledge.interactions}` : ''}</button>
+            <button type="button" onClick={() => onOpenKnowledge(selectedNode, 'archive')}>Archive{selectedKnowledge?.archived ? ' ✓' : ''}</button>
+          </div>
+        </footer>
+      )}
     </div>
   )
 }

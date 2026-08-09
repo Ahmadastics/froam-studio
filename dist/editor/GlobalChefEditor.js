@@ -36,7 +36,8 @@ import FroamLabs from './FroamLabs.js';
 import FroamWorkspaceShell from './FroamWorkspaceShell.js';
 import { FROAM_WORKSPACE_SECTIONS, readWorkspacePreference, workspaceCommandMatches, writeWorkspacePreference } from './workspace-shell-model.js';
 import { readFroamLabsFlags, writeFroamLabsFlags } from '../project/experiments.js';
-import { deriveBranchState, switchProjectBranch } from '../project/event-log.js';
+import { appendProjectEvents, createProjectEvent, deriveBranchState, switchProjectBranch } from '../project/event-log.js';
+import { sitePlanGraphRecords } from '../project/adapters.js';
 import { useFroamProjectDocument } from './useFroamProjectDocument.js';
 import FroamRoomChat from './FroamRoomChat.js';
 import { diffStores } from '../collab/oplog.js';
@@ -957,7 +958,7 @@ function buildGradientCSS(type, angle, stops) {
         ? `linear-gradient(${angle}deg, ${stopStr})`
         : `radial-gradient(circle, ${stopStr})`;
 }
-function collectLayers(root, maxDepth = 4) {
+function collectLayers(root, maxDepth = 8) {
     const nodes = [];
     function walk(el, depth) {
         if (depth > maxDepth)
@@ -971,13 +972,18 @@ function collectLayers(root, maxDepth = 4) {
             element: el,
             path,
             tag: el.tagName.toLowerCase(),
-            label: el.dataset.froamMerged === 'true' ? 'Stamp group' : el.dataset.froamShape === 'true' ? 'Shape' : el.tagName.toLowerCase(),
+            label: el.dataset.froamMerged === 'true'
+                ? 'Stamp group'
+                : el.dataset.froamShape === 'true'
+                    ? 'Shape'
+                    : el.dataset.froamFrameLabel || el.getAttribute('aria-label') || el.dataset.froamComponentCategory || el.tagName.toLowerCase(),
             kind: el.dataset.froamMerged === 'true' ? 'stamp' : el.dataset.froamShape === 'true' ? 'shape' : 'element',
             className: typeof el.className === 'string' ? el.className.split(' ').filter(Boolean).slice(0, 2).join(' ') : '',
             depth,
             hidden: computed.display === 'none',
             hasChildren: elementChildren.length > 0,
             childCount: elementChildren.length,
+            nodeId: el.dataset.froamId || undefined,
         });
         elementChildren.forEach((child) => walk(child, depth + 1));
     }
@@ -1500,6 +1506,75 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const roomPresence = room.present;
     const froamProjectId = `project:${typeof window !== 'undefined' ? window.location.host : 'froam'}`;
     const projectSession = useFroamProjectDocument({ projectId: froamProjectId, actorId: room.identity?.actor ?? LOCAL_ACTOR, ops: opLog.all(), store, revision: logVersion });
+    const activeProjectState = useMemo(() => deriveBranchState(projectSession.project), [projectSession.project]);
+    const layerKnowledge = useMemo(() => {
+        const result = {};
+        const interactionCounts = new Map();
+        Object.values(activeProjectState.interactions).forEach((interaction) => {
+            interactionCounts.set(interaction.sourceId, (interactionCounts.get(interaction.sourceId) ?? 0) + 1);
+            interaction.targetIds.forEach((nodeId) => interactionCounts.set(nodeId, (interactionCounts.get(nodeId) ?? 0) + 1));
+        });
+        const archived = new Set(Object.values(activeProjectState.archive).map((item) => item.nodeId));
+        const ids = new Set([
+            ...Object.keys(activeProjectState.nodes),
+            ...Object.keys(activeProjectState.dna),
+            ...Object.keys(activeProjectState.responsive),
+            ...interactionCounts.keys(),
+            ...archived,
+        ]);
+        ids.forEach((nodeId) => {
+            result[nodeId] = {
+                graph: Boolean(activeProjectState.nodes[nodeId]),
+                dna: Boolean(activeProjectState.dna[nodeId]),
+                interactions: interactionCounts.get(nodeId) ?? 0,
+                responsive: activeProjectState.responsive[nodeId]?.priority,
+                archived: archived.has(nodeId),
+            };
+        });
+        return result;
+    }, [activeProjectState]);
+    const plannerArchiveItems = useMemo(() => Object.values(activeProjectState.archive).map((item) => ({
+        id: item.id,
+        name: item.name,
+        html: item.snapshot?.html,
+    })), [activeProjectState.archive]);
+    const projectActorId = room.identity?.actor ?? LOCAL_ACTOR;
+    const syncSitePlanGraph = useCallback((pages) => {
+        projectSession.setProject((current) => {
+            const state = deriveBranchState(current);
+            const graph = sitePlanGraphRecords(pages);
+            const nodeIds = new Set(graph.nodes.map((node) => node.id));
+            const relationIds = new Set(graph.relations.map((relation) => relation.id));
+            const changes = [];
+            graph.nodes.forEach((node) => {
+                if (JSON.stringify(state.nodes[node.id]) !== JSON.stringify(node))
+                    changes.push({ type: 'node.upserted', payload: { node }, targetIds: [node.id] });
+            });
+            graph.relations.forEach((relation) => {
+                if (JSON.stringify(state.relations[relation.id]) !== JSON.stringify(relation))
+                    changes.push({ type: 'relation.upserted', payload: { relation }, targetIds: [relation.from, relation.to] });
+            });
+            Object.values(state.nodes).filter((node) => node.metadata?.sitePlanner === true && !nodeIds.has(node.id)).forEach((node) => changes.push({ type: 'node.removed', payload: { nodeId: node.id }, targetIds: [node.id] }));
+            Object.values(state.relations).filter((relation) => relation.metadata?.sitePlanner === true && !relationIds.has(relation.id)).forEach((relation) => changes.push({ type: 'relation.removed', payload: { relationId: relation.id }, targetIds: [relation.from, relation.to] }));
+            if (!changes.length)
+                return current;
+            let clock = Math.max(0, ...current.events.map((event) => event.clock));
+            const createdAt = Date.now();
+            const batchId = `site-plan:${createdAt.toString(36)}`;
+            return appendProjectEvents(current, changes.map((change) => createProjectEvent({
+                projectId: current.id,
+                branchId: current.activeBranchId,
+                actorId: projectActorId,
+                clock: ++clock,
+                createdAt,
+                type: change.type,
+                payload: change.payload,
+                targetIds: change.targetIds,
+                batchId,
+                label: 'Update page structure',
+            })));
+        });
+    }, [projectActorId, projectSession.setProject]);
     const roomSubmittedOpsRef = useRef(new Set());
     const remoteLocks = useMemo(() => new Map(roomPresence.filter((member) => member.lockedPath).map((member) => [member.lockedPath, member])), [roomPresence]);
     function guardRemoteLock(path) {
@@ -2832,7 +2907,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 updateSelectionsState([{ ...buildSelection(element, fallbackPath), nodeId }]);
         }
     }
-    function insertArchivedHtml(html) {
+    function insertArchivedHtml(html, placement = 'end') {
         const template = document.createElement('template');
         template.innerHTML = html.trim();
         const node = template.content.firstElementChild;
@@ -2847,7 +2922,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         node.setAttribute('data-froam-injected', 'true');
         node.setAttribute('data-froam-block', 'true');
         assignFreshFroamNodeIds(node);
-        placeInsertedNode(node, 'end');
+        placeInsertedNode(node, placement);
         selectInsertedElement(node);
         persistLiveRouteSnapshot();
         showToast('Inserted from Component Archive');
@@ -4908,6 +4983,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             if (section === 'plan' || section === 'layers') {
                 setLeftPanelOpen(true);
                 setLeftWorkspaceMode(section);
+                if (section === 'layers') {
+                    const root = getRoot();
+                    if (root)
+                        setLayers(collectLayers(root));
+                }
                 return;
             }
             if (section === 'animator') {
@@ -5310,8 +5390,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 setPanelOpen(false);
                                 setActive(false);
                                 setStudioMinimized(false);
-                            } }) }), leftPanelOpen && _jsxs("div", { className: "froam-figma-left", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-figma-left__tabs", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: leftWorkspaceMode === 'plan' ? 'is-active' : '', onClick: () => setLeftWorkspaceMode('plan'), children: [_jsx(LayoutGrid, { size: 13 }), " Plan"] }), _jsxs("button", { type: "button", className: leftWorkspaceMode === 'layers' ? 'is-active' : '', onClick: () => setLeftWorkspaceMode('layers'), children: [_jsx(Layers, { size: 13 }), " Layers"] })] }), _jsx("div", { className: "froam-figma-left__body", "data-chef-editor-root": "true", children: leftWorkspaceMode === 'plan' ? (_jsx(FroamSectionBoundary, { name: "SitePlanner", children: _jsx(FroamSitePlanner, { routeKey: routeKey, onInsertComponent: insertLibraryComponent, onInsertBlankFrame: insertBlankFrame, onBuildPage: buildLibraryPage, onToast: showToast }) })) : (_jsx(FroamSectionBoundary, { name: "LayersPanel", children: _jsx(FroamLayersPanel, { layers: layers, selectedPath: selection?.path ?? null, selections: selections, onSelectLayer: selectLayerNode, onToggleVisibility: toggleLayerVisibility, onRefresh: () => { const root = getRoot(); if (root)
-                                            setLayers(collectLayers(root)); }, routeKey: routeKey }) })) })] }), _jsx("div", { className: "froam-figma-layout__canvas", "data-chef-editor-root": "true" }), rightPanelOpen && workspaceMode === 'create' && (() => {
+                            } }) }), leftPanelOpen && _jsxs("div", { className: "froam-figma-left", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-figma-left__tabs", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: leftWorkspaceMode === 'plan' ? 'is-active' : '', onClick: () => openWorkspaceSection('plan', 'create'), children: [_jsx(LayoutGrid, { size: 13 }), " Build"] }), _jsxs("button", { type: "button", className: leftWorkspaceMode === 'layers' ? 'is-active' : '', onClick: () => openWorkspaceSection('layers', 'create'), children: [_jsx(Layers, { size: 13 }), " Outline"] })] }), _jsx("div", { className: "froam-figma-left__body", "data-chef-editor-root": "true", children: leftWorkspaceMode === 'plan' ? (_jsx(FroamSectionBoundary, { name: "SitePlanner", children: _jsx(FroamSitePlanner, { routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, selection: selection ? { nodeId: selection.nodeId, label: selection.label } : null, archiveItems: plannerArchiveItems, onInsertComponent: insertLibraryComponent, onInsertBlankFrame: insertBlankFrame, onInsertBlock: addStructureBlock, onInsertArchived: insertArchivedHtml, onBuildPage: buildLibraryPage, onPlanChange: syncSitePlanGraph, onToast: showToast }) })) : (_jsx(FroamSectionBoundary, { name: "LayersPanel", children: _jsx(FroamLayersPanel, { layers: layers, selectedPath: selection?.path ?? null, selections: selections, onSelectLayer: selectLayerNode, onToggleVisibility: toggleLayerVisibility, onRefresh: () => { const root = getRoot(); if (root)
+                                            setLayers(collectLayers(root)); }, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, knowledgeByNodeId: layerKnowledge, onOpenKnowledge: (node, section) => { selectLayerNode(node); openWorkspaceSection(section); } }) })) })] }), _jsx("div", { className: "froam-figma-layout__canvas", "data-chef-editor-root": "true" }), rightPanelOpen && workspaceMode === 'create' && (() => {
                         const designPanel = (_jsx(FroamSectionBoundary, { name: "DesignPanel", children: _jsx(FroamDesignPanel, { selection: selection, selectionRect: selectionRect, onApplyStyle: applyStyle, onUpdateDraft: updateDraft, onOpenImageUpload: openSelectedImageUpload, onClearImage: clearAppliedImage, onClearSelectionDraft: actionsRef.current.clearSelectionDraft, marginLinked: marginLinked, paddingLinked: paddingLinked, radiusLinked: radiusLinked, onToggleMarginLinked: () => setMarginLinked((value) => !value), onTogglePaddingLinked: () => setPaddingLinked((value) => !value), onToggleRadiusLinked: () => setRadiusLinked((value) => !value), onApplySizePreset: applySizePreset, onBuildTransformString: buildTransformString, fontOptions: fontOptions, getRootEl: getRoot, onOpenBlueprint: () => setBlueprintOpen(true) }) }));
                         if (!isMobileUI)
                             return designPanel;

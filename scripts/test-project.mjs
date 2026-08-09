@@ -869,6 +869,8 @@ test('Site Planner records project cleanly into shared graph nodes and relations
   assert.equal(graph.nodes.length, 2)
   assert.ok(graph.relations.some((relation) => relation.kind === 'contains'))
   assert.ok(graph.relations.some((relation) => relation.kind === 'instance-of'))
+  assert.ok(graph.nodes.every((node) => node.metadata.sitePlanner === true))
+  assert.ok(graph.relations.every((relation) => relation.metadata.sitePlanner === true))
 })
 
 test('component catalog projects into the same graph vocabulary', () => {
