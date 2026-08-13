@@ -6,7 +6,7 @@ const { appendProjectEvents, createProjectDocument, createProjectEvent, deriveBr
 const { assembleFroamIntelligenceRequest, looksLikeNaturalLanguageIntent } = await import('../dist/project/intelligence-context.js')
 const { requestFroamIntelligence } = await import('../dist/project/bridge.js')
 const { adoptMutationChanges, compareMutationBranches, createMutationPrototypeFromProposals, normalizeMutationConstraints } = await import('../dist/project/mutation.js')
-const { FROAM_INTENT_MAX_ATTEMPTS, froamIntentPreferences, froamIntentPrototypeName, froamIntentReducer, froamIntentRetryFeedback, initialFroamIntentState, shouldOfferAskFroam } = await import('../dist/editor/froam-intent-model.js')
+const { FROAM_INTENT_MAX_ATTEMPTS, createLocalFroamIntentProposals, froamIntentPreferences, froamIntentPrototypeName, froamIntentReducer, froamIntentRetryFeedback, initialFroamIntentState, shouldOfferAskFroam } = await import('../dist/editor/froam-intent-model.js')
 const { FROAM_INTELLIGENCE_CONSENT_KEY, readFroamIntelligenceConsent, writeFroamIntelligenceConsent } = await import('../dist/editor/intelligence-consent.js')
 
 const tests = []
@@ -67,6 +67,20 @@ test('dimension preference is deterministic', () => assert.equal(froamIntentPref
 test('prototype labels are provider-neutral', () => { const name = froamIntentPrototypeName('Make this CTA feel more premium'); assert.match(name, /^Froam/); assert.doesNotMatch(name, /GPT|AI|OpenAI/i) })
 test('Reference is a first-class shared intent origin', () => assert.equal({ ...session(), origin: 'reference' }.origin, 'reference'))
 test('Reference retry preserves its origin and bounded scope', () => { const start = { phase: 'previewing', session: { ...session(), origin: 'reference', prototypeBranchId: 'reference-1', referenceValidation: { differences: ['Mobile overflow'] } }, message: null }; const next = froamIntentReducer(start, { type: 'retry' }); assert.equal(next.session.origin, 'reference'); assert.equal(next.session.selectedNodeId, 'cta') })
+test('common conversational edits are resolved locally without a provider', () => {
+  const proposals = createLocalFroamIntentProposals(snapshot, 'Make it bolder and rounder')
+  assert.deepEqual(proposals.map(({ domain }) => domain).sort(), ['typography', 'visual'])
+  assert.equal(proposals.find(({ domain }) => domain === 'typography').payload.dna.visual.fontWeight, '700')
+  assert.equal(proposals.find(({ domain }) => domain === 'visual').payload.dna.visual.borderRadius, '16px')
+})
+test('local spacing requests preserve the native protected proposal format', () => {
+  const [proposal] = createLocalFroamIntentProposals(snapshot, 'Add more space')
+  assert.equal(proposal.type, 'dna.captured')
+  assert.equal(proposal.domain, 'spacing')
+  assert.equal(proposal.payload.dna.layout.padding, '18px')
+  assert.deepEqual(proposal.targetIds, ['cta'])
+})
+test('unknown requests stay provider-eligible instead of inventing a local edit', () => assert.deepEqual(createLocalFroamIntentProposals(snapshot, 'Rewrite this pricing strategy'), []))
 
 function createExperiment(project = fixtureProject(), plan = proposal(), preserveDimensions = true) {
   return createMutationPrototypeFromProposals(project, { branchId: `intent-branch-${Date.now()}-${Math.random()}`, name: 'Froam Premium CTA', actorId: 'tester', level: 'safe', scopeNodeIds: ['cta'], proposals: [plan], constraints: normalizeMutationConstraints('safe', { protect: ['navigation', 'logo', 'brand-colors'] }), provider: 'fixture-provider', selectionSnapshot: snapshot, preserveDimensions, now: 10, idFactory: ids('intent-event') })

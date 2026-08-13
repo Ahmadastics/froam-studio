@@ -298,16 +298,16 @@ export default function FroamToolbar({
         <div className="froam-tb__sep" />
 
         {/* Undo/Redo */}
-        <button type="button" className="froam-tb__icon-btn" onClick={onUndo} disabled={!canUndo} title="Undo (Ctrl+Z)" data-chef-editor-root="true">
+        <button type="button" className="froam-tb__icon-btn froam-tb__history" onClick={onUndo} disabled={!canUndo} title="Undo (Ctrl+Z)" data-chef-editor-root="true">
           <Undo2 size={15} />
         </button>
-        <button type="button" className="froam-tb__icon-btn" onClick={onRedo} disabled={!canRedo} title="Redo (Ctrl+Y)" data-chef-editor-root="true">
+        <button type="button" className="froam-tb__icon-btn froam-tb__history" onClick={onRedo} disabled={!canRedo} title="Redo (Ctrl+Y)" data-chef-editor-root="true">
           <Redo2 size={15} />
         </button>
 
         <div className="froam-tb__sep" />
 
-        <button type="button" className="froam-tb__icon-btn" onClick={onCommandPalette} title="Command palette (Ctrl+K)" data-chef-editor-root="true">
+        <button type="button" className="froam-tb__icon-btn froam-tb__command" onClick={onCommandPalette} title="Command palette (Ctrl+K)" data-chef-editor-root="true">
           <Command size={14} />
         </button>
         <button type="button" className="froam-tb__icon-btn froam-tb__desktop-only" onClick={onShortcutsOverlay} title="Keyboard shortcuts (?)" data-chef-editor-root="true">
@@ -343,7 +343,7 @@ export default function FroamToolbar({
 
         {/* Theme flip — only Froam can preview both themes on the real app */}
         {onToggleTheme && (
-          <button type="button" className="froam-tb__icon-btn" onClick={onToggleTheme} title={`Preview ${theme === 'light' ? 'dark' : 'light'} theme`} aria-label="Toggle theme preview" data-chef-editor-root="true">
+          <button type="button" className="froam-tb__icon-btn froam-tb__theme" onClick={onToggleTheme} title={`Preview ${theme === 'light' ? 'dark' : 'light'} theme`} aria-label="Toggle theme preview" data-chef-editor-root="true">
             {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
           </button>
         )}

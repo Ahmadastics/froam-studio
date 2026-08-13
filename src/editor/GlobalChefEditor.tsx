@@ -115,6 +115,7 @@ import FroamConnectedCanvas, { type FroamConnectedCanvasTab } from './FroamConne
 import FroamIntelligence, { type FroamIntelligenceTab } from './FroamIntelligence'
 import FroamReferenceWorkspace from './FroamReferenceWorkspace'
 import FroamIntentResult from './FroamIntentResult'
+import FroamQuickChat from './FroamQuickChat'
 import { useFroamIntent } from './useFroamIntent'
 import { shouldOfferAskFroam } from './froam-intent-model'
 import FroamLabs, { type FroamLab } from './FroamLabs'
@@ -1706,6 +1707,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     assets: false,
   })
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const [quickChatOpen, setQuickChatOpen] = useState(false)
   const [workspacePreference, setWorkspacePreference] = useState(() => readWorkspacePreference(typeof localStorage === 'undefined' ? undefined : localStorage))
   const [uiPreference, setUIPreference] = useState(() => readFroamUIPreference(typeof localStorage === 'undefined' ? undefined : localStorage))
   const [uiCustomizerOpen, setUICustomizerOpen] = useState(false)
@@ -1714,10 +1716,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const isMobileUI = useMediaQuery(MOBILE_UI_QUERY)
   const isTouchDevice = useMediaQuery(COARSE_POINTER_QUERY)
   const [sheetDetent, setSheetDetent] = useState<SheetDetent>('peek')
-  const [leftPanelOpen, setLeftPanelOpen] = useState(() => (
-    workspacePreference.mode === 'understand' && (workspacePreference.sections.understand === 'reference' || workspacePreference.sections.understand === 'layers')
-  ) || (!matchesMedia(MOBILE_UI_QUERY) && workspacePreference.mode === 'create'))
-  const [rightPanelOpen, setRightPanelOpen] = useState(() => workspacePreference.mode === 'create')
+  const [leftPanelOpen, setLeftPanelOpen] = useState(false)
+  const [rightPanelOpen, setRightPanelOpen] = useState(false)
   const [studioMinimized, setStudioMinimized] = useState(false)
   const [scanActive, setScanActive] = useState(false)
   const [blueprintOpen, setBlueprintOpen] = useState(false)
@@ -2322,17 +2322,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     return () => { delete (window as unknown as Record<string, unknown>).__froamOpLog }
   }, [])
 
-  /* First time the editor opens on a project: run the one-time scan. */
-  useEffect(() => {
-    if (!showPanel || studioMinimized) return undefined
-    let alreadyScanned = true
-    try { alreadyScanned = window.localStorage.getItem(SCAN_DONE_KEY) === '1' } catch { alreadyScanned = true }
-    if (alreadyScanned) return undefined
-    try { window.localStorage.setItem(SCAN_DONE_KEY, '1') } catch { /* storage unavailable */ }
-    const id = window.setTimeout(() => setScanActive(true), 180)
-    return () => window.clearTimeout(id)
-  }, [showPanel, studioMinimized])
-
   useEffect(() => {
     if (!pendingDraftPaintResumeRef.current) return
     pendingDraftPaintResumeRef.current = false
@@ -2399,6 +2388,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     onToast: showToast,
     onValidateReference: validateReferenceBuildOnCanvas,
   })
+
+  useEffect(() => {
+    if (!selection?.path || !showPanel || inlineEditing || froamIntent.state.phase === 'previewing') return
+    setQuickChatOpen(true)
+  }, [selection?.path, showPanel, inlineEditing])
 
   function openPersonaEditor() {
     keepStudioPinned()
@@ -2832,7 +2826,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   }, [hasRouteDrafts, routeDrafts, viewportStoreKey])
 
   useEffect(() => {
-    if (!showPanel) return
+    if (!showPanel || studioMinimized) return
+    if (!leftPanelOpen && !rightPanelOpen && !intelligenceOpen && !labsOpen && !connectedCanvasOpen && !workspacePreference.advancedOpen) return
     const root = getRoot()
     if (!root || typeof MutationObserver === 'undefined') return
     const maintenance = createFrameworkIdentityObserver({
@@ -2843,7 +2838,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     })
     setFrameworkIdentityFinding(maintenance.finding)
     return () => maintenance.disconnect()
-  }, [showPanel, viewportStoreKey])
+  }, [showPanel, studioMinimized, viewportStoreKey, leftPanelOpen, rightPanelOpen, intelligenceOpen, labsOpen, connectedCanvasOpen, workspacePreference.advancedOpen])
 
   /* ─── v4: touch affordances while editing on a coarse pointer ─── */
   useEffect(() => {
@@ -2863,7 +2858,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     function clearHover() {
       currentHoverRef.current?.removeAttribute('data-chef-hovered')
       currentHoverRef.current = null
-      setMeasureRect(null)
     }
 
     function resolveTarget(rawTarget: EventTarget | null) {
@@ -2887,7 +2881,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         clearHover()
         currentHoverRef.current = target
         target.setAttribute('data-chef-hovered', 'true')
-        setMeasureRect(target.getBoundingClientRect())
       })
     }
 
@@ -2934,12 +2927,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       }
       setMeasureRect(null)
       setContextMenuPos(null)
+      setQuickChatOpen(true)
     }
 
     function handleDblClick(event: MouseEvent) {
       const target = resolveTarget(event.target)
       if (!target) return
       const textTarget = target
+      setQuickChatOpen(false)
       event.preventDefault()
       event.stopPropagation()
       if (!canApplyTextDraft(textTarget)) {
@@ -5301,7 +5296,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   /* ─── Repo bridge status polling (dev only) ─── */
   useEffect(() => {
-    if (!showPanel) return
+    if (!showPanel || !['127.0.0.1', 'localhost', '::1'].includes(window.location.hostname)) { setRepoStatus('offline'); return }
     let active = true
     let timer = 0
 
@@ -6005,6 +6000,16 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         onDismiss={froamIntent.dismiss}
       />
 
+      {showPanel && selection && !inlineEditing && (
+        <FroamQuickChat
+          open={quickChatOpen}
+          selectionLabel={selection.label}
+          busy={['preparing', 'awaiting-consent', 'requesting', 'plan-ready', 'creating-prototype', 'retrying', 'adopting'].includes(froamIntent.state.phase)}
+          onSubmit={(intent) => { setQuickChatOpen(false); void froamIntent.submit({ origin: 'contextual', intent }) }}
+          onClose={() => setQuickChatOpen(false)}
+        />
+      )}
+
       {/* v5: Figma Layout */}
       {showPanel && !studioMinimized && (
         <div
@@ -6109,6 +6114,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   onToggleAdvanced={toggleAdvancedWorkspace}
                   onOpenPrototypes={() => openConnectedWorkspace('branches')}
                   onOpenReplay={() => openConnectedWorkspace('replay')}
+                  onOpenCommands={openCommandPalette}
                   temporalOwner={temporalOwner}
                   activity={workspaceActivity}
                 />
@@ -7997,7 +8003,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       />
 
       {/* v4: Floating toolbar — docked above the bottom sheet on mobile */}
-      {showPanel && selection && !inlineEditing && !isResizing && (!isMobileUI || sheetDetent === 'peek') && (
+      {showPanel && selection && !inlineEditing && !isResizing && !quickChatOpen && froamIntent.state.phase !== 'previewing' && (!isMobileUI || sheetDetent === 'peek') && (
         <FroamFloatingBar
           targetRect={selectionRect}
           visible={!!selectionRect}

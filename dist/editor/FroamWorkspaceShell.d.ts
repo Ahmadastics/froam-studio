@@ -10,7 +10,7 @@ type Props = {
     mode: FroamWorkspaceMode;
     activeSection: FroamWorkspaceSection;
     onModeChange: (mode: FroamWorkspaceMode) => void;
-    onSectionChange: (section: FroamWorkspaceSection) => void;
+    onSectionChange: (section: FroamWorkspaceSection, mode?: FroamWorkspaceMode) => void;
     projectName: string;
     branchId: string;
     branchName: string;
@@ -22,6 +22,7 @@ type Props = {
     onToggleAdvanced: () => void;
     onOpenPrototypes: () => void;
     onOpenReplay: () => void;
+    onOpenCommands: () => void;
     temporalOwner: FroamTemporalOwner;
     activity?: 'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | 'intent-understanding' | 'intent-creating' | 'intent-applying' | null;
 };

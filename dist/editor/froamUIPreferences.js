@@ -1,4 +1,6 @@
-export const FROAM_UI_PREFERENCE_KEY = 'froam-ui-preference-v1';
+// v2 starts everyone on the calmer, attached layout. The previous release could
+// persist the oversized bottom toolbar and make Froam cover the edited page.
+export const FROAM_UI_PREFERENCE_KEY = 'froam-ui-preference-v2';
 export const DEFAULT_FROAM_UI_PREFERENCE = {
     version: 1,
     toolbar: 'top',

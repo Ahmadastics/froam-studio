@@ -1,7 +1,8 @@
 # Froam Studio
 
-> **8.1.0 — Froam Workspace:** Build and Reference share the live editor with
-> direct design tools, local interface understanding and protected experiments.
+> **8.1.1 — Focused editing:** Click any section to open a small command chat.
+> Common visual edits now run locally, the default shell is calmer, and idle
+> scanning and production polling no longer compete with the host application.
 > Project schema remains v2; Repo Mode and path-based output are unchanged.
 
 [![CI](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml)

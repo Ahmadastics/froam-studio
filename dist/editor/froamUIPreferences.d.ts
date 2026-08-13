@@ -18,7 +18,7 @@ export type FroamUIPreference = {
     scale: 0.9 | 1 | 1.1;
     labels: boolean;
 };
-export declare const FROAM_UI_PREFERENCE_KEY = "froam-ui-preference-v1";
+export declare const FROAM_UI_PREFERENCE_KEY = "froam-ui-preference-v2";
 export declare const DEFAULT_FROAM_UI_PREFERENCE: FroamUIPreference;
 export declare function sanitizeFroamUIPreference(value: unknown): FroamUIPreference;
 export declare function readFroamUIPreference(storage?: Pick<Storage, 'getItem'>): FroamUIPreference;

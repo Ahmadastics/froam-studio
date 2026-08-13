@@ -638,3 +638,15 @@
   overflow: hidden;
   background: transparent;
 }
+
+@media(min-width:769px){
+  .froam-tb__center,.froam-tb__viewport-group,.froam-tb__zoom-group,.froam-tb__git-chip,.froam-tb__draft-count,.froam-tb__theme,.froam-tb__right>.froam-tb__desktop-only,.froam-tb__right>.froam-tb__sep{display:none}
+  .froam-tb__panel-controls button:nth-child(-n+2){display:none}
+  .froam-tb__right{margin-left:auto}
+}
+@media(max-width:768px){
+  .froam-tb__center,.froam-tb__viewport-group,.froam-tb__zoom-group,.froam-tb__git-chip,.froam-tb__draft-count,.froam-tb__theme,.froam-tb__right>.froam-tb__desktop-only,.froam-tb__right>.froam-tb__sep,.froam-tb__history,.froam-tb__save-btn{display:none}
+  .froam-tb__panel-controls button:nth-child(-n+2){display:none}
+  .froam-tb__right{margin-left:auto}
+  .froam-tb__mobile-command{display:grid}
+}

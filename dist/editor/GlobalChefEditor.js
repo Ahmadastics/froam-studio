@@ -11,7 +11,7 @@ import FroamFloatingBar from './FroamFloatingBar.js';
 import FroamContextMenu from './FroamContextMenu.js';
 import FroamBottomSheet from './FroamBottomSheet.js';
 import FroamBlueprint from './FroamBlueprint.js';
-import { COARSE_POINTER_QUERY, MOBILE_UI_QUERY, matchesMedia, useMediaQuery } from './froamMedia.js';
+import { COARSE_POINTER_QUERY, MOBILE_UI_QUERY, useMediaQuery } from './froamMedia.js';
 import FroamExport from './FroamExport.js';
 import FroamShortcutOverlay from './FroamShortcutOverlay.js';
 import FroamSmartGuides from './FroamSmartGuides.js';
@@ -34,6 +34,7 @@ import FroamConnectedCanvas from './FroamConnectedCanvas.js';
 import FroamIntelligence from './FroamIntelligence.js';
 import FroamReferenceWorkspace from './FroamReferenceWorkspace.js';
 import FroamIntentResult from './FroamIntentResult.js';
+import FroamQuickChat from './FroamQuickChat.js';
 import { useFroamIntent } from './useFroamIntent.js';
 import { shouldOfferAskFroam } from './froam-intent-model.js';
 import FroamLabs from './FroamLabs.js';
@@ -1308,6 +1309,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         assets: false,
     });
     const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+    const [quickChatOpen, setQuickChatOpen] = useState(false);
     const [workspacePreference, setWorkspacePreference] = useState(() => readWorkspacePreference(typeof localStorage === 'undefined' ? undefined : localStorage));
     const [uiPreference, setUIPreference] = useState(() => readFroamUIPreference(typeof localStorage === 'undefined' ? undefined : localStorage));
     const [uiCustomizerOpen, setUICustomizerOpen] = useState(false);
@@ -1316,8 +1318,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const isMobileUI = useMediaQuery(MOBILE_UI_QUERY);
     const isTouchDevice = useMediaQuery(COARSE_POINTER_QUERY);
     const [sheetDetent, setSheetDetent] = useState('peek');
-    const [leftPanelOpen, setLeftPanelOpen] = useState(() => (workspacePreference.mode === 'understand' && (workspacePreference.sections.understand === 'reference' || workspacePreference.sections.understand === 'layers')) || (!matchesMedia(MOBILE_UI_QUERY) && workspacePreference.mode === 'create'));
-    const [rightPanelOpen, setRightPanelOpen] = useState(() => workspacePreference.mode === 'create');
+    const [leftPanelOpen, setLeftPanelOpen] = useState(false);
+    const [rightPanelOpen, setRightPanelOpen] = useState(false);
     const [studioMinimized, setStudioMinimized] = useState(false);
     const [scanActive, setScanActive] = useState(false);
     const [blueprintOpen, setBlueprintOpen] = useState(false);
@@ -1925,26 +1927,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         window.__froamOpLog = debug;
         return () => { delete window.__froamOpLog; };
     }, []);
-    /* First time the editor opens on a project: run the one-time scan. */
-    useEffect(() => {
-        if (!showPanel || studioMinimized)
-            return undefined;
-        let alreadyScanned = true;
-        try {
-            alreadyScanned = window.localStorage.getItem(SCAN_DONE_KEY) === '1';
-        }
-        catch {
-            alreadyScanned = true;
-        }
-        if (alreadyScanned)
-            return undefined;
-        try {
-            window.localStorage.setItem(SCAN_DONE_KEY, '1');
-        }
-        catch { /* storage unavailable */ }
-        const id = window.setTimeout(() => setScanActive(true), 180);
-        return () => window.clearTimeout(id);
-    }, [showPanel, studioMinimized]);
     useEffect(() => {
         if (!pendingDraftPaintResumeRef.current)
             return;
@@ -2030,6 +2012,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         onToast: showToast,
         onValidateReference: validateReferenceBuildOnCanvas,
     });
+    useEffect(() => {
+        if (!selection?.path || !showPanel || inlineEditing || froamIntent.state.phase === 'previewing')
+            return;
+        setQuickChatOpen(true);
+    }, [selection?.path, showPanel, inlineEditing]);
     function openPersonaEditor() {
         keepStudioPinned();
         setPersonaDraft(persona);
@@ -2440,7 +2427,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         };
     }, [hasRouteDrafts, routeDrafts, viewportStoreKey]);
     useEffect(() => {
-        if (!showPanel)
+        if (!showPanel || studioMinimized)
+            return;
+        if (!leftPanelOpen && !rightPanelOpen && !intelligenceOpen && !labsOpen && !connectedCanvasOpen && !workspacePreference.advancedOpen)
             return;
         const root = getRoot();
         if (!root || typeof MutationObserver === 'undefined')
@@ -2453,7 +2442,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         });
         setFrameworkIdentityFinding(maintenance.finding);
         return () => maintenance.disconnect();
-    }, [showPanel, viewportStoreKey]);
+    }, [showPanel, studioMinimized, viewportStoreKey, leftPanelOpen, rightPanelOpen, intelligenceOpen, labsOpen, connectedCanvasOpen, workspacePreference.advancedOpen]);
     /* ─── v4: touch affordances while editing on a coarse pointer ─── */
     useEffect(() => {
         if (!showPanel || !isTouchDevice)
@@ -2473,7 +2462,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         function clearHover() {
             currentHoverRef.current?.removeAttribute('data-chef-hovered');
             currentHoverRef.current = null;
-            setMeasureRect(null);
         }
         function resolveTarget(rawTarget) {
             let element = rawTarget instanceof HTMLElement ? rawTarget : null;
@@ -2498,7 +2486,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 clearHover();
                 currentHoverRef.current = target;
                 target.setAttribute('data-chef-hovered', 'true');
-                setMeasureRect(target.getBoundingClientRect());
             });
         }
         function handlePointerLeave() {
@@ -2544,12 +2531,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             }
             setMeasureRect(null);
             setContextMenuPos(null);
+            setQuickChatOpen(true);
         }
         function handleDblClick(event) {
             const target = resolveTarget(event.target);
             if (!target)
                 return;
             const textTarget = target;
+            setQuickChatOpen(false);
             event.preventDefault();
             event.stopPropagation();
             if (!canApplyTextDraft(textTarget)) {
@@ -4841,8 +4830,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }, [openSections.cssVars]);
     /* ─── Repo bridge status polling (dev only) ─── */
     useEffect(() => {
-        if (!showPanel)
+        if (!showPanel || !['127.0.0.1', 'localhost', '::1'].includes(window.location.hostname)) {
+            setRepoStatus('offline');
             return;
+        }
         let active = true;
         let timer = 0;
         async function poll() {
@@ -5536,7 +5527,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                     setCommandPaletteOpen(false);
                                     setCommandSearch('');
                                 }
-                            } }), _jsxs("ul", { className: "fs-command-palette__list", id: "froam-command-results", role: "listbox", children: [filteredCommands.map((cmd, idx) => (_jsx("li", { id: `froam-command-${cmd.id}`, role: "option", "aria-selected": idx === commandFocusIndex, className: `fs-command-palette__item ${idx === commandFocusIndex ? 'is-focused' : ''}`, onMouseEnter: () => setCommandFocusIndex(idx), children: _jsxs("button", { type: "button", tabIndex: -1, onClick: () => executePaletteCommand(cmd), children: [cmd.icon, _jsx("span", { className: "fs-command-palette__item-label", children: cmd.label }), cmd.shortcut && _jsx("span", { className: "fs-command-palette__item-shortcut", children: cmd.shortcut })] }) }, cmd.id))), askFroamVisible && (_jsx("li", { id: "froam-command-ask", role: "option", "aria-selected": commandFocusIndex === 0, className: `fs-command-palette__item fs-command-palette__ask ${commandFocusIndex === 0 ? 'is-focused' : ''}`, children: _jsxs("button", { type: "button", tabIndex: -1, "aria-label": `Ask Froam: ${commandSearch.trim()}`, onClick: executeAskFroam, children: [_jsx(Sparkles, { size: 15 }), _jsxs("span", { className: "fs-command-palette__item-label", children: [_jsx("strong", { children: "Ask Froam" }), _jsx("small", { children: commandSearch.trim() })] }), _jsx("span", { className: "fs-command-palette__item-shortcut", children: "Enter" })] }) })), filteredCommands.length === 0 && !askFroamVisible && (_jsx("li", { role: "status", className: "fs-command-palette__empty", children: "No commands found" }))] })] }) })), _jsx(FroamIntentResult, { state: froamIntent.state, onAllow: froamIntent.allow, onNotNow: froamIntent.notNow, onKeep: froamIntent.keep, onRetry: froamIntent.retry, onCancel: froamIntent.cancel, onDismiss: froamIntent.dismiss }), showPanel && !studioMinimized && (_jsxs("div", { className: [
+                            } }), _jsxs("ul", { className: "fs-command-palette__list", id: "froam-command-results", role: "listbox", children: [filteredCommands.map((cmd, idx) => (_jsx("li", { id: `froam-command-${cmd.id}`, role: "option", "aria-selected": idx === commandFocusIndex, className: `fs-command-palette__item ${idx === commandFocusIndex ? 'is-focused' : ''}`, onMouseEnter: () => setCommandFocusIndex(idx), children: _jsxs("button", { type: "button", tabIndex: -1, onClick: () => executePaletteCommand(cmd), children: [cmd.icon, _jsx("span", { className: "fs-command-palette__item-label", children: cmd.label }), cmd.shortcut && _jsx("span", { className: "fs-command-palette__item-shortcut", children: cmd.shortcut })] }) }, cmd.id))), askFroamVisible && (_jsx("li", { id: "froam-command-ask", role: "option", "aria-selected": commandFocusIndex === 0, className: `fs-command-palette__item fs-command-palette__ask ${commandFocusIndex === 0 ? 'is-focused' : ''}`, children: _jsxs("button", { type: "button", tabIndex: -1, "aria-label": `Ask Froam: ${commandSearch.trim()}`, onClick: executeAskFroam, children: [_jsx(Sparkles, { size: 15 }), _jsxs("span", { className: "fs-command-palette__item-label", children: [_jsx("strong", { children: "Ask Froam" }), _jsx("small", { children: commandSearch.trim() })] }), _jsx("span", { className: "fs-command-palette__item-shortcut", children: "Enter" })] }) })), filteredCommands.length === 0 && !askFroamVisible && (_jsx("li", { role: "status", className: "fs-command-palette__empty", children: "No commands found" }))] })] }) })), _jsx(FroamIntentResult, { state: froamIntent.state, onAllow: froamIntent.allow, onNotNow: froamIntent.notNow, onKeep: froamIntent.keep, onRetry: froamIntent.retry, onCancel: froamIntent.cancel, onDismiss: froamIntent.dismiss }), showPanel && selection && !inlineEditing && (_jsx(FroamQuickChat, { open: quickChatOpen, selectionLabel: selection.label, busy: ['preparing', 'awaiting-consent', 'requesting', 'plan-ready', 'creating-prototype', 'retrying', 'adopting'].includes(froamIntent.state.phase), onSubmit: (intent) => { setQuickChatOpen(false); void froamIntent.submit({ origin: 'contextual', intent }); }, onClose: () => setQuickChatOpen(false) })), showPanel && !studioMinimized && (_jsxs("div", { className: [
                     'froam-figma-layout',
                     isMobileUI ? 'is-mobile' : '',
                     leftWorkspaceMode === 'plan' || leftWorkspaceMode === 'reference' ? 'is-planning' : '',
@@ -5586,7 +5577,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                     return;
                                 }
                                 setRightPanelOpen((value) => !value);
-                            }, workspace: (_jsx(FroamWorkspaceShell, { mode: workspaceMode, activeSection: activeWorkspaceSection, onModeChange: setWorkspaceMode, onSectionChange: openWorkspaceSection, projectName: projectSession.project.name, branchId: projectSession.project.activeBranchId, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, members: roomPresence, hasSelection: Boolean(selection), selectionLabel: selection?.label, flags: labsFlags, advancedOpen: workspacePreference.advancedOpen, onToggleAdvanced: toggleAdvancedWorkspace, onOpenPrototypes: () => openConnectedWorkspace('branches'), onOpenReplay: () => openConnectedWorkspace('replay'), temporalOwner: temporalOwner, activity: workspaceActivity })), onMinimize: () => {
+                            }, workspace: (_jsx(FroamWorkspaceShell, { mode: workspaceMode, activeSection: activeWorkspaceSection, onModeChange: setWorkspaceMode, onSectionChange: openWorkspaceSection, projectName: projectSession.project.name, branchId: projectSession.project.activeBranchId, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, members: roomPresence, hasSelection: Boolean(selection), selectionLabel: selection?.label, flags: labsFlags, advancedOpen: workspacePreference.advancedOpen, onToggleAdvanced: toggleAdvancedWorkspace, onOpenPrototypes: () => openConnectedWorkspace('branches'), onOpenReplay: () => openConnectedWorkspace('replay'), onOpenCommands: openCommandPalette, temporalOwner: temporalOwner, activity: workspaceActivity })), onMinimize: () => {
                                 setStudioMinimized(true);
                                 showToast(`${persona.name} minimized — editing is still active`);
                             }, onClose: () => {
@@ -5907,7 +5898,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         applyStyle(finalStyles, nextSelection, 'Resized element');
                     }
                     setSelectionRect(target.getBoundingClientRect());
-                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: canUndo, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, opacity: selection.opacity, isHidden: selection.display === 'none', mixBlendMode: selection.mixBlendMode, zIndex: selection.zIndex, fontOptions: fontOptions, selectionCount: selections.length, onStyle: (styles, selectionPatch, label) => {
+                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && !quickChatOpen && froamIntent.state.phase !== 'previewing' && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: canUndo, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, opacity: selection.opacity, isHidden: selection.display === 'none', mixBlendMode: selection.mixBlendMode, zIndex: selection.zIndex, fontOptions: fontOptions, selectionCount: selections.length, onStyle: (styles, selectionPatch, label) => {
                     applyStyle(styles, selectionPatch, label);
                     const root = getRoot();
                     const target = root ? findElementByPath(root, selection.path) : null;

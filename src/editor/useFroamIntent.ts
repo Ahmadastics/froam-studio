@@ -11,7 +11,7 @@ import type { FroamNodeRegistry } from '../project/node-registry'
 import type { FroamIntelligenceResponse, FroamIntelligenceNotConfiguredResponse } from '../project/intelligence-transport'
 import type { FroamProjectDocument } from '../project/types'
 import { readFroamIntelligenceConsent, writeFroamIntelligenceConsent } from './intelligence-consent'
-import { FROAM_INTENT_MAX_ATTEMPTS, froamIntentPreferences, froamIntentPrototypeName, froamIntentReducer, froamIntentRetryFeedback, initialFroamIntentState, type FroamIntentOrigin, type FroamIntentSession } from './froam-intent-model'
+import { createLocalFroamIntentProposals, FROAM_INTENT_MAX_ATTEMPTS, froamIntentPreferences, froamIntentPrototypeName, froamIntentReducer, froamIntentRetryFeedback, initialFroamIntentState, type FroamIntentOrigin, type FroamIntentSession } from './froam-intent-model'
 
 type Selection = { nodeId?: string; path: string; label: string } | null
 type Activity = 'intent-understanding' | 'intent-creating' | 'intent-applying' | null
@@ -41,14 +41,13 @@ type Props = {
 
 function safeIntentError(error: unknown) {
   const code = error instanceof Error ? error.message : 'provider_unavailable'
-  if (code === 'not_configured') return "Froam intelligence isn't configured for this project."
-  if (code === 'provider_unavailable') return "Froam couldn't reach the configured intelligence provider."
+  if (code === 'not_configured' || code === 'provider_unavailable') return 'That request needs online intelligence. Try a direct edit like “make it bolder”, “add more space”, or “make it rounder”.'
   if (code === 'no_valid_proposals') return "Froam couldn't find a safe change for that request."
   if (code === 'provider_invalid_response' || code === 'invalid_request') return "Froam couldn't prepare a safe experiment."
   if (code === 'identity_lost') return 'That element changed while Froam was preparing the experiment. Select it again and retry.'
   if (code === 'stale_context') return 'The interface changed while Froam was preparing this. Try again.'
   if (code === 'no_compiled_changes' || /No safe mutation proposals/.test(code)) return "Froam couldn't find a safe change for that request."
-  return "Froam couldn't reach the configured intelligence provider."
+  return 'Froam could not prepare that change. Try a shorter, more direct instruction.'
 }
 
 export function useFroamIntent(props: Props) {
@@ -132,7 +131,10 @@ export function useFroamIntent(props: Props) {
     const request = assembleFroamIntelligenceRequest({ project: projectRef.current, intent: pending.session.intent, scope: { selectedNodeId: pending.session.selectedNodeId, selectedDomPath: pending.session.selectedPath, routeKey: props.routeKey, viewport: props.viewport }, priorAttemptFeedback: pending.feedback, requestId: `${pending.session.id}:${pending.session.attempt}`, consent: true, selectionEvidence: { node: pending.snapshot.node, scan: pending.snapshot.scan, dna: pending.snapshot.dna, relationships: pending.snapshot.relationships } })
     if (!request) { if (abortRef.current === operation.controller) abortRef.current = null; dispatch({ type: 'fail', message: 'Froam couldn\'t identify that element reliably. Select it again and retry.' }); return }
     try {
-      const response = props.request ? await props.request(request, operation.controller.signal) : await requestIntelligencePlan(request, fetch, operation.controller.signal)
+      const localProposals = createLocalFroamIntentProposals(pending.snapshot, pending.session.intent)
+      const response: FroamIntelligenceResponse | FroamIntelligenceNotConfiguredResponse = localProposals.length
+        ? { schemaVersion: 1, purpose: 'mutate', provider: 'froam-local-command@1', proposals: localProposals, rationale: 'Prepared instantly on this device.', confidence: .98 }
+        : props.request ? await props.request(request, operation.controller.signal) : await requestIntelligencePlan(request, fetch, operation.controller.signal)
       if (!operation.current()) return
       if ('configured' in response) throw new Error('not_configured')
       if (response.purpose !== 'mutate') throw new Error('provider_invalid_response')
@@ -187,7 +189,7 @@ export function useFroamIntent(props: Props) {
         const source = switchProjectBranch(projectRef.current, pending.session.sourceBranchId)
         projectRef.current = source; props.setProject(source); props.onPreviewStore(deriveBranchState(source, pending.session.sourceBranchId).legacyStore, false)
       }
-      dispatch({ type: 'fail', message: safeIntentError(error) === "Froam couldn't reach the configured intelligence provider." ? "Froam couldn't prepare the reference experiment." : safeIntentError(error) })
+      dispatch({ type: 'fail', message: safeIntentError(error) })
     } finally { if (abortRef.current === operation.controller) abortRef.current = null }
   }, [contextIsCurrent, previewContextIsCurrent, props.actorId, props.onPreviewStore, props.onValidateReference, props.setProject, startOperation])
 
@@ -202,7 +204,7 @@ export function useFroamIntent(props: Props) {
     const session: FroamIntentSession = { id: `intent:${Date.now().toString(36)}`, origin: input.origin, intent, selectedNodeId: selection.nodeId, selectedPath: selection.path, sourceBranchId: projectRef.current.activeBranchId, attempt: 1, maxAttempts: FROAM_INTENT_MAX_ATTEMPTS }
     const pending: PendingIntelligenceIntent = { kind: 'intelligence', session, snapshot, source: sourceContext(), elementFingerprint: elementFingerprint(), feedback: null }; pendingRef.current = pending
     dispatch({ type: 'submit', session })
-    if (readFroamIntelligenceConsent(typeof localStorage === 'undefined' ? undefined : localStorage) !== 'allowed') { dispatch({ type: 'require-consent' }); return }
+    if (createLocalFroamIntentProposals(snapshot, intent).length === 0 && readFroamIntelligenceConsent(typeof localStorage === 'undefined' ? undefined : localStorage) !== 'allowed') { dispatch({ type: 'require-consent' }); return }
     await performRequest(pending)
   }, [elementFingerprint, observeSelection, performRequest, sourceContext])
 

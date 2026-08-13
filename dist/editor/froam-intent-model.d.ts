@@ -1,4 +1,5 @@
 import type { FroamReferenceBuildValidation } from '../project/reference-build';
+import type { FroamMutationProposal, FroamMutationSelectionSnapshot } from '../project/mutation';
 export declare const FROAM_INTENT_MAX_ATTEMPTS = 3;
 export type FroamIntentOrigin = 'command-palette' | 'reference' | 'responsive' | 'contextual';
 export type FroamIntentPhase = 'idle' | 'preparing' | 'awaiting-consent' | 'requesting' | 'plan-ready' | 'creating-prototype' | 'previewing' | 'adopting' | 'retrying' | 'error' | 'completed';
@@ -64,4 +65,10 @@ export declare function froamIntentPreferences(intent: string): {
 };
 export declare function froamIntentPrototypeName(intent: string): string;
 export declare function froamIntentRetryFeedback(state: FroamIntentState): string;
+/**
+ * Fast, browser-local commands for the edits people ask for most often.
+ * They use the same native proposal validation and protected branch workflow
+ * as remote intelligence, but never require a provider or network request.
+ */
+export declare function createLocalFroamIntentProposals(snapshot: FroamMutationSelectionSnapshot, intent: string): FroamMutationProposal[];
 //# sourceMappingURL=froam-intent-model.d.ts.map
