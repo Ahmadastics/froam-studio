@@ -14,7 +14,7 @@ import {
   validateResponsiveHealth,
 } from '../dist/project/index.js'
 import { validateIntelligenceRequest } from '../dist/project/intelligence-transport.js'
-import { readReferenceConsent, referenceQualityLabel, suggestReferenceLabel, validateReferenceDimensions, validateReferenceFile, writeReferenceConsent } from '../dist/editor/reference-workspace-model.js'
+import { FROAM_REFERENCE_MAX_REFERENCES, readReferenceConsent, referenceQualityLabel, suggestReferenceLabel, validateReferenceDimensions, validateReferenceFile, writeReferenceConsent } from '../dist/editor/reference-workspace-model.js'
 
 const tests = []
 function test(name, run) { tests.push({ name, run }) }
@@ -36,6 +36,7 @@ test('rejects empty sets', () => assert.throws(() => validateReferenceSet(set('e
 test('rejects duplicate reference ids', () => assert.throws(() => validateReferenceSet(set('dup', [reference('a', 390), reference('a', 768)])), /Duplicate/))
 test('rejects impossible viewports', () => assert.throws(() => validateReferenceSet(set('bad', [reference('a', 0)])), /Invalid viewport/))
 test('rejects data URLs as media handles', () => assert.throws(() => validateReferenceSet(set('raw', [{ ...reference('a', 390), media: { id: 'data:image/png;base64,AAAA' } }])), /opaque/))
+test('reference workspace and project validation share a 20-reference boundary', () => { assert.equal(FROAM_REFERENCE_MAX_REFERENCES, 20); assert.equal(validateReferenceSet(set('max', Array.from({ length: 20 }, (_, index) => reference(`ref-${index}`, 320 + index)))).references.length, 20); assert.throws(() => validateReferenceSet(set('too-many', Array.from({ length: 21 }, (_, index) => reference(`ref-${index}`, 320 + index)))), /1 to 20/) })
 
 const geometryEntry = { reference: reference('geometry', 1000, 800), reconstruction: reconstruction('geometry', 1000, 800, [region('full', 0, 0, 950, 100), region('left-a', 20, 200, 200, 100), region('left-b', 20, 350, 200, 100), region('row-b', 300, 200, 200, 100)]) }
 test('normalizes geometry by viewport', () => assert.equal(normalizeReferenceRegions(geometryEntry)[0].width, .95))
@@ -54,6 +55,8 @@ const ambiguousTo = reconstruction('amb-to', 500, 500, [region('candidate-a', 0,
 test('leaves near-tied candidates unmatched', () => assert.equal(matchScreenshotRegions(ambiguousFrom, ambiguousTo).matches.length, 0))
 test('reports ambiguous candidates', () => assert.equal(matchScreenshotRegions(ambiguousFrom, ambiguousTo).ambiguous[0].candidateRegionIds.length, 2))
 test('ambiguity carries reduced certainty versus exact text', () => assert(matchScreenshotRegions(ambiguousFrom, ambiguousTo).ambiguous[0].confidence < matchScreenshotRegions(matchFrom, matchTo).matches[0].confidence))
+const sameWidthUnderstanding = analyzeReferenceReconstructions(set('same-width', [reference('closed-menu', 390, 700), reference('open-menu', 390, 700)]), [reconstruction('closed-menu', 390, 700, [region('menu', 330, 20, 40, 40, { kind: 'text', role: 'button', text: 'Menu' })]), reconstruction('open-menu', 390, 700, [region('home', 20, 80, 120, 30, { kind: 'text', role: 'label', text: 'Home' }), region('work', 20, 120, 120, 30, { kind: 'text', role: 'label', text: 'Work' })])])
+test('same-width references remain distinct states', () => { assert.equal(sameWidthUnderstanding.reconstructions.length, 2); assert.deepEqual(sameWidthUnderstanding.reconstructions.map((item) => item.reference.id).sort(), ['closed-menu', 'open-menu']); assert.equal(sameWidthUnderstanding.comparisons.length, 1) })
 
 const gridRefs = [reference('mobile', 390), reference('tablet', 768), reference('laptop', 1024), reference('desktop', 1440)]
 const gridUnderstanding = analyzeReferenceReconstructions(set('grid-set', gridRefs), [grid('desktop', 1440, 4), grid('mobile', 390, 1), grid('laptop', 1024, 3), grid('tablet', 768, 2)])

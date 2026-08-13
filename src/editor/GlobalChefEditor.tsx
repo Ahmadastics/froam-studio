@@ -124,6 +124,7 @@ import { froamUIPanelWidth, readFroamUIPreference, writeFroamUIPreference } from
 import { FROAM_WORKSPACE_SECTIONS, readWorkspacePreference, workspaceCommandMatches, writeWorkspacePreference, type FroamTemporalOwner, type FroamWorkspaceMode, type FroamWorkspaceSection } from './workspace-shell-model'
 import { readFroamLabsFlags, writeFroamLabsFlags } from '../project/experiments'
 import { appendProjectEvents, createProjectEvent, deriveBranchState, switchProjectBranch } from '../project/event-log'
+import { validateReferenceBuildCandidate, type FroamReferenceBuildPlan, type FroamReferenceCandidateObservation } from '../project/reference-build'
 import { sitePlanGraphRecords, type LegacySitePage } from '../project/adapters'
 import { useFroamProjectDocument } from './useFroamProjectDocument'
 import FroamRoomChat from './FroamRoomChat'
@@ -1738,11 +1739,20 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   })
   const [commandSearch, setCommandSearch] = useState('')
   const [commandFocusIndex, setCommandFocusIndex] = useState(0)
+  const commandPaletteRef = useRef<HTMLDivElement | null>(null)
+  const commandPaletteReturnFocusRef = useRef<HTMLElement | null>(null)
   const [inlineEditing, setInlineEditing] = useState(false)
   const [measureRect, setMeasureRect] = useState<DOMRect | null>(null)
 
   useEffect(() => { writeWorkspacePreference(typeof localStorage === 'undefined' ? undefined : localStorage, workspacePreference) }, [workspacePreference])
   useEffect(() => { writeFroamUIPreference(typeof localStorage === 'undefined' ? undefined : localStorage, uiPreference) }, [uiPreference])
+  useEffect(() => {
+    if (!commandPaletteOpen) return
+    return () => {
+      if (commandPaletteReturnFocusRef.current?.isConnected) commandPaletteReturnFocusRef.current.focus()
+      commandPaletteReturnFocusRef.current = null
+    }
+  }, [commandPaletteOpen])
   useEffect(() => {
     if (!portalContainer) return
     portalContainer.dataset.froamUiAppearance = uiPreference.appearance
@@ -2345,6 +2355,33 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     window.clearTimeout(toastTimerRef.current)
     toastTimerRef.current = window.setTimeout(() => setToastVisible(false), 2200)
   }, [])
+  async function validateReferenceBuildOnCanvas(plan: FroamReferenceBuildPlan, signal: AbortSignal) {
+    const root = getRoot()
+    if (!root) return validateReferenceBuildCandidate(plan, [])
+    const original = { width: root.style.width, maxWidth: root.style.maxWidth, marginInline: root.style.marginInline }
+    const observations: FroamReferenceCandidateObservation[] = []
+    try {
+      for (const width of plan.validationWidths) {
+        if (signal.aborted) throw new Error('Reference validation cancelled')
+        root.style.width = `${width}px`; root.style.maxWidth = 'none'; root.style.marginInline = 'auto'
+        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+        if (signal.aborted) throw new Error('Reference validation cancelled')
+        const target = plan.target.kind === 'selected' ? findElementByPath(root, plan.target.path) : root.querySelector<HTMLElement>(`[data-froam-reference-build="${CSS.escape(plan.id.replace(/[^A-Za-z0-9._:-]+/g, '-').slice(0, 80))}"]`)
+        const measuredTarget = target?.querySelector<HTMLElement>('[data-froam-reference-grid], [data-froam-reference-hero]') ?? target
+        const children = measuredTarget ? Array.from(measuredTarget.children).filter((item): item is HTMLElement => item instanceof HTMLElement && getComputedStyle(item).display !== 'none') : []
+        const rects = children.map((item) => item.getBoundingClientRect()).filter((rect) => rect.width > 0 && rect.height > 0)
+        const rows = new Map<number, number>(); for (const rect of rects) { const row = [...rows.keys()].find((value) => Math.abs(value - rect.top) < 8) ?? Math.round(rect.top); rows.set(row, (rows.get(row) ?? 0) + 1) }
+        const first = rects[0]; const second = rects[1]; const orientation = first && second ? Math.abs(first.top - second.top) < Math.min(first.height, second.height) * .5 ? 'row' as const : 'column' as const : undefined
+        let collisions = 0; for (let left = 0; left < rects.length; left += 1) for (let right = left + 1; right < rects.length; right += 1) if (rects[left].left < rects[right].right && rects[left].right > rects[right].left && rects[left].top < rects[right].bottom && rects[left].bottom > rects[right].top) collisions += 1
+        const visibleNodes = target ? [target, ...Array.from(target.querySelectorAll<HTMLElement>('*'))].filter((item) => { const style = getComputedStyle(item); const rect = item.getBoundingClientRect(); return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0 }) : []
+        const clipped = visibleNodes.filter((item) => { const style = getComputedStyle(item); return ((style.overflowX === 'hidden' || style.overflowX === 'clip') && item.scrollWidth > item.clientWidth + 2) || ((style.overflowY === 'hidden' || style.overflowY === 'clip') && item.scrollHeight > item.clientHeight + 2) }).length
+        const touchTargetFailures = visibleNodes.filter((item) => { const rect = item.getBoundingClientRect(); return ['A', 'BUTTON', 'INPUT'].includes(item.tagName) && (rect.width < 24 || rect.height < 24) }).length
+        const navText = target?.querySelectorAll('nav a, nav button, [role="navigation"] a').length ?? 0
+        observations.push({ width, targetFound: Boolean(target), targetWidthRatio: measuredTarget ? measuredTarget.getBoundingClientRect().width / Math.max(1, width) : undefined, gridColumns: rows.size ? Math.max(...rows.values()) : undefined, orientation, navigationShape: navText <= 1 ? 'compact' : 'expanded', visible: Boolean(target), regionCount: visibleNodes.length, overflowX: measuredTarget ? measuredTarget.scrollWidth > measuredTarget.clientWidth + 2 : false, collisions, clipped, hiddenCritical: target?.querySelectorAll('[data-froam-priority="critical"][hidden]').length ?? 0, touchTargetFailures })
+      }
+    } finally { root.style.width = original.width; root.style.maxWidth = original.maxWidth; root.style.marginInline = original.marginInline }
+    return validateReferenceBuildCandidate(plan, observations)
+  }
   const froamIntent = useFroamIntent({
     project: projectSession.project,
     setProject: projectSession.setProject,
@@ -2357,9 +2394,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     registry: nodeRegistryRef.current,
     onRegistryChange: (registry) => { nodeRegistryRef.current = registry; saveNodeRegistry(registry) },
     onPreviewStore: previewConnectedCanvas,
-    onCommitStore: materializeConnectedBranch,
+    onCommitStore: adoptConnectedCandidate,
     onActivityChange: setWorkspaceActivity,
     onToast: showToast,
+    onValidateReference: validateReferenceBuildOnCanvas,
   })
 
   function openPersonaEditor() {
@@ -3376,6 +3414,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     connectedPreviewStoreRef.current = null
     bumpLog()
     updateSelectionsState([])
+  }
+
+  function adoptConnectedCandidate(next: EditorStore) {
+    restoreConnectedCanvasPreview()
+    const previous = connectedPreviewStoreRef.current ?? storeRef.current
+    opPendingLabelRef.current = 'Froam experiment'
+    storeRef.current = next
+    setStore(next)
+    saveStore(next)
+    applyStoreToDOM(next, { clearCurrent: true, previousStore: previous })
+    connectedPreviewStoreRef.current = null
   }
 
   function selectConnectedNode(nodeId: string, fallbackPath?: string) {
@@ -5586,6 +5635,20 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     void froamIntent.submit({ origin: 'command-palette', intent })
   }
 
+  function openCommandPalette() {
+    commandPaletteReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setCommandPaletteOpen(true)
+  }
+
+  function trapCommandPaletteFocus(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'Tab') return
+    const focusable = [...(commandPaletteRef.current?.querySelectorAll<HTMLElement>('input, button:not(:disabled)') ?? [])].filter((element) => element.offsetParent !== null)
+    if (!focusable.length) return
+    const current = focusable.indexOf(document.activeElement as HTMLElement)
+    const next = event.shiftKey ? (current <= 0 ? focusable.length - 1 : current - 1) : (current < 0 || current === focusable.length - 1 ? 0 : current + 1)
+    event.preventDefault(); focusable[next].focus()
+  }
+
   /* ─── Global toggle shortcut (works even when panel is closed) ─── */
   useEffect(() => {
     function handleGlobalToggle(e: KeyboardEvent) {
@@ -5616,7 +5679,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       // Command palette
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault()
-        setCommandPaletteOpen((o) => !o)
+        if (commandPaletteOpen) setCommandPaletteOpen(false)
+        else openCommandPalette()
         return
       }
       // Save to repo (git-ready files via the dev-server bridge)
@@ -5867,11 +5931,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       {/* Command palette */}
       {commandPaletteOpen && (
         <div
+          ref={commandPaletteRef}
           className="fs-command-palette"
           data-chef-editor-root="true"
           role="dialog"
           aria-modal="true"
           aria-label="Froam command palette"
+          onKeyDown={trapCommandPaletteFocus}
           onClick={(e) => { if (e.target === e.currentTarget) { setCommandPaletteOpen(false); setCommandSearch('') } }}
         >
           <div className="fs-command-palette__card" data-chef-editor-root="true">
@@ -5995,7 +6061,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               onToggleTheme={toggleEditorTheme}
               onUndo={actionsRef.current.undo}
               onRedo={actionsRef.current.redo}
-              onCommandPalette={() => setCommandPaletteOpen(true)}
+              onCommandPalette={openCommandPalette}
               onShortcutsOverlay={() => setShowShortcutOverlay(true)}
               routeKey={routeKey}
               persona={persona}
@@ -6101,6 +6167,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   <FroamReferenceWorkspace
                     project={projectSession.project}
                     routeKey={routeKey}
+                    selection={selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null}
+                    reconstructing={['preparing', 'requesting', 'plan-ready', 'creating-prototype', 'retrying'].includes(froamIntent.state.phase)}
+                    onReconstruct={(understanding, target) => { void froamIntent.submitReference({ understanding, target }) }}
+                    onReferencesChanged={() => { if (froamIntent.state.session?.origin === 'reference') froamIntent.cancel() }}
                     onToast={showToast}
                     onActivityChange={setWorkspaceActivity}
                   />
@@ -6279,16 +6349,16 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   </button>
                 </div>
                 <div className="froam-studio__header-divider" />
-                <button type="button" className="froam-studio__icon-btn" onClick={() => setCommandPaletteOpen(true)} title="Command palette (Ctrl+K)">
+                <button type="button" className="froam-studio__icon-btn" onClick={openCommandPalette} title="Command palette (Ctrl+K)">
                   <Command size={14} />
                 </button>
                 <button type="button" className={`froam-studio__icon-btn ${connectedCanvasOpen ? 'is-active' : ''}`} onClick={() => setConnectedCanvasOpen((value) => !value)} title="Connected Canvas — replay, prototypes and inspectors">
                   <Share2 size={14} />
                 </button>
-                <button type="button" className={`froam-studio__icon-btn ${intelligenceOpen ? 'is-active' : ''}`} onClick={() => setIntelligenceOpen((value) => !value)} title="Froam Intelligence — Scan, DNA, Archive, Flow and responsive understanding">
+                <button type="button" className={`froam-studio__icon-btn ${intelligenceOpen ? 'is-active' : ''}`} onClick={() => setIntelligenceOpen((value) => !value)} title="Understand — Scan, DNA, Archive, Flow and responsive evidence">
                   <Sparkles size={14} />
                 </button>
-                <button type="button" className={`froam-studio__icon-btn ${labsOpen ? 'is-active' : ''}`} onClick={() => setLabsOpen((value) => !value)} title="Froam Labs — experimental v8 systems">
+                <button type="button" className={`froam-studio__icon-btn ${labsOpen ? 'is-active' : ''}`} onClick={() => setLabsOpen((value) => !value)} title="Experiments — optional Froam tools">
                   <Zap size={14} />
                 </button>
                 <button type="button" className="froam-studio__icon-btn" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
@@ -7662,7 +7732,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
             {/* Quick bar footer */}
             <div className="froam-studio__quick-bar" data-chef-editor-root="true">
-              <button type="button" className="fs-pill" onClick={() => setCommandPaletteOpen(true)} title="Ctrl+K">
+              <button type="button" className="fs-pill" onClick={openCommandPalette} title="Ctrl+K">
                 <Search size={11} /> Ctrl+K
               </button>
               <span style={{ flex: 1 }} />

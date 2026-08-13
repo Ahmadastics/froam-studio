@@ -86,7 +86,7 @@ function makeProject(id = 'mutation-project') {
   return project
 }
 
-async function callApi(handler, body, { method = 'POST', raw } = {}) {
+async function callApi(handler, body, { method = 'POST', raw, contentType = 'application/json' } = {}) {
   return new Promise((resolve, reject) => {
     const server = http.createServer(async (req, res) => {
       try {
@@ -95,12 +95,12 @@ async function callApi(handler, body, { method = 'POST', raw } = {}) {
     })
     server.listen(0, '127.0.0.1', () => {
       const port = server.address().port
-      const request = http.request({ hostname: '127.0.0.1', port, path: '/plan', method, headers: { 'Content-Type': 'application/json' } }, (response) => {
+      const request = http.request({ hostname: '127.0.0.1', port, path: '/plan', method, headers: contentType ? { 'Content-Type': contentType } : {} }, (response) => {
         let data = ''
         response.on('data', (chunk) => { data += chunk })
         response.on('end', () => {
           server.close()
-          try { resolve({ status: response.statusCode, body: JSON.parse(data) }) } catch (error) { reject(error) }
+          try { resolve({ status: response.statusCode, headers: response.headers, body: JSON.parse(data) }) } catch (error) { reject(error) }
         })
       })
       request.on('error', reject)
@@ -184,6 +184,10 @@ test('the shared intelligence route works in bridge, app-proxy, and static-serve
   }
 })
 test('invalid request maps safely', async () => { const result = await callApi(createFroamIntelligenceApi({ provider: providerOf(makePlan()) }), { bad: true }); assert.equal(result.status, 400); assert.equal(result.body.error.code, 'invalid_request') })
+test('method enforcement returns a sanitized 405', async () => { const result = await callApi(createFroamIntelligenceApi(), null, { method: 'GET' }); assert.equal(result.status, 405); assert.equal(result.body.error.code, 'invalid_request') })
+test('JSON content type is required for streamed requests', async () => { const result = await callApi(createFroamIntelligenceApi(), makeMutationRequest(), { contentType: 'text/plain' }); assert.equal(result.status, 415); assert.equal(result.body.error.code, 'invalid_request') })
+test('malformed JSON is sanitized', async () => { const result = await callApi(createFroamIntelligenceApi(), null, { raw: '{bad' }); assert.equal(result.status, 400); assert.equal(result.body.error.code, 'invalid_request') })
+test('intelligence responses expose the bridge CORS contract', async () => { const result = await callApi(createFroamIntelligenceApi(), makeAnalysisRequest('understand')); assert.equal(result.headers['access-control-allow-origin'], '*'); assert.match(result.headers['access-control-allow-methods'], /POST/) })
 test('oversized HTTP request is refused before provider', async () => { let calls = 0; const provider = { id: 'local', privacy: localPrivacy, async plan() { calls++; return makePlan() } }; const raw = JSON.stringify(makeMutationRequest({ intent: 'x'.repeat(FROAM_INTELLIGENCE_MAX_REQUEST_BYTES + 100) })); const result = await callApi(createFroamIntelligenceApi({ provider }), null, { raw }); assert.equal(result.status, 400); assert.equal(calls, 0) })
 test('object provider output crosses a JSON normalization boundary', async () => { const result = await callApi(createFroamIntelligenceApi({ provider: providerOf(makePlan()) }), makeMutationRequest()); assert.equal(result.status, 200) })
 test('unusual object prototype is stripped at provider boundary', async () => { const output = Object.assign(Object.create({ constructor: { polluted: true } }), makePlan()); const result = await callApi(createFroamIntelligenceApi({ provider: providerOf(output) }), makeMutationRequest()); assert.equal(result.status, 200); assert.equal({}.polluted, undefined) })
@@ -212,8 +216,11 @@ test('compatible provider sends a bounded generic chat request', async () => {
   const provider = createOpenAICompatibleProvider({ baseUrl: 'https://compatible.test/v1', apiKey: 'server-key', model: 'model-x', fetchImpl: compatibleFetch({ choices: [{ message: { content: JSON.stringify(makePlan()) } }] }, 200, (url, init) => { captured = { url, init } }) })
   const output = await provider.plan({ ...makeMutationRequest(), consent: true })
   const sent = JSON.parse(captured.init.body)
-  assert.equal(captured.url, 'https://compatible.test/v1/chat/completions'); assert.equal(captured.init.headers.Authorization, 'Bearer server-key'); assert.ok(!sent.messages[1].content.includes('server-key')); assert.ok(!sent.messages[1].content.includes('consent')); assert.equal(typeof output, 'string')
+  assert.equal(captured.url, 'https://compatible.test/v1/chat/completions'); assert.equal(captured.init.headers.Authorization, 'Bearer server-key'); assert.ok(!sent.messages[1].content.includes('server-key')); assert.ok(!sent.messages[1].content.includes('consent')); assert.equal('response_format' in sent, false); assert.equal(typeof output, 'string')
 })
+test('two compatible provider configurations use only the claimed wire contract', async () => { const seen = []; for (const config of [{ baseUrl: 'https://one.test/v1', model: 'model-a' }, { baseUrl: 'http://127.0.0.1:11434/v1/', model: 'local-model' }]) { const provider = createOpenAICompatibleProvider({ ...config, apiKey: 'server-only', fetchImpl: compatibleFetch({ choices: [{ message: { content: JSON.stringify(makePlan()) } }] }, 200, (url, init) => seen.push({ url, body: JSON.parse(init.body) })) }); await provider.plan(makeMutationRequest()) }; assert.deepEqual(seen.map((item) => item.url), ['https://one.test/v1/chat/completions', 'http://127.0.0.1:11434/v1/chat/completions']); assert.deepEqual(seen.map((item) => item.body.model), ['model-a', 'local-model']) })
+test('compatible provider timeout is bounded and sanitized by the API', async () => { const provider = createOpenAICompatibleProvider({ baseUrl: 'https://slow.test/v1', apiKey: 'server-only', model: 'slow', timeout: 5, fetchImpl: (_url, init) => new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('private timeout detail')), { once: true })) }); const result = await callApi(createFroamIntelligenceApi({ provider }), { ...makeMutationRequest(), consent: true }); assert.equal(result.status, 502); assert.equal(result.body.error.code, 'provider_unavailable'); assert.equal(JSON.stringify(result.body).includes('private timeout detail'), false) })
+test('compatible provider respects a caller AbortSignal', async () => { const controller = new AbortController(); const provider = createOpenAICompatibleProvider({ baseUrl: 'https://slow.test/v1', apiKey: 'server-only', model: 'slow', timeout: 30_000, fetchImpl: (_url, init) => new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted upstream')), { once: true })) }); const pending = provider.plan(makeMutationRequest(), { signal: controller.signal }); controller.abort(); await assert.rejects(pending, (error) => error.message === 'aborted') })
 test('compatible provider rejects non-2xx without exposing body', async () => { const provider = createOpenAICompatibleProvider({ baseUrl: 'https://compatible.test', apiKey: 'key', model: 'm', fetchImpl: compatibleFetch('sk-leak', 500) }); await assert.rejects(provider.plan(makeMutationRequest()), (error) => error.message === 'http_status' && !error.message.includes('sk-leak')) })
 test('compatible provider maps network failure', async () => { const provider = createOpenAICompatibleProvider({ baseUrl: 'https://compatible.test', apiKey: 'key', model: 'm', fetchImpl: async () => { throw new Error('network secret') } }); await assert.rejects(provider.plan(makeMutationRequest()), (error) => error.message === 'network') })
 test('compatible provider rejects invalid JSON envelope', async () => { const provider = createOpenAICompatibleProvider({ baseUrl: 'https://compatible.test', apiKey: 'key', model: 'm', fetchImpl: compatibleFetch('{bad') }); await assert.rejects(provider.plan(makeMutationRequest()), (error) => error.message === 'invalid_envelope') })

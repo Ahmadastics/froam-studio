@@ -83,7 +83,10 @@ export function assembleFroamIntelligenceRequest(
   // Neighbour scans are bounded context, not mutation scope.
   const scanRecords: FroamScanRecord[] = [
     ...(selectionEvidence?.scan ? [selectionEvidence.scan] : []),
-    ...Object.values(state.scans),
+    // A fresh live observation is the authoritative, bounded source. Avoid a
+    // project-wide scan in the interactive Ask Froam path; older projects can
+    // still fall back to persisted records when no observation was supplied.
+    ...(!selectionEvidence?.scan ? Object.values(state.scans) : []),
   ]
     .filter((record, index, all) => evidenceIds.has(record.node.nodeId) && all.findIndex((candidate) => candidate.id === record.id) === index)
     .sort((a, b) => b.capturedAt - a.capturedAt)
@@ -106,7 +109,7 @@ export function assembleFroamIntelligenceRequest(
 
   const relationships = [
     ...(selectionEvidence?.relationships ?? []),
-    ...Object.values(state.relations),
+    ...(!selectionEvidence?.relationships ? Object.values(state.relations) : []),
   ].filter((relation, index, all) => evidenceIds.has(relation.from) || evidenceIds.has(relation.to)
     ? all.findIndex((candidate) => candidate.id === relation.id) === index
     : false).slice(0, MAX_RELATIONSHIPS)

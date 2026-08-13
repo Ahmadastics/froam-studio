@@ -1,6 +1,6 @@
 {
   "name": "froam-studio",
-  "version": "8.0.5",
+  "version": "8.1.0",
   "description": "Froam Studio — Figma-style visual editor for ANY project (Vite, Next, static HTML, anything that serves a page). Every edit compiles to committable files in your repo.",
   "author": "Ahmad Modibbo <ahmadnuhu14@gmail.com>",
   "license": "MIT",
@@ -68,11 +68,12 @@
     "build": "node scripts/clean.mjs && tsc -p tsconfig.json && node scripts/fix-js-extensions.mjs && node scripts/copy-assets.mjs && node scripts/build-standalone.mjs",
     "build:standalone": "node scripts/build-standalone.mjs",
     "clean": "node scripts/clean.mjs",
-    "test": "node scripts/test-oplog.mjs && node scripts/test-project.mjs && node scripts/test-project-sync.mjs && node scripts/test-committer.mjs && node scripts/test-rooms.mjs && node scripts/test-room-client.mjs && node scripts/test-editor-shell.mjs && node scripts/test-intelligence.mjs && node scripts/test-reference-intelligence.mjs && node scripts/test-froam-intent.mjs",
+    "test": "node scripts/test-oplog.mjs && node scripts/test-project.mjs && node scripts/test-project-sync.mjs && node scripts/test-committer.mjs && node scripts/test-rooms.mjs && node scripts/test-room-client.mjs && node scripts/test-editor-shell.mjs && node scripts/test-intelligence.mjs && node scripts/test-reference-intelligence.mjs && node scripts/test-froam-intent.mjs && node scripts/test-reference-build.mjs",
     "benchmark:v7.1": "node scripts/benchmark-intelligence.mjs",
     "benchmark:v7.2": "node scripts/benchmark-intelligence.mjs",
     "benchmark:v8": "node scripts/benchmark-intelligence.mjs && node scripts/benchmark-storage-worker.mjs && node scripts/benchmark-reference-intelligence.mjs",
     "benchmark:reference": "node scripts/benchmark-reference-intelligence.mjs",
+    "benchmark:reference-build": "node scripts/benchmark-reference-build.mjs",
     "profile:memory:v8": "node --expose-gc scripts/profile-memory-v8.mjs",
     "evaluate:screenshots": "node scripts/evaluate-screenshot-corpus.mjs"
   },

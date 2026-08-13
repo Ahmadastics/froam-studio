@@ -1,4 +1,5 @@
 import { looksLikeNaturalLanguageIntent } from '../project/intelligence-context'
+import type { FroamReferenceBuildValidation } from '../project/reference-build'
 
 export const FROAM_INTENT_MAX_ATTEMPTS = 3
 export type FroamIntentOrigin = 'command-palette' | 'reference' | 'responsive' | 'contextual'
@@ -17,6 +18,7 @@ export type FroamIntentSession = {
   changeCount?: number
   rationale?: string
   changeSummaries?: string[]
+  referenceValidation?: FroamReferenceBuildValidation
 }
 export type FroamIntentState = { phase: FroamIntentPhase; session: FroamIntentSession | null; message: string | null }
 export const initialFroamIntentState: FroamIntentState = { phase: 'idle', session: null, message: null }
@@ -27,7 +29,7 @@ export type FroamIntentEvent =
   | { type: 'request' }
   | { type: 'plan-ready' }
   | { type: 'create-prototype' }
-  | { type: 'preview'; prototypeBranchId: string; prototypeName: string; changeCount: number; rationale?: string; changeSummaries: string[] }
+  | { type: 'preview'; prototypeBranchId: string; prototypeName: string; changeCount: number; rationale?: string; changeSummaries: string[]; referenceValidation?: FroamReferenceBuildValidation }
   | { type: 'adopt' }
   | { type: 'retry' }
   | { type: 'complete'; message: string }
@@ -42,9 +44,9 @@ export function froamIntentReducer(state: FroamIntentState, event: FroamIntentEv
   if (event.type === 'request') return allows(state.phase, ['preparing', 'awaiting-consent', 'retrying']) ? { ...state, phase: 'requesting', message: null } : state
   if (event.type === 'plan-ready') return state.phase === 'requesting' ? { ...state, phase: 'plan-ready', message: null } : state
   if (event.type === 'create-prototype') return state.phase === 'plan-ready' ? { ...state, phase: 'creating-prototype', message: null } : state
-  if (event.type === 'preview') return state.phase === 'creating-prototype' && state.session ? { phase: 'previewing', message: null, session: { ...state.session, prototypeBranchId: event.prototypeBranchId, prototypeName: event.prototypeName, changeCount: event.changeCount, rationale: event.rationale, changeSummaries: event.changeSummaries } } : state
+  if (event.type === 'preview') return state.phase === 'creating-prototype' && state.session ? { phase: 'previewing', message: null, session: { ...state.session, prototypeBranchId: event.prototypeBranchId, prototypeName: event.prototypeName, changeCount: event.changeCount, rationale: event.rationale, changeSummaries: event.changeSummaries, referenceValidation: event.referenceValidation } } : state
   if (event.type === 'adopt') return state.phase === 'previewing' ? { ...state, phase: 'adopting', message: null } : state
-  if (event.type === 'retry') return (state.phase === 'previewing' || state.phase === 'error') && state.session && state.session.attempt < state.session.maxAttempts ? { phase: 'retrying', message: null, session: { ...state.session, attempt: state.session.attempt + 1, prototypeBranchId: undefined, prototypeName: undefined, changeCount: undefined, rationale: undefined, changeSummaries: undefined } } : state
+  if (event.type === 'retry') return (state.phase === 'previewing' || state.phase === 'error') && state.session && state.session.attempt < state.session.maxAttempts ? { phase: 'retrying', message: null, session: { ...state.session, attempt: state.session.attempt + 1, prototypeBranchId: undefined, prototypeName: undefined, changeCount: undefined, rationale: undefined, changeSummaries: undefined, referenceValidation: undefined } } : state
   if (event.type === 'complete') return state.session ? { ...state, phase: 'completed', message: event.message } : state
   if (event.type === 'fail') return state.phase === 'idle' ? { phase: 'error', session: null, message: event.message } : { ...state, phase: 'error', message: event.message }
   return state

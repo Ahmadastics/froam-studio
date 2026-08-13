@@ -1,3 +1,4 @@
+import type { FroamReferenceBuildValidation } from '../project/reference-build';
 export declare const FROAM_INTENT_MAX_ATTEMPTS = 3;
 export type FroamIntentOrigin = 'command-palette' | 'reference' | 'responsive' | 'contextual';
 export type FroamIntentPhase = 'idle' | 'preparing' | 'awaiting-consent' | 'requesting' | 'plan-ready' | 'creating-prototype' | 'previewing' | 'adopting' | 'retrying' | 'error' | 'completed';
@@ -15,6 +16,7 @@ export type FroamIntentSession = {
     changeCount?: number;
     rationale?: string;
     changeSummaries?: string[];
+    referenceValidation?: FroamReferenceBuildValidation;
 };
 export type FroamIntentState = {
     phase: FroamIntentPhase;
@@ -40,6 +42,7 @@ export type FroamIntentEvent = {
     changeCount: number;
     rationale?: string;
     changeSummaries: string[];
+    referenceValidation?: FroamReferenceBuildValidation;
 } | {
     type: 'adopt';
 } | {

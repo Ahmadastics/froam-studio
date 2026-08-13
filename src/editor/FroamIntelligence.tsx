@@ -159,7 +159,7 @@ export default function FroamIntelligence(props: Props) {
   const suggestions = responsiveSuggestions(latestScans, state.responsive, cinemaWidth)
   return <>
     <aside className="froam-intelligence" data-chef-editor-root="true">
-      <header><div><strong>Froam Intelligence</strong><small>v7 · understands locally</small></div><button type="button" aria-label="Close Froam Intelligence" onClick={() => { props.onPreviewWidth(null); props.onClose() }}><X size={15} /></button></header>
+      <header><div><strong>Understand</strong><small>Local interface evidence</small></div><button type="button" aria-label="Close Understand tools" onClick={() => { props.onPreviewWidth(null); props.onClose() }}><X size={15} /></button></header>
       <nav>{tabs.map(([id, label, Icon]) => <button type="button" key={id} className={tab === id ? 'is-active' : ''} title={label} onClick={() => { if (tab === 'responsive') props.onPreviewWidth(null); setTab(id) }}><Icon size={14} /><span>{label}</span></button>)}</nav>
       <div className="froam-intelligence__journey"><span>Observe</span><i>→</i><span>Understand</span><i>→</i><span>Explain</span><i>→</i><span>Act</span></div>
       <main>

@@ -175,6 +175,14 @@ html[data-froam-touch] [contenteditable='true'] {
   display: none;
 }
 
+.froam-figma-layout.is-mobile .froam-tb__mobile-command {
+  display: grid;
+  min-width: 40px;
+  min-height: 40px;
+  color: var(--fs-accent);
+  background: rgba(94, 234, 212, 0.1);
+}
+
 /* Left panel (Plan / Layers) becomes a slide-over drawer */
 .froam-figma-layout.is-mobile .froam-figma-left {
   position: fixed;

@@ -155,7 +155,7 @@ export default function FroamLayersPanel({
       <div className="froam-lp__header" data-chef-editor-root="true">
         <div className="froam-lp__header-title">
           <Layers size={14} />
-          <span>Outline</span>
+          <span>Layers</span>
         </div>
         <button
           type="button"

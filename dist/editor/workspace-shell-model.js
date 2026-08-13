@@ -20,7 +20,7 @@ export const FROAM_WORKSPACE_SECTIONS = [
     { id: 'attention', mode: 'understand', label: 'Attention', description: 'Estimate probable visual focus', maturity: 'experimental', aliases: ['heatmap'] },
     { id: 'rhythm', mode: 'understand', label: 'Rhythm', description: 'Inspect compositional repetition', maturity: 'experimental' },
     { id: 'responsive', mode: 'understand', label: 'Responsive', description: 'Priority metadata and Breakpoint Cinema', maturity: 'beta', temporalOwner: 'breakpoint-cinema', aliases: ['breakpoint cinema'] },
-    { id: 'laboratory', mode: 'experiment', label: 'Laboratory', description: 'Configure independently flagged experiments', maturity: 'experimental', aliases: ['labs', 'flags'] },
+    { id: 'laboratory', mode: 'experiment', label: 'Experiments', description: 'Configure independently flagged experiments', maturity: 'experimental', aliases: ['laboratory', 'labs', 'flags'] },
     { id: 'mutate', mode: 'experiment', label: '☣ MUTATE', description: 'Fork an alternate prototype reality', maturity: 'experimental', requiresSelection: true, labFlag: 'mutate' },
     { id: 'sample', mode: 'experiment', label: '◉ SAMPLE', description: 'Record observable interaction behavior', maturity: 'experimental', requiresSelection: true, labFlag: 'uiSampling', temporalOwner: 'sampling' },
     { id: 'interactions', mode: 'experiment', label: 'Interactions', description: 'Browse and edit portable recipes', maturity: 'experimental', labFlag: 'interactionLibrary' },

@@ -3,6 +3,7 @@ import { type FroamIntelligenceConsent } from './intelligence-consent';
 export declare const FROAM_REFERENCE_CONSENT_KEY = "froam-intelligence-consent-v1";
 export declare const FROAM_REFERENCE_ACCEPTED_TYPES: readonly ["image/png", "image/jpeg", "image/webp"];
 export declare const FROAM_REFERENCE_MAX_PIXELS = 20000000;
+export declare const FROAM_REFERENCE_MAX_REFERENCES = 20;
 export type FroamReferenceConsent = FroamIntelligenceConsent;
 export declare function validateReferenceFile(input: {
     type: string;

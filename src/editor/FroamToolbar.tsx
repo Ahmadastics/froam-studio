@@ -149,6 +149,9 @@ export default function FroamToolbar({
         </button>
         <div className="froam-tb__sep" />
         <span className="froam-tb__route froam-tb__desktop-only">{routeKey}</span>
+        <button type="button" className="froam-tb__icon-btn froam-tb__mobile-command" onClick={onCommandPalette} title="Ask Froam or run a command" aria-label="Ask Froam or run a command" data-chef-editor-root="true">
+          <Command size={16} />
+        </button>
       </div>
 
       {/* Center: Tools */}

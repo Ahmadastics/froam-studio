@@ -1,15 +1,8 @@
 # Froam Studio
 
-> **8.0.1 — Froam Workspace:** Create / Understand / Experiment now organize the
-> existing live editor, Intelligence and Interface Laboratory around one canvas,
-> with explicit project/prototype context, native presence and temporal ownership.
-> Project schema remains v2. See `docs/FROAM_V8_EDITOR_SHELL.md`.
->
-> **8.0.0 — Interface Laboratory:** protected branch-isolated MUTATE, portable
-> Interaction recipes, observable Sampling, deterministic Physics and Gravity,
-> isolated Chaos, research Synthetic UX, UI Sound and real-project Trailer
-> storyboards in one independently flagged Laboratory. Worker-backed exact
-> project saves improve responsiveness; Rooms and path-based output are unchanged.
+> **8.1.0 — Froam Workspace:** Build and Reference share the live editor with
+> direct design tools, local interface understanding and protected experiments.
+> Project schema remains v2; Repo Mode and path-based output are unchanged.
 
 [![CI](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-14b8a0.svg)](LICENSE)
@@ -44,6 +37,33 @@ animated version, hand-built as SVG so it moves inline: GitHub strips scripts
 from READMEs, so canvas and WebGL are off the table there.
 
 ## ✨ What's new
+
+**Unified Froam workflow.** Build organizes pages, composition and reusable
+components. Reference accepts up to 20 PNG, JPEG or WebP screenshots, compares
+observable layout evidence across viewports, and can reconstruct a protected
+responsive candidate on an explicitly selected element or page. Screenshots do
+not expose original source code, assets, component boundaries or exact
+breakpoints, so Froam labels results as Observed or Inferred rather than claiming
+an exact clone.
+
+**Ask Froam.** Natural-language intent is available through the existing command
+palette when a stable element is selected. Any proposed change is validated into
+ordinary Froam operations on an isolated prototype. The user chooses **Keep**,
+**Try again**, or **Cancel**; Froam never keeps or publishes automatically.
+Deterministic editing, Build, Reference analysis, Save and Repo Mode continue to
+work when remote intelligence is unconfigured.
+
+Remote interpretation is optional and requires explicit consent. It receives a
+bounded request containing the intent, project/branch/route/viewport identifiers,
+selected-node Scan and DNA summaries, nearby relationships, responsive evidence,
+Reference summaries, constraints and bounded project memory. It does not receive
+credentials, cookies, local storage, repository source, arbitrary files or raw
+screenshot pixels through the intelligence JSON route. Configure a compatible
+server-side provider with `FROAM_AI_API_KEY`, `FROAM_AI_MODEL` and
+`FROAM_AI_BASE_URL`; never expose these values in browser configuration.
+
+All adopted results remain framework-independent Froam project state and compile
+through the same Save to Repo path used by ordinary editing.
 
 **7.1.0 — Intelligence Hardening.** Screenshot → Live UI now supports
 multi-reference metadata, injectable local OCR, stable reconstruction IDs,

@@ -16,11 +16,11 @@ export function froamIntentReducer(state, event) {
     if (event.type === 'create-prototype')
         return state.phase === 'plan-ready' ? { ...state, phase: 'creating-prototype', message: null } : state;
     if (event.type === 'preview')
-        return state.phase === 'creating-prototype' && state.session ? { phase: 'previewing', message: null, session: { ...state.session, prototypeBranchId: event.prototypeBranchId, prototypeName: event.prototypeName, changeCount: event.changeCount, rationale: event.rationale, changeSummaries: event.changeSummaries } } : state;
+        return state.phase === 'creating-prototype' && state.session ? { phase: 'previewing', message: null, session: { ...state.session, prototypeBranchId: event.prototypeBranchId, prototypeName: event.prototypeName, changeCount: event.changeCount, rationale: event.rationale, changeSummaries: event.changeSummaries, referenceValidation: event.referenceValidation } } : state;
     if (event.type === 'adopt')
         return state.phase === 'previewing' ? { ...state, phase: 'adopting', message: null } : state;
     if (event.type === 'retry')
-        return (state.phase === 'previewing' || state.phase === 'error') && state.session && state.session.attempt < state.session.maxAttempts ? { phase: 'retrying', message: null, session: { ...state.session, attempt: state.session.attempt + 1, prototypeBranchId: undefined, prototypeName: undefined, changeCount: undefined, rationale: undefined, changeSummaries: undefined } } : state;
+        return (state.phase === 'previewing' || state.phase === 'error') && state.session && state.session.attempt < state.session.maxAttempts ? { phase: 'retrying', message: null, session: { ...state.session, attempt: state.session.attempt + 1, prototypeBranchId: undefined, prototypeName: undefined, changeCount: undefined, rationale: undefined, changeSummaries: undefined, referenceValidation: undefined } } : state;
     if (event.type === 'complete')
         return state.session ? { ...state, phase: 'completed', message: event.message } : state;
     if (event.type === 'fail')

@@ -1,6 +1,8 @@
 import { type Dispatch, type SetStateAction } from 'react';
 import type { EditorStore, FroamViewport } from '../collab/types';
 import { requestIntelligencePlan } from '../project/bridge';
+import { type FroamReferenceBuildPlan, type FroamReferenceBuildTarget, type FroamReferenceBuildValidation } from '../project/reference-build';
+import type { FroamReferenceUnderstanding } from '../project/reference-intelligence';
 import type { FroamNodeRegistry } from '../project/node-registry';
 import type { FroamIntelligenceResponse, FroamIntelligenceNotConfiguredResponse } from '../project/intelligence-transport';
 import type { FroamProjectDocument } from '../project/types';
@@ -26,6 +28,7 @@ type Props = {
     onCommitStore: (store: EditorStore) => void;
     onActivityChange: (activity: Activity) => void;
     onToast: (message: string) => void;
+    onValidateReference?: (plan: FroamReferenceBuildPlan, signal: AbortSignal) => Promise<FroamReferenceBuildValidation>;
     request?: (request: Parameters<typeof requestIntelligencePlan>[0], signal: AbortSignal) => Promise<FroamIntelligenceResponse | FroamIntelligenceNotConfiguredResponse>;
 };
 export declare function useFroamIntent(props: Props): {
@@ -33,6 +36,11 @@ export declare function useFroamIntent(props: Props): {
     submit: (input: {
         origin: FroamIntentOrigin;
         intent: string;
+    }) => Promise<void>;
+    submitReference: (input: {
+        understanding: FroamReferenceUnderstanding;
+        target: FroamReferenceBuildTarget;
+        intent?: string;
     }) => Promise<void>;
     allow: () => void;
     notNow: () => void;

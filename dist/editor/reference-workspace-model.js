@@ -2,6 +2,7 @@ import { FROAM_INTELLIGENCE_CONSENT_KEY, readFroamIntelligenceConsent, writeFroa
 export const FROAM_REFERENCE_CONSENT_KEY = FROAM_INTELLIGENCE_CONSENT_KEY;
 export const FROAM_REFERENCE_ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 export const FROAM_REFERENCE_MAX_PIXELS = 20_000_000;
+export const FROAM_REFERENCE_MAX_REFERENCES = 20;
 export function validateReferenceFile(input) {
     if (!FROAM_REFERENCE_ACCEPTED_TYPES.includes(input.type))
         return { valid: false, reason: 'Use a PNG, JPEG or WebP screenshot' };

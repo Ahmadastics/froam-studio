@@ -1,0 +1,22 @@
+.froam-reference__build {
+  display: grid;
+  gap: 8px;
+  margin: 0 10px 14px;
+  padding: 11px;
+  border: 1px solid rgba(125, 243, 225, .24);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(125, 243, 225, .08), rgba(165, 180, 252, .045));
+}
+.froam-reference__build header { display: flex; align-items: end; justify-content: space-between; gap: 10px; }
+.froam-reference__build header div { display: grid; }
+.froam-reference__build header span { color: #7df3e1; font-size: 8px; text-transform: uppercase; letter-spacing: .1em; }
+.froam-reference__build header em { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c7d2fe; font-size: 9px; font-style: normal; }
+.froam-reference__build p { margin: 0; color: var(--fs-text-secondary); font-size: 9px; }
+.froam-reference__build small { color: var(--fs-text-tertiary); font-size: 8px; }
+.froam-reference__build > button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; border: 1px solid #7df3e155; border-radius: 7px; background: #7df3e119; color: #b7fff4; font-weight: 700; }
+.froam-reference__build > button:disabled { opacity: .5; cursor: wait; }
+.froam-intent-result__scorecard { display: grid; gap: 5px; padding: 8px; border-radius: 8px; background: rgba(125, 243, 225, .055); }
+.froam-intent-result__scorecard > strong { margin-top: 2px; color: #b7fff4; font-size: 9px; }
+.froam-intent-result__scorecard span { display: flex; justify-content: space-between; gap: 8px; text-transform: capitalize; }
+.froam-intent-result__scorecard em { color: #c7d2fe; font-size: 9px; font-style: normal; }
+.froam-intent-result__scorecard small { color: var(--fs-text-tertiary, #94a3b8); }

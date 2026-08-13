@@ -12,7 +12,7 @@ function percentile(values, fraction) { const sorted = [...values].sort((a, b) =
 function measure(run, iterations = 20) { const values = []; let last; for (let index = 0; index < iterations; index += 1) { const started = performance.now(); last = run(); values.push(performance.now() - started) } return { p50: percentile(values, .5), p95: percentile(values, .95), last } }
 
 console.log('Reference intelligence benchmark (48 regions/reference, milliseconds)')
-for (const count of [3, 6, 12]) {
+for (const count of [3, 6, 12, 20]) {
   const input = fixture(count); let understanding = analyzeReferenceReconstructions(input.set, input.reconstructions)
   const orchestration = measure(() => analyzeReferenceReconstructions(input.set, input.reconstructions), 15); understanding = orchestration.last
   const matching = measure(() => { for (let index = 1; index < input.reconstructions.length; index += 1) matchScreenshotRegions(input.reconstructions[index - 1], input.reconstructions[index]) }, 20)

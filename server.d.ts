@@ -224,7 +224,7 @@ export type FroamIntelligenceProvider = {
     sendsCredentials: false
     dataDescription: string
   }
-  plan(request: FroamIntelligenceRequest): Promise<string | Record<string, unknown>>
+  plan(request: FroamIntelligenceRequest, options?: { signal?: AbortSignal }): Promise<string | Record<string, unknown>>
 }
 
 /**
