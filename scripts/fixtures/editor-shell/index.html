@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Froam editor shell fixture</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; color: #e5e7eb; background: #07090d; font: 16px/1.5 Inter, system-ui, sans-serif; }
+      main { min-height: 100vh; overflow: hidden; }
+      nav { display: flex; justify-content: space-between; align-items: center; padding: 24px 5vw; }
+      nav div { display: flex; gap: 24px; }
+      nav a { color: #aeb8c6; text-decoration: none; }
+      .hero { min-height: 460px; display: grid; grid-template-columns: 1.1fr .9fr; align-items: center; gap: 56px; padding: 64px 7vw; }
+      .hero h1 { max-width: 680px; margin: 0 0 18px; font-size: clamp(48px, 7vw, 96px); line-height: .96; }
+      .hero p { max-width: 560px; color: #9ca3af; }
+      .media { aspect-ratio: 4/3; border: 1px solid #2a3442; border-radius: 28px; background: radial-gradient(circle at 30% 20%, #194b49, #111827 60%); }
+      .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; padding: 32px 7vw 96px; }
+      .cards article { min-height: 160px; padding: 24px; border: 1px solid #202936; border-radius: 18px; background: #0d1118; }
+      @media (max-width: 820px) { .hero { grid-template-columns: 1fr; } .cards { grid-template-columns: repeat(2, 1fr); } nav div { display: none; } }
+      @media (max-width: 520px) { .cards { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <main data-froam-root>
+      <nav><strong>Northstar</strong><div><a href="#work">Work</a><a href="#about">About</a><a href="#contact">Contact</a></div><button>Menu</button></nav>
+      <section class="hero"><div><h1>Make the interface explain itself.</h1><p>A deterministic shell fixture for Build, Reference, Blueprint and Layers.</p><button>Start a project</button></div><div class="media" aria-label="Abstract project preview"></div></section>
+      <section class="cards" id="work"><article>Research</article><article>Structure</article><article>Responsive</article><article>Validate</article></section>
+    </main>
+    <script>
+      const fixtureParams = new URLSearchParams(location.search)
+      if (fixtureParams.has('reference')) {
+        localStorage.setItem('froam-workspace-shell-v1', JSON.stringify({
+          mode: 'understand',
+          sections: { create: 'design', understand: 'reference', experiment: 'laboratory' },
+          advancedOpen: false,
+        }))
+      }
+      if (fixtureParams.has('intent')) {
+        localStorage.setItem('froam-workspace-shell-v1', JSON.stringify({
+          mode: 'create',
+          sections: { create: 'design', understand: 'reference', experiment: 'laboratory' },
+          advancedOpen: false,
+        }))
+        localStorage.setItem('froam-intelligence-consent-v1', 'allowed')
+        const fixtureFetch = window.fetch.bind(window)
+        let fixtureAttempt = 0
+        window.fetch = async (input, init) => {
+          if (String(input).includes('/__froam/intelligence/plan')) {
+            const request = JSON.parse(String(init?.body || '{}'))
+            fixtureAttempt += 1
+            const selectedNodeId = request.context?.selectedNodeId
+            const captured = request.context?.dna?.[selectedNodeId] || {
+              schemaVersion: 1,
+              nodeId: selectedNodeId,
+              capturedAt: Date.now(),
+              visual: {},
+              layout: {},
+            }
+            const retried = Boolean(request.priorAttemptFeedback)
+            const boxShadow = retried
+              ? '0 0 0 3px rgb(125, 243, 225)'
+              : '0 16px 40px rgba(0, 0, 0, 0.45)'
+            return new Response(JSON.stringify({
+              schemaVersion: 1,
+              purpose: 'mutate',
+              requestId: request.requestId,
+              provider: 'fixture-provider',
+              proposals: [{
+                type: 'dna.captured',
+                domain: 'visual',
+                targetIds: [selectedNodeId],
+                confidence: 0.92,
+                rationale: retried ? 'Use a crisp luminous edge.' : 'Increase depth with a restrained shadow.',
+                payload: {
+                  dna: {
+                    ...captured,
+                    schemaVersion: 1,
+                    nodeId: selectedNodeId,
+                    capturedAt: Date.now(),
+                    visual: { ...(captured.visual || {}), boxShadow },
+                  },
+                },
+              }],
+              rationale: 'Strengthen hierarchy while preserving the selected element dimensions.',
+              confidence: 0.92,
+              warnings: [],
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+          }
+          return fixtureFetch(input, init)
+        }
+      }
+    </script>
+    <script src="/froam.js?task4=5" data-open="true" defer></script>
+  </body>
+</html>

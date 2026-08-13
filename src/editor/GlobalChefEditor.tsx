@@ -113,6 +113,10 @@ import FroamNotePins from './FroamNotePins'
 import FroamPresenceLayer from './FroamPresenceLayer'
 import FroamConnectedCanvas, { type FroamConnectedCanvasTab } from './FroamConnectedCanvas'
 import FroamIntelligence, { type FroamIntelligenceTab } from './FroamIntelligence'
+import FroamReferenceWorkspace from './FroamReferenceWorkspace'
+import FroamIntentResult from './FroamIntentResult'
+import { useFroamIntent } from './useFroamIntent'
+import { shouldOfferAskFroam } from './froam-intent-model'
 import FroamLabs, { type FroamLab } from './FroamLabs'
 import FroamWorkspaceShell from './FroamWorkspaceShell'
 import FroamUICustomizer from './FroamUICustomizer'
@@ -122,7 +126,6 @@ import { readFroamLabsFlags, writeFroamLabsFlags } from '../project/experiments'
 import { appendProjectEvents, createProjectEvent, deriveBranchState, switchProjectBranch } from '../project/event-log'
 import { sitePlanGraphRecords, type LegacySitePage } from '../project/adapters'
 import { useFroamProjectDocument } from './useFroamProjectDocument'
-import type { FroamScreenshotRegion } from '../project/screenshot-reconstruction'
 import FroamRoomChat from './FroamRoomChat'
 import { diffStores, type FroamChange } from '../collab/oplog'
 import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist'
@@ -144,7 +147,7 @@ import {
   isFroamPersonaPath,
 } from './froamPersona'
 
-const intelligenceTabs: Partial<Record<FroamWorkspaceSection, FroamIntelligenceTab>> = { scan: 'scan', dna: 'dna', archive: 'archive', archaeology: 'archaeology', flow: 'flow', attention: 'attention', rhythm: 'rhythm', responsive: 'responsive', screenshot: 'screenshot' }
+const intelligenceTabs: Partial<Record<FroamWorkspaceSection, FroamIntelligenceTab>> = { scan: 'scan', dna: 'dna', archive: 'archive', archaeology: 'archaeology', flow: 'flow', attention: 'attention', rhythm: 'rhythm', responsive: 'responsive' }
 const labTabs: Partial<Record<FroamWorkspaceSection, FroamLab>> = { laboratory: 'overview', mutate: 'mutate', sample: 'sample', interactions: 'interactions', 'interactions-create': 'interactions', physics: 'physics', gravity: 'physics', break: 'break', 'test-user': 'user', sound: 'sound', trailer: 'trailer', reality: 'reality' }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1705,25 +1708,29 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [workspacePreference, setWorkspacePreference] = useState(() => readWorkspacePreference(typeof localStorage === 'undefined' ? undefined : localStorage))
   const [uiPreference, setUIPreference] = useState(() => readFroamUIPreference(typeof localStorage === 'undefined' ? undefined : localStorage))
   const [uiCustomizerOpen, setUICustomizerOpen] = useState(false)
-  const [leftWorkspaceMode, setLeftWorkspaceMode] = useState<'plan' | 'layers'>(() => workspacePreference.sections.create === 'layers' ? 'layers' : 'plan')
+  const [leftWorkspaceMode, setLeftWorkspaceMode] = useState<'plan' | 'reference' | 'layers'>(() => workspacePreference.sections.understand === 'reference' ? 'reference' : workspacePreference.sections.understand === 'layers' ? 'layers' : 'plan')
   // v4: phone-first editing — compact chrome on small viewports, touch behaviors on coarse pointers
   const isMobileUI = useMediaQuery(MOBILE_UI_QUERY)
   const isTouchDevice = useMediaQuery(COARSE_POINTER_QUERY)
   const [sheetDetent, setSheetDetent] = useState<SheetDetent>('peek')
-  const [leftPanelOpen, setLeftPanelOpen] = useState(() => !matchesMedia(MOBILE_UI_QUERY) && workspacePreference.mode === 'create')
+  const [leftPanelOpen, setLeftPanelOpen] = useState(() => (
+    workspacePreference.mode === 'understand' && (workspacePreference.sections.understand === 'reference' || workspacePreference.sections.understand === 'layers')
+  ) || (!matchesMedia(MOBILE_UI_QUERY) && workspacePreference.mode === 'create'))
   const [rightPanelOpen, setRightPanelOpen] = useState(() => workspacePreference.mode === 'create')
   const [studioMinimized, setStudioMinimized] = useState(false)
   const [scanActive, setScanActive] = useState(false)
   const [blueprintOpen, setBlueprintOpen] = useState(false)
   const [connectedCanvasOpen, setConnectedCanvasOpen] = useState(false)
-  const [intelligenceOpen, setIntelligenceOpen] = useState(() => workspacePreference.mode === 'understand')
+  const [intelligenceOpen, setIntelligenceOpen] = useState(() => workspacePreference.mode === 'understand'
+    && workspacePreference.sections.understand !== 'reference'
+    && workspacePreference.sections.understand !== 'layers')
   const [labsOpen, setLabsOpen] = useState(() => workspacePreference.mode === 'experiment')
   const [labsFlags, setLabsFlags] = useState(() => readFroamLabsFlags(typeof localStorage === 'undefined' ? undefined : localStorage))
   const [requestedIntelligenceTab, setRequestedIntelligenceTab] = useState<FroamIntelligenceTab>(() => intelligenceTabs[workspacePreference.sections.understand ?? 'scan'] ?? 'scan')
   const [requestedLab, setRequestedLab] = useState<FroamLab>(() => labTabs[workspacePreference.sections.experiment ?? 'laboratory'] ?? 'overview')
   const [requestedConnectedTab, setRequestedConnectedTab] = useState<FroamConnectedCanvasTab>('replay')
   const [temporalOwner, setTemporalOwner] = useState<FroamTemporalOwner>(null)
-  const [workspaceActivity, setWorkspaceActivity] = useState<'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | null>(null)
+  const [workspaceActivity, setWorkspaceActivity] = useState<'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | 'intent-understanding' | 'intent-creating' | 'intent-applying' | null>(null)
   const [identityDiagnostics, setIdentityDiagnostics] = useState<FroamIdentityDiagnostic[]>([])
   const [frameworkIdentityFinding, setFrameworkIdentityFinding] = useState<FroamFrameworkFinding | null>(null)
   const [tipsReady, setTipsReady] = useState(() => {
@@ -2338,6 +2345,22 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     window.clearTimeout(toastTimerRef.current)
     toastTimerRef.current = window.setTimeout(() => setToastVisible(false), 2200)
   }, [])
+  const froamIntent = useFroamIntent({
+    project: projectSession.project,
+    setProject: projectSession.setProject,
+    actorId: projectActorId,
+    routeKey,
+    viewport: viewportMode,
+    selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null,
+    root: getRoot(),
+    selectedElement: currentSelectionRef.current,
+    registry: nodeRegistryRef.current,
+    onRegistryChange: (registry) => { nodeRegistryRef.current = registry; saveNodeRegistry(registry) },
+    onPreviewStore: previewConnectedCanvas,
+    onCommitStore: materializeConnectedBranch,
+    onActivityChange: setWorkspaceActivity,
+    onToast: showToast,
+  })
 
   function openPersonaEditor() {
     keepStudioPinned()
@@ -3311,18 +3334,46 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     })
   }
 
-  function previewConnectedCanvas(next: EditorStore | null) {
-    applyStoreToDOM(next ?? storeRef.current, { clearCurrent: true })
+  function restoreConnectedCanvasPreview() {
+    const root = getRoot()
+    const originals = connectedPreviewOriginalStylesRef.current
+    if (!root || !originals) return
+    originals.forEach((style, path) => {
+      const element = findElementByPath(root, path)
+      if (!element) return
+      if (style === null) element.removeAttribute('style')
+      else element.setAttribute('style', style)
+    })
+    connectedPreviewOriginalStylesRef.current = null
+  }
+
+  function previewConnectedCanvas(next: EditorStore | null, protectRollback = true) {
+    const target = next ?? storeRef.current
+    restoreConnectedCanvasPreview()
+    if (protectRollback) {
+      const root = getRoot()
+      const originals = new Map<string, string | null>()
+      Object.keys(target[viewportStoreKey] ?? {}).forEach((path) => {
+        if (!root || path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path)) return
+        const element = findElementByPath(root, path)
+        if (element) originals.set(path, element.getAttribute('style'))
+      })
+      connectedPreviewOriginalStylesRef.current = originals
+    }
+    applyStoreToDOM(target, { clearCurrent: true, previousStore: connectedPreviewStoreRef.current ?? storeRef.current })
+    connectedPreviewStoreRef.current = target
   }
 
   function materializeConnectedBranch(next: EditorStore) {
+    restoreConnectedCanvasPreview()
     opLoadingDesignRef.current = true
     opLog.load([])
     opLog.seed(next)
     storeRef.current = next
     setStore(next)
     saveStore(next)
-    applyStoreToDOM(next, { clearCurrent: true })
+    applyStoreToDOM(next, { clearCurrent: true, previousStore: connectedPreviewStoreRef.current ?? storeRef.current })
+    connectedPreviewStoreRef.current = null
     bumpLog()
     updateSelectionsState([])
   }
@@ -3389,28 +3440,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     })
     projectSession.setProject((current) => appendProjectEvents(current, [createProjectEvent({ projectId: current.id, branchId: current.activeBranchId, actorId: projectActorId, clock: Math.max(0, ...current.events.map((event) => event.clock)) + 1, type: 'archive.upserted', payload: { archiveItem: item }, targetIds: [item.nodeId], label: `Archived ${archiveItemKind(item)}: ${item.name}` })]))
     showToast(`${item.name} added to Archive`)
-  }
-
-  function insertScreenshotReconstruction(regions: FroamScreenshotRegion[], width: number, height: number, rootNodeId: string) {
-    const frame = document.createElement('section')
-    frame.setAttribute('data-froam-injected', 'true')
-    frame.setAttribute('data-froam-block', 'true')
-    frame.setAttribute('data-froam-id', rootNodeId)
-    frame.style.cssText = `position:relative;width:100%;max-width:${width}px;aspect-ratio:${width}/${height};overflow:hidden;background:#f8fafc;border:1px solid rgba(15,23,42,.12);margin:24px auto;`
-    for (const region of regions) {
-      const child = document.createElement(region.semanticRole === 'button' ? 'button' : region.semanticRole === 'heading' ? 'h2' : region.kind === 'text' ? 'p' : 'div')
-      child.setAttribute('data-froam-injected', 'true')
-      child.setAttribute('data-froam-id', region.nodeId)
-      child.contentEditable = 'true'
-      child.textContent = region.kind === 'text' ? (region.text ?? '') : ''
-      child.setAttribute('data-froam-ocr-confidence', String(region.textConfidence ?? 0))
-      child.style.cssText = `position:absolute;left:${region.x / width * 100}%;top:${region.y / height * 100}%;width:${region.width / width * 100}%;height:${region.height / height * 100}%;margin:0;overflow:hidden;color:#0f172a;background:${region.averageColor ?? (region.kind === 'container' ? 'rgb(226,232,240)' : 'transparent')};font-size:${region.semanticRole === 'heading' ? '32px' : '16px'};line-height:1.25;`
-      frame.appendChild(child)
-    }
-    placeInsertedNode(frame, 'end')
-    selectInsertedElement(frame)
-    persistLiveRouteSnapshot()
-    return frame
   }
 
   function previewIntelligenceWidth(width: number | null) {
@@ -3590,12 +3619,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       })
   }
 
-  function applyStoreToDOM(targetStore: EditorStore, options: { clearCurrent?: boolean } = {}) {
+  function applyStoreToDOM(targetStore: EditorStore, options: { clearCurrent?: boolean; previousStore?: EditorStore } = {}) {
     const root = getRoot()
     if (!root) return
     const routeDraftsToApply = targetStore[viewportStoreKey] ?? {}
     if (options.clearCurrent) {
-      const previous = store[viewportStoreKey] ?? {}
+      const previous = (options.previousStore ?? store)[viewportStoreKey] ?? {}
       clearDraftsFromDOM(previous)
       // Styles live in the element's style attribute and are cleared above.
       // Text and image swaps were written into the DOM itself, so a draft
@@ -5203,6 +5232,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   /* ─── Refs for stable callbacks (avoids stale closures) ─── */
   const storeRef = useRef(store)
+  const connectedPreviewStoreRef = useRef<EditorStore | null>(null)
+  const connectedPreviewOriginalStylesRef = useRef<Map<string, string | null> | null>(null)
   storeRef.current = store
   const selectionRef = useRef(selection)
   selectionRef.current = selection
@@ -5432,7 +5463,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     setWorkspaceActivity(null)
     setTemporalOwner(null)
     if (mode === 'create') { setIntelligenceOpen(false); setLabsOpen(false); setConnectedCanvasOpen(false); setRightPanelOpen(true) }
-    else if (mode === 'understand') { setLabsOpen(false); setConnectedCanvasOpen(false); setLeftPanelOpen(false); setRightPanelOpen(false); setIntelligenceOpen(true); setRequestedIntelligenceTab(intelligenceTabs[section] ?? 'scan') }
+    else if (mode === 'understand') {
+      setLabsOpen(false); setConnectedCanvasOpen(false); setRightPanelOpen(false)
+      if (section === 'reference' || section === 'layers') { setIntelligenceOpen(false); setLeftPanelOpen(true); setLeftWorkspaceMode(section); if (section === 'layers') { const root = getRoot(); if (root) setLayers(collectLayers(root)) } }
+      else { setLeftPanelOpen(false); setIntelligenceOpen(true); setRequestedIntelligenceTab(intelligenceTabs[section] ?? 'scan') }
+    }
     else { setIntelligenceOpen(false); setConnectedCanvasOpen(false); setLeftPanelOpen(false); setRightPanelOpen(false); setLabsOpen(true); if (labTabs[section]) setRequestedLab(labTabs[section]!) }
   }
 
@@ -5446,11 +5481,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     setLabsOpen(false)
     setConnectedCanvasOpen(false)
     if (section === 'blueprint') { setBlueprintOpen(true); return }
+    if (section === 'reference' || section === 'layers') {
+      setLeftPanelOpen(true); setRightPanelOpen(false); setLeftWorkspaceMode(section)
+      if (section === 'layers') { const root = getRoot(); if (root) setLayers(collectLayers(root)) }
+      return
+    }
     if (mode === 'create') {
-      if (section === 'plan' || section === 'layers') {
+      if (section === 'plan') {
         setLeftPanelOpen(true)
         setLeftWorkspaceMode(section)
-        if (section === 'layers') { const root = getRoot(); if (root) setLayers(collectLayers(root)) }
         return
       }
       if (section === 'animator') { setRequestedConnectedTab('interaction'); setConnectedCanvasOpen(true); return }
@@ -5530,11 +5569,21 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const filteredCommands = commandSearchTerm
     ? paletteCommands.filter((c) => `${c.label} ${c.searchText ?? ''}`.toLowerCase().includes(commandSearchTerm) || FROAM_WORKSPACE_SECTIONS.some((section) => c.id === `workspace:${section.mode}:${section.id}` && workspaceCommandMatches(section, commandSearchTerm)))
     : paletteCommands
+  const askFroamVisible = shouldOfferAskFroam(commandSearch, filteredCommands.length)
+  const commandResultCount = filteredCommands.length + (askFroamVisible ? 1 : 0)
 
   function executePaletteCommand(cmd: PaletteCommand) {
     cmd.action()
     setCommandPaletteOpen(false)
     setCommandSearch('')
+  }
+
+  function executeAskFroam() {
+    const intent = commandSearch.trim()
+    if (!intent || !askFroamVisible) return
+    setCommandPaletteOpen(false)
+    setCommandSearch('')
+    void froamIntent.submit({ origin: 'command-palette', intent })
   }
 
   /* ─── Global toggle shortcut (works even when panel is closed) ─── */
@@ -5812,6 +5861,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           setBlueprintOpen(false)
           selectInsertedElement(el)
         }}
+        onOpenLayers={() => openWorkspaceSection('layers', 'understand')}
       />
 
       {/* Command palette */}
@@ -5829,18 +5879,19 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               className="fs-command-palette__input"
               type="text"
               value={commandSearch}
-              placeholder="Type a command…"
-              aria-label="Search commands, tools, prototypes, and entities"
+              placeholder="Type a command or ask Froam…"
+              aria-label="Search commands or ask Froam"
               role="combobox"
               aria-controls="froam-command-results"
               aria-expanded="true"
-              aria-activedescendant={filteredCommands[commandFocusIndex] ? `froam-command-${filteredCommands[commandFocusIndex].id}` : undefined}
+              aria-activedescendant={filteredCommands[commandFocusIndex] ? `froam-command-${filteredCommands[commandFocusIndex].id}` : askFroamVisible && commandFocusIndex === 0 ? 'froam-command-ask' : undefined}
               autoFocus
               onChange={(e) => { setCommandSearch(e.target.value); setCommandFocusIndex(0) }}
               onKeyDown={(e) => {
-                if (e.key === 'ArrowDown') { e.preventDefault(); setCommandFocusIndex((i) => Math.min(i + 1, filteredCommands.length - 1)) }
+                if (e.key === 'ArrowDown') { e.preventDefault(); setCommandFocusIndex((i) => Math.min(i + 1, Math.max(0, commandResultCount - 1))) }
                 if (e.key === 'ArrowUp') { e.preventDefault(); setCommandFocusIndex((i) => Math.max(i - 1, 0)) }
                 if (e.key === 'Enter' && filteredCommands[commandFocusIndex]) { executePaletteCommand(filteredCommands[commandFocusIndex]) }
+                else if (e.key === 'Enter' && askFroamVisible) executeAskFroam()
                 if (e.key === 'Escape') { setCommandPaletteOpen(false); setCommandSearch('') }
               }}
             />
@@ -5861,7 +5912,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   </button>
                 </li>
               ))}
-              {filteredCommands.length === 0 && (
+              {askFroamVisible && (
+                <li id="froam-command-ask" role="option" aria-selected={commandFocusIndex === 0} className={`fs-command-palette__item fs-command-palette__ask ${commandFocusIndex === 0 ? 'is-focused' : ''}`}>
+                  <button type="button" tabIndex={-1} aria-label={`Ask Froam: ${commandSearch.trim()}`} onClick={executeAskFroam}>
+                    <Sparkles size={15}/><span className="fs-command-palette__item-label"><strong>Ask Froam</strong><small>{commandSearch.trim()}</small></span><span className="fs-command-palette__item-shortcut">Enter</span>
+                  </button>
+                </li>
+              )}
+              {filteredCommands.length === 0 && !askFroamVisible && (
                 <li role="status" className="fs-command-palette__empty">
                   No commands found
                 </li>
@@ -5871,19 +5929,30 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         </div>
       )}
 
+      <FroamIntentResult
+        state={froamIntent.state}
+        onAllow={froamIntent.allow}
+        onNotNow={froamIntent.notNow}
+        onKeep={froamIntent.keep}
+        onRetry={froamIntent.retry}
+        onCancel={froamIntent.cancel}
+        onDismiss={froamIntent.dismiss}
+      />
+
       {/* v5: Figma Layout */}
       {showPanel && !studioMinimized && (
         <div
           className={[
             'froam-figma-layout',
             isMobileUI ? 'is-mobile' : '',
-            leftWorkspaceMode === 'plan' ? 'is-planning' : '',
+            leftWorkspaceMode === 'plan' || leftWorkspaceMode === 'reference' ? 'is-planning' : '',
             leftPanelOpen ? '' : 'is-left-collapsed',
             connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen ? 'has-context-inspector' : '',
             (workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen ? '' : 'is-right-collapsed',
             `is-toolbar-${uiPreference.toolbar}`,
             `is-workspace-${uiPreference.workspace}`,
             `is-panels-${uiPreference.panels}`,
+            froamIntent.state.phase === 'previewing' ? 'is-intent-preview' : '',
           ].filter(Boolean).join(' ')}
           style={{
             '--froam-left-width': `${froamUIPanelWidth(uiPreference.leftSize, 'left')}px`,
@@ -5939,7 +6008,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               leftPanelOpen={leftPanelOpen}
               rightPanelOpen={(workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen}
               onToggleLeftPanel={() => {
-                if (workspaceMode !== 'create') {
+                if (workspaceMode !== 'create' && leftWorkspaceMode !== 'reference' && leftWorkspaceMode !== 'layers') {
                   setWorkspaceMode('create')
                   setLeftPanelOpen(true)
                   return
@@ -5989,7 +6058,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               }}
             />
           </FroamSectionBoundary>
-          {leftPanelOpen && <div className="froam-figma-left" data-chef-editor-root="true">
+          <div className="froam-figma-left" data-chef-editor-root="true" hidden={!leftPanelOpen}>
             <div className="froam-figma-left__tabs" data-chef-editor-root="true">
               <button
                 type="button"
@@ -6000,33 +6069,47 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               </button>
               <button
                 type="button"
-                className={leftWorkspaceMode === 'layers' ? 'is-active' : ''}
-                onClick={() => openWorkspaceSection('layers', 'create')}
+                className={leftWorkspaceMode === 'reference' ? 'is-active' : ''}
+                onClick={() => openWorkspaceSection('reference', 'understand')}
               >
-                <Layers size={13} /> Outline
+                <FileImage size={13} /> Reference
               </button>
             </div>
             <div className="froam-figma-left__body" data-chef-editor-root="true">
               {leftWorkspaceMode === 'plan' ? (
-                <FroamSectionBoundary name="SitePlanner">
-                  <FroamSitePlanner
+                <div className="froam-figma-left__view">
+                  <FroamSectionBoundary name="SitePlanner">
+                    <FroamSitePlanner
+                      routeKey={routeKey}
+                      projectName={projectSession.project.name}
+                      branchName={projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId}
+                      selection={selection ? { nodeId: selection.nodeId, label: selection.label } : null}
+                      archiveItems={plannerArchiveItems}
+                      onInsertComponent={insertLibraryComponent}
+                      onInsertBlankFrame={insertBlankFrame}
+                      onInsertBlock={addStructureBlock}
+                      onInsertArchived={insertArchivedHtml}
+                      onBuildPage={buildLibraryPage}
+                      onPlanChange={syncSitePlanGraph}
+                      onToast={showToast}
+                    />
+                  </FroamSectionBoundary>
+                </div>
+              ) : null}
+              <div className="froam-figma-left__view" hidden={leftWorkspaceMode !== 'reference'}>
+                <FroamSectionBoundary name="ReferenceWorkspace">
+                  <FroamReferenceWorkspace
+                    project={projectSession.project}
                     routeKey={routeKey}
-                    projectName={projectSession.project.name}
-                    branchName={projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId}
-                    selection={selection ? { nodeId: selection.nodeId, label: selection.label } : null}
-                    archiveItems={plannerArchiveItems}
-                    onInsertComponent={insertLibraryComponent}
-                    onInsertBlankFrame={insertBlankFrame}
-                    onInsertBlock={addStructureBlock}
-                    onInsertArchived={insertArchivedHtml}
-                    onBuildPage={buildLibraryPage}
-                    onPlanChange={syncSitePlanGraph}
                     onToast={showToast}
+                    onActivityChange={setWorkspaceActivity}
                   />
                 </FroamSectionBoundary>
-              ) : (
-                <FroamSectionBoundary name="LayersPanel">
-                  <FroamLayersPanel
+              </div>
+              {leftWorkspaceMode === 'layers' ? (
+                <div className="froam-figma-left__view">
+                  <FroamSectionBoundary name="LayersPanel">
+                    <FroamLayersPanel
                     layers={layers}
                     selectedPath={selection?.path ?? null}
                     selections={selections}
@@ -6038,11 +6121,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     branchName={projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId}
                     knowledgeByNodeId={layerKnowledge}
                     onOpenKnowledge={(node, section) => { selectLayerNode(node); openWorkspaceSection(section) }}
-                  />
-                </FroamSectionBoundary>
-              )}
+                    />
+                  </FroamSectionBoundary>
+                </div>
+              ) : null}
             </div>
-          </div>}
+          </div>
           <div className="froam-figma-layout__canvas" data-chef-editor-root="true" />
           {rightPanelOpen && workspaceMode === 'create' && (() => {
             const designPanel = (
@@ -7672,7 +7756,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         onSelectNode={selectConnectedNode}
         onInsertArchived={insertArchivedHtml}
         onApplyArchivedStyle={(styles) => applyStyle(styles, undefined, 'Archive style')}
-        onInsertReconstruction={insertScreenshotReconstruction}
         onPreviewWidth={previewIntelligenceWidth}
         onToast={showToast}
         requestedTab={requestedIntelligenceTab}

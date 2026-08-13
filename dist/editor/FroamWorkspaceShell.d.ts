@@ -23,7 +23,7 @@ type Props = {
     onOpenPrototypes: () => void;
     onOpenReplay: () => void;
     temporalOwner: FroamTemporalOwner;
-    activity?: 'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | null;
+    activity?: 'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | 'intent-understanding' | 'intent-creating' | 'intent-applying' | null;
 };
 export default function FroamWorkspaceShell(props: Props): import("react").JSX.Element;
 export {};

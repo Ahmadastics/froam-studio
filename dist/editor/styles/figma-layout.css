@@ -88,6 +88,10 @@
   background: linear-gradient(180deg, rgba(30, 30, 30, 0.99), rgba(21, 21, 23, 0.99));
 }
 
+.froam-figma-left[hidden] {
+  display: none !important;
+}
+
 .froam-figma-left__tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -140,4 +144,20 @@
 .froam-figma-layout__canvas {
   grid-area: canvas;
   pointer-events: none;
+}
+.froam-figma-left__view{height:100%;min-height:0}.froam-figma-left__view[hidden]{display:none}
+
+.froam-reference__header > .froam-reference__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.froam-reference__ready {
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(125, 243, 225, 0.08);
+  color: #7dd3b0 !important;
+  font-size: 7px !important;
+  letter-spacing: 0.08em;
 }

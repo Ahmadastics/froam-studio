@@ -20,4 +20,31 @@ export async function saveProjectToBridge(project, fetchImpl = fetch) {
         throw new Error(payload.error || `Could not save Froam project (${response.status})`);
     return payload;
 }
+/**
+ * Browser-safe intelligence planning client.
+ * Calls the Froam bridge intelligence endpoint.
+ * No provider credentials or model-specific logic lives here.
+ */
+export async function requestFroamIntelligence(request, fetchImpl = fetch, signal) {
+    const body = JSON.stringify(request);
+    const response = await fetchImpl(bridgeUrl('/__froam/intelligence/plan'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal,
+    });
+    let payload;
+    try {
+        payload = await response.json();
+    }
+    catch {
+        throw new Error('provider_unavailable');
+    }
+    if (!response.ok) {
+        throw new Error('error' in payload && typeof payload.error === 'object' ? payload.error.code : 'provider_unavailable');
+    }
+    return payload;
+}
+/** Compatibility name for the first mutation-only client. */
+export const requestIntelligencePlan = requestFroamIntelligence;
 //# sourceMappingURL=bridge.js.map

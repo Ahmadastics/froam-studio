@@ -7,6 +7,7 @@ import { buildIntelligenceMemory } from '../dist/project/intelligence-memory.js'
 import { emptyProjectState } from '../dist/project/event-log.js'
 import { animationPresetInteraction, FROAM_ANIMATION_PRESETS } from '../dist/editor/FroamAnimationPresets.js'
 import { DEFAULT_FROAM_UI_PREFERENCE, froamUIPanelWidth, readFroamUIPreference, sanitizeFroamUIPreference, writeFroamUIPreference } from '../dist/editor/froamUIPreferences.js'
+import { FROAM_REFERENCE_ACCEPTED_TYPES, FROAM_REFERENCE_CONSENT_KEY, readReferenceConsent, referenceQualityLabel, suggestReferenceLabel, validateReferenceDimensions, validateReferenceFile, writeReferenceConsent } from '../dist/editor/reference-workspace-model.js'
 import {
   FROAM_WORKSPACE_MODES,
   readWorkspacePreference,
@@ -36,10 +37,13 @@ test('contextual selection tools disable without hiding their meaning', () => {
   assert.equal(workspaceSections('create', flags, true).find(({ id }) => id === 'animator')?.contextual, true)
 })
 
-test('Create names the connected structure surfaces consistently', () => {
+test('Build remains in Create while Reference and Layers are structural Understand surfaces', () => {
   const create = workspaceSections('create', defaultFroamLabsFlags(), true)
+  const understand = workspaceSections('understand', defaultFroamLabsFlags(), true)
   assert.equal(create.find(({ id }) => id === 'plan')?.label, 'Build')
-  assert.equal(create.find(({ id }) => id === 'layers')?.label, 'Outline')
+  assert.equal(create.some(({ id }) => id === 'layers'), false)
+  assert.equal(understand.find(({ id }) => id === 'reference')?.label, 'Reference')
+  assert.equal(understand.find(({ id }) => id === 'layers')?.label, 'Layers')
 })
 
 test('Blueprint has one canonical workspace home', () => {
@@ -85,8 +89,44 @@ test('panel preferences persist, recover, and tolerate quota failure', () => {
 
 test('command search understands user-facing aliases', () => {
   const breakpoint = workspaceSections('understand', defaultFroamLabsFlags(), true).find(({ id }) => id === 'responsive')
+  const reference = workspaceSections('understand', defaultFroamLabsFlags(), true).find(({ id }) => id === 'reference')
+  const layers = workspaceSections('understand', defaultFroamLabsFlags(), true).find(({ id }) => id === 'layers')
   assert.equal(workspaceCommandMatches(breakpoint, 'breakpoint cinema'), true)
   assert.equal(workspaceCommandMatches(breakpoint, 'mutagen'), false)
+  assert.equal(workspaceCommandMatches(reference, 'screenshot to ui'), true)
+  assert.equal(workspaceCommandMatches(reference, 'reconstruction'), true)
+  assert.equal(workspaceCommandMatches(layers, 'outline'), true)
+  assert.equal(workspaceCommandMatches(layers, 'dom structure'), true)
+})
+
+test('Reference file and viewport validation follows native reconstruction limits', () => {
+  assert.deepEqual(FROAM_REFERENCE_ACCEPTED_TYPES, ['image/png', 'image/jpeg', 'image/webp'])
+  for (const type of FROAM_REFERENCE_ACCEPTED_TYPES) assert.equal(validateReferenceFile({ type, size: 100 }).valid, true)
+  assert.equal(validateReferenceFile({ type: 'image/gif', size: 100 }).valid, false)
+  assert.equal(validateReferenceFile({ type: 'image/png', size: 0 }).valid, false)
+  assert.equal(validateReferenceDimensions(1440, 1100).valid, true)
+  assert.equal(validateReferenceDimensions(6000, 4000).valid, false)
+})
+
+test('Reference viewport labels are suggestions and quality labels use deterministic thresholds', () => {
+  assert.equal(suggestReferenceLabel(390), 'Mobile')
+  assert.equal(suggestReferenceLabel(768), 'Tablet')
+  assert.equal(suggestReferenceLabel(1440), 'Desktop')
+  assert.equal(referenceQualityLabel(.85).label, 'Strong')
+  assert.equal(referenceQualityLabel(.7).label, 'Good')
+  assert.equal(referenceQualityLabel(.5).label, 'Moderate')
+  assert.equal(referenceQualityLabel(undefined).detail, 'Not measured')
+})
+
+test('Reference intelligence consent is versioned, explicit, and storage-safe', () => {
+  const values = new Map(); const storage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) }
+  assert.match(FROAM_REFERENCE_CONSENT_KEY, /v1$/)
+  assert.equal(readReferenceConsent(storage), 'unknown')
+  assert.equal(writeReferenceConsent(storage, 'declined'), true)
+  assert.equal(readReferenceConsent(storage), 'declined')
+  assert.equal(writeReferenceConsent(storage, 'allowed'), true)
+  assert.equal(readReferenceConsent(storage), 'allowed')
+  assert.equal(writeReferenceConsent({ setItem: () => { throw new Error('quota') } }, 'allowed'), false)
 })
 
 test('Froam UI preferences are versioned, recoverable, and quota tolerant', () => {
@@ -171,10 +211,13 @@ test('keyboard, mobile, reduced-motion, and legacy surfaces stay reachable', () 
   assert.match(css, /froam-intelligence>nav,.froam-labs>nav\{display:none\}/)
 })
 
-test('Build and Outline use the connected project and accessible live structure', () => {
+test('Build and relocated Layers use the connected project and Reference owns screenshot reconstruction', () => {
   const planner = fs.readFileSync(new URL('../src/editor/FroamSitePlanner.tsx', import.meta.url), 'utf8')
   const layers = fs.readFileSync(new URL('../src/editor/FroamLayersPanel.tsx', import.meta.url), 'utf8')
   const editor = fs.readFileSync(new URL('../src/editor/GlobalChefEditor.tsx', import.meta.url), 'utf8')
+  const reference = fs.readFileSync(new URL('../src/editor/FroamReferenceWorkspace.tsx', import.meta.url), 'utf8')
+  const intelligence = fs.readFileSync(new URL('../src/editor/FroamIntelligence.tsx', import.meta.url), 'utf8')
+  const blueprint = fs.readFileSync(new URL('../src/editor/FroamBlueprint.tsx', import.meta.url), 'utf8')
   assert.match(planner, /Graph synced/)
   assert.match(planner, /onPlanChange\(plan\.pages\)/)
   assert.match(planner, /Saved in this project/)
@@ -184,7 +227,38 @@ test('Build and Outline use the connected project and accessible live structure'
   assert.match(layers, /event\.key === 'ArrowDown'/)
   assert.match(editor, /sitePlanGraphRecords\(pages\)/)
   assert.match(editor, /LayoutGrid size=\{13\} \/> Build/)
-  assert.match(editor, /Layers size=\{13\} \/> Outline/)
+  assert.match(editor, /FileImage size=\{13\} \/> Reference/)
+  assert.doesNotMatch(editor, /Layers size=\{13\} \/> Outline/)
+  assert.match(blueprint, /Open Layers and DOM structure/)
+  assert.match(reference, /Add screenshot references/)
+  assert.match(reference, /multiple/)
+  assert.match(reference, /Reading references…/)
+  assert.match(reference, /Matching interface structure…/)
+  assert.match(reference, /Building responsive understanding…/)
+  assert.doesNotMatch(intelligence, /Import screenshot/)
+})
+
+test('Reference exposes observed and inferred evidence, separate quality, and bounded status announcements', () => {
+  const reference = fs.readFileSync(new URL('../src/editor/FroamReferenceWorkspace.tsx', import.meta.url), 'utf8')
+  assert.match(reference, /data-origin="observed"/)
+  assert.match(reference, /data-origin="inferred"/)
+  assert.match(reference, /Reference understanding/)
+  assert.match(reference, /not an exact CSS breakpoint/)
+  assert.match(reference, /aria-live="polite"/)
+  assert.match(reference, /aria-atomic="true"/)
+  assert.match(reference, /Remove \$\{item\.reference\.label/)
+})
+
+test('Reference intelligence remains optional, consented, bounded, and non-mutating', () => {
+  const reference = fs.readFileSync(new URL('../src/editor/FroamReferenceWorkspace.tsx', import.meta.url), 'utf8')
+  assert.match(reference, /createReferenceIntelligenceRequest/)
+  assert.match(reference, /createResponsiveIntelligenceRequest/)
+  assert.match(reference, /consent !== 'allowed'/)
+  assert.match(reference, /Not now/)
+  assert.match(reference, /not your source code, credentials or raw screenshots/)
+  assert.match(reference, /Deterministic Reference results remain available/)
+  assert.doesNotMatch(reference, /purpose:\s*'mutate'/)
+  assert.doesNotMatch(reference, /pixelsBase64|sourceCode|apiKey/)
 })
 
 console.log(`\n${count} editor-shell tests passed.`)

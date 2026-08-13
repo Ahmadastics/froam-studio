@@ -485,3 +485,4 @@
   border-radius: 4px;
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
+.fs-bp__layers{position:fixed;z-index:2147483645;left:18px;top:18px;display:flex;align-items:center;gap:6px;min-height:36px;padding:7px 11px;border:1px solid rgba(160,190,255,.32);border-radius:8px;background:rgba(8,20,42,.9);color:#c3d3e8;font:700 10px/1 Inter,sans-serif;cursor:pointer;backdrop-filter:blur(12px)}.fs-bp__layers:hover,.fs-bp__layers:focus-visible{border-color:#7df3e1;color:#7df3e1}

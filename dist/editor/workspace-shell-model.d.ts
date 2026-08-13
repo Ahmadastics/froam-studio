@@ -2,7 +2,7 @@ import type { FroamLabsFlags } from '../project/experiments';
 export type FroamWorkspaceMode = 'create' | 'understand' | 'experiment';
 export type FroamWorkspaceMaturity = 'production' | 'beta' | 'experimental' | 'research' | 'advanced';
 export type FroamTemporalOwner = 'animator' | 'replay' | 'sampling' | 'breakpoint-cinema' | 'trailer' | null;
-export type FroamWorkspaceSection = 'design' | 'plan' | 'layers' | 'blueprint' | 'animator' | 'interactions-create' | 'responsive-create' | 'scan' | 'dna' | 'archive' | 'archaeology' | 'flow' | 'attention' | 'rhythm' | 'responsive' | 'screenshot' | 'laboratory' | 'mutate' | 'sample' | 'interactions' | 'physics' | 'gravity' | 'break' | 'test-user' | 'sound' | 'trailer' | 'reality' | 'replay' | 'prototypes' | 'advanced';
+export type FroamWorkspaceSection = 'design' | 'plan' | 'blueprint' | 'animator' | 'interactions-create' | 'responsive-create' | 'reference' | 'layers' | 'scan' | 'dna' | 'archive' | 'archaeology' | 'flow' | 'attention' | 'rhythm' | 'responsive' | 'laboratory' | 'mutate' | 'sample' | 'interactions' | 'physics' | 'gravity' | 'break' | 'test-user' | 'sound' | 'trailer' | 'reality' | 'replay' | 'prototypes' | 'advanced';
 export type FroamWorkspaceSectionDefinition = {
     id: FroamWorkspaceSection;
     mode: FroamWorkspaceMode;
@@ -43,7 +43,7 @@ export declare function workspaceStatus(input: {
     mode: FroamWorkspaceMode;
     branchName: string;
     branchId: string;
-    activity?: 'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | null;
+    activity?: 'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | 'intent-understanding' | 'intent-creating' | 'intent-applying' | null;
     sampling?: boolean;
     replay?: boolean;
     physics?: boolean;

@@ -33,6 +33,8 @@ export * from './replay.js';
 export * from './graph-inspector.js';
 export * from './animator-adapter.js';
 export * from './intelligence-provider.js';
+export * from './intelligence-transport.js';
+export * from './intelligence-context.js';
 export * from './archive.js';
 export * from './archaeology.js';
 export * from './product-flow.js';
@@ -40,4 +42,5 @@ export * from './attention.js';
 export * from './rhythm.js';
 export * from './responsive.js';
 export * from './screenshot-reconstruction.js';
+export * from './reference-intelligence.js';
 //# sourceMappingURL=index.js.map

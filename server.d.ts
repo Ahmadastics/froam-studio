@@ -142,3 +142,119 @@ export function createGitHubCommitter(options: {
   committer?: { name: string; email: string }
   fetchImpl?: typeof fetch
 }): (input: { design: FroamDesign; message?: string; paths?: Record<string, string> }) => Promise<FroamCommitResult>
+
+// ─── Intelligence API ─────────────────────────────────────────────────────────
+
+export type FroamMutationDomain = 'visual' | 'typography' | 'spacing' | 'layout' | 'navigation' | 'interactions' | 'motion' | 'responsive' | 'composition'
+
+export type FroamMutationProposal = {
+  type: string
+  domain: FroamMutationDomain
+  targetIds: string[]
+  confidence: number
+  rationale: string
+  payload: Record<string, unknown>
+  dependencies?: string[]
+}
+
+export type FroamIntelligencePurpose = 'mutate' | 'understand' | 'reference' | 'responsive' | 'evaluate'
+export type FroamEvidenceOrigin = 'observed' | 'inferred' | 'generated'
+
+export type FroamIntelligenceRequest = {
+  schemaVersion: 1
+  purpose: FroamIntelligencePurpose
+  intent: string
+  context: {
+    projectId: string
+    activeBranchId: string
+    routeKey: string
+    viewport: string
+    selectedNodeId?: string | null
+    selectedDomPath?: string | null
+    scanRecords?: unknown[]
+    dna?: Record<string, unknown>
+    relationships?: unknown[]
+    responsivePolicies?: unknown[]
+    responsiveObservations?: unknown[]
+    references?: unknown[]
+    memory?: unknown
+  }
+  constraints?: { protect: string[]; allow: FroamMutationDomain[]; protectedNodeIds?: string[] }
+  scopeNodeIds?: string[]
+  protectedNodeIds?: string[]
+  priorAttemptFeedback?: string | null
+  previousAttemptFeedback?: string | null
+  requestId?: string
+  consent?: boolean
+}
+export type FroamIntelligencePlanRequest = FroamIntelligenceRequest
+
+export type FroamIntelligencePlanResponse = {
+  schemaVersion: 1
+  purpose: 'mutate'
+  requestId?: string
+  provider: string
+  proposals: FroamMutationProposal[]
+  rationale: string
+  confidence: number
+  warnings?: string[]
+}
+
+export type FroamIntelligenceAnalysisResponse = {
+  schemaVersion: 1
+  purpose: Exclude<FroamIntelligencePurpose, 'mutate'>
+  requestId?: string
+  provider: string
+  findings: Array<{ id?: string; summary: string; detail?: string; origin: FroamEvidenceOrigin; confidence?: number; evidence?: unknown[]; nodeIds?: string[] }>
+  recommendations?: string[]
+  limitations?: string[]
+  referenceIds?: string[]
+  breakpointHypotheses?: Array<{ summary: string; origin: 'inferred'; confidence?: number }>
+  score?: number
+}
+
+export type FroamIntelligenceResponse = FroamIntelligencePlanResponse | FroamIntelligenceAnalysisResponse
+
+export type FroamIntelligenceProvider = {
+  id: string
+  privacy: {
+    execution: 'local' | 'remote'
+    requiresConsent?: boolean
+    sendsSourceCode: false
+    sendsCredentials: false
+    dataDescription: string
+  }
+  plan(request: FroamIntelligenceRequest): Promise<string | Record<string, unknown>>
+}
+
+/**
+ * Mount a Froam intelligence planning endpoint.
+ *
+ * POST /plan — receives a FroamIntelligencePlanRequest, calls the provider,
+ * validates the output deterministically, returns a FroamIntelligencePlanResponse.
+ *
+ * API key is server-side only and never appears in responses.
+ */
+export function createFroamIntelligenceApi(options: {
+  provider?: FroamIntelligenceProvider | null
+  authorize?: (req: IncomingMessage) => boolean | Promise<boolean>
+  log?: (line: string) => void
+}): (req: IncomingMessage, res: ServerResponse) => Promise<boolean>
+
+/**
+ * OpenAI-compatible provider. Works with any provider that speaks the
+ * OpenAI chat completions API (OpenAI, Azure OpenAI, Ollama, etc.).
+ * Uses fetch only — no SDK dependency.
+ * API key is server-side only.
+ */
+export function createOpenAICompatibleProvider(options: {
+  /** Base URL of the compatible chat-completions API. */
+  baseUrl: string
+  /** Server-side API key. Never serialized to browser responses. */
+  apiKey: string
+  /** Provider-specific model name. */
+  model: string
+  fetchImpl?: typeof fetch
+  systemPrompt?: string
+  timeout?: number
+}): FroamIntelligenceProvider

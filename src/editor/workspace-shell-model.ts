@@ -4,8 +4,8 @@ export type FroamWorkspaceMode = 'create' | 'understand' | 'experiment'
 export type FroamWorkspaceMaturity = 'production' | 'beta' | 'experimental' | 'research' | 'advanced'
 export type FroamTemporalOwner = 'animator' | 'replay' | 'sampling' | 'breakpoint-cinema' | 'trailer' | null
 export type FroamWorkspaceSection =
-  | 'design' | 'plan' | 'layers' | 'blueprint' | 'animator' | 'interactions-create' | 'responsive-create'
-  | 'scan' | 'dna' | 'archive' | 'archaeology' | 'flow' | 'attention' | 'rhythm' | 'responsive' | 'screenshot'
+  | 'design' | 'plan' | 'blueprint' | 'animator' | 'interactions-create' | 'responsive-create'
+  | 'reference' | 'layers' | 'scan' | 'dna' | 'archive' | 'archaeology' | 'flow' | 'attention' | 'rhythm' | 'responsive'
   | 'laboratory' | 'mutate' | 'sample' | 'interactions' | 'physics' | 'gravity' | 'break' | 'test-user' | 'sound' | 'trailer' | 'reality'
   | 'replay' | 'prototypes' | 'advanced'
 
@@ -30,12 +30,13 @@ export const FROAM_WORKSPACE_MODES: ReadonlyArray<{ id: FroamWorkspaceMode; labe
 export const FROAM_WORKSPACE_SECTIONS: readonly FroamWorkspaceSectionDefinition[] = [
   { id: 'design', mode: 'create', label: 'Design', description: 'Style and layout the selection', maturity: 'production', aliases: ['style', 'typography', 'layout'] },
   { id: 'plan', mode: 'create', label: 'Build', description: 'Draft pages, compose structure and add reusable components', maturity: 'production', aliases: ['insert', 'site planner', 'components', 'compose'] },
-  { id: 'layers', mode: 'create', label: 'Outline', description: 'Navigate the identity-aware live DOM structure', maturity: 'production', aliases: ['layers', 'structure', 'tree'] },
   { id: 'blueprint', mode: 'create', label: 'Blueprint', description: 'Open the existing 2D/3D structural view', maturity: 'production', aliases: ['blueprint 2d', 'blueprint 3d'] },
   { id: 'animator', mode: 'create', label: 'Animator', description: 'Edit time-based interaction motion', maturity: 'production', requiresSelection: true, temporalOwner: 'animator', aliases: ['animation', 'timeline'] },
   { id: 'interactions-create', mode: 'create', label: 'Interactions', description: 'Apply behavior to the selection', maturity: 'experimental', requiresSelection: true, labFlag: 'interactionLibrary' },
   { id: 'responsive-create', mode: 'create', label: 'Responsive', description: 'Viewport and survival controls', maturity: 'beta' },
 
+  { id: 'reference', mode: 'understand', label: 'Reference', description: 'Import screenshots and understand structure across viewport evidence', maturity: 'production', aliases: ['screenshot', 'screenshot to ui', 'screenshot → ui', 'reconstruction', 'multiple views'] },
+  { id: 'layers', mode: 'understand', label: 'Layers', description: 'Navigate the identity-aware live DOM structure', maturity: 'production', aliases: ['outline', 'dom structure', 'structure', 'tree'] },
   { id: 'scan', mode: 'understand', label: 'Scan', description: 'Observe the live interface', maturity: 'beta', aliases: ['scan page'] },
   { id: 'dna', mode: 'understand', label: 'DNA', description: 'Inspect selected component knowledge', maturity: 'beta', requiresSelection: true, aliases: ['component dna'] },
   { id: 'archive', mode: 'understand', label: 'Archive', description: 'Reuse known components', maturity: 'beta', aliases: ['component archive'] },
@@ -44,7 +45,6 @@ export const FROAM_WORKSPACE_SECTIONS: readonly FroamWorkspaceSectionDefinition[
   { id: 'attention', mode: 'understand', label: 'Attention', description: 'Estimate probable visual focus', maturity: 'experimental', aliases: ['heatmap'] },
   { id: 'rhythm', mode: 'understand', label: 'Rhythm', description: 'Inspect compositional repetition', maturity: 'experimental' },
   { id: 'responsive', mode: 'understand', label: 'Responsive', description: 'Priority metadata and Breakpoint Cinema', maturity: 'beta', temporalOwner: 'breakpoint-cinema', aliases: ['breakpoint cinema'] },
-  { id: 'screenshot', mode: 'understand', label: 'Screenshot → UI', description: 'Reconstruct observable visual structure', maturity: 'experimental', aliases: ['screenshot', 'reconstruction'] },
   { id: 'laboratory', mode: 'experiment', label: 'Laboratory', description: 'Configure independently flagged experiments', maturity: 'experimental', aliases: ['labs', 'flags'] },
   { id: 'mutate', mode: 'experiment', label: '☣ MUTATE', description: 'Fork an alternate prototype reality', maturity: 'experimental', requiresSelection: true, labFlag: 'mutate' },
   { id: 'sample', mode: 'experiment', label: '◉ SAMPLE', description: 'Record observable interaction behavior', maturity: 'experimental', requiresSelection: true, labFlag: 'uiSampling', temporalOwner: 'sampling' },
@@ -72,11 +72,14 @@ export function workspaceProjectLabel(projectName: string, branchName: string, b
   return { projectName: projectName.trim() || 'Untitled project', branchName: branchName.trim() || branchId, prototype: branchId !== 'main', label: `${projectName.trim() || 'Untitled project'} / ${branchName.trim() || branchId}` }
 }
 
-export function workspaceStatus(input: { mode: FroamWorkspaceMode; branchName: string; branchId: string; activity?: 'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | null; sampling?: boolean; replay?: boolean; physics?: boolean }) {
+export function workspaceStatus(input: { mode: FroamWorkspaceMode; branchName: string; branchId: string; activity?: 'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | 'intent-understanding' | 'intent-creating' | 'intent-applying' | null; sampling?: boolean; replay?: boolean; physics?: boolean }) {
+  if (input.activity === 'intent-understanding') return { label: 'Froam is understanding', tone: 'understand' as const }
+  if (input.activity === 'intent-creating') return { label: 'Preparing experiment', tone: 'prototype' as const }
+  if (input.activity === 'intent-applying') return { label: 'Applying', tone: 'prototype' as const }
   if (input.activity === 'mutating') return { label: 'Mutagen active ☣', tone: 'prototype' as const }
   if (input.activity === 'chaos') return { label: 'Chaos simulation', tone: 'warning' as const }
   if (input.activity === 'synthetic') return { label: 'Synthetic UX', tone: 'research' as const }
-  if (input.activity === 'screenshot') return { label: 'Screenshot reconstruction', tone: 'understand' as const }
+  if (input.activity === 'screenshot') return { label: 'Reading references', tone: 'understand' as const }
   const scanning = input.activity === 'scanning'
   if (scanning) return { label: 'Scanning', tone: 'understand' as const }
   if (input.sampling) return { label: 'Sampling ●', tone: 'live' as const }

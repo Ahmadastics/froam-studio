@@ -12,7 +12,7 @@
    can show the same full-page picture as a persistent thumbnail.
    =============================================================== */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Box, PenLine, X } from 'lucide-react'
+import { Box, Layers, PenLine, X } from 'lucide-react'
 import { collectPagePalette } from './FroamFloatingBar'
 
 type BlueprintCategory = 'heading' | 'media' | 'action' | 'container' | 'text'
@@ -419,9 +419,10 @@ type Props = {
   routeKey: string
   getRootEl: () => HTMLElement | null
   onJumpToElement: (element: HTMLElement) => void
+  onOpenLayers?: () => void
 }
 
-export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJumpToElement }: Props) {
+export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJumpToElement, onOpenLayers }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [threeD, setThreeD] = useState(false)
 
@@ -496,6 +497,8 @@ export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJ
         {threeD ? <PenLine size={14} /> : <Box size={14} />}
         {threeD ? '2D' : '3D'}
       </button>
+
+      {onOpenLayers && <button type="button" className="fs-bp__layers" onClick={() => { onClose(); onOpenLayers() }} aria-label="Open Layers and DOM structure" data-chef-editor-root="true"><Layers size={14}/>Layers</button>}
 
       <button type="button" className="fs-bp__close" onClick={onClose} aria-label="Close blueprint" data-chef-editor-root="true">
         <X size={16} />

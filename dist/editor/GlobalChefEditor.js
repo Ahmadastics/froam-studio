@@ -32,6 +32,10 @@ import FroamNotePins from './FroamNotePins.js';
 import FroamPresenceLayer from './FroamPresenceLayer.js';
 import FroamConnectedCanvas from './FroamConnectedCanvas.js';
 import FroamIntelligence from './FroamIntelligence.js';
+import FroamReferenceWorkspace from './FroamReferenceWorkspace.js';
+import FroamIntentResult from './FroamIntentResult.js';
+import { useFroamIntent } from './useFroamIntent.js';
+import { shouldOfferAskFroam } from './froam-intent-model.js';
 import FroamLabs from './FroamLabs.js';
 import FroamWorkspaceShell from './FroamWorkspaceShell.js';
 import FroamUICustomizer from './FroamUICustomizer.js';
@@ -53,7 +57,7 @@ import { createFrameworkIdentityObserver } from '../project/framework-identity.j
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources.js';
 import { useFroamRouteKey } from '../routing.js';
 import { DEFAULT_FROAM_PERSONA, FROAM_PERSONA_PATH, PERSONA_STORAGE_KEY, readFroamPersonaDraft, sanitizeFroamPersona, isFroamPersonaPath, } from './froamPersona.js';
-const intelligenceTabs = { scan: 'scan', dna: 'dna', archive: 'archive', archaeology: 'archaeology', flow: 'flow', attention: 'attention', rhythm: 'rhythm', responsive: 'responsive', screenshot: 'screenshot' };
+const intelligenceTabs = { scan: 'scan', dna: 'dna', archive: 'archive', archaeology: 'archaeology', flow: 'flow', attention: 'attention', rhythm: 'rhythm', responsive: 'responsive' };
 const labTabs = { laboratory: 'overview', mutate: 'mutate', sample: 'sample', interactions: 'interactions', 'interactions-create': 'interactions', physics: 'physics', gravity: 'physics', break: 'break', 'test-user': 'user', sound: 'sound', trailer: 'trailer', reality: 'reality' };
 const cursorOptions = ['auto', 'default', 'pointer', 'grab', 'grabbing', 'text', 'crosshair', 'move', 'not-allowed', 'wait', 'zoom-in', 'zoom-out', 'none'];
 /* ═══════════════════════════════════════════════════════════════
@@ -1306,18 +1310,20 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [workspacePreference, setWorkspacePreference] = useState(() => readWorkspacePreference(typeof localStorage === 'undefined' ? undefined : localStorage));
     const [uiPreference, setUIPreference] = useState(() => readFroamUIPreference(typeof localStorage === 'undefined' ? undefined : localStorage));
     const [uiCustomizerOpen, setUICustomizerOpen] = useState(false);
-    const [leftWorkspaceMode, setLeftWorkspaceMode] = useState(() => workspacePreference.sections.create === 'layers' ? 'layers' : 'plan');
+    const [leftWorkspaceMode, setLeftWorkspaceMode] = useState(() => workspacePreference.sections.understand === 'reference' ? 'reference' : workspacePreference.sections.understand === 'layers' ? 'layers' : 'plan');
     // v4: phone-first editing — compact chrome on small viewports, touch behaviors on coarse pointers
     const isMobileUI = useMediaQuery(MOBILE_UI_QUERY);
     const isTouchDevice = useMediaQuery(COARSE_POINTER_QUERY);
     const [sheetDetent, setSheetDetent] = useState('peek');
-    const [leftPanelOpen, setLeftPanelOpen] = useState(() => !matchesMedia(MOBILE_UI_QUERY) && workspacePreference.mode === 'create');
+    const [leftPanelOpen, setLeftPanelOpen] = useState(() => (workspacePreference.mode === 'understand' && (workspacePreference.sections.understand === 'reference' || workspacePreference.sections.understand === 'layers')) || (!matchesMedia(MOBILE_UI_QUERY) && workspacePreference.mode === 'create'));
     const [rightPanelOpen, setRightPanelOpen] = useState(() => workspacePreference.mode === 'create');
     const [studioMinimized, setStudioMinimized] = useState(false);
     const [scanActive, setScanActive] = useState(false);
     const [blueprintOpen, setBlueprintOpen] = useState(false);
     const [connectedCanvasOpen, setConnectedCanvasOpen] = useState(false);
-    const [intelligenceOpen, setIntelligenceOpen] = useState(() => workspacePreference.mode === 'understand');
+    const [intelligenceOpen, setIntelligenceOpen] = useState(() => workspacePreference.mode === 'understand'
+        && workspacePreference.sections.understand !== 'reference'
+        && workspacePreference.sections.understand !== 'layers');
     const [labsOpen, setLabsOpen] = useState(() => workspacePreference.mode === 'experiment');
     const [labsFlags, setLabsFlags] = useState(() => readFroamLabsFlags(typeof localStorage === 'undefined' ? undefined : localStorage));
     const [requestedIntelligenceTab, setRequestedIntelligenceTab] = useState(() => intelligenceTabs[workspacePreference.sections.understand ?? 'scan'] ?? 'scan');
@@ -1948,6 +1954,22 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         window.clearTimeout(toastTimerRef.current);
         toastTimerRef.current = window.setTimeout(() => setToastVisible(false), 2200);
     }, []);
+    const froamIntent = useFroamIntent({
+        project: projectSession.project,
+        setProject: projectSession.setProject,
+        actorId: projectActorId,
+        routeKey,
+        viewport: viewportMode,
+        selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null,
+        root: getRoot(),
+        selectedElement: currentSelectionRef.current,
+        registry: nodeRegistryRef.current,
+        onRegistryChange: (registry) => { nodeRegistryRef.current = registry; saveNodeRegistry(registry); },
+        onPreviewStore: previewConnectedCanvas,
+        onCommitStore: materializeConnectedBranch,
+        onActivityChange: setWorkspaceActivity,
+        onToast: showToast,
+    });
     function openPersonaEditor() {
         keepStudioPinned();
         setPersonaDraft(persona);
@@ -2885,17 +2907,50 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             setSelectionRect(target.getBoundingClientRect());
         });
     }
-    function previewConnectedCanvas(next) {
-        applyStoreToDOM(next ?? storeRef.current, { clearCurrent: true });
+    function restoreConnectedCanvasPreview() {
+        const root = getRoot();
+        const originals = connectedPreviewOriginalStylesRef.current;
+        if (!root || !originals)
+            return;
+        originals.forEach((style, path) => {
+            const element = findElementByPath(root, path);
+            if (!element)
+                return;
+            if (style === null)
+                element.removeAttribute('style');
+            else
+                element.setAttribute('style', style);
+        });
+        connectedPreviewOriginalStylesRef.current = null;
+    }
+    function previewConnectedCanvas(next, protectRollback = true) {
+        const target = next ?? storeRef.current;
+        restoreConnectedCanvasPreview();
+        if (protectRollback) {
+            const root = getRoot();
+            const originals = new Map();
+            Object.keys(target[viewportStoreKey] ?? {}).forEach((path) => {
+                if (!root || path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path))
+                    return;
+                const element = findElementByPath(root, path);
+                if (element)
+                    originals.set(path, element.getAttribute('style'));
+            });
+            connectedPreviewOriginalStylesRef.current = originals;
+        }
+        applyStoreToDOM(target, { clearCurrent: true, previousStore: connectedPreviewStoreRef.current ?? storeRef.current });
+        connectedPreviewStoreRef.current = target;
     }
     function materializeConnectedBranch(next) {
+        restoreConnectedCanvasPreview();
         opLoadingDesignRef.current = true;
         opLog.load([]);
         opLog.seed(next);
         storeRef.current = next;
         setStore(next);
         saveStore(next);
-        applyStoreToDOM(next, { clearCurrent: true });
+        applyStoreToDOM(next, { clearCurrent: true, previousStore: connectedPreviewStoreRef.current ?? storeRef.current });
+        connectedPreviewStoreRef.current = null;
         bumpLog();
         updateSelectionsState([]);
     }
@@ -2966,27 +3021,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         });
         projectSession.setProject((current) => appendProjectEvents(current, [createProjectEvent({ projectId: current.id, branchId: current.activeBranchId, actorId: projectActorId, clock: Math.max(0, ...current.events.map((event) => event.clock)) + 1, type: 'archive.upserted', payload: { archiveItem: item }, targetIds: [item.nodeId], label: `Archived ${archiveItemKind(item)}: ${item.name}` })]));
         showToast(`${item.name} added to Archive`);
-    }
-    function insertScreenshotReconstruction(regions, width, height, rootNodeId) {
-        const frame = document.createElement('section');
-        frame.setAttribute('data-froam-injected', 'true');
-        frame.setAttribute('data-froam-block', 'true');
-        frame.setAttribute('data-froam-id', rootNodeId);
-        frame.style.cssText = `position:relative;width:100%;max-width:${width}px;aspect-ratio:${width}/${height};overflow:hidden;background:#f8fafc;border:1px solid rgba(15,23,42,.12);margin:24px auto;`;
-        for (const region of regions) {
-            const child = document.createElement(region.semanticRole === 'button' ? 'button' : region.semanticRole === 'heading' ? 'h2' : region.kind === 'text' ? 'p' : 'div');
-            child.setAttribute('data-froam-injected', 'true');
-            child.setAttribute('data-froam-id', region.nodeId);
-            child.contentEditable = 'true';
-            child.textContent = region.kind === 'text' ? (region.text ?? '') : '';
-            child.setAttribute('data-froam-ocr-confidence', String(region.textConfidence ?? 0));
-            child.style.cssText = `position:absolute;left:${region.x / width * 100}%;top:${region.y / height * 100}%;width:${region.width / width * 100}%;height:${region.height / height * 100}%;margin:0;overflow:hidden;color:#0f172a;background:${region.averageColor ?? (region.kind === 'container' ? 'rgb(226,232,240)' : 'transparent')};font-size:${region.semanticRole === 'heading' ? '32px' : '16px'};line-height:1.25;`;
-            frame.appendChild(child);
-        }
-        placeInsertedNode(frame, 'end');
-        selectInsertedElement(frame);
-        persistLiveRouteSnapshot();
-        return frame;
     }
     function previewIntelligenceWidth(width) {
         const root = getRoot();
@@ -3172,7 +3206,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             return;
         const routeDraftsToApply = targetStore[viewportStoreKey] ?? {};
         if (options.clearCurrent) {
-            const previous = store[viewportStoreKey] ?? {};
+            const previous = (options.previousStore ?? store)[viewportStoreKey] ?? {};
             clearDraftsFromDOM(previous);
             // Styles live in the element's style attribute and are cleared above.
             // Text and image swaps were written into the DOM itself, so a draft
@@ -4718,6 +4752,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
     /* ─── Refs for stable callbacks (avoids stale closures) ─── */
     const storeRef = useRef(store);
+    const connectedPreviewStoreRef = useRef(null);
+    const connectedPreviewOriginalStylesRef = useRef(null);
     storeRef.current = store;
     const selectionRef = useRef(selection);
     selectionRef.current = selection;
@@ -4988,10 +5024,22 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         else if (mode === 'understand') {
             setLabsOpen(false);
             setConnectedCanvasOpen(false);
-            setLeftPanelOpen(false);
             setRightPanelOpen(false);
-            setIntelligenceOpen(true);
-            setRequestedIntelligenceTab(intelligenceTabs[section] ?? 'scan');
+            if (section === 'reference' || section === 'layers') {
+                setIntelligenceOpen(false);
+                setLeftPanelOpen(true);
+                setLeftWorkspaceMode(section);
+                if (section === 'layers') {
+                    const root = getRoot();
+                    if (root)
+                        setLayers(collectLayers(root));
+                }
+            }
+            else {
+                setLeftPanelOpen(false);
+                setIntelligenceOpen(true);
+                setRequestedIntelligenceTab(intelligenceTabs[section] ?? 'scan');
+            }
         }
         else {
             setIntelligenceOpen(false);
@@ -5019,15 +5067,21 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             setBlueprintOpen(true);
             return;
         }
+        if (section === 'reference' || section === 'layers') {
+            setLeftPanelOpen(true);
+            setRightPanelOpen(false);
+            setLeftWorkspaceMode(section);
+            if (section === 'layers') {
+                const root = getRoot();
+                if (root)
+                    setLayers(collectLayers(root));
+            }
+            return;
+        }
         if (mode === 'create') {
-            if (section === 'plan' || section === 'layers') {
+            if (section === 'plan') {
                 setLeftPanelOpen(true);
                 setLeftWorkspaceMode(section);
-                if (section === 'layers') {
-                    const root = getRoot();
-                    if (root)
-                        setLayers(collectLayers(root));
-                }
                 return;
             }
             if (section === 'animator') {
@@ -5141,10 +5195,20 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const filteredCommands = commandSearchTerm
         ? paletteCommands.filter((c) => `${c.label} ${c.searchText ?? ''}`.toLowerCase().includes(commandSearchTerm) || FROAM_WORKSPACE_SECTIONS.some((section) => c.id === `workspace:${section.mode}:${section.id}` && workspaceCommandMatches(section, commandSearchTerm)))
         : paletteCommands;
+    const askFroamVisible = shouldOfferAskFroam(commandSearch, filteredCommands.length);
+    const commandResultCount = filteredCommands.length + (askFroamVisible ? 1 : 0);
     function executePaletteCommand(cmd) {
         cmd.action();
         setCommandPaletteOpen(false);
         setCommandSearch('');
+    }
+    function executeAskFroam() {
+        const intent = commandSearch.trim();
+        if (!intent || !askFroamVisible)
+            return;
+        setCommandPaletteOpen(false);
+        setCommandSearch('');
+        void froamIntent.submit({ origin: 'command-palette', intent });
     }
     /* ─── Global toggle shortcut (works even when panel is closed) ─── */
     useEffect(() => {
@@ -5363,13 +5427,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 } }), _jsx(FroamBlueprint, { open: blueprintOpen, onClose: () => setBlueprintOpen(false), routeKey: routeKey, getRootEl: getRoot, onJumpToElement: (el) => {
                     setBlueprintOpen(false);
                     selectInsertedElement(el);
-                } }), commandPaletteOpen && (_jsx("div", { className: "fs-command-palette", "data-chef-editor-root": "true", role: "dialog", "aria-modal": "true", "aria-label": "Froam command palette", onClick: (e) => { if (e.target === e.currentTarget) {
+                }, onOpenLayers: () => openWorkspaceSection('layers', 'understand') }), commandPaletteOpen && (_jsx("div", { className: "fs-command-palette", "data-chef-editor-root": "true", role: "dialog", "aria-modal": "true", "aria-label": "Froam command palette", onClick: (e) => { if (e.target === e.currentTarget) {
                     setCommandPaletteOpen(false);
                     setCommandSearch('');
-                } }, children: _jsxs("div", { className: "fs-command-palette__card", "data-chef-editor-root": "true", children: [_jsx("input", { className: "fs-command-palette__input", type: "text", value: commandSearch, placeholder: "Type a command\u2026", "aria-label": "Search commands, tools, prototypes, and entities", role: "combobox", "aria-controls": "froam-command-results", "aria-expanded": "true", "aria-activedescendant": filteredCommands[commandFocusIndex] ? `froam-command-${filteredCommands[commandFocusIndex].id}` : undefined, autoFocus: true, onChange: (e) => { setCommandSearch(e.target.value); setCommandFocusIndex(0); }, onKeyDown: (e) => {
+                } }, children: _jsxs("div", { className: "fs-command-palette__card", "data-chef-editor-root": "true", children: [_jsx("input", { className: "fs-command-palette__input", type: "text", value: commandSearch, placeholder: "Type a command or ask Froam\u2026", "aria-label": "Search commands or ask Froam", role: "combobox", "aria-controls": "froam-command-results", "aria-expanded": "true", "aria-activedescendant": filteredCommands[commandFocusIndex] ? `froam-command-${filteredCommands[commandFocusIndex].id}` : askFroamVisible && commandFocusIndex === 0 ? 'froam-command-ask' : undefined, autoFocus: true, onChange: (e) => { setCommandSearch(e.target.value); setCommandFocusIndex(0); }, onKeyDown: (e) => {
                                 if (e.key === 'ArrowDown') {
                                     e.preventDefault();
-                                    setCommandFocusIndex((i) => Math.min(i + 1, filteredCommands.length - 1));
+                                    setCommandFocusIndex((i) => Math.min(i + 1, Math.max(0, commandResultCount - 1)));
                                 }
                                 if (e.key === 'ArrowUp') {
                                     e.preventDefault();
@@ -5378,20 +5442,23 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 if (e.key === 'Enter' && filteredCommands[commandFocusIndex]) {
                                     executePaletteCommand(filteredCommands[commandFocusIndex]);
                                 }
+                                else if (e.key === 'Enter' && askFroamVisible)
+                                    executeAskFroam();
                                 if (e.key === 'Escape') {
                                     setCommandPaletteOpen(false);
                                     setCommandSearch('');
                                 }
-                            } }), _jsxs("ul", { className: "fs-command-palette__list", id: "froam-command-results", role: "listbox", children: [filteredCommands.map((cmd, idx) => (_jsx("li", { id: `froam-command-${cmd.id}`, role: "option", "aria-selected": idx === commandFocusIndex, className: `fs-command-palette__item ${idx === commandFocusIndex ? 'is-focused' : ''}`, onMouseEnter: () => setCommandFocusIndex(idx), children: _jsxs("button", { type: "button", tabIndex: -1, onClick: () => executePaletteCommand(cmd), children: [cmd.icon, _jsx("span", { className: "fs-command-palette__item-label", children: cmd.label }), cmd.shortcut && _jsx("span", { className: "fs-command-palette__item-shortcut", children: cmd.shortcut })] }) }, cmd.id))), filteredCommands.length === 0 && (_jsx("li", { role: "status", className: "fs-command-palette__empty", children: "No commands found" }))] })] }) })), showPanel && !studioMinimized && (_jsxs("div", { className: [
+                            } }), _jsxs("ul", { className: "fs-command-palette__list", id: "froam-command-results", role: "listbox", children: [filteredCommands.map((cmd, idx) => (_jsx("li", { id: `froam-command-${cmd.id}`, role: "option", "aria-selected": idx === commandFocusIndex, className: `fs-command-palette__item ${idx === commandFocusIndex ? 'is-focused' : ''}`, onMouseEnter: () => setCommandFocusIndex(idx), children: _jsxs("button", { type: "button", tabIndex: -1, onClick: () => executePaletteCommand(cmd), children: [cmd.icon, _jsx("span", { className: "fs-command-palette__item-label", children: cmd.label }), cmd.shortcut && _jsx("span", { className: "fs-command-palette__item-shortcut", children: cmd.shortcut })] }) }, cmd.id))), askFroamVisible && (_jsx("li", { id: "froam-command-ask", role: "option", "aria-selected": commandFocusIndex === 0, className: `fs-command-palette__item fs-command-palette__ask ${commandFocusIndex === 0 ? 'is-focused' : ''}`, children: _jsxs("button", { type: "button", tabIndex: -1, "aria-label": `Ask Froam: ${commandSearch.trim()}`, onClick: executeAskFroam, children: [_jsx(Sparkles, { size: 15 }), _jsxs("span", { className: "fs-command-palette__item-label", children: [_jsx("strong", { children: "Ask Froam" }), _jsx("small", { children: commandSearch.trim() })] }), _jsx("span", { className: "fs-command-palette__item-shortcut", children: "Enter" })] }) })), filteredCommands.length === 0 && !askFroamVisible && (_jsx("li", { role: "status", className: "fs-command-palette__empty", children: "No commands found" }))] })] }) })), _jsx(FroamIntentResult, { state: froamIntent.state, onAllow: froamIntent.allow, onNotNow: froamIntent.notNow, onKeep: froamIntent.keep, onRetry: froamIntent.retry, onCancel: froamIntent.cancel, onDismiss: froamIntent.dismiss }), showPanel && !studioMinimized && (_jsxs("div", { className: [
                     'froam-figma-layout',
                     isMobileUI ? 'is-mobile' : '',
-                    leftWorkspaceMode === 'plan' ? 'is-planning' : '',
+                    leftWorkspaceMode === 'plan' || leftWorkspaceMode === 'reference' ? 'is-planning' : '',
                     leftPanelOpen ? '' : 'is-left-collapsed',
                     connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen ? 'has-context-inspector' : '',
                     (workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen ? '' : 'is-right-collapsed',
                     `is-toolbar-${uiPreference.toolbar}`,
                     `is-workspace-${uiPreference.workspace}`,
                     `is-panels-${uiPreference.panels}`,
+                    froamIntent.state.phase === 'previewing' ? 'is-intent-preview' : '',
                 ].filter(Boolean).join(' '), style: {
                     '--froam-left-width': `${froamUIPanelWidth(uiPreference.leftSize, 'left')}px`,
                     '--froam-planner-width': `${Math.max(320, froamUIPanelWidth(uiPreference.leftSize, 'left') + 150)}px`,
@@ -5415,7 +5482,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 setActiveTool(tool);
                                 setMoveMode(tool === 'move');
                             }, canUndo: canUndo, canRedo: canRedo, onSave: actionsRef.current.saveToRunam, onSaveRepo: () => { void actionsRef.current.saveToRepo(); }, repoStatus: repoStatus, repoDirtyCount: repoDirtyCount, theme: editorTheme, onToggleTheme: toggleEditorTheme, onUndo: actionsRef.current.undo, onRedo: actionsRef.current.redo, onCommandPalette: () => setCommandPaletteOpen(true), onShortcutsOverlay: () => setShowShortcutOverlay(true), routeKey: routeKey, persona: persona, onOpenPersonaEditor: openPersonaEditor, draftCount: draftCount, moveMode: moveMode, onToggleMoveMode: () => setMoveMode((value) => !value), zoom: zoom, setZoom: setZoom, leftPanelOpen: leftPanelOpen, rightPanelOpen: (workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen, onToggleLeftPanel: () => {
-                                if (workspaceMode !== 'create') {
+                                if (workspaceMode !== 'create' && leftWorkspaceMode !== 'reference' && leftWorkspaceMode !== 'layers') {
                                     setWorkspaceMode('create');
                                     setLeftPanelOpen(true);
                                     return;
@@ -5438,8 +5505,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 setPanelOpen(false);
                                 setActive(false);
                                 setStudioMinimized(false);
-                            } }) }), leftPanelOpen && _jsxs("div", { className: "froam-figma-left", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-figma-left__tabs", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: leftWorkspaceMode === 'plan' ? 'is-active' : '', onClick: () => openWorkspaceSection('plan', 'create'), children: [_jsx(LayoutGrid, { size: 13 }), " Build"] }), _jsxs("button", { type: "button", className: leftWorkspaceMode === 'layers' ? 'is-active' : '', onClick: () => openWorkspaceSection('layers', 'create'), children: [_jsx(Layers, { size: 13 }), " Outline"] })] }), _jsx("div", { className: "froam-figma-left__body", "data-chef-editor-root": "true", children: leftWorkspaceMode === 'plan' ? (_jsx(FroamSectionBoundary, { name: "SitePlanner", children: _jsx(FroamSitePlanner, { routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, selection: selection ? { nodeId: selection.nodeId, label: selection.label } : null, archiveItems: plannerArchiveItems, onInsertComponent: insertLibraryComponent, onInsertBlankFrame: insertBlankFrame, onInsertBlock: addStructureBlock, onInsertArchived: insertArchivedHtml, onBuildPage: buildLibraryPage, onPlanChange: syncSitePlanGraph, onToast: showToast }) })) : (_jsx(FroamSectionBoundary, { name: "LayersPanel", children: _jsx(FroamLayersPanel, { layers: layers, selectedPath: selection?.path ?? null, selections: selections, onSelectLayer: selectLayerNode, onToggleVisibility: toggleLayerVisibility, onRefresh: () => { const root = getRoot(); if (root)
-                                            setLayers(collectLayers(root)); }, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, knowledgeByNodeId: layerKnowledge, onOpenKnowledge: (node, section) => { selectLayerNode(node); openWorkspaceSection(section); } }) })) })] }), _jsx("div", { className: "froam-figma-layout__canvas", "data-chef-editor-root": "true" }), rightPanelOpen && workspaceMode === 'create' && (() => {
+                            } }) }), _jsxs("div", { className: "froam-figma-left", "data-chef-editor-root": "true", hidden: !leftPanelOpen, children: [_jsxs("div", { className: "froam-figma-left__tabs", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: leftWorkspaceMode === 'plan' ? 'is-active' : '', onClick: () => openWorkspaceSection('plan', 'create'), children: [_jsx(LayoutGrid, { size: 13 }), " Build"] }), _jsxs("button", { type: "button", className: leftWorkspaceMode === 'reference' ? 'is-active' : '', onClick: () => openWorkspaceSection('reference', 'understand'), children: [_jsx(FileImage, { size: 13 }), " Reference"] })] }), _jsxs("div", { className: "froam-figma-left__body", "data-chef-editor-root": "true", children: [leftWorkspaceMode === 'plan' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "SitePlanner", children: _jsx(FroamSitePlanner, { routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, selection: selection ? { nodeId: selection.nodeId, label: selection.label } : null, archiveItems: plannerArchiveItems, onInsertComponent: insertLibraryComponent, onInsertBlankFrame: insertBlankFrame, onInsertBlock: addStructureBlock, onInsertArchived: insertArchivedHtml, onBuildPage: buildLibraryPage, onPlanChange: syncSitePlanGraph, onToast: showToast }) }) })) : null, _jsx("div", { className: "froam-figma-left__view", hidden: leftWorkspaceMode !== 'reference', children: _jsx(FroamSectionBoundary, { name: "ReferenceWorkspace", children: _jsx(FroamReferenceWorkspace, { project: projectSession.project, routeKey: routeKey, onToast: showToast, onActivityChange: setWorkspaceActivity }) }) }), leftWorkspaceMode === 'layers' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "LayersPanel", children: _jsx(FroamLayersPanel, { layers: layers, selectedPath: selection?.path ?? null, selections: selections, onSelectLayer: selectLayerNode, onToggleVisibility: toggleLayerVisibility, onRefresh: () => { const root = getRoot(); if (root)
+                                                    setLayers(collectLayers(root)); }, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, knowledgeByNodeId: layerKnowledge, onOpenKnowledge: (node, section) => { selectLayerNode(node); openWorkspaceSection(section); } }) }) })) : null] })] }), _jsx("div", { className: "froam-figma-layout__canvas", "data-chef-editor-root": "true" }), rightPanelOpen && workspaceMode === 'create' && (() => {
                         const designPanel = (_jsx(FroamSectionBoundary, { name: "DesignPanel", children: _jsx(FroamDesignPanel, { selection: selection, selectionRect: selectionRect, onApplyStyle: applyStyle, onUpdateDraft: updateDraft, onOpenImageUpload: openSelectedImageUpload, onClearImage: clearAppliedImage, onClearSelectionDraft: actionsRef.current.clearSelectionDraft, marginLinked: marginLinked, paddingLinked: paddingLinked, radiusLinked: radiusLinked, onToggleMarginLinked: () => setMarginLinked((value) => !value), onTogglePaddingLinked: () => setPaddingLinked((value) => !value), onToggleRadiusLinked: () => setRadiusLinked((value) => !value), onApplySizePreset: applySizePreset, onBuildTransformString: buildTransformString, fontOptions: fontOptions, getRootEl: getRoot, onOpenBlueprint: () => setBlueprintOpen(true) }) }));
                         if (!isMobileUI)
                             return designPanel;
@@ -5618,7 +5685,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     }
                     style.textContent = `${style.textContent ?? ''}\n${css}`;
                     applyStyle({ animation: inline }, undefined, 'Animation');
-                }, onToast: showToast, project: projectSession.project, onProjectChange: projectSession.setProject, requestedTab: requestedConnectedTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'replay' || current === 'animator' ? null : current)) }), _jsx(FroamIntelligence, { open: showPanel && intelligenceOpen, onClose: () => { setIntelligenceOpen(false); setTemporalOwner((owner) => owner === 'breakpoint-cinema' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, root: getRoot(), registry: nodeRegistryRef.current, onRegistryChange: (registry) => { nodeRegistryRef.current = registry; saveNodeRegistry(registry); }, routeKey: routeKey, viewport: viewportMode, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, selectedElement: currentSelectionRef.current, onSelectNode: selectConnectedNode, onInsertArchived: insertArchivedHtml, onApplyArchivedStyle: (styles) => applyStyle(styles, undefined, 'Archive style'), onInsertReconstruction: insertScreenshotReconstruction, onPreviewWidth: previewIntelligenceWidth, onToast: showToast, requestedTab: requestedIntelligenceTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'breakpoint-cinema' ? null : current)), onActivityChange: setWorkspaceActivity }), _jsx(FroamLabs, { open: showPanel && labsOpen, onClose: () => { setLabsOpen(false); setTemporalOwner((owner) => owner === 'sampling' || owner === 'trailer' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, selectedNodeId: selection?.nodeId, selectedElement: currentSelectionRef.current, onToast: showToast, requestedLab: requestedLab, flags: labsFlags, onFlagsChange: setLabsFlags, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'sampling' || current === 'trailer' ? null : current)), onActivityChange: setWorkspaceActivity }), showPanel && selection && !inlineEditing && (_jsx(FroamResizeHandles, { targetRect: selectionRect, visible: !!selectionRect, onResizeStart: () => {
+                }, onToast: showToast, project: projectSession.project, onProjectChange: projectSession.setProject, requestedTab: requestedConnectedTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'replay' || current === 'animator' ? null : current)) }), _jsx(FroamIntelligence, { open: showPanel && intelligenceOpen, onClose: () => { setIntelligenceOpen(false); setTemporalOwner((owner) => owner === 'breakpoint-cinema' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, root: getRoot(), registry: nodeRegistryRef.current, onRegistryChange: (registry) => { nodeRegistryRef.current = registry; saveNodeRegistry(registry); }, routeKey: routeKey, viewport: viewportMode, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, selectedElement: currentSelectionRef.current, onSelectNode: selectConnectedNode, onInsertArchived: insertArchivedHtml, onApplyArchivedStyle: (styles) => applyStyle(styles, undefined, 'Archive style'), onPreviewWidth: previewIntelligenceWidth, onToast: showToast, requestedTab: requestedIntelligenceTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'breakpoint-cinema' ? null : current)), onActivityChange: setWorkspaceActivity }), _jsx(FroamLabs, { open: showPanel && labsOpen, onClose: () => { setLabsOpen(false); setTemporalOwner((owner) => owner === 'sampling' || owner === 'trailer' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, selectedNodeId: selection?.nodeId, selectedElement: currentSelectionRef.current, onToast: showToast, requestedLab: requestedLab, flags: labsFlags, onFlagsChange: setLabsFlags, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'sampling' || current === 'trailer' ? null : current)), onActivityChange: setWorkspaceActivity }), showPanel && selection && !inlineEditing && (_jsx(FroamResizeHandles, { targetRect: selectionRect, visible: !!selectionRect, onResizeStart: () => {
                     if (!selection)
                         return;
                     if (guardRemoteLock(selection.path))

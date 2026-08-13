@@ -1,4 +1,5 @@
-import type { FroamProjectDocument, FroamProjectEvent, FroamProjectEventPayload, FroamProjectEventType, FroamProjectState } from './types';
+import { type FroamViewport } from '../collab/types';
+import type { FroamDNA, FroamNode, FroamProjectDocument, FroamProjectEvent, FroamProjectEventPayload, FroamProjectEventType, FroamProjectState, FroamRelation, FroamScanRecord } from './types';
 export type FroamMutationLevel = 'safe' | 'experimental' | 'unhinged';
 export type FroamMutationDomain = 'visual' | 'typography' | 'spacing' | 'layout' | 'navigation' | 'interactions' | 'motion' | 'responsive' | 'composition';
 export type FroamMutationProtection = 'copy' | 'brand-colors' | 'logo' | 'product-data' | 'navigation' | 'component' | 'section';
@@ -61,6 +62,15 @@ export type FroamAdoptionResult = {
         targetId: string;
         reason: string;
     }>;
+};
+export type FroamMutationSelectionSnapshot = {
+    node: FroamNode;
+    scan?: FroamScanRecord;
+    dna?: FroamDNA;
+    relationships?: FroamRelation[];
+    routeKey: string;
+    viewport: FroamViewport;
+    path: string;
 };
 export declare function normalizeMutationConstraints(level: FroamMutationLevel, input?: Partial<FroamMutationConstraints>): FroamMutationConstraints;
 export declare const deterministicMutationProvider: FroamMutationProvider;
@@ -142,4 +152,61 @@ export declare function adoptMutationChanges(document: FroamProjectDocument, inp
     idFactory?: () => string;
 }): FroamAdoptionResult;
 export declare function materializeMutationPreview(state: FroamProjectState, proposals: readonly FroamMutationProposal[]): FroamProjectState;
+/**
+ * Create a mutation prototype branch from an already-validated set of external
+ * FroamMutationProposal objects (e.g. from the AI planning pipeline).
+ *
+ * Uses the SAME branch/provenance/adoption pipeline as createMutationPrototype
+ * so all MUTATE protections remain intact. The caller is responsible for
+ * validating proposals before passing them here.
+ */
+export declare function createMutationPrototypeFromProposals(document: FroamProjectDocument, input: {
+    branchId: string;
+    name?: string;
+    actorId: string;
+    level: FroamMutationLevel;
+    /** Original bounded request scope. Proposals cannot expand it. */
+    scopeNodeIds: string[];
+    proposals: FroamMutationProposal[];
+    constraints: FroamMutationConstraints;
+    provider: string;
+    /** Fresh selected-node evidence is written to the prototype only. */
+    selectionSnapshot?: FroamMutationSelectionSnapshot;
+    preserveDimensions?: boolean;
+    now?: number;
+    idFactory?: () => string;
+}): {
+    project: {
+        metadata: {
+            mutations: FroamMutationProvenance[];
+        };
+        activeBranchId: string;
+        updatedAt: number;
+        checkpoints: {
+            [x: string]: import("./types").FroamCheckpoint;
+        };
+        branches: {
+            [x: string]: import("./types").FroamBranch;
+        };
+        schemaVersion: typeof import("./types").FROAM_PROJECT_SCHEMA_VERSION;
+        id: import("./types").FroamId;
+        name: string;
+        createdAt: number;
+        events: FroamProjectEvent[];
+    };
+    provenance: {
+        operationIds: string[];
+        id: string;
+        sourceBranchId: string;
+        sourceCheckpointId: string;
+        level: FroamMutationLevel;
+        provider: string;
+        targetScope: string[];
+        constraints: FroamMutationConstraints;
+        createdAt: number;
+    };
+    proposals: FroamMutationProposal[];
+    filteredCount: number;
+    compiledDesignOperationCount: number;
+};
 //# sourceMappingURL=mutation.d.ts.map

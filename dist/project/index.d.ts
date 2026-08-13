@@ -33,6 +33,8 @@ export * from './replay';
 export * from './graph-inspector';
 export * from './animator-adapter';
 export * from './intelligence-provider';
+export * from './intelligence-transport';
+export * from './intelligence-context';
 export * from './archive';
 export * from './archaeology';
 export * from './product-flow';
@@ -40,4 +42,5 @@ export * from './attention';
 export * from './rhythm';
 export * from './responsive';
 export * from './screenshot-reconstruction';
+export * from './reference-intelligence';
 //# sourceMappingURL=index.d.ts.map

@@ -54,7 +54,8 @@ type Props = {
     routeKey: string;
     getRootEl: () => HTMLElement | null;
     onJumpToElement: (element: HTMLElement) => void;
+    onOpenLayers?: () => void;
 };
-export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJumpToElement }: Props): import("react").JSX.Element | null;
+export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJumpToElement, onOpenLayers }: Props): import("react").JSX.Element | null;
 export {};
 //# sourceMappingURL=FroamBlueprint.d.ts.map

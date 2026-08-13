@@ -1,4 +1,4 @@
-import { Archive, Beaker, Boxes, Braces, Clapperboard, DraftingCompass, FlaskConical, GitBranch, History, Layers, MousePointer2, Network, ScanSearch, Sparkles, UserRound, Waves, Zap } from 'lucide-react'
+import { Archive, Beaker, Boxes, Braces, Clapperboard, DraftingCompass, FileImage, FlaskConical, GitBranch, History, Layers, MousePointer2, Network, ScanSearch, Sparkles, UserRound, Waves, Zap } from 'lucide-react'
 import type { FroamLabsFlags } from '../project/experiments'
 import { FROAM_WORKSPACE_MODES, workspacePresenceSummary, workspaceProjectLabel, workspaceSections, workspaceStatus, workspaceTemporalSurface, type FroamTemporalOwner, type FroamWorkspaceMode, type FroamWorkspaceSection } from './workspace-shell-model'
 
@@ -20,10 +20,10 @@ type Props = {
   onOpenPrototypes: () => void
   onOpenReplay: () => void
   temporalOwner: FroamTemporalOwner
-  activity?: 'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | null
+  activity?: 'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | 'intent-understanding' | 'intent-creating' | 'intent-applying' | null
 }
 
-const icons: Partial<Record<FroamWorkspaceSection, typeof MousePointer2>> = { design: MousePointer2, plan: Boxes, layers: Layers, blueprint: DraftingCompass, animator: Clapperboard, scan: ScanSearch, dna: Braces, archive: Archive, flow: Network, rhythm: Waves, responsive: Clapperboard, laboratory: Beaker, mutate: FlaskConical, sample: Zap, interactions: Zap, 'interactions-create': Zap, break: FlaskConical, 'test-user': UserRound, prototypes: GitBranch, replay: History, advanced: Braces }
+const icons: Partial<Record<FroamWorkspaceSection, typeof MousePointer2>> = { design: MousePointer2, plan: Boxes, reference: FileImage, layers: Layers, blueprint: DraftingCompass, animator: Clapperboard, scan: ScanSearch, dna: Braces, archive: Archive, flow: Network, rhythm: Waves, responsive: Clapperboard, laboratory: Beaker, mutate: FlaskConical, sample: Zap, interactions: Zap, 'interactions-create': Zap, break: FlaskConical, 'test-user': UserRound, prototypes: GitBranch, replay: History, advanced: Braces }
 export default function FroamWorkspaceShell(props: Props) {
   const project = workspaceProjectLabel(props.projectName, props.branchName, props.branchId)
   const status = workspaceStatus({ mode: props.mode, branchName: props.branchName, branchId: props.branchId, activity: props.activity, sampling: props.temporalOwner === 'sampling', replay: props.temporalOwner === 'replay', physics: props.activeSection === 'physics' })

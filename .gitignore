@@ -3,3 +3,10 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# Credentials — never commit API keys or secrets
+.env
+.env.*
+
+# Local AI playground — contains user-specific config and credentials
+froam-ai-lab/

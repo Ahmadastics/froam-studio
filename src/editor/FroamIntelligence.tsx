@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { Archive, Brain, Clapperboard, Eye, GitFork, History, Network, Play, Pause, ScanSearch, Smartphone, Upload, Waves, X } from 'lucide-react'
+import { Archive, Brain, Clapperboard, Eye, GitFork, History, Network, Play, Pause, ScanSearch, Smartphone, Waves, X } from 'lucide-react'
 import { appendProjectEvents, createProjectEvent, deriveBranchState } from '../project/event-log'
 import { scanDomTree, dnaFromScan } from '../project/scan'
 import { archiveItemKind, createArchiveItem, recordArchiveArtifactUse, searchArchive, type FroamArchiveKind } from '../project/archive'
@@ -9,12 +9,11 @@ import { createFlowGraph } from '../project/product-flow'
 import { predictAttention, type FroamAttentionRank } from '../project/attention'
 import { analyzeVisualRhythm } from '../project/rhythm'
 import { cinemaWidths, defaultResponsivePolicy, observeResponsiveState, responsiveSuggestions, type FroamResponsiveObservation } from '../project/responsive'
-import { applyVisualDiff, compareScreenshotPixels, localScreenshotProvider, type FroamScreenshotReconstruction, type FroamScreenshotRegion } from '../project/screenshot-reconstruction'
 import type { FroamNodeRegistry } from '../project/node-registry'
 import type { FroamArchiveItem, FroamProjectDocument, FroamProjectEventPayload, FroamProjectEventType, FroamResponsivePolicy, FroamScanRecord } from '../project/types'
 
 type SelectionRef = { nodeId?: string; path: string; label: string } | null
-export type FroamIntelligenceTab = 'scan' | 'dna' | 'archive' | 'archaeology' | 'flow' | 'attention' | 'rhythm' | 'responsive' | 'screenshot'
+export type FroamIntelligenceTab = 'scan' | 'dna' | 'archive' | 'archaeology' | 'flow' | 'attention' | 'rhythm' | 'responsive'
 
 type Props = {
   open: boolean; onClose: () => void; project: FroamProjectDocument; onProjectChange: Dispatch<SetStateAction<FroamProjectDocument>>
@@ -22,7 +21,6 @@ type Props = {
   routeKey: string; viewport: 'desktop' | 'tablet' | 'mobile'; selection: SelectionRef; selectedElement: HTMLElement | null
   onSelectNode: (nodeId: string, path?: string) => void; onInsertArchived: (html: string) => void
   onApplyArchivedStyle: (styles: Record<string, string>) => void
-  onInsertReconstruction: (regions: FroamScreenshotRegion[], width: number, height: number, rootNodeId: string) => HTMLElement
   onPreviewWidth: (width: number | null) => void; onToast: (message: string) => void
   requestedTab?: FroamIntelligenceTab; onTemporalOwnerChange?: (owner: 'breakpoint-cinema' | null) => void
   onActivityChange?: (activity: 'scanning' | 'screenshot' | null) => void
@@ -43,9 +41,6 @@ export default function FroamIntelligence(props: Props) {
   const [cinemaWidth, setCinemaWidth] = useState(375)
   const [cinemaSpeed, setCinemaSpeed] = useState(1)
   const [cinemaObservations, setCinemaObservations] = useState<FroamResponsiveObservation[]>([])
-  const [screenshotBusy, setScreenshotBusy] = useState(false)
-  const [lastReconstruction, setLastReconstruction] = useState<FroamScreenshotReconstruction | null>(null)
-  const screenshotInput = useRef<HTMLInputElement>(null)
   const state = useMemo(() => deriveBranchState(props.project), [props.project])
   const selectedDna = props.selection?.nodeId ? state.dna[props.selection.nodeId] : undefined
   const selectedPolicy = props.selection?.nodeId ? state.responsive[props.selection.nodeId] : undefined
@@ -154,32 +149,8 @@ export default function FroamIntelligence(props: Props) {
   }, [cinemaWidth, tab])
   useEffect(() => () => props.onPreviewWidth(null), [])
 
-  async function importScreenshot(file: File) {
-    setScreenshotBusy(true)
-    props.onActivityChange?.('screenshot')
-    try {
-      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('Use a PNG, JPEG or WebP screenshot')
-      const bitmap = await createImageBitmap(file); const imageWidth = bitmap.width; const imageHeight = bitmap.height; const canvas = document.createElement('canvas'); canvas.width = imageWidth; canvas.height = imageHeight
-      const context = canvas.getContext('2d', { willReadFrequently: true }); if (!context) throw new Error('Canvas decoding is unavailable')
-      context.drawImage(bitmap, 0, 0); const pixels = context.getImageData(0, 0, imageWidth, imageHeight); bitmap.close()
-      let result = await localScreenshotProvider.reconstruct({ width: imageWidth, height: imageHeight, data: pixels.data, mimeType: file.type, name: file.name, referenceId: `reference:${Date.now().toString(36)}`, metadata: { viewportWidth: imageWidth, viewportHeight: imageHeight, route: props.routeKey, label: file.name } })
-      const frame = props.onInsertReconstruction(result.regions, imageWidth, imageHeight, result.rootNodeId)
-      try {
-        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-        const { toPixelData } = await import('html-to-image')
-        const captured = await toPixelData(frame, { width: imageWidth, height: imageHeight, pixelRatio: 1, cacheBust: true })
-        result = applyVisualDiff(result, compareScreenshotPixels({ width: imageWidth, height: imageHeight, data: pixels.data, mimeType: file.type }, { width: imageWidth, height: imageHeight, data: new Uint8ClampedArray(captured), mimeType: 'image/png' }))
-      } catch { result = applyVisualDiff(result, { metric: 'normalized-rgb-mae-v1', comparable: false, largestMismatches: [], disclaimer: 'The browser could not capture the reconstruction; structure remains editable and validation can be retried.' }) }
-      const events: EventInput[] = [{ type: 'analysis.upserted', payload: { analysis: result.analysis }, targetIds: result.analysis.targetIds, label: 'Screenshot reconstruction' }]
-      for (const node of result.nodes) events.push({ type: 'node.upserted', payload: { node }, targetIds: [node.id] })
-      for (const relation of result.relations) events.push({ type: 'relation.upserted', payload: { relation }, targetIds: [relation.from, relation.to] })
-      for (const dna of result.dna) events.push({ type: 'dna.captured', payload: { dna }, targetIds: [dna.nodeId] })
-      commit(events); setLastReconstruction(result); const validation = result.analysis.result.validation as { comparable?: boolean; pixelSimilarity?: number } | null; props.onToast(`Reconstructed ${result.regions.length} editable regions${validation?.comparable ? ` · measured ${Math.round((validation.pixelSimilarity ?? 0) * 100)}% RGB similarity` : ''}`)
-    } catch (error) { props.onToast(error instanceof Error ? error.message : 'Screenshot reconstruction failed') } finally { setScreenshotBusy(false); props.onActivityChange?.(null) }
-  }
-
   if (!props.open) return null
-  const tabs: Array<[FroamIntelligenceTab, string, typeof Brain]> = [['scan', 'Scan', ScanSearch], ['dna', 'DNA', Brain], ['archive', 'Archive', Archive], ['archaeology', 'Origins', History], ['flow', 'Flow', Network], ['attention', 'Attention', Eye], ['rhythm', 'Rhythm', Waves], ['responsive', 'Responsive', Clapperboard], ['screenshot', 'Screenshot', Upload]]
+  const tabs: Array<[FroamIntelligenceTab, string, typeof Brain]> = [['scan', 'Scan', ScanSearch], ['dna', 'DNA', Brain], ['archive', 'Archive', Archive], ['archaeology', 'Origins', History], ['flow', 'Flow', Network], ['attention', 'Attention', Eye], ['rhythm', 'Rhythm', Waves], ['responsive', 'Responsive', Clapperboard]]
   const archaeology = props.selection?.nodeId ? archaeologyForNode(props.project, props.selection.nodeId) : null
   const rhythm = Object.values(state.analyses).filter((analysis) => analysis.kind === 'visual-rhythm').sort((a, b) => b.createdAt - a.createdAt)[0]
   const flow = Object.values(state.flows)[0]
@@ -200,7 +171,6 @@ export default function FroamIntelligence(props: Props) {
         {tab === 'attention' && <section><h3>Predicted Attention</h3><p>Local heuristic estimate—not eye tracking or scientific measurement.</p><button type="button" className="is-primary" onClick={runAttention} disabled={!latestScans.length}>Analyze attention</button><label><input type="checkbox" checked={attentionOverlay} onChange={(event) => setAttentionOverlay(event.target.checked)} /> Heat overlay</label><ol>{ranking.slice(0, 12).map((item) => <li key={item.nodeId} onClick={() => props.onSelectNode(item.nodeId)}><b>{item.score}</b><span>{item.role}</span><small>{item.reasons.join(', ')}</small></li>)}</ol>{((latestAttention?.result.warnings ?? []) as string[]).map((warning) => <aside className="froam-intelligence__warning" key={warning}>{warning}</aside>)}</section>}
         {tab === 'rhythm' && <section><h3>Visual Rhythm</h3><button type="button" className="is-primary" onClick={runRhythm} disabled={!latestScans.length}>Analyze page rhythm</button>{rhythm && <><div className="froam-intelligence__rhythm">{((rhythm.result.sections ?? []) as Array<{ height: number }>).map((item, index) => <i key={index} style={{ height: Math.max(8, Math.min(70, item.height / 8)) }} />)}</div>{((rhythm.result.warnings ?? []) as string[]).map((warning) => <aside className="froam-intelligence__warning" key={warning}>{warning}</aside>)}<small>Confidence {Math.round((rhythm.confidence ?? 0) * 100)}%</small></>}</section>}
         {tab === 'responsive' && <section><h3>Priority Responsive</h3>{props.selection?.nodeId ? <div className="froam-intelligence__grid"><label>Priority<select value={selectedPolicy?.priority ?? 'medium'} onChange={(event) => updatePolicy({ priority: event.target.value as FroamResponsivePolicy['priority'] })}>{['critical','high','medium','low','decorative'].map((value) => <option key={value}>{value}</option>)}</select></label>{(['canHide','canCollapse','canWrap','canTruncate','canCrop','canReposition'] as const).map((key) => <label key={key}><input type="checkbox" checked={selectedPolicy?.[key] ?? defaultResponsivePolicy('', props.actorId)[key]} onChange={(event) => updatePolicy({ [key]: event.target.checked })} /> {key.replace('can','Can ')}</label>)}<label>Minimum useful width<input type="number" value={selectedPolicy?.minimumUsefulWidth ?? ''} onChange={(event) => updatePolicy({ minimumUsefulWidth: Number(event.target.value) || undefined })} /></label></div> : <p>Select a node to set survival metadata.</p>}<h3>Breakpoint Cinema</h3><div className="froam-intelligence__row"><button type="button" onClick={() => setCinemaPlaying((value) => !value)}>{cinemaPlaying ? <Pause size={13} /> : <Play size={13} />}</button><input type="range" min="320" max="1440" value={cinemaWidth} onChange={(event) => setCinemaWidth(Number(event.target.value))} /><b>{cinemaWidth}px</b><select value={cinemaSpeed} onChange={(event) => setCinemaSpeed(Number(event.target.value))}>{[1,2,4].map((speed) => <option key={speed} value={speed}>{speed}x</option>)}</select></div><div className="froam-intelligence__markers">{cinemaObservations.filter((item) => item.markers.length).map((item) => <button type="button" key={item.width} onClick={() => setCinemaWidth(item.width)}><b>{item.width}px</b>{item.markers.join(' · ')}</button>)}</div>{suggestions.map((suggestion) => <aside key={`${suggestion.nodeId}:${suggestion.action}`}><b>{suggestion.action}</b> {suggestion.reason}</aside>)}</section>}
-        {tab === 'screenshot' && <section><h3>Observe → Understand → Validate</h3><p>Experimental local reconstruction extracts observable regions and available browser OCR, creates normal Froam/DNA nodes, renders them, then reports an equal-size RGB difference. It does not recover original source code.</p><button type="button" className="is-primary" onClick={() => screenshotInput.current?.click()} disabled={screenshotBusy}>{screenshotBusy ? 'Reconstructing and validating…' : 'Import screenshot'}</button><input ref={screenshotInput} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importScreenshot(file); event.target.value = '' }} />{lastReconstruction && <><dl><dt>OCR</dt><dd>{lastReconstruction.ocr[0]?.available ? `${lastReconstruction.ocr[0].lines.length} detected lines` : 'Unavailable — text remains unknown'}</dd><dt>References</dt><dd>{lastReconstruction.references.length} · multi-reference model</dd><dt>Similarity</dt><dd>{(lastReconstruction.analysis.result.validation as { comparable?: boolean; pixelSimilarity?: number } | null)?.comparable ? `${Math.round(((lastReconstruction.analysis.result.validation as { pixelSimilarity: number }).pixelSimilarity) * 100)}% normalized RGB agreement` : 'Capture not comparable'}</dd><dt>Largest mismatches</dt><dd>{((lastReconstruction.analysis.result.validation as { largestMismatches?: unknown[] } | null)?.largestMismatches?.length ?? 0)} measured tiles</dd></dl><small>Similarity is a transparent pixel-error metric, not a claim of perceptual or source equivalence.</small></>}<dl><dt>Provider</dt><dd>froam-local-reconstruction-v2</dd><dt>Data boundary</dt><dd>Pixels stay in this browser. No source, credentials or image data is uploaded.</dd></dl></section>}
       </main>
     </aside>
     {attentionOverlay && <div className="froam-attention-overlay" data-chef-editor-root="true">{ranking.slice(0, 12).map((item) => { const element = props.root?.querySelector<HTMLElement>(`[data-froam-id="${CSS.escape(item.nodeId)}"]`); const rect = element?.getBoundingClientRect(); return rect ? <i key={item.nodeId} style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height, opacity: Math.max(.12, item.score / 125) }}><b>{item.rank}</b></i> : null })}</div>}

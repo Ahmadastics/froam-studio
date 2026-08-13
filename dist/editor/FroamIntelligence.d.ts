@@ -1,5 +1,4 @@
 import { type Dispatch, type SetStateAction } from 'react';
-import { type FroamScreenshotRegion } from '../project/screenshot-reconstruction';
 import type { FroamNodeRegistry } from '../project/node-registry';
 import type { FroamProjectDocument } from '../project/types';
 type SelectionRef = {
@@ -7,7 +6,7 @@ type SelectionRef = {
     path: string;
     label: string;
 } | null;
-export type FroamIntelligenceTab = 'scan' | 'dna' | 'archive' | 'archaeology' | 'flow' | 'attention' | 'rhythm' | 'responsive' | 'screenshot';
+export type FroamIntelligenceTab = 'scan' | 'dna' | 'archive' | 'archaeology' | 'flow' | 'attention' | 'rhythm' | 'responsive';
 type Props = {
     open: boolean;
     onClose: () => void;
@@ -24,7 +23,6 @@ type Props = {
     onSelectNode: (nodeId: string, path?: string) => void;
     onInsertArchived: (html: string) => void;
     onApplyArchivedStyle: (styles: Record<string, string>) => void;
-    onInsertReconstruction: (regions: FroamScreenshotRegion[], width: number, height: number, rootNodeId: string) => HTMLElement;
     onPreviewWidth: (width: number | null) => void;
     onToast: (message: string) => void;
     requestedTab?: FroamIntelligenceTab;
