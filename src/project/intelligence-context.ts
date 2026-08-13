@@ -135,9 +135,11 @@ export function assembleFroamIntelligenceRequest(
   }
 
   // ── Constraints ───────────────────────────────────────────────────────────
-  // Safe level by default for Phase 2. Protects navigation and brand colors.
+  // Safe level protects product identity while still allowing visual and
+  // layout edits to navigation. Structural navigation mutations remain outside
+  // the safe domain allow-list.
   const constraints: FroamMutationConstraints = normalizeMutationConstraints('safe', {
-    protect: ['navigation', 'logo', 'brand-colors'],
+    protect: ['logo', 'brand-colors'],
   })
 
   const request: FroamMutationIntelligenceRequest = {
@@ -147,7 +149,7 @@ export function assembleFroamIntelligenceRequest(
     context,
     constraints,
     scopeNodeIds,
-    protectedNodeIds: /navigation|menu|logo/i.test(String(selectedNode.metadata?.semanticRole ?? selectedNode.name ?? '')) ? [scope.selectedNodeId] : [],
+    protectedNodeIds: /logo/i.test(String(selectedNode.metadata?.semanticRole ?? selectedNode.name ?? '')) ? [scope.selectedNodeId] : [],
     priorAttemptFeedback: priorAttemptFeedback?.trim().slice(0, 1000) || null,
     requestId,
     // Consent is passed through so the server can enforce it.

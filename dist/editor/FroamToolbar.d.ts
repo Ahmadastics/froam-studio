@@ -16,8 +16,7 @@ type Props = {
     onSaveRepo?: () => void;
     repoStatus?: 'clean' | 'dirty' | 'offline' | null;
     repoDirtyCount?: number;
-    theme?: 'dark' | 'light';
-    onToggleTheme?: () => void;
+    onAskFroam: () => void;
     onCommandPalette: () => void;
     onShortcutsOverlay: () => void;
     routeKey: string;
@@ -35,6 +34,6 @@ type Props = {
     onMinimize: () => void;
     onClose: () => void;
 };
-export default function FroamToolbar({ workspace, viewportMode, onViewportChange, activeTool, onToolChange, canUndo, canRedo, onUndo, onRedo, onSave, onSaveRepo, repoStatus, repoDirtyCount, theme, onToggleTheme, onCommandPalette, onShortcutsOverlay, routeKey, persona, onOpenPersonaEditor, draftCount, moveMode, onToggleMoveMode, zoom, setZoom, leftPanelOpen, rightPanelOpen, onToggleLeftPanel, onToggleRightPanel, onMinimize, onClose, }: Props): import("react").JSX.Element;
+export default function FroamToolbar({ workspace, viewportMode, onViewportChange, activeTool, onToolChange, canUndo, canRedo, onUndo, onRedo, onSave, onSaveRepo, repoStatus, repoDirtyCount, onAskFroam, onCommandPalette, onShortcutsOverlay, routeKey, persona, onOpenPersonaEditor, draftCount, moveMode, onToggleMoveMode, zoom, setZoom, leftPanelOpen, rightPanelOpen, onToggleLeftPanel, onToggleRightPanel, onMinimize, onClose, }: Props): import("react").JSX.Element;
 export type { ToolMode };
 //# sourceMappingURL=FroamToolbar.d.ts.map

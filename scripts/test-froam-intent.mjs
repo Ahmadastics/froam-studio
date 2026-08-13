@@ -80,6 +80,20 @@ test('local spacing requests preserve the native protected proposal format', () 
   assert.equal(proposal.payload.dna.layout.padding, '18px')
   assert.deepEqual(proposal.targetIds, ['cta'])
 })
+test('local intelligence understands layout, sizing, and movement requests', () => {
+  const proposals = createLocalFroamIntentProposals(snapshot, 'Center the content, set width to 320px, and move it right 12px')
+  const layout = proposals.find(({ domain }) => domain === 'layout').payload.dna.layout
+  const motion = proposals.find(({ domain }) => domain === 'motion').payload.dna.motion
+  assert.equal(layout.width, '320px')
+  assert.equal(layout.justifyContent, 'center')
+  assert.equal(layout.alignItems, 'center')
+  assert.equal(motion.transform, 'translateX(12px)')
+})
+test('local intelligence understands plain-text replacement requests', () => {
+  const [proposal] = createLocalFroamIntentProposals(snapshot, 'Change the button text to Start free')
+  assert.equal(proposal.domain, 'typography')
+  assert.equal(proposal.payload.dna.semantics.textContent, 'Start free')
+})
 test('unknown requests stay provider-eligible instead of inventing a local edit', () => assert.deepEqual(createLocalFroamIntentProposals(snapshot, 'Rewrite this pricing strategy'), []))
 
 function createExperiment(project = fixtureProject(), plan = proposal(), preserveDimensions = true) {
@@ -89,6 +103,8 @@ function createExperiment(project = fixtureProject(), plan = proposal(), preserv
 test('valid plan creates an isolated live-design branch', () => { const project = fixtureProject(); const before = JSON.stringify(deriveBranchState(project, 'main')); const result = createExperiment(project); assert.notEqual(result.project.activeBranchId, 'main'); assert.equal(JSON.stringify(deriveBranchState(result.project, 'main')), before); assert.equal(result.compiledDesignOperationCount, 1); assert.notEqual(deriveBranchState(result.project).legacyStore[viewportKey][snapshot.path].styles.boxShadow, 'none') })
 test('prototype has lineage and provider provenance', () => { const result = createExperiment(); assert.equal(result.provenance.sourceBranchId, 'main'); assert.equal(result.provenance.provider, 'fixture-provider'); assert.deepEqual(result.provenance.targetScope, ['cta']); assert.ok(result.provenance.operationIds.length >= 3) })
 test('dimension preservation suppresses size styles', () => { const plan = { ...proposal(), domain: 'spacing', payload: { dna: { ...snapshot.dna, capturedAt: 3, layout: { ...snapshot.dna.layout, padding: '24px' } } } }; assert.equal(createExperiment(fixtureProject(), plan, true).compiledDesignOperationCount, 0) })
+test('safe Ask Froam layout changes compile into live design operations', () => { const plan = createLocalFroamIntentProposals(snapshot, 'Center the content')[0]; assert.ok(createExperiment(fixtureProject(), plan, false).compiledDesignOperationCount >= 3) })
+test('safe Ask Froam copy changes compile into live text operations', () => { const plan = createLocalFroamIntentProposals(snapshot, 'Change the button text to Start free')[0]; const result = createMutationPrototypeFromProposals(fixtureProject(), { branchId: 'copy-intent', actorId: 'tester', level: 'safe', scopeNodeIds: ['cta'], proposals: [plan], constraints: normalizeMutationConstraints('safe'), provider: 'local', selectionSnapshot: snapshot, now: 10, idFactory: ids('copy-event') }); assert.equal(deriveBranchState(result.project).legacyStore[viewportKey][snapshot.path].text, 'Start free') })
 test('scope expansion is rejected by native mutation', () => { const bad = { ...proposal(), targetIds: ['copy'], payload: { dna: { ...snapshot.dna, nodeId: 'copy' } } }; assert.throws(() => createExperiment(fixtureProject(), bad), /No safe mutation proposals/) })
 test('unsafe CSS never compiles onto live design', () => assert.equal(createExperiment(fixtureProject(), proposal('url(https://tracker.invalid/pixel)')).compiledDesignOperationCount, 0))
 test('Keep uses canonical adoption', () => { const result = createExperiment(); const branch = result.project.activeBranchId; const comparison = compareMutationBranches(result.project, 'main', branch); const adopted = adoptMutationChanges(result.project, { mutationBranchId: branch, targetBranchId: 'main', eventIds: comparison.eventIds, actorId: 'tester', now: 20, idFactory: ids('adopted') }); assert.equal(adopted.status, 'adopted'); assert.notEqual(deriveBranchState(switchProjectBranch(adopted.project, 'main'), 'main').legacyStore[viewportKey][snapshot.path].styles.boxShadow, 'none') })

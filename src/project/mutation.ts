@@ -15,7 +15,7 @@ export type FroamAdoptionResult = { status: 'adopted' | 'refused'; project: Froa
 export type FroamMutationSelectionSnapshot = { node: FroamNode; scan?: FroamScanRecord; dna?: FroamDNA; relationships?: FroamRelation[]; routeKey: string; viewport: FroamViewport; path: string }
 
 const DEFAULT_ALLOWED: Record<FroamMutationLevel, FroamMutationDomain[]> = {
-  safe: ['visual', 'typography', 'spacing', 'motion'],
+  safe: ['visual', 'typography', 'spacing', 'layout', 'motion'],
   experimental: ['visual', 'typography', 'spacing', 'layout', 'navigation', 'interactions', 'motion', 'responsive', 'composition'],
   unhinged: ['visual', 'typography', 'spacing', 'layout', 'navigation', 'interactions', 'motion', 'responsive', 'composition'],
 }
@@ -124,12 +124,12 @@ export function materializeMutationPreview(state: FroamProjectState, proposals: 
 
 const COMPILED_STYLE_FIELDS: Record<FroamMutationDomain, readonly string[]> = {
   visual: ['color', 'backgroundColor', 'border', 'borderColor', 'borderRadius', 'boxShadow', 'opacity'],
-  typography: ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textTransform', 'textDecorationLine'],
+  typography: ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign', 'textTransform', 'textDecorationLine'],
   spacing: ['margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'gap', 'rowGap', 'columnGap'],
   motion: ['transition', 'animation', 'transform'],
-  layout: [], navigation: [], interactions: [], responsive: [], composition: [],
+  layout: ['display', 'position', 'top', 'right', 'bottom', 'left', 'zIndex', 'overflow', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'aspectRatio', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'gridTemplateColumns', 'gridTemplateRows'], navigation: [], interactions: [], responsive: [], composition: [],
 }
-const DIMENSION_SENSITIVE_STYLES = new Set(['border', 'fontSize', 'lineHeight', 'letterSpacing', 'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'gap', 'rowGap', 'columnGap', 'transform'])
+const DIMENSION_SENSITIVE_STYLES = new Set(['border', 'fontSize', 'lineHeight', 'letterSpacing', 'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'gap', 'rowGap', 'columnGap', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'transform'])
 function safeCompiledStyle(value: unknown) {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
@@ -149,13 +149,19 @@ function proposalStyleRecord(proposal: FroamMutationProposal) {
 function baselineStyleRecord(dna: FroamDNA | undefined, domain: FroamMutationDomain) {
   return domain === 'spacing' || domain === 'layout' ? dna?.layout : domain === 'motion' ? dna?.motion ?? dna?.behavior : dna?.visual
 }
-function compileMutationDesignEvents(input: { project: FroamProjectDocument; branchId: string; actorId: string; proposals: FroamMutationProposal[]; snapshot: FroamMutationSelectionSnapshot; baseClock: number; now: number; preserveDimensions: boolean; idFactory?: () => string }) {
+function compileMutationDesignEvents(input: { project: FroamProjectDocument; branchId: string; actorId: string; proposals: FroamMutationProposal[]; snapshot: FroamMutationSelectionSnapshot; baseClock: number; now: number; preserveDimensions: boolean; preserveCopy: boolean; idFactory?: () => string }) {
   const sourceState = deriveBranchState(input.project, input.project.branches[input.branchId].parentBranchId ?? input.project.activeBranchId)
   const scope = sourceState.legacyStore[scopeKey(input.snapshot.routeKey, input.snapshot.viewport)] ?? {}
   const draft = scope[input.snapshot.path]
   const compiled: Array<{ property: string; value: string; rationale: string }> = []
   for (const proposal of input.proposals) {
     if (!proposal.targetIds.includes(input.snapshot.node.id)) continue
+    const proposedDna = proposal.type === 'dna.captured' ? (proposal.payload as { dna?: FroamDNA }).dna : undefined
+    const proposedText = proposedDna?.semantics?.textContent
+    const baselineText = input.snapshot.dna?.semantics?.textContent
+    if (!input.preserveCopy && typeof proposedText === 'string' && proposedText.trim() && proposedText.length <= 1_000 && proposedText !== baselineText && !compiled.some((item) => item.property === '$text')) {
+      compiled.push({ property: '$text', value: proposedText.trim(), rationale: proposal.rationale })
+    }
     const record = proposalStyleRecord(proposal)
     if (!record) continue
     const baseline = baselineStyleRecord(input.snapshot.dna, proposal.domain) as Record<string, unknown> | undefined
@@ -170,7 +176,9 @@ function compileMutationDesignEvents(input: { project: FroamProjectDocument; bra
   }
   return compiled.map((item, index) => {
     const clock = input.baseClock + index + 1
-    const op: FroamOp = { id: `intent-op:${input.branchId}:${index + 1}`, kind: 'edit', actor: input.actorId, clock, ts: input.now + index, routeKey: input.snapshot.routeKey, viewport: input.snapshot.viewport, path: input.snapshot.path, nodeId: input.snapshot.node.id, field: `style:${item.property}`, before: draft?.styles?.[item.property], after: item.value, label: `Froam: ${item.rationale}`, batch: `intent:${input.branchId}` }
+    const isText = item.property === '$text'
+    const observedText = input.snapshot.dna?.semantics?.textContent
+    const op: FroamOp = { id: `intent-op:${input.branchId}:${index + 1}`, kind: 'edit', actor: input.actorId, clock, ts: input.now + index, routeKey: input.snapshot.routeKey, viewport: input.snapshot.viewport, path: input.snapshot.path, nodeId: input.snapshot.node.id, field: isText ? 'text' : `style:${item.property}`, before: isText ? draft?.text ?? (typeof observedText === 'string' ? observedText : undefined) : draft?.styles?.[item.property], after: item.value, label: `Froam: ${item.rationale}`, batch: `intent:${input.branchId}` }
     return createProjectEvent({ projectId: input.project.id, branchId: input.branchId, actorId: input.actorId, clock, createdAt: input.now + index, type: 'design.op.appended', payload: { op }, targetIds: [input.snapshot.node.id], label: `Froam experiment: ${item.rationale}`, idFactory: input.idFactory })
   })
 }
@@ -198,6 +206,7 @@ export function createMutationPrototypeFromProposals(
     /** Fresh selected-node evidence is written to the prototype only. */
     selectionSnapshot?: FroamMutationSelectionSnapshot
     preserveDimensions?: boolean
+    preserveCopy?: boolean
     now?: number
     idFactory?: () => string
   },
@@ -261,7 +270,7 @@ export function createMutationPrototypeFromProposals(
     }),
   )
   project = appendProjectEvents(project, events)
-  const designEvents = input.selectionSnapshot ? compileMutationDesignEvents({ project, branchId: input.branchId, actorId: input.actorId, proposals: allowed, snapshot: input.selectionSnapshot, baseClock: baseClock + events.length, now: now + events.length, preserveDimensions: input.preserveDimensions === true, idFactory: input.idFactory }) : []
+  const designEvents = input.selectionSnapshot ? compileMutationDesignEvents({ project, branchId: input.branchId, actorId: input.actorId, proposals: allowed, snapshot: input.selectionSnapshot, baseClock: baseClock + events.length, now: now + events.length, preserveDimensions: input.preserveDimensions === true, preserveCopy: input.preserveCopy === true, idFactory: input.idFactory }) : []
   project = appendProjectEvents(project, designEvents)
   const provenance: FroamMutationProvenance = {
     id: input.branchId,

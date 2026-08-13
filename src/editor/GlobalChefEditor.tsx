@@ -1861,9 +1861,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [cssVars, setCssVars] = useState<CSSVarEntry[]>([])
   const [repoStatus, setRepoStatus] = useState<'clean' | 'dirty' | 'offline' | null>(null)
   const [repoDirtyCount, setRepoDirtyCount] = useState(0)
-  const [editorTheme, setEditorTheme] = useState<'dark' | 'light'>(() =>
-    typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark',
-  )
   const [newVarName, setNewVarName] = useState('')
   const [newVarValue, setNewVarValue] = useState('')
 
@@ -2344,6 +2341,35 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     window.clearTimeout(toastTimerRef.current)
     toastTimerRef.current = window.setTimeout(() => setToastVisible(false), 2200)
   }, [])
+
+  function executeLocalFroamCommand(intent: string) {
+    const request = intent.toLocaleLowerCase().trim()
+    const wants = (pattern: RegExp) => pattern.test(request)
+    if (wants(/^(?:undo|undo that|go back)$/)) { undo(); return true }
+    if (wants(/^(?:redo|redo that)$/)) { redo(); return true }
+    if (wants(/\b(save|save draft)\b/) && request.split(/\s+/).length <= 4) { saveToRunam(); return true }
+    if (wants(/\b(open|show)\s+(?:the\s+)?layers\b/)) { openWorkspaceSection('layers', 'understand'); return true }
+    if (wants(/\b(open|show)\s+(?:the\s+)?(?:build|components?)\b/)) { openWorkspaceSection('plan', 'create'); return true }
+    if (wants(/\b(open|show)\s+(?:the\s+)?reference\b/)) { openWorkspaceSection('reference', 'understand'); return true }
+    if (wants(/\b(?:turn on|enable|use|enter)\s+move(?: mode)?\b|\bmove mode\b/)) { setActiveTool('move'); setMoveMode(true); showToast('Move mode on — drag any element freely'); return true }
+    if (wants(/\b(?:select|pointer) tool\b/)) { setActiveTool('pointer'); setMoveMode(false); showToast('Select tool active'); return true }
+    if (wants(/\bmake (?:the )?page dark\b|\bdark(?:en)? (?:the )?(?:page|canvas)\b/)) { applyCanvasStyles({ background: '#050505', text: '#ffffff' }); return true }
+
+    if (wants(/\b(add|insert|create|place|draw)\b/)) {
+      const blocks: Array<[RegExp, FroamBlockKind]> = [
+        [/\bhero\b/, 'hero'], [/\bheader|navbar|navigation bar\b/, 'header'], [/\bfooter\b/, 'footer'],
+        [/\bsection\b/, 'section'], [/\bstats?|metrics?\b/, 'stats'], [/\bgrid\b/, 'grid'],
+        [/\bcards?\b/, 'card'], [/\bcontainers?\b/, 'container'], [/\bbuttons?|cta\b/, 'button'],
+        [/\bimages?|photos?|pictures?\b/, 'image'], [/\btext|heading|paragraph\b/, 'text'],
+        [/\brectangle|square|shape|circle\b/, 'shape'], [/\bdivider|separator\b/, 'divider'],
+      ]
+      const block = blocks.find(([pattern]) => pattern.test(request))?.[1]
+      if (block) { addStructureBlock(block); return true }
+      if (wants(/\bframe|artboard\b/)) { insertBlankFrame('end', { preset: 'responsive', width: 1200, height: 720, background: '#ffffff' }); return true }
+    }
+    return false
+  }
+
   async function validateReferenceBuildOnCanvas(plan: FroamReferenceBuildPlan, signal: AbortSignal) {
     const root = getRoot()
     if (!root) return validateReferenceBuildCandidate(plan, [])
@@ -2386,13 +2412,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     onCommitStore: adoptConnectedCandidate,
     onActivityChange: setWorkspaceActivity,
     onToast: showToast,
+    onExecuteLocalCommand: executeLocalFroamCommand,
     onValidateReference: validateReferenceBuildOnCanvas,
   })
-
-  useEffect(() => {
-    if (!selection?.path || !showPanel || inlineEditing || froamIntent.state.phase === 'previewing') return
-    setQuickChatOpen(true)
-  }, [selection?.path, showPanel, inlineEditing])
 
   function openPersonaEditor() {
     keepStudioPinned()
@@ -3371,11 +3393,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const root = getRoot()
     const originals = connectedPreviewOriginalStylesRef.current
     if (!root || !originals) return
-    originals.forEach((style, path) => {
+    originals.forEach((original, path) => {
       const element = findElementByPath(root, path)
       if (!element) return
-      if (style === null) element.removeAttribute('style')
-      else element.setAttribute('style', style)
+      if (original.style === null) element.removeAttribute('style')
+      else element.setAttribute('style', original.style)
+      if (original.text !== undefined) element.innerText = original.text
+      if (original.imageUrl !== undefined && element instanceof HTMLImageElement) element.src = original.imageUrl
     })
     connectedPreviewOriginalStylesRef.current = null
   }
@@ -3385,11 +3409,16 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     restoreConnectedCanvasPreview()
     if (protectRollback) {
       const root = getRoot()
-      const originals = new Map<string, string | null>()
+      const originals = new Map<string, { style: string | null; text?: string; imageUrl?: string }>()
       Object.keys(target[viewportStoreKey] ?? {}).forEach((path) => {
         if (!root || path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path)) return
         const element = findElementByPath(root, path)
-        if (element) originals.set(path, element.getAttribute('style'))
+        const draft = target[viewportStoreKey]?.[path]
+        if (element) originals.set(path, {
+          style: element.getAttribute('style'),
+          text: draft?.text !== undefined ? element.innerText : undefined,
+          imageUrl: draft?.imageUrl !== undefined && element instanceof HTMLImageElement ? element.currentSrc || element.src : undefined,
+        })
       })
       connectedPreviewOriginalStylesRef.current = originals
     }
@@ -5277,7 +5306,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   /* ─── Refs for stable callbacks (avoids stale closures) ─── */
   const storeRef = useRef(store)
   const connectedPreviewStoreRef = useRef<EditorStore | null>(null)
-  const connectedPreviewOriginalStylesRef = useRef<Map<string, string | null> | null>(null)
+  const connectedPreviewOriginalStylesRef = useRef<Map<string, { style: string | null; text?: string; imageUrl?: string }> | null>(null)
   storeRef.current = store
   const selectionRef = useRef(selection)
   selectionRef.current = selection
@@ -5318,15 +5347,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     timer = window.setInterval(poll, 4000)
     return () => { active = false; window.clearInterval(timer) }
   }, [showPanel])
-
-  /* ─── Theme preview flip (Froam edits the real app, so both themes are live) ─── */
-  function toggleEditorTheme() {
-    const next = editorTheme === 'light' ? 'dark' : 'light'
-    if (next === 'light') document.documentElement.setAttribute('data-theme', 'light')
-    else document.documentElement.removeAttribute('data-theme')
-    setEditorTheme(next)
-    showToast(`Previewing ${next} theme`)
-  }
 
   function updateCSSVar(name: string, value: string) {
     document.documentElement.style.setProperty(name, value)
@@ -5594,7 +5614,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     { id: 'export', label: 'Export as file', icon: <Download size={15} />, action: downloadRunamDrafts },
     { id: 'reset', label: 'Reset page', icon: <Eraser size={15} />, action: clearRouteDrafts },
     { id: 'dark', label: 'Dark page', icon: <Palette size={15} />, action: () => applyCanvasStyles({ background: '#050505', text: '#ffffff' }) },
-    { id: 'light', label: 'Light page', icon: <Palette size={15} />, action: () => applyCanvasStyles({ background: '#ffffff', text: '#111827' }) },
     { id: 'clear-sel', label: 'Clear selected element', icon: <X size={15} />, action: clearSelectionDraft },
     { id: 'bold', label: 'Toggle bold', icon: <Bold size={15} />, action: () => { if (selectionRef.current) applyStyle({ fontWeight: Number(selectionRef.current.fontWeight) >= 700 ? '400' : '700' }, { fontWeight: Number(selectionRef.current.fontWeight) >= 700 ? '400' : '700' }) } },
     { id: 'flex', label: 'Set display: flex', icon: <LayoutGrid size={15} />, action: () => { if (selectionRef.current) applyStyle({ display: 'flex' }, { display: 'flex' }) } },
@@ -6000,10 +6019,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         onDismiss={froamIntent.dismiss}
       />
 
-      {showPanel && selection && !inlineEditing && (
+      {showPanel && !inlineEditing && (
         <FroamQuickChat
           open={quickChatOpen}
-          selectionLabel={selection.label}
+          selectionLabel={selection?.label}
           busy={['preparing', 'awaiting-consent', 'requesting', 'plan-ready', 'creating-prototype', 'retrying', 'adopting'].includes(froamIntent.state.phase)}
           onSubmit={(intent) => { setQuickChatOpen(false); void froamIntent.submit({ origin: 'contextual', intent }) }}
           onClose={() => setQuickChatOpen(false)}
@@ -6062,8 +6081,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               onSaveRepo={() => { void actionsRef.current.saveToRepo() }}
               repoStatus={repoStatus}
               repoDirtyCount={repoDirtyCount}
-              theme={editorTheme}
-              onToggleTheme={toggleEditorTheme}
+              onAskFroam={() => setQuickChatOpen(true)}
               onUndo={actionsRef.current.undo}
               onRedo={actionsRef.current.redo}
               onCommandPalette={openCommandPalette}
@@ -6115,6 +6133,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   onOpenPrototypes={() => openConnectedWorkspace('branches')}
                   onOpenReplay={() => openConnectedWorkspace('replay')}
                   onOpenCommands={openCommandPalette}
+                  onAskFroam={() => setQuickChatOpen(true)}
                   temporalOwner={temporalOwner}
                   activity={workspaceActivity}
                 />

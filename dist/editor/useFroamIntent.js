@@ -9,8 +9,10 @@ import { readFroamIntelligenceConsent, writeFroamIntelligenceConsent } from './i
 import { createLocalFroamIntentProposals, FROAM_INTENT_MAX_ATTEMPTS, froamIntentPreferences, froamIntentPrototypeName, froamIntentReducer, froamIntentRetryFeedback, initialFroamIntentState } from './froam-intent-model.js';
 function safeIntentError(error) {
     const code = error instanceof Error ? error.message : 'provider_unavailable';
-    if (code === 'not_configured' || code === 'provider_unavailable')
-        return 'That request needs online intelligence. Try a direct edit like “make it bolder”, “add more space”, or “make it rounder”.';
+    if (code === 'not_configured')
+        return 'That request needs connected intelligence. Configure a provider for the Froam bridge, then restart Froam.';
+    if (code === 'provider_unavailable')
+        return 'The connected intelligence provider did not respond. Check the provider settings and try again.';
     if (code === 'no_valid_proposals')
         return "Froam couldn't find a safe change for that request.";
     if (code === 'provider_invalid_response' || code === 'invalid_request')
@@ -35,6 +37,8 @@ export function useFroamIntent(props) {
     selectedElementRef.current = props.selectedElement;
     const routeRef = useRef(props.routeKey);
     routeRef.current = props.routeKey;
+    const registryRef = useRef(props.registry);
+    registryRef.current = props.registry;
     const pendingRef = useRef(null);
     const abortRef = useRef(null);
     const operationRef = useRef(0);
@@ -50,29 +54,53 @@ export function useFroamIntent(props) {
         else
             props.onActivityChange(null);
     }, [state.phase, props.onActivityChange]);
-    const observeSelection = useCallback(() => {
-        const selection = selectionRef.current;
+    const fingerprint = useCallback((element) => element
+        ? JSON.stringify([element.tagName, element.getAttribute('style') ?? '', element.textContent?.slice(0, 500) ?? '', element.childElementCount])
+        : '', []);
+    const observeTarget = useCallback((element) => {
         const root = props.root;
-        const element = selectedElementRef.current;
-        if (!selection?.nodeId || !root || !element || !root.contains(element))
+        if (!root || element === root || !root.contains(element))
             return null;
-        const bundle = scanDomTree(root, props.registry, { routeKey: props.routeKey, viewport: props.viewport, selectedRoot: element, maxNodes: 48 });
+        const bundle = scanDomTree(root, registryRef.current, { routeKey: props.routeKey, viewport: props.viewport, selectedRoot: element, maxNodes: 48 });
+        registryRef.current = bundle.registry;
         props.onRegistryChange(bundle.registry);
-        const scan = bundle.records.find((record) => record.node.nodeId === selection.nodeId);
-        const node = bundle.nodes.find((candidate) => candidate.id === selection.nodeId);
-        if (!scan || !node || scan.node.path !== selection.path)
+        const scan = bundle.records.find((record) => record.node.nodeId === bundle.rootNodeId);
+        const node = bundle.nodes.find((candidate) => candidate.id === bundle.rootNodeId);
+        if (!scan || !node || !scan.node.path)
             return null;
-        const evidenceIds = new Set([selection.nodeId, ...scan.childNodeIds, ...scan.siblingNodeIds]);
-        return { node, scan, dna: dnaFromScan(scan), relationships: bundle.relations.filter((relation) => evidenceIds.has(relation.from) || evidenceIds.has(relation.to)).slice(0, 16), routeKey: props.routeKey, viewport: props.viewport, path: selection.path };
-    }, [props.root, props.registry, props.routeKey, props.viewport, props.onRegistryChange]);
+        const evidenceIds = new Set([node.id, ...scan.childNodeIds, ...scan.siblingNodeIds]);
+        return { node, scan, dna: dnaFromScan(scan), relationships: bundle.relations.filter((relation) => evidenceIds.has(relation.from) || evidenceIds.has(relation.to)).slice(0, 16), routeKey: props.routeKey, viewport: props.viewport, path: scan.node.path };
+    }, [props.root, props.routeKey, props.viewport, props.onRegistryChange]);
+    const resolveAutomaticTarget = useCallback((intent) => {
+        const root = props.root;
+        if (!root)
+            return null;
+        const query = intent.toLocaleLowerCase();
+        const requested = [
+            [/\b(nav|navigation|menu)\b/, 'nav, [role="navigation"]'],
+            [/\b(header|top bar|navbar)\b/, 'header, nav'],
+            [/\b(hero|masthead)\b/, '[data-hero], .hero, [class*="hero"], main > section:first-of-type'],
+            [/\b(footer|bottom section)\b/, 'footer'],
+            [/\b(button|cta|call to action)\b/, 'button, [role="button"], a'],
+            [/\b(heading|headline|title)\b/, 'h1, h2, h3'],
+            [/\b(image|photo|picture)\b/, 'img, picture, [data-froam-image-frame]'],
+            [/\b(card|tile)\b/, '[class*="card"], article'],
+            [/\b(section|panel)\b/, 'main section, section'],
+            [/\b(page|canvas|screen|everything)\b/, '[data-froam-canvas], main'],
+        ];
+        for (const [pattern, selector] of requested) {
+            if (!pattern.test(query))
+                continue;
+            const match = root.querySelector(selector);
+            if (match && !match.closest('[data-chef-editor-root]'))
+                return match;
+        }
+        return root.querySelector('[data-froam-canvas], main, section, article, div');
+    }, [props.root]);
     const sourceContext = useCallback(() => {
         const project = projectRef.current;
         const branch = project.branches[project.activeBranchId];
         return { projectId: project.id, branchId: project.activeBranchId, baseCheckpointId: branch.baseCheckpointId, headEventId: branch.headEventId, routeKey: routeRef.current };
-    }, []);
-    const elementFingerprint = useCallback(() => {
-        const element = selectedElementRef.current;
-        return element ? JSON.stringify([element.tagName, element.getAttribute('style') ?? '', element.textContent?.slice(0, 500) ?? '', element.childElementCount]) : '';
     }, []);
     const contextIsCurrent = useCallback((pending) => {
         const project = projectRef.current;
@@ -81,15 +109,19 @@ export function useFroamIntent(props) {
             return false;
         if (pending.kind === 'reference' && pending.target.routeKey !== routeRef.current)
             return false;
-        if (pending.session.selectedNodeId && pending.session.selectedPath !== '__froam_root__') {
+        if (pending.kind === 'intelligence') {
+            if (!pending.targetElement.isConnected || !props.root?.contains(pending.targetElement))
+                return false;
+            if (pending.elementFingerprint !== fingerprint(pending.targetElement))
+                return false;
+        }
+        else if (pending.session.selectedNodeId && pending.session.selectedPath !== '__froam_root__') {
             const selection = selectionRef.current;
             if (!selection?.nodeId || selection.nodeId !== pending.session.selectedNodeId || selection.path !== pending.session.selectedPath || !selectedElementRef.current || !props.root?.contains(selectedElementRef.current))
                 return false;
-            if (pending.elementFingerprint !== elementFingerprint())
-                return false;
         }
         return true;
-    }, [elementFingerprint, props.root]);
+    }, [fingerprint, props.root]);
     const previewContextIsCurrent = useCallback((pending, prototypeBranchId) => {
         const project = projectRef.current;
         const sourceBranch = project.branches[pending.source.branchId];
@@ -97,7 +129,11 @@ export function useFroamIntent(props) {
             return false;
         if (pending.kind === 'reference' && pending.target.routeKey !== routeRef.current)
             return false;
-        if (pending.session.selectedNodeId && pending.session.selectedPath !== '__froam_root__') {
+        if (pending.kind === 'intelligence') {
+            if (!pending.targetElement.isConnected || !props.root?.contains(pending.targetElement))
+                return false;
+        }
+        else if (pending.session.selectedNodeId && pending.session.selectedPath !== '__froam_root__') {
             const selection = selectionRef.current;
             if (!selection?.nodeId || selection.nodeId !== pending.session.selectedNodeId || selection.path !== pending.session.selectedPath || !selectedElementRef.current || !props.root?.contains(selectedElementRef.current))
                 return false;
@@ -141,7 +177,7 @@ export function useFroamIntent(props) {
             const branchId = `froam-intent-${Date.now().toString(36)}-${pending.session.attempt}`;
             const branchName = froamIntentPrototypeName(pending.session.intent);
             const preferences = froamIntentPreferences(pending.session.intent);
-            const result = createMutationPrototypeFromProposals(sourceProject, { branchId, name: branchName, actorId: props.actorId, level: 'safe', scopeNodeIds: [pending.session.selectedNodeId], proposals: response.proposals, constraints: request.constraints, provider: response.provider, selectionSnapshot: pending.snapshot, preserveDimensions: preferences.preserveDimensions });
+            const result = createMutationPrototypeFromProposals(sourceProject, { branchId, name: branchName, actorId: props.actorId, level: 'safe', scopeNodeIds: [pending.session.selectedNodeId], proposals: response.proposals, constraints: request.constraints, provider: response.provider, selectionSnapshot: pending.snapshot, preserveDimensions: preferences.preserveDimensions, preserveCopy: preferences.preserveCopy });
             if (result.compiledDesignOperationCount === 0)
                 throw new Error('no_compiled_changes');
             if (!operation.current())
@@ -215,20 +251,26 @@ export function useFroamIntent(props) {
         if (stateRef.current.phase !== 'idle' && stateRef.current.phase !== 'completed' && stateRef.current.phase !== 'error')
             return;
         const intent = input.intent.trim();
-        const selection = selectionRef.current;
         if (!intent)
             return;
-        if (!selection?.nodeId) {
-            dispatch({ type: 'fail', message: 'Select something on the canvas first.' });
+        if (props.onExecuteLocalCommand?.(intent))
+            return;
+        const selection = selectionRef.current;
+        const selectedElement = selectedElementRef.current;
+        const automaticTarget = !selection?.nodeId || !selectedElement || !props.root?.contains(selectedElement);
+        const targetElement = automaticTarget ? resolveAutomaticTarget(intent) : selectedElement;
+        if (!targetElement) {
+            dispatch({ type: 'fail', message: "Froam couldn't find a safe target for that request. Select the part you want to change and try again." });
             return;
         }
-        const snapshot = observeSelection();
+        const snapshot = observeTarget(targetElement);
         if (!snapshot) {
             dispatch({ type: 'fail', message: "Froam couldn't identify that element reliably. Select it again and retry." });
             return;
         }
-        const session = { id: `intent:${Date.now().toString(36)}`, origin: input.origin, intent, selectedNodeId: selection.nodeId, selectedPath: selection.path, sourceBranchId: projectRef.current.activeBranchId, attempt: 1, maxAttempts: FROAM_INTENT_MAX_ATTEMPTS };
-        const pending = { kind: 'intelligence', session, snapshot, source: sourceContext(), elementFingerprint: elementFingerprint(), feedback: null };
+        const targetLabel = automaticTarget ? String(snapshot.node.metadata?.semanticRole ?? snapshot.node.name ?? targetElement.tagName.toLowerCase()) : selection?.label ?? snapshot.node.name;
+        const session = { id: `intent:${Date.now().toString(36)}`, origin: input.origin, intent, selectedNodeId: snapshot.node.id, selectedPath: snapshot.path, targetLabel, automaticTarget, sourceBranchId: projectRef.current.activeBranchId, attempt: 1, maxAttempts: FROAM_INTENT_MAX_ATTEMPTS };
+        const pending = { kind: 'intelligence', session, snapshot, source: sourceContext(), targetElement, targetLabel, automaticTarget, elementFingerprint: fingerprint(targetElement), feedback: null };
         pendingRef.current = pending;
         dispatch({ type: 'submit', session });
         if (createLocalFroamIntentProposals(snapshot, intent).length === 0 && readFroamIntelligenceConsent(typeof localStorage === 'undefined' ? undefined : localStorage) !== 'allowed') {
@@ -236,7 +278,7 @@ export function useFroamIntent(props) {
             return;
         }
         await performRequest(pending);
-    }, [elementFingerprint, observeSelection, performRequest, sourceContext]);
+    }, [fingerprint, observeTarget, performRequest, props.onExecuteLocalCommand, props.root, resolveAutomaticTarget, sourceContext]);
     const submitReference = useCallback(async (input) => {
         if (stateRef.current.phase !== 'idle' && stateRef.current.phase !== 'completed' && stateRef.current.phase !== 'error')
             return;
@@ -247,18 +289,18 @@ export function useFroamIntent(props) {
                 dispatch({ type: 'fail', message: 'Select that target again before reconstructing here.' });
                 return;
             }
-            snapshot = observeSelection() ?? undefined;
+            snapshot = selectedElementRef.current ? observeTarget(selectedElementRef.current) ?? undefined : undefined;
             if (!snapshot) {
                 dispatch({ type: 'fail', message: "Froam couldn't identify that target reliably. Select it again and retry." });
                 return;
             }
         }
         const session = { id: `reference-intent:${Date.now().toString(36)}`, origin: 'reference', intent: input.intent?.trim() || `Reconstruct ${input.target.label} from the supplied reference evidence`, selectedNodeId: input.target.nodeId, selectedPath: input.target.kind === 'selected' ? input.target.path : '__froam_root__', sourceBranchId: projectRef.current.activeBranchId, attempt: 1, maxAttempts: FROAM_INTENT_MAX_ATTEMPTS };
-        const pending = { kind: 'reference', session, understanding: input.understanding, target: input.target, snapshot, source: sourceContext(), elementFingerprint: input.target.kind === 'selected' ? elementFingerprint() : undefined, feedback: null };
+        const pending = { kind: 'reference', session, understanding: input.understanding, target: input.target, snapshot, source: sourceContext(), elementFingerprint: input.target.kind === 'selected' ? fingerprint(selectedElementRef.current) : undefined, feedback: null };
         pendingRef.current = pending;
         dispatch({ type: 'submit', session });
         await performReference(pending);
-    }, [elementFingerprint, observeSelection, performReference, sourceContext]);
+    }, [fingerprint, observeTarget, performReference, sourceContext]);
     const allow = useCallback(() => {
         const pending = pendingRef.current;
         if (!pending)
@@ -304,18 +346,18 @@ export function useFroamIntent(props) {
             void performReference(pending);
             return;
         }
-        const snapshot = previous?.kind === 'intelligence' ? previous.snapshot : observeSelection();
+        const snapshot = previous?.kind === 'intelligence' ? previous.snapshot : selectedElementRef.current ? observeTarget(selectedElementRef.current) : null;
         if (!snapshot) {
             dispatch({ type: 'fail', message: 'That element changed while Froam was preparing the experiment. Select it again and retry.' });
             return;
         }
         const pending = previous?.kind === 'intelligence'
             ? { ...previous, session: nextSession, snapshot, feedback }
-            : { kind: 'intelligence', session: nextSession, snapshot, source: sourceContext(), elementFingerprint: elementFingerprint(), feedback };
+            : { kind: 'intelligence', session: nextSession, snapshot, source: sourceContext(), targetElement: selectedElementRef.current, targetLabel: nextSession.targetLabel ?? 'selection', automaticTarget: false, elementFingerprint: fingerprint(selectedElementRef.current), feedback };
         pendingRef.current = pending;
         dispatch({ type: 'retry' });
         void performRequest(pending);
-    }, [elementFingerprint, observeSelection, performReference, performRequest, props.onPreviewStore, props.setProject, sourceContext]);
+    }, [fingerprint, observeTarget, performReference, performRequest, props.onPreviewStore, props.setProject, sourceContext]);
     const keep = useCallback(() => {
         const current = stateRef.current;
         const session = current.session;

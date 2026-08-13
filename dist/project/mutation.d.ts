@@ -173,6 +173,7 @@ export declare function createMutationPrototypeFromProposals(document: FroamProj
     /** Fresh selected-node evidence is written to the prototype only. */
     selectionSnapshot?: FroamMutationSelectionSnapshot;
     preserveDimensions?: boolean;
+    preserveCopy?: boolean;
     now?: number;
     idFactory?: () => string;
 }): {

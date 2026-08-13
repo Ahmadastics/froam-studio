@@ -1,4 +1,4 @@
-import { Boxes, Clapperboard, Command, FileImage, GitBranch, Layers, MousePointer2 } from 'lucide-react'
+import { Boxes, Clapperboard, FileImage, GitBranch, Layers, MoreHorizontal, MousePointer2, Sparkles, WandSparkles } from 'lucide-react'
 import type { FroamLabsFlags } from '../project/experiments'
 import { workspaceProjectLabel, workspaceStatus, workspaceTemporalSurface, type FroamTemporalOwner, type FroamWorkspaceMode, type FroamWorkspaceSection } from './workspace-shell-model'
 
@@ -20,6 +20,7 @@ type Props = {
   onOpenPrototypes: () => void
   onOpenReplay: () => void
   onOpenCommands: () => void
+  onAskFroam: () => void
   temporalOwner: FroamTemporalOwner
   activity?: 'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | 'intent-understanding' | 'intent-creating' | 'intent-applying' | null
 }
@@ -27,8 +28,9 @@ type Props = {
 const primaryTools: Array<{ id: FroamWorkspaceSection; mode: FroamWorkspaceMode; label: string; icon: typeof MousePointer2 }> = [
   { id: 'design', mode: 'create', label: 'Design', icon: MousePointer2 },
   { id: 'plan', mode: 'create', label: 'Build', icon: Boxes },
-  { id: 'reference', mode: 'understand', label: 'Reference', icon: FileImage },
   { id: 'layers', mode: 'understand', label: 'Layers', icon: Layers },
+  { id: 'reference', mode: 'understand', label: 'Reference', icon: FileImage },
+  { id: 'animator', mode: 'create', label: 'Animate', icon: WandSparkles },
 ]
 
 export default function FroamWorkspaceShell(props: Props) {
@@ -59,10 +61,13 @@ export default function FroamWorkspaceShell(props: Props) {
         })}
       </nav>
       <output className={`froam-workspace__status is-${status.tone}`} aria-live="polite">
-        <i />{props.selectionLabel ? `Selected · ${props.selectionLabel}` : 'Click anything to edit'}
+        <i />{props.activity ? status.label : props.selectionLabel ? `Selected · ${props.selectionLabel}` : 'Click anything to edit'}
       </output>
+      <button type="button" className="froam-workspace__ask" onClick={props.onAskFroam} title="Ask Froam to make an edit">
+        <Sparkles size={13} /><span>Ask Froam</span>
+      </button>
       <button type="button" className="froam-workspace__commands" onClick={props.onOpenCommands} title="Open all Froam commands">
-        <Command size={13} /><span>Commands</span>
+        <MoreHorizontal size={15} /><span>More</span>
       </button>
     </section>
     {temporal && <section className="froam-temporal-dock" data-chef-editor-root="true" aria-label="Active temporal surface"><Clapperboard size={14}/><b>{temporal.label}</b><span>Only this timeline currently owns time controls.</span></section>}

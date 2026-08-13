@@ -321,6 +321,30 @@
 
 .froam-tb__save-btn:active { transform: scale(0.96); }
 
+.froam-tb__ask-btn {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid rgba(125, 243, 225, 0.28);
+  border-radius: 8px;
+  background: rgba(125, 243, 225, 0.1);
+  color: #b9fff5;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.froam-tb__ask-btn:hover,
+.froam-tb__ask-btn:focus-visible {
+  border-color: rgba(125, 243, 225, 0.52);
+  background: rgba(125, 243, 225, 0.16);
+  outline: none;
+}
+
 /* Save to Repo — git-ready variant (Froam v2) */
 .froam-tb__save-btn--repo {
   background: #12c877;
@@ -640,13 +664,25 @@
 }
 
 @media(min-width:769px){
-  .froam-tb__center,.froam-tb__viewport-group,.froam-tb__zoom-group,.froam-tb__git-chip,.froam-tb__draft-count,.froam-tb__theme,.froam-tb__right>.froam-tb__desktop-only,.froam-tb__right>.froam-tb__sep{display:none}
-  .froam-tb__panel-controls button:nth-child(-n+2){display:none}
-  .froam-tb__right{margin-left:auto}
+  .froam-tb__center{display:flex}
+  .froam-tb__viewport-group{display:flex}
+  .froam-tb__zoom-group,.froam-tb__git-chip,.froam-tb__draft-count{display:none}
+  .froam-tb__right>.froam-tb__desktop-only{display:grid}
+  .froam-tb__right>.froam-tb__sep{display:block}
+  .froam-tb__panel-controls button:nth-child(-n+2){display:grid}
+  .froam-tb__right{min-width:0;margin-left:0}
+  .froam-tb__route{display:none}
+}
+@media(min-width:769px) and (max-width:1180px){
+  .froam-tb__viewport-group,.froam-tb__right>.froam-tb__desktop-only,.froam-tb__save-btn--repo{display:none}
+  .froam-tb__right>.froam-tb__sep{display:none}
+  .froam-tb{padding-inline:8px;gap:5px}
 }
 @media(max-width:768px){
-  .froam-tb__center,.froam-tb__viewport-group,.froam-tb__zoom-group,.froam-tb__git-chip,.froam-tb__draft-count,.froam-tb__theme,.froam-tb__right>.froam-tb__desktop-only,.froam-tb__right>.froam-tb__sep,.froam-tb__history,.froam-tb__save-btn{display:none}
+  .froam-tb__center,.froam-tb__viewport-group,.froam-tb__zoom-group,.froam-tb__git-chip,.froam-tb__draft-count,.froam-tb__right>.froam-tb__desktop-only,.froam-tb__right>.froam-tb__sep,.froam-tb__history,.froam-tb__save-btn{display:none}
   .froam-tb__panel-controls button:nth-child(-n+2){display:none}
   .froam-tb__right{margin-left:auto}
   .froam-tb__mobile-command{display:grid}
+  .froam-tb__ask-btn{width:34px;padding:0;justify-content:center}
+  .froam-tb__ask-btn span{display:none}
 }

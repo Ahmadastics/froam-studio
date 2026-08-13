@@ -3,7 +3,6 @@ import {
   Command,
   GitBranch,
   Hand,
-  Moon,
   Keyboard,
   Minus,
   Minimize2,
@@ -15,9 +14,9 @@ import {
   Plus,
   Redo2,
   Save,
+  Sparkles,
   Smartphone,
   Square,
-  Sun,
   Tablet,
   Type,
   Undo2,
@@ -45,8 +44,7 @@ type Props = {
   onSaveRepo?: () => void
   repoStatus?: 'clean' | 'dirty' | 'offline' | null
   repoDirtyCount?: number
-  theme?: 'dark' | 'light'
-  onToggleTheme?: () => void
+  onAskFroam: () => void
   onCommandPalette: () => void
   onShortcutsOverlay: () => void
   routeKey: string
@@ -107,8 +105,7 @@ export default function FroamToolbar({
   onSaveRepo,
   repoStatus,
   repoDirtyCount,
-  theme,
-  onToggleTheme,
+  onAskFroam,
   onCommandPalette,
   onShortcutsOverlay,
   routeKey,
@@ -314,6 +311,11 @@ export default function FroamToolbar({
           <Keyboard size={14} />
         </button>
 
+        <button type="button" className="froam-tb__ask-btn" onClick={onAskFroam} title="Ask Froam to edit the page" data-chef-editor-root="true">
+          <Sparkles size={14} />
+          <span>Ask Froam</span>
+        </button>
+
         {/* Save */}
         <button type="button" className="froam-tb__save-btn" onClick={onSave} aria-label="Save draft (Ctrl+S)" title="Save draft (Ctrl+S)" data-chef-editor-root="true">
           <Save size={14} />
@@ -339,13 +341,6 @@ export default function FroamToolbar({
             <span className="froam-tb__git-dot" />
             {repoStatus === 'dirty' ? `${repoDirtyCount ?? ''} unsaved` : 'in sync'}
           </span>
-        )}
-
-        {/* Theme flip — only Froam can preview both themes on the real app */}
-        {onToggleTheme && (
-          <button type="button" className="froam-tb__icon-btn froam-tb__theme" onClick={onToggleTheme} title={`Preview ${theme === 'light' ? 'dark' : 'light'} theme`} aria-label="Toggle theme preview" data-chef-editor-root="true">
-            {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
-          </button>
         )}
 
         {/* Draft count */}

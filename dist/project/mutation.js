@@ -1,7 +1,7 @@
 import { appendProjectEvents, applyProjectEvent, createProjectBranch, createProjectEvent, deriveBranchState } from './event-log.js';
 import { scopeKey } from '../collab/types.js';
 const DEFAULT_ALLOWED = {
-    safe: ['visual', 'typography', 'spacing', 'motion'],
+    safe: ['visual', 'typography', 'spacing', 'layout', 'motion'],
     experimental: ['visual', 'typography', 'spacing', 'layout', 'navigation', 'interactions', 'motion', 'responsive', 'composition'],
     unhinged: ['visual', 'typography', 'spacing', 'layout', 'navigation', 'interactions', 'motion', 'responsive', 'composition'],
 };
@@ -154,12 +154,12 @@ export function adoptMutationChanges(document, input) {
 export function materializeMutationPreview(state, proposals) { return proposals.reduce((current, proposal, index) => applyProjectEvent(current, { schemaVersion: 2, id: `preview-${index}`, projectId: 'preview', branchId: 'preview', actorId: 'preview', clock: index + 1, createdAt: 0, type: proposal.type, targetIds: proposal.targetIds, payload: proposal.payload }), structuredClone(state)); }
 const COMPILED_STYLE_FIELDS = {
     visual: ['color', 'backgroundColor', 'border', 'borderColor', 'borderRadius', 'boxShadow', 'opacity'],
-    typography: ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textTransform', 'textDecorationLine'],
+    typography: ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign', 'textTransform', 'textDecorationLine'],
     spacing: ['margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'gap', 'rowGap', 'columnGap'],
     motion: ['transition', 'animation', 'transform'],
-    layout: [], navigation: [], interactions: [], responsive: [], composition: [],
+    layout: ['display', 'position', 'top', 'right', 'bottom', 'left', 'zIndex', 'overflow', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'aspectRatio', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'gridTemplateColumns', 'gridTemplateRows'], navigation: [], interactions: [], responsive: [], composition: [],
 };
-const DIMENSION_SENSITIVE_STYLES = new Set(['border', 'fontSize', 'lineHeight', 'letterSpacing', 'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'gap', 'rowGap', 'columnGap', 'transform']);
+const DIMENSION_SENSITIVE_STYLES = new Set(['border', 'fontSize', 'lineHeight', 'letterSpacing', 'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'gap', 'rowGap', 'columnGap', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'transform']);
 function safeCompiledStyle(value) {
     if (typeof value !== 'string')
         return null;
@@ -191,6 +191,12 @@ function compileMutationDesignEvents(input) {
     for (const proposal of input.proposals) {
         if (!proposal.targetIds.includes(input.snapshot.node.id))
             continue;
+        const proposedDna = proposal.type === 'dna.captured' ? proposal.payload.dna : undefined;
+        const proposedText = proposedDna?.semantics?.textContent;
+        const baselineText = input.snapshot.dna?.semantics?.textContent;
+        if (!input.preserveCopy && typeof proposedText === 'string' && proposedText.trim() && proposedText.length <= 1_000 && proposedText !== baselineText && !compiled.some((item) => item.property === '$text')) {
+            compiled.push({ property: '$text', value: proposedText.trim(), rationale: proposal.rationale });
+        }
         const record = proposalStyleRecord(proposal);
         if (!record)
             continue;
@@ -210,7 +216,9 @@ function compileMutationDesignEvents(input) {
     }
     return compiled.map((item, index) => {
         const clock = input.baseClock + index + 1;
-        const op = { id: `intent-op:${input.branchId}:${index + 1}`, kind: 'edit', actor: input.actorId, clock, ts: input.now + index, routeKey: input.snapshot.routeKey, viewport: input.snapshot.viewport, path: input.snapshot.path, nodeId: input.snapshot.node.id, field: `style:${item.property}`, before: draft?.styles?.[item.property], after: item.value, label: `Froam: ${item.rationale}`, batch: `intent:${input.branchId}` };
+        const isText = item.property === '$text';
+        const observedText = input.snapshot.dna?.semantics?.textContent;
+        const op = { id: `intent-op:${input.branchId}:${index + 1}`, kind: 'edit', actor: input.actorId, clock, ts: input.now + index, routeKey: input.snapshot.routeKey, viewport: input.snapshot.viewport, path: input.snapshot.path, nodeId: input.snapshot.node.id, field: isText ? 'text' : `style:${item.property}`, before: isText ? draft?.text ?? (typeof observedText === 'string' ? observedText : undefined) : draft?.styles?.[item.property], after: item.value, label: `Froam: ${item.rationale}`, batch: `intent:${input.branchId}` };
         return createProjectEvent({ projectId: input.project.id, branchId: input.branchId, actorId: input.actorId, clock, createdAt: input.now + index, type: 'design.op.appended', payload: { op }, targetIds: [input.snapshot.node.id], label: `Froam experiment: ${item.rationale}`, idFactory: input.idFactory });
     });
 }
@@ -284,7 +292,7 @@ export function createMutationPrototypeFromProposals(document, input) {
         idFactory: input.idFactory,
     }));
     project = appendProjectEvents(project, events);
-    const designEvents = input.selectionSnapshot ? compileMutationDesignEvents({ project, branchId: input.branchId, actorId: input.actorId, proposals: allowed, snapshot: input.selectionSnapshot, baseClock: baseClock + events.length, now: now + events.length, preserveDimensions: input.preserveDimensions === true, idFactory: input.idFactory }) : [];
+    const designEvents = input.selectionSnapshot ? compileMutationDesignEvents({ project, branchId: input.branchId, actorId: input.actorId, proposals: allowed, snapshot: input.selectionSnapshot, baseClock: baseClock + events.length, now: now + events.length, preserveDimensions: input.preserveDimensions === true, preserveCopy: input.preserveCopy === true, idFactory: input.idFactory }) : [];
     project = appendProjectEvents(project, designEvents);
     const provenance = {
         id: input.branchId,

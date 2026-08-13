@@ -12,6 +12,8 @@ export type FroamIntentSession = {
   intent: string
   selectedNodeId: string
   selectedPath: string
+  targetLabel?: string
+  automaticTarget?: boolean
   sourceBranchId: string
   attempt: number
   maxAttempts: number
@@ -89,6 +91,23 @@ function pixels(value: unknown, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+function firstNumber(intent: string, labels: string) {
+  const match = intent.match(new RegExp(`(?:${labels})(?:\\s+(?:to|of|by))?\\s*(-?\\d+(?:\\.\\d+)?)\\s*(px|rem|em|%|deg)?`, 'i'))
+  if (!match) return null
+  return { value: Number(match[1]), unit: match[2]?.toLowerCase() || 'px' }
+}
+
+function replacementText(intent: string) {
+  const patterns = [
+    /(?:change|replace|update|set)\s+(?:the\s+)?(?:text|copy|label|heading|title|button text)\s+(?:to|with)\s+(.+)$/i,
+    /rename\s+(?:this|it|the\s+(?:button|heading|title|label))?\s*to\s+(.+)$/i,
+    /(?:make\s+(?:it|this)\s+say|say|read)\s+(.+)$/i,
+  ]
+  const raw = patterns.map((pattern) => intent.match(pattern)?.[1]).find(Boolean)?.trim()
+  if (!raw) return null
+  return raw.replace(/^["'“‘]|["'”’]$/g, '').trim().slice(0, 1_000) || null
+}
+
 /**
  * Fast, browser-local commands for the edits people ask for most often.
  * They use the same native proposal validation and protected branch workflow
@@ -106,24 +125,83 @@ export function createLocalFroamIntentProposals(snapshot: FroamMutationSelection
   const colorName = Object.keys(LOCAL_COLORS).find((name) => new RegExp(`\\b${name}\\b`).test(normalized))
   const hex = normalized.match(/#[0-9a-f]{3,8}\b/i)?.[0]
   const requestedColor = hex ?? (colorName ? LOCAL_COLORS[colorName] : null)
-  if (requestedColor) add('visual', /background|surface|card|section|fill/.test(normalized) ? 'backgroundColor' : 'color', requestedColor)
+  if (requestedColor) add('visual', /border/.test(normalized) ? 'borderColor' : /background|surface|card|section|fill/.test(normalized) ? 'backgroundColor' : 'color', requestedColor)
+  if (/dark(?:er)? (?:background|surface|fill)|(?:background|surface|fill).{0,12}dark/.test(normalized)) add('visual', 'backgroundColor', '#0b0f14')
+  if (/white text|light text/.test(normalized)) add('visual', 'color', '#ffffff')
+  if (/black text|dark text/.test(normalized)) add('visual', 'color', '#111827')
   if (/bold|stronger text|heavier text/.test(normalized)) add('typography', 'fontWeight', '700')
   if (/lighter text|less bold/.test(normalized)) add('typography', 'fontWeight', '400')
   if (/uppercase|all caps/.test(normalized)) add('typography', 'textTransform', 'uppercase')
   if (/lowercase/.test(normalized)) add('typography', 'textTransform', 'lowercase')
   if (/italic/.test(normalized)) add('typography', 'fontStyle', 'italic')
   if (/underline/.test(normalized)) add('typography', 'textDecorationLine', 'underline')
-  if (/bigger|larger|increase (?:the )?(?:text|font)|make (?:the )?(?:text|font) bigger/.test(normalized)) add('typography', 'fontSize', `${Math.round(pixels(visual.fontSize, 16) * 1.15)}px`)
+  const fontSize = firstNumber(normalized, 'font(?:\\s+size)?|text\\s+size')
+  if (fontSize) add('typography', 'fontSize', `${fontSize.value}${fontSize.unit}`)
+  else if (/bigger|larger|increase (?:the )?(?:text|font)|make (?:the )?(?:text|font) bigger/.test(normalized)) add('typography', 'fontSize', `${Math.round(pixels(visual.fontSize, 16) * 1.15)}px`)
   if (/smaller|reduce (?:the )?(?:text|font)|make (?:the )?(?:text|font) smaller/.test(normalized)) add('typography', 'fontSize', `${Math.max(10, Math.round(pixels(visual.fontSize, 16) * .88))}px`)
+  const lineHeight = firstNumber(normalized, 'line[-\\s]?height')
+  if (lineHeight) add('typography', 'lineHeight', `${lineHeight.value}${lineHeight.unit}`)
+  const letterSpacing = firstNumber(normalized, 'letter[-\\s]?spacing|tracking')
+  if (letterSpacing) add('typography', 'letterSpacing', `${letterSpacing.value}${letterSpacing.unit}`)
+  if (/align (?:the )?text (?:to the )?center|center (?:the )?text/.test(normalized)) add('typography', 'textAlign', 'center')
+  if (/align (?:the )?text (?:to the )?left|left[- ]align/.test(normalized)) add('typography', 'textAlign', 'left')
+  if (/align (?:the )?text (?:to the )?right|right[- ]align/.test(normalized)) add('typography', 'textAlign', 'right')
   if (/rounder|rounded|soft corners/.test(normalized)) add('visual', 'borderRadius', /pill|fully/.test(normalized) ? '999px' : '16px')
+  const radius = firstNumber(normalized, 'border[-\\s]?radius|corner(?:\\s+radius)?|radius')
+  if (radius) add('visual', 'borderRadius', `${radius.value}${radius.unit}`)
   if (/square corners|sharp corners|remove (?:the )?radius/.test(normalized)) add('visual', 'borderRadius', '0px')
   if (/shadow|depth|premium|polished|prominent|stand out|pop/.test(normalized)) add('visual', 'boxShadow', '0 16px 42px rgba(0, 0, 0, 0.28)')
   if (/remove (?:the )?shadow|flat/.test(normalized)) add('visual', 'boxShadow', 'none')
+  if (/remove (?:the )?border|borderless/.test(normalized)) add('visual', 'border', 'none')
+  const border = normalized.match(/(?:add|set|make)?\s*(?:a\s+)?(\d+(?:\.\d+)?px)\s+(solid|dashed|dotted)\s+border/)
+  if (border) add('visual', 'border', `${border[1]} ${border[2]} ${requestedColor ?? '#64748b'}`)
   if (/transparent|fade|faded|less visible/.test(normalized)) add('visual', 'opacity', '0.72')
   if (/opaque|fully visible/.test(normalized)) add('visual', 'opacity', '1')
-  if (/more (?:space|spacing|padding)|breathing room|roomier/.test(normalized)) add('spacing', 'padding', `${Math.round(pixels(layout.padding, 12) + 6)}px`)
+  const opacity = normalized.match(/opacity(?:\s+(?:to|of))?\s*(\d+(?:\.\d+)?)\s*(%)?/)
+  if (opacity) add('visual', 'opacity', String(Math.max(0, Math.min(1, opacity[2] ? Number(opacity[1]) / 100 : Number(opacity[1])))))
+  const padding = firstNumber(normalized, 'padding')
+  const margin = firstNumber(normalized, 'margin')
+  const gap = firstNumber(normalized, 'gap|spacing')
+  if (padding) add('spacing', 'padding', `${padding.value}${padding.unit}`)
+  else if (/more (?:space|spacing|padding)|breathing room|roomier/.test(normalized)) add('spacing', 'padding', `${Math.round(pixels(layout.padding, 12) + 6)}px`)
   if (/less (?:space|spacing|padding)|tighter|compact/.test(normalized)) add('spacing', 'padding', `${Math.max(0, Math.round(pixels(layout.padding, 12) - 4))}px`)
-  if (/lift|raise|slightly up/.test(normalized)) add('motion', 'transform', 'translateY(-4px)')
+  if (margin) add('spacing', 'margin', `${margin.value}${margin.unit}`)
+  if (gap) add('spacing', 'gap', `${gap.value}${gap.unit}`)
+
+  if (/display (?:as )?grid|make (?:it|this) (?:a )?grid|grid layout/.test(normalized)) add('layout', 'display', 'grid')
+  if (/display (?:as )?flex|use flex|flex layout/.test(normalized)) add('layout', 'display', 'flex')
+  if (/stack|vertical|column/.test(normalized)) { add('layout', 'display', 'flex'); add('layout', 'flexDirection', 'column') }
+  if (/horizontal|row layout|side by side/.test(normalized)) { add('layout', 'display', 'flex'); add('layout', 'flexDirection', 'row') }
+  if (/center (?:the )?(?:content|items|children)|align (?:everything|items) (?:to the )?center/.test(normalized)) { add('layout', 'display', 'flex'); add('layout', 'justifyContent', 'center'); add('layout', 'alignItems', 'center') }
+  if (/space between|spread (?:the )?(?:items|content)/.test(normalized)) add('layout', 'justifyContent', 'space-between')
+  if (/allow (?:it|items|content) to wrap|wrap (?:the )?(?:items|content)|make (?:it|this) wrap/.test(normalized)) add('layout', 'flexWrap', 'wrap')
+  if (/hide overflow|clip overflow/.test(normalized)) add('layout', 'overflow', 'hidden')
+  if (/show overflow/.test(normalized)) add('layout', 'overflow', 'visible')
+  if (/\bhide (?:it|this|the element)?\b/.test(normalized)) add('layout', 'display', 'none')
+
+  const width = firstNumber(normalized, 'width|make\\s+(?:it|this)\\s+wide')
+  const height = firstNumber(normalized, 'height|make\\s+(?:it|this)\\s+tall')
+  if (width) add('layout', 'width', `${width.value}${width.unit}`)
+  else if (/full width|fill (?:the )?(?:parent|container|width)/.test(normalized)) add('layout', 'width', '100%')
+  if (height) add('layout', 'height', `${height.value}${height.unit}`)
+  if (/responsive|fit (?:on )?(?:mobile|all screens)/.test(normalized)) { add('layout', 'width', '100%'); add('layout', 'maxWidth', '100%'); add('layout', 'flexWrap', 'wrap') }
+
+  const distance = normalized.match(/(?:move|shift)\s+(?:it|this)?\s*(up|down|left|right)(?:\s+by)?\s*(\d+(?:\.\d+)?)?\s*(px|rem|em|%)?/)
+  if (distance) {
+    const amount = `${distance[2] ?? '8'}${distance[3] ?? 'px'}`
+    const negative = distance[1] === 'up' || distance[1] === 'left' ? '-' : ''
+    add('motion', 'transform', distance[1] === 'up' || distance[1] === 'down' ? `translateY(${negative}${amount})` : `translateX(${negative}${amount})`)
+  } else if (/lift|raise|slightly up/.test(normalized)) add('motion', 'transform', 'translateY(-4px)')
+  const rotate = firstNumber(normalized, 'rotate')
+  if (rotate) add('motion', 'transform', `rotate(${rotate.value}deg)`)
+  if (/smooth|animate|add (?:a )?transition/.test(normalized)) add('motion', 'transition', 'all 220ms ease')
+
+  if (/minimal|cleaner|simpler/.test(normalized)) { add('visual', 'boxShadow', 'none'); add('visual', 'borderRadius', '12px') }
+  if (/premium|polish(?:ed)?|modern|make (?:it|this) better|improve (?:it|this)/.test(normalized)) { add('visual', 'borderRadius', '16px'); add('visual', 'boxShadow', '0 16px 42px rgba(0, 0, 0, 0.24)'); add('motion', 'transition', 'all 220ms ease') }
+  if (/accessible|easier to read|more readable/.test(normalized)) { add('typography', 'lineHeight', '1.6'); add('visual', 'opacity', '1') }
+
+  const nextText = replacementText(intent)
+  if (nextText) add('typography', 'textContent', nextText)
 
   return [...changes].map(([domain, record]) => ({
     type: 'dna.captured',
@@ -131,6 +209,6 @@ export function createLocalFroamIntentProposals(snapshot: FroamMutationSelection
     targetIds: [snapshot.node.id],
     confidence: .98,
     rationale: `Applied locally: ${intent.slice(0, 120)}`,
-    payload: { dna: { ...dna, nodeId: snapshot.node.id, capturedAt: Date.now(), visual: domain === 'visual' || domain === 'typography' ? { ...visual, ...record } : visual, layout: domain === 'spacing' ? { ...layout, ...record } : layout, motion: domain === 'motion' ? { ...motion, ...record } : motion } },
+    payload: { dna: { ...dna, nodeId: snapshot.node.id, capturedAt: Date.now(), visual: domain === 'visual' || domain === 'typography' ? { ...visual, ...Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'textContent')) } : visual, layout: domain === 'spacing' || domain === 'layout' ? { ...layout, ...record } : layout, motion: domain === 'motion' ? { ...motion, ...record } : motion, semantics: record.textContent ? { ...dna.semantics, textContent: record.textContent } : dna.semantics } },
   }))
 }

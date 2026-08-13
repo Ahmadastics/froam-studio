@@ -158,7 +158,7 @@ export function readDesignTokens(force = false): TokenGroups {
     let rules: CSSRuleList
     try { rules = sheet.cssRules } catch { continue }
     for (const rule of Array.from(rules)) {
-      if (rule instanceof CSSStyleRule && (rule.selectorText === ':root' || rule.selectorText === "[data-theme='light']" || rule.selectorText === '[data-theme="light"]')) {
+      if (rule instanceof CSSStyleRule && rule.selectorText === ':root') {
         for (const prop of Array.from(rule.style)) {
           if (prop.startsWith('--')) ingest(prop, rule.style.getPropertyValue(prop))
         }

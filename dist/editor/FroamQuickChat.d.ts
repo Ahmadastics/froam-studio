@@ -1,6 +1,6 @@
 type Props = {
     open: boolean;
-    selectionLabel: string;
+    selectionLabel?: string;
     busy?: boolean;
     onSubmit: (intent: string) => void;
     onClose: () => void;

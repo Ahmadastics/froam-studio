@@ -9,6 +9,8 @@ export type FroamIntentSession = {
     intent: string;
     selectedNodeId: string;
     selectedPath: string;
+    targetLabel?: string;
+    automaticTarget?: boolean;
     sourceBranchId: string;
     attempt: number;
     maxAttempts: number;

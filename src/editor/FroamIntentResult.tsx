@@ -35,7 +35,8 @@ export default function FroamIntentResult(props: Props) {
   if (busy) return <aside ref={surfaceRef} className="froam-intent-result is-busy" data-chef-editor-root="true" role="status" aria-live="polite" aria-atomic="true"><span className="froam-intent-result__pulse"/><strong>{busy}</strong><button type="button" onClick={props.onCancel}>Cancel</button></aside>
   if (state.phase === 'previewing' && state.session) return <aside ref={surfaceRef} className="froam-intent-result is-preview" data-chef-editor-root="true" role="dialog" aria-label="Froam experiment result">
     <header><div><span>Prototype</span><strong>{state.session.prototypeName}</strong></div><em>{state.session.attempt}/{state.session.maxAttempts}</em></header>
-    <p>Froam changed {state.session.changeCount} thing{state.session.changeCount === 1 ? '' : 's'}</p>
+    <p>Froam prepared {state.session.changeCount} change{state.session.changeCount === 1 ? '' : 's'}{state.session.targetLabel ? ` for ${state.session.targetLabel}` : ''}.</p>
+    {state.session.automaticTarget && <small>Froam chose the most relevant page region because nothing was selected.</small>}
     {state.session.referenceValidation && <section className="froam-intent-result__scorecard" aria-label="Reference candidate scorecard">
       <strong>Reference match</strong>
       {(['structure', 'geometry', 'responsive', 'visual', 'text'] as const).map((kind) => <span key={kind}><b>{kind}</b><em>{kind === 'visual' && state.session!.referenceValidation!.scorecard.visual !== undefined ? `${Math.round(state.session!.referenceValidation!.scorecard.visual * 100)}% measured` : score(state.session!.referenceValidation!.scorecard[kind])}</em></span>)}

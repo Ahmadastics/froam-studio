@@ -23,6 +23,7 @@ type Props = {
     onOpenPrototypes: () => void;
     onOpenReplay: () => void;
     onOpenCommands: () => void;
+    onAskFroam: () => void;
     temporalOwner: FroamTemporalOwner;
     activity?: 'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | 'intent-understanding' | 'intent-creating' | 'intent-applying' | null;
 };
