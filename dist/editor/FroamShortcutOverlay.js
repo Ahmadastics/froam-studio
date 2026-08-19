@@ -14,13 +14,24 @@ const SHORTCUT_GROUPS = [
         ],
     },
     {
+        title: 'Tools',
+        shortcuts: [
+            { keys: 'V', label: 'Select tool' },
+            { keys: 'H', label: 'Hand (pan) tool' },
+            { keys: 'T', label: 'Text tool' },
+            { keys: 'R', label: 'Rectangle / Shape' },
+            { keys: 'F', label: 'Frame / Section' },
+            { keys: 'Ctrl + Shift + L', label: 'Toggle move mode' },
+        ],
+    },
+    {
         title: 'Selection',
         shortcuts: [
             { keys: 'Click', label: 'Select element' },
             { keys: 'Shift + Click', label: 'Multi-select' },
             { keys: 'Double-click', label: 'Edit text inline' },
+            { keys: 'Right-click', label: 'Context menu + Edit with AI' },
             { keys: 'Delete', label: 'Clear element styles' },
-            { keys: 'Right-click', label: 'Context menu' },
         ],
     },
     {

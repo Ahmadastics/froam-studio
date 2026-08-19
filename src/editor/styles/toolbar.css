@@ -119,10 +119,17 @@
   background: var(--fs-surface-control-hover);
 }
 
+/* ─── Active tool indicator — stronger fill + label pulse for non-pointer tools ─── */
 .froam-tb__tool.is-active {
   color: var(--fs-text-on-accent);
   background: var(--fs-accent-control);
   box-shadow: 0 2px 8px var(--fs-accent-control-shadow);
+}
+
+/* When a non-default tool is active, pulse the tool group border as a reminder */
+.froam-tb__tool-group:has(.froam-tb__tool.is-active:not([aria-label="Select"])) {
+  border-color: rgba(var(--fs-accent-control-rgb), 0.5);
+  box-shadow: 0 0 0 1px rgba(var(--fs-accent-control-rgb), 0.18);
 }
 
 /* Viewport switcher in toolbar */

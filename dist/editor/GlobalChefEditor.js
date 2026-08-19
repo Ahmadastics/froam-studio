@@ -2346,19 +2346,35 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         return () => { document.documentElement.removeAttribute('data-chef-editing'); };
     }, [showPanel]);
     /* ─── Move mode cursor ─── */
+    /* ─── Tool cursor ─── */
     useEffect(() => {
-        if (moveMode && showPanel) {
+        if (!showPanel) {
+            document.body.style.removeProperty('cursor');
+            return;
+        }
+        if (moveMode || activeTool === 'move') {
             document.body.style.cursor = 'move';
+        }
+        else if (activeTool === 'hand') {
+            document.body.style.cursor = 'grab';
+        }
+        else if (activeTool === 'text') {
+            document.body.style.cursor = 'text';
+        }
+        else if (activeTool === 'shape' || activeTool === 'frame') {
+            document.body.style.cursor = 'crosshair';
         }
         else {
             document.body.style.removeProperty('cursor');
         }
         return () => { document.body.style.removeProperty('cursor'); };
-    }, [moveMode, showPanel]);
-    /* ─── Turn off move mode when panel closes ─── */
+    }, [moveMode, activeTool, showPanel]);
+    /* ─── Turn off move mode and reset tool when panel closes ─── */
     useEffect(() => {
-        if (!showPanel)
+        if (!showPanel) {
             setMoveMode(false);
+            setActiveTool('pointer');
+        }
     }, [showPanel]);
     /* ─── Persist store ─── */
     useEffect(() => { saveStore(store); }, [store]);
@@ -2564,6 +2580,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 setCommandPaletteOpen(false);
                 return;
             }
+            // Hand tool — suppress all selection; just let the page scroll/pan naturally
+            if (activeToolRef.current === 'hand') {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
             event.preventDefault();
             event.stopPropagation();
             // Exit inline editing if clicking something else
@@ -2589,7 +2611,35 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             }
             setMeasureRect(null);
             setContextMenuPos(null);
-            setQuickChatOpen(true);
+            // Text tool — single click enters inline editing immediately (no double-click required)
+            if (activeToolRef.current === 'text' && canApplyTextDraft(target)) {
+                const textEl = target; // capture non-null for closure
+                const originalRoute = originalsRef.current[viewportStoreKeyRef.current] ?? {};
+                if (!originalRoute[path]) {
+                    originalRoute[path] = { text: textEl.innerText };
+                    originalsRef.current[viewportStoreKeyRef.current] = originalRoute;
+                }
+                textEl.contentEditable = 'true';
+                textEl.focus();
+                setInlineEditing(true);
+                function handleTextToolBlur() {
+                    textEl.contentEditable = 'false';
+                    setInlineEditing(false);
+                    const newText = textEl.innerText;
+                    opPendingLabelRef.current = 'Rewrote copy';
+                    setStore((currentStore) => {
+                        const vsk = viewportStoreKeyRef.current;
+                        return { ...currentStore, [vsk]: { ...(currentStore[vsk] ?? {}), [path]: { ...(currentStore[vsk]?.[path] ?? {}), text: newText } } };
+                    });
+                    setSelection((s) => s ? { ...s, text: newText } : s);
+                    persistLiveRouteSnapshot();
+                    textEl.removeEventListener('blur', handleTextToolBlur);
+                }
+                textEl.addEventListener('blur', handleTextToolBlur);
+                return;
+            }
+            // NOTE: Do NOT open AI here. Left-click only selects.
+            // AI is opened intentionally via right-click → "Edit with AI" in the context menu.
         }
         function handleDblClick(event) {
             const target = resolveTarget(event.target);
@@ -4887,6 +4937,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     selectionsRef.current = selections;
     const panelOpenRef = useRef(panelOpen);
     panelOpenRef.current = panelOpen;
+    const quickChatOpenRef = useRef(quickChatOpen);
+    quickChatOpenRef.current = quickChatOpen;
+    const contextMenuPosRef = useRef(contextMenuPos);
+    contextMenuPosRef.current = contextMenuPos;
+    const activeToolRef = useRef(activeTool);
+    activeToolRef.current = activeTool;
+    const moveModeRef = useRef(moveMode);
+    moveModeRef.current = moveMode;
     const actionsRef = useRef({ saveToRunam, saveToRepo, undo, redo, clearSelectionDraft, applyStyle, openSelectedImageUpload, wrapInContainer });
     actionsRef.current = { saveToRunam, saveToRepo, undo, redo, clearSelectionDraft, applyStyle, openSelectedImageUpload, wrapInContainer };
     /* ─── CSS Vars refresh ─── */
@@ -5403,11 +5461,19 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 actionsRef.current.redo();
                 return;
             }
-            // Escape
+            // Escape — layered dismissal: AI first, then menus, then panels, then deselect
             if (e.key === 'Escape') {
                 if (commandPaletteOpen) {
                     setCommandPaletteOpen(false);
                     setCommandSearch('');
+                    return;
+                }
+                if (quickChatOpenRef.current) {
+                    setQuickChatOpen(false);
+                    return;
+                }
+                if (contextMenuPosRef.current) {
+                    setContextMenuPos(null);
                     return;
                 }
                 if (inlineEditing && currentSelectionRef.current) {
@@ -5444,6 +5510,39 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 e.preventDefault();
                 setShowShortcutOverlay((v) => !v);
                 return;
+            }
+            // ─── Tool shortcuts — only when not typing ───
+            if (!inlineEditing && !commandPaletteOpen && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                if (e.key === 'v' || e.key === 'V') {
+                    e.preventDefault();
+                    setActiveTool('pointer');
+                    setMoveMode(false);
+                    return;
+                }
+                if (e.key === 'h' || e.key === 'H') {
+                    e.preventDefault();
+                    setActiveTool('hand');
+                    setMoveMode(false);
+                    return;
+                }
+                if (e.key === 't' || e.key === 'T') {
+                    e.preventDefault();
+                    setActiveTool('text');
+                    setMoveMode(false);
+                    return;
+                }
+                if (e.key === 'r' || e.key === 'R') {
+                    e.preventDefault();
+                    setActiveTool('shape');
+                    setMoveMode(false);
+                    return;
+                }
+                if (e.key === 'f' || e.key === 'F') {
+                    e.preventDefault();
+                    setActiveTool('frame');
+                    setMoveMode(false);
+                    return;
+                }
             }
             // Modified shortcut to toggle move mode without stealing normal typing.
             if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'l' && !inlineEditing && !commandPaletteOpen) {
@@ -5605,6 +5704,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                     setMoveMode(false);
                                     setRightPanelOpen(true);
                                     addStructureBlock('shape');
+                                    showToast('Rectangle tool — shape inserted');
                                     return;
                                 }
                                 if (tool === 'frame') {
@@ -5612,6 +5712,24 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                     setMoveMode(false);
                                     setRightPanelOpen(true);
                                     insertBlankFrame('end', { preset: 'responsive', width: 1200, height: 720, background: '#ffffff' });
+                                    showToast('Frame inserted');
+                                    return;
+                                }
+                                if (tool === 'text') {
+                                    setActiveTool('text');
+                                    setMoveMode(false);
+                                    showToast('Text tool — click any element to edit its text');
+                                    return;
+                                }
+                                if (tool === 'hand') {
+                                    setActiveTool('hand');
+                                    setMoveMode(false);
+                                    showToast('Hand tool — click and drag to pan');
+                                    return;
+                                }
+                                if (tool === 'pointer') {
+                                    setActiveTool('pointer');
+                                    setMoveMode(false);
                                     return;
                                 }
                                 setActiveTool(tool);
@@ -6059,8 +6177,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                             break;
                         }
                     }
-                } })), _jsx(FroamContextMenu, { position: contextMenuPos, elementLabel: selection?.label, isHidden: false, hasClipboard: !!clipboardStyles, onAction: (action) => {
+                } })), _jsx(FroamContextMenu, { position: contextMenuPos, elementLabel: selection?.label, isHidden: false, hasClipboard: !!clipboardStyles, hasMultiSelection: selections.length > 1, isGroup: selection?.label?.toLowerCase().includes('group') || false, onAction: (action) => {
                     switch (action) {
+                        case 'edit-with-ai': {
+                            // Intentional AI entry point: open Quick Chat with the selected element as context
+                            setContextMenuPos(null);
+                            setQuickChatOpen(true);
+                            break;
+                        }
                         case 'copy-styles': {
                             const draft = store[viewportStoreKey]?.[selection?.path ?? ''];
                             if (draft?.styles) {

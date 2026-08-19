@@ -17,9 +17,11 @@ import {
   Palette,
   Clapperboard,
   Boxes,
+  Sparkles,
 } from 'lucide-react'
 
 type ContextAction =
+  | 'edit-with-ai'
   | 'copy-styles'
   | 'paste-styles'
   | 'duplicate'
@@ -121,6 +123,16 @@ export default function FroamContextMenu({
           <span className="froam-context-menu__label">{elementLabel}</span>
         </div>
       )}
+
+      {/* ─── Edit with AI — intentional entry point, not automatic ─── */}
+      <div className="froam-context-menu__group">
+        <button type="button" className="froam-context-menu__item froam-context-menu__item--ai" onClick={() => handleAction('edit-with-ai')}>
+          <Sparkles size={14} />
+          <span>Edit with AI</span>
+        </button>
+      </div>
+
+      <div className="froam-context-menu__divider" />
 
       <div className="froam-context-menu__group">
         <button type="button" className="froam-context-menu__item" onClick={() => handleAction('copy-styles')}>

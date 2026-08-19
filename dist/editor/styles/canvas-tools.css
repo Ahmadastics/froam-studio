@@ -622,6 +622,22 @@
   color: #ff9786;
 }
 
+/* ─── Edit with AI entry — intentional, not automatic ─── */
+.froam-context-menu__item--ai {
+  color: rgba(var(--fs-accent-control-rgb), 0.9);
+  font-weight: 600;
+}
+
+.froam-context-menu__item--ai svg {
+  opacity: 0.85;
+  color: rgba(var(--fs-accent-control-rgb), 0.9);
+}
+
+.froam-context-menu__item--ai:hover {
+  background: rgba(var(--fs-accent-control-rgb), 0.16);
+  color: var(--fs-accent-control-hover, #a5f3fc);
+}
+
 .froam-context-menu__item svg {
   flex-shrink: 0;
   opacity: 0.6;
