@@ -176,6 +176,11 @@ committable files on your machine.
 - **Aa** — one tap to edit copy inline; the bar gets out of the keyboard's
   way.
 
+- **Motion Studio** — 107 searchable motions across Entrance, Reveal,
+  Emphasis, Hover, Motion, Scroll, Loading, Text, Navigation and Exit. A card
+  previews immediately; **Apply & save** persists both the interaction and its
+  keyframes, while **Save reusable** adds the exact motion to Archive.
+
 ## Install
 
 ```bash

@@ -57,6 +57,7 @@ import { LOCAL_ACTOR, scopeKey } from '../collab/types.js';
 import { captureNodeRef, resolveNodeRef } from '../project/node-registry.js';
 import { archiveItemKind, createArchiveItem, minimalArchiveDna } from '../project/archive.js';
 import { componentCatalogFamilies } from '../project/component-adapter.js';
+import { upsertAnimationCss } from '../project/animator-adapter.js';
 import { createReusableStyle, saveReusableStyle, upsertComponentFamily } from '../project/design-system.js';
 import { createFrameworkIdentityObserver } from '../project/framework-identity.js';
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources.js';
@@ -5997,6 +5998,19 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         document.head.appendChild(style);
                     }
                     style.textContent = `${style.textContent ?? ''}\n${css}`;
+                    const activeStoreKey = viewportStoreKeyRef.current;
+                    const activeStore = storeRef.current;
+                    const activeRoute = { ...(activeStore[activeStoreKey] ?? {}) };
+                    const currentCanvasDraft = activeRoute[CANVAS_KEY] ?? {};
+                    const animationName = inline.trim().split(/\s+/)[0] || 'froam-motion';
+                    const nextCustomCSS = upsertAnimationCss(currentCanvasDraft.styles?.customCSS, animationName, css);
+                    const nextCanvasDraft = { ...currentCanvasDraft, styles: { ...(currentCanvasDraft.styles ?? {}), customCSS: nextCustomCSS } };
+                    activeRoute[CANVAS_KEY] = nextCanvasDraft;
+                    const nextStore = { ...activeStore, [activeStoreKey]: activeRoute };
+                    recordOp(CANVAS_KEY, currentCanvasDraft, nextCanvasDraft, `Animation keyframes: ${animationName}`);
+                    applyGlobalCSS(nextCustomCSS);
+                    storeRef.current = nextStore;
+                    setStore(nextStore);
                     applyStyle({ animation: inline }, undefined, 'Animation');
                 }, onToast: showToast, project: projectSession.project, onProjectChange: projectSession.setProject, requestedTab: requestedConnectedTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'replay' || current === 'animator' ? null : current)) }), _jsx(FroamIntelligence, { open: showPanel && intelligenceOpen, onClose: () => { setIntelligenceOpen(false); setTemporalOwner((owner) => owner === 'breakpoint-cinema' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, root: getRoot(), registry: nodeRegistryRef.current, onRegistryChange: (registry) => { nodeRegistryRef.current = registry; saveNodeRegistry(registry); }, routeKey: routeKey, viewport: viewportMode, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, selectedElement: currentSelectionRef.current, onSelectNode: selectConnectedNode, onInsertArchived: insertArchivedHtml, onApplyArchivedStyle: (styles) => applyStyle(styles, undefined, 'Archive style'), onPreviewWidth: previewIntelligenceWidth, onToast: showToast, requestedTab: requestedIntelligenceTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'breakpoint-cinema' ? null : current)), onActivityChange: setWorkspaceActivity }), _jsx(FroamLabs, { open: showPanel && labsOpen, onClose: () => { setLabsOpen(false); setTemporalOwner((owner) => owner === 'sampling' || owner === 'trailer' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, selectedNodeId: selection?.nodeId, selectedElement: currentSelectionRef.current, onToast: showToast, requestedLab: requestedLab, flags: labsFlags, onFlagsChange: setLabsFlags, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'sampling' || current === 'trailer' ? null : current)), onActivityChange: setWorkspaceActivity }), showPanel && selection && !inlineEditing && (_jsx(FroamResizeHandles, { targetRect: selectionRect, visible: !!selectionRect, onResizeStart: () => {
                     if (!selection)

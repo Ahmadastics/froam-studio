@@ -134,22 +134,25 @@ export default function FroamConnectedCanvas(props: Props) {
     } catch (error) { props.onToast(error instanceof Error ? error.message : 'Could not delete prototype') }
   }
 
-  function commitAnimation(css: string, inline: string) {
+  function commitAnimation(css: string, inline: string, interaction: FroamInteraction) {
     props.onApplyAnimation(css, inline)
-    if (!draftInteraction) return
-    const clock = Math.max(0, ...project.events.map((event) => event.clock)) + 1
     setProject((current) => appendProjectEvents(current, [createProjectEvent({
-      projectId: current.id, branchId: current.activeBranchId, actorId: props.actorId, clock,
-      type: 'interaction.upserted', targetIds: [draftInteraction.sourceId, ...draftInteraction.targetIds],
-      payload: { interaction: draftInteraction }, label: `Interaction: ${draftInteraction.name}`,
+      projectId: current.id, branchId: current.activeBranchId, actorId: props.actorId, clock: Math.max(0, ...current.events.map((event) => event.clock)) + 1,
+      type: 'interaction.upserted', targetIds: [interaction.sourceId, ...interaction.targetIds],
+      payload: { interaction }, label: `Interaction: ${interaction.name}`,
     })]))
+    setDraftInteraction(interaction)
   }
 
-  function saveDraftToArchive() {
-    if (!draftInteraction || !props.selection?.nodeId) return props.onToast('Select a node and create motion before archiving it')
-    const dna = projectState.dna[props.selection.nodeId] ?? minimalArchiveDna(props.selection.nodeId, { role: props.selectedElement?.getAttribute('role') ?? props.selectedElement?.tagName.toLowerCase(), tagName: props.selectedElement?.tagName.toLowerCase(), motion: draftInteraction })
-    const item = createArchiveItem({ id: `archive:motion:${Date.now().toString(36)}`, nodeId: props.selection.nodeId, name: draftInteraction.name, actorId: props.actorId, projectId: project.id, branchId: project.activeBranchId, dna, kind: 'motion', interaction: draftInteraction, interactionIds: [draftInteraction.id], includes: ['motion'], description: 'Precision keyframe motion authored in Animator.' })
-    setProject((current) => appendProjectEvents(current, [createProjectEvent({ projectId: current.id, branchId: current.activeBranchId, actorId: props.actorId, clock: Math.max(0, ...current.events.map((event) => event.clock)) + 1, type: 'archive.upserted', payload: { archiveItem: item }, targetIds: [item.nodeId], label: `Archived Animator motion: ${item.name}` })]))
+  function saveDraftToArchive(interaction: FroamInteraction) {
+    if (!props.selection?.nodeId) return props.onToast('Select a node and create motion before archiving it')
+    const dna = projectState.dna[props.selection.nodeId] ?? minimalArchiveDna(props.selection.nodeId, { role: props.selectedElement?.getAttribute('role') ?? props.selectedElement?.tagName.toLowerCase(), tagName: props.selectedElement?.tagName.toLowerCase(), motion: interaction })
+    const item = createArchiveItem({ id: `archive:motion:${Date.now().toString(36)}`, nodeId: props.selection.nodeId, name: interaction.name, actorId: props.actorId, projectId: project.id, branchId: project.activeBranchId, dna, kind: 'motion', interaction, interactionIds: [interaction.id], includes: ['motion'], description: 'Precision keyframe motion authored in Animator.' })
+    setProject((current) => { const clock = Math.max(0, ...current.events.map((event) => event.clock)) + 1; return appendProjectEvents(current, [
+      createProjectEvent({ projectId: current.id, branchId: current.activeBranchId, actorId: props.actorId, clock, type: 'interaction.upserted', payload: { interaction }, targetIds: [interaction.sourceId, ...interaction.targetIds], label: `Saved reusable interaction: ${interaction.name}` }),
+      createProjectEvent({ projectId: current.id, branchId: current.activeBranchId, actorId: props.actorId, clock: clock + 1, type: 'archive.upserted', payload: { archiveItem: item }, targetIds: [item.nodeId], label: `Archived Animator motion: ${item.name}` }),
+    ]) })
+    setDraftInteraction(interaction)
     props.onToast(`${item.name} saved to Archive`)
   }
 
@@ -223,7 +226,7 @@ export default function FroamConnectedCanvas(props: Props) {
         </section>}
 
         {tab === 'interaction' && <section className="froam-connected__section">
-          <FroamAnimator selectedElement={props.selectedElement} selectionLabel={props.selection?.label ?? 'node'} sourceNodeId={props.selection?.nodeId} onInteractionChange={setDraftInteraction} onSaveToArchive={saveDraftToArchive} onApplyAnimation={commitAnimation} onToast={props.onToast} />
+          <FroamAnimator selectedElement={props.selectedElement} selectionLabel={props.selection?.label ?? 'node'} sourceNodeId={props.selection?.nodeId} savedInteractions={Object.values(projectState.interactions)} onInteractionChange={setDraftInteraction} onSaveToArchive={saveDraftToArchive} onApplyAnimation={commitAnimation} onToast={props.onToast} />
           {draftInteraction && <pre className="froam-connected__interaction">{JSON.stringify(interactionInspectorRecord(draftInteraction), null, 2)}</pre>}
         </section>}
       </div>

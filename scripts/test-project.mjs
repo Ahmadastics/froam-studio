@@ -116,7 +116,7 @@ const { scanDomTree, detectComponentFamilies } = await import('../dist/project/s
 const { compileInteractionToCss } = await import('../dist/project/interaction-runtime.js')
 const { branchReplayEvents, checkpointAncestry, filterReplayEvents, replayCategory, replayStateAt } = await import('../dist/project/replay.js')
 const { graphSelectionIndex, materializeGraphRows } = await import('../dist/project/graph-inspector.js')
-const { interactionInspectorRecord, legacyAnimatorToInteraction } = await import('../dist/project/animator-adapter.js')
+const { interactionInspectorRecord, interactionToLegacyAnimator, legacyAnimatorToInteraction, upsertAnimationCss } = await import('../dist/project/animator-adapter.js')
 const { runSimulationScenario } = await import('../dist/project/simulation.js')
 const { defaultFroamFeatureFlags, FROAM_ROADMAP_FEATURES } = await import('../dist/project/experiments.js')
 const { isProjectFile, loadProjectFile, writeProjectFile } = await import('../lib/project-store.mjs')
@@ -921,6 +921,19 @@ test('legacy Animator adapts and serializes through the shared interaction model
   assert.equal(inspected.trigger, 'hover')
   assert.equal(inspected.compilerTarget, 'css-keyframes')
   assert.match(compileInteractionToCss(interaction).animation, /500ms/)
+  const restored = interactionToLegacyAnimator(JSON.parse(JSON.stringify(interaction)))
+  assert.equal(restored.trigger, 'hover')
+  assert.equal(restored.duration, 500)
+  assert.deepEqual(restored.keyframes.map((frame) => frame.offset), [0, 100])
+})
+
+test('Animator keyframes persist as replaceable canvas CSS blocks', () => {
+  const first = upsertAnimationCss('body { color: red; }', 'froam-rise', '@keyframes froam-rise { 0% { opacity: 0; } }')
+  const second = upsertAnimationCss(first, 'froam-rise', '@keyframes froam-rise { 100% { opacity: 1; } }')
+  assert.match(second, /body \{ color: red; \}/)
+  assert.doesNotMatch(second, /0% \{ opacity: 0/)
+  assert.match(second, /100% \{ opacity: 1/)
+  assert.equal((second.match(/froam-motion:froam-rise:start/g) ?? []).length, 1)
 })
 
 test('simulation scenarios execute deterministically through adapters', async () => {

@@ -138,6 +138,7 @@ import { LOCAL_ACTOR, scopeKey, type FroamAnchor, type FroamOp, type FroamViewpo
 import { captureNodeRef, resolveNodeRef, type FroamIdentityDiagnostic, type FroamNodeRegistry } from '../project/node-registry'
 import { archiveItemKind, createArchiveItem, minimalArchiveDna } from '../project/archive'
 import { componentCatalogFamilies } from '../project/component-adapter'
+import { upsertAnimationCss } from '../project/animator-adapter'
 import { createReusableStyle, saveReusableStyle, upsertComponentFamily } from '../project/design-system'
 import type { FroamDesignSystem, FroamStyleState } from '../project/types'
 import { createFrameworkIdentityObserver, type FroamFrameworkFinding } from '../project/framework-identity'
@@ -8008,6 +8009,19 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             document.head.appendChild(style)
           }
           style.textContent = `${style.textContent ?? ''}\n${css}`
+          const activeStoreKey = viewportStoreKeyRef.current
+          const activeStore = storeRef.current
+          const activeRoute = { ...(activeStore[activeStoreKey] ?? {}) }
+          const currentCanvasDraft = activeRoute[CANVAS_KEY] ?? {}
+          const animationName = inline.trim().split(/\s+/)[0] || 'froam-motion'
+          const nextCustomCSS = upsertAnimationCss(currentCanvasDraft.styles?.customCSS, animationName, css)
+          const nextCanvasDraft = { ...currentCanvasDraft, styles: { ...(currentCanvasDraft.styles ?? {}), customCSS: nextCustomCSS } }
+          activeRoute[CANVAS_KEY] = nextCanvasDraft
+          const nextStore = { ...activeStore, [activeStoreKey]: activeRoute }
+          recordOp(CANVAS_KEY, currentCanvasDraft, nextCanvasDraft, `Animation keyframes: ${animationName}`)
+          applyGlobalCSS(nextCustomCSS)
+          storeRef.current = nextStore
+          setStore(nextStore)
           applyStyle({ animation: inline }, undefined, 'Animation')
         }}
         onToast={showToast}

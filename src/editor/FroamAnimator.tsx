@@ -12,9 +12,12 @@ import {
   MoveHorizontal,
   Search,
   Archive,
+  CheckCircle2,
+  SlidersHorizontal,
+  Bookmark,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { legacyAnimatorToInteraction } from '../project/animator-adapter'
+import { interactionToLegacyAnimator, legacyAnimatorToInteraction } from '../project/animator-adapter'
 import type { FroamInteraction } from '../project/types'
 import { FROAM_ANIMATION_PRESETS, type FroamAnimationCategory, type FroamAnimationPreset } from './FroamAnimationPresets'
 
@@ -54,11 +57,12 @@ export type AnimationConfig = {
 type Props = {
   selectedElement: HTMLElement | null
   selectionLabel: string
-  onApplyAnimation: (css: string, inline: string) => void
+  onApplyAnimation: (css: string, inline: string, interaction: FroamInteraction) => void
   onToast: (msg: string) => void
   sourceNodeId?: string | null
   onInteractionChange?: (interaction: FroamInteraction) => void
-  onSaveToArchive?: () => void
+  onSaveToArchive?: (interaction: FroamInteraction) => void
+  savedInteractions?: FroamInteraction[]
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -194,7 +198,7 @@ const TEMPLATE_ANIMATIONS: FroamAnimationPreset[] = [
   ...LEGACY_TEMPLATE_ANIMATIONS.map((preset, index) => ({ id: `essential-${index}`, category: 'Entrance' as const, description: 'Froam essential', ...preset })),
   ...FROAM_ANIMATION_PRESETS,
 ]
-const TEMPLATE_CATEGORIES: Array<'All' | FroamAnimationCategory> = ['All', 'Entrance', 'Reveal', 'Emphasis', 'Motion', 'Exit']
+const TEMPLATE_CATEGORIES: Array<'All' | FroamAnimationCategory> = ['All', 'Entrance', 'Reveal', 'Emphasis', 'Hover', 'Motion', 'Scroll', 'Loading', 'Text', 'Navigation', 'Exit']
 
 /* ═══════════════════════════════════════════════════════════════
    Helpers
@@ -242,15 +246,18 @@ function defaultConfig(): AnimationConfig {
 /* ═══════════════════════════════════════════════════════════════
    Component
    ═══════════════════════════════════════════════════════════════ */
-export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast, sourceNodeId, onInteractionChange, onSaveToArchive }: Props) {
+export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast, sourceNodeId, onInteractionChange, onSaveToArchive, savedInteractions = [] }: Props) {
   const [config, setConfig] = useState<AnimationConfig>(defaultConfig)
   const [previewing, setPreviewing] = useState(false)
   const [expandedKeyframe, setExpandedKeyframe] = useState<string | null>(null)
   const [showTemplates, setShowTemplates] = useState(true)
   const [templateSearch, setTemplateSearch] = useState('')
   const [templateCategory, setTemplateCategory] = useState<'All' | FroamAnimationCategory>('All')
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
+  const [savedAt, setSavedAt] = useState<number | null>(null)
   const previewTimerRef = useRef<number>(0)
   const mountedRef = useRef(true)
+  const loadedSourceRef = useRef<string | null>(null)
 
   // Clean up preview on unmount
   useEffect(() => {
@@ -268,6 +275,26 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
       sourceId: sourceNodeId,
     }))
   }, [config, sourceNodeId, onInteractionChange])
+
+  useEffect(() => {
+    if (!sourceNodeId) { loadedSourceRef.current = null; return }
+    if (loadedSourceRef.current === sourceNodeId) return
+    loadedSourceRef.current = sourceNodeId
+    const saved = [...savedInteractions].reverse().find((interaction) => interaction.sourceId === sourceNodeId)
+    if (!saved) { setConfig(defaultConfig()); setSelectedPresetId(null); setSavedAt(null); return }
+    setConfig(interactionToLegacyAnimator(saved))
+    setSelectedPresetId(String(saved.metadata?.presetId ?? '') || null)
+    setSavedAt(Date.now())
+  }, [sourceNodeId, savedInteractions])
+
+  const currentInteraction = useCallback((nextConfig = config) => {
+    const interaction = legacyAnimatorToInteraction(nextConfig, {
+      id: `animator:${sourceNodeId ?? 'unbound'}:${nextConfig.name}`,
+      sourceId: sourceNodeId ?? 'unbound',
+    })
+    const selectedPreset = selectedPresetId ? TEMPLATE_ANIMATIONS.find((item) => item.id === selectedPresetId) : undefined
+    return { ...interaction, metadata: { ...interaction.metadata, ...(selectedPreset ? { presetId: selectedPreset.id, label: selectedPreset.label, category: selectedPreset.category } : {}) } }
+  }, [config, selectedPresetId, sourceNodeId])
 
   const updateConfig = useCallback((patch: Partial<AnimationConfig>) => {
     setConfig((prev) => ({ ...prev, ...patch }))
@@ -322,7 +349,7 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
     }))
   }, [])
 
-  const previewAnimation = useCallback(() => {
+  const previewAnimation = useCallback((nextConfig: AnimationConfig = config) => {
     if (!selectedElement) { onToast('Select an element first'); return }
     setPreviewing(true)
 
@@ -334,17 +361,17 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
       styleEl.id = styleId
       document.head.appendChild(styleEl)
     }
-    styleEl.textContent = buildKeyframesCSS(config)
+    styleEl.textContent = buildKeyframesCSS(nextConfig)
 
     // Apply animation
-    const inlineAnim = buildInlineAnimation(config)
+    const inlineAnim = buildInlineAnimation(nextConfig)
     // eslint-disable-next-line react-hooks/immutability
     selectedElement.style.animation = inlineAnim
 
     // Clear after duration (or 5s for infinite)
-    const timeout = config.iterations === 0
+    const timeout = nextConfig.iterations === 0
       ? 5000
-      : config.duration * config.iterations + config.delay + 200
+      : nextConfig.duration * nextConfig.iterations + nextConfig.delay + 200
     window.clearTimeout(previewTimerRef.current)
     previewTimerRef.current = window.setTimeout(() => {
       selectedElement.style.animation = ''
@@ -364,18 +391,37 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
   }, [selectedElement])
 
   const applyAnimation = useCallback(() => {
+    if (!sourceNodeId) { onToast('Select an element first'); return }
     const css = buildKeyframesCSS(config)
     const inline = buildInlineAnimation(config)
-    onApplyAnimation(css, inline)
-    onToast('Animation applied')
-  }, [config, onApplyAnimation, onToast])
+    onApplyAnimation(css, inline, currentInteraction())
+    setSavedAt(Date.now())
+    onToast('Animation applied and saved to this project')
+  }, [config, currentInteraction, onApplyAnimation, onToast, sourceNodeId])
 
   const loadTemplate = useCallback((tpl: FroamAnimationPreset) => {
     const base = defaultConfig()
-    setConfig({ ...base, ...tpl.config, keyframes: tpl.config.keyframes ?? base.keyframes })
-    setShowTemplates(false)
-    onToast(`Loaded: ${tpl.label}`)
-  }, [onToast])
+    const next = { ...base, ...tpl.config, keyframes: tpl.config.keyframes ?? base.keyframes }
+    setConfig(next)
+    setSelectedPresetId(tpl.id)
+    setSavedAt(null)
+    previewAnimation(next)
+  }, [previewAnimation])
+
+  const saveReusable = useCallback(() => {
+    if (!sourceNodeId) { onToast('Select an element first'); return }
+    const interaction = currentInteraction()
+    onSaveToArchive?.(interaction)
+    setSavedAt(Date.now())
+  }, [currentInteraction, onSaveToArchive, onToast, sourceNodeId])
+
+  const loadSaved = useCallback((interaction: FroamInteraction) => {
+    const next = interactionToLegacyAnimator(interaction)
+    setConfig(next)
+    setSelectedPresetId(String(interaction.metadata?.presetId ?? '') || null)
+    setSavedAt(Date.now())
+    previewAnimation(next)
+  }, [previewAnimation])
 
   const copyCSS = useCallback(async () => {
     const css = buildKeyframesCSS(config) + '\n\n' + `.element {\n  animation: ${buildInlineAnimation(config)};\n}`
@@ -402,7 +448,7 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
         <div className="fs-animator__templates">
           <div className="fs-export__section-title" style={{ marginBottom: 6 }}>
             <Zap size={12} />
-            {TEMPLATE_ANIMATIONS.length} Quick motions
+            {TEMPLATE_ANIMATIONS.length} Quick motions · click to preview
           </div>
           <label className="fs-animator__preset-search"><Search size={12}/><input value={templateSearch} onChange={(event) => setTemplateSearch(event.target.value)} placeholder="Search motion…"/></label>
           <div className="fs-animator__preset-categories">{TEMPLATE_CATEGORIES.map((item) => <button type="button" key={item} className={templateCategory === item ? 'is-active' : ''} onClick={() => setTemplateCategory(item)}>{item}</button>)}</div>
@@ -411,21 +457,21 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
               <button
                 key={tpl.id}
                 type="button"
-                className="fs-animator__template-btn"
+                className={`fs-animator__template-btn ${selectedPresetId === tpl.id ? 'is-selected' : ''}`}
                 onClick={() => loadTemplate(tpl)}
               >
                 <strong>{tpl.label}</strong><small>{tpl.category} · {tpl.config.duration ?? 600}ms</small><span>{tpl.description}</span>
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            className="fs-pill"
-            onClick={() => setShowTemplates(false)}
-            style={{ marginTop: 6, width: '100%', justifyContent: 'center' }}
-          >
-            Custom animation
-          </button>
+          {!filteredTemplates.length && <p className="fs-animator__empty">No motions match this search.</p>}
+          <div className="fs-animator__quick-actions">
+            <button type="button" className={`fs-pill ${previewing ? 'is-danger' : ''}`} onClick={() => previewing ? stopPreview() : previewAnimation()}>{previewing ? <Pause size={12}/> : <Play size={12}/>} {previewing ? 'Stop' : 'Replay'}</button>
+            <button type="button" className="fs-pill is-accent" disabled={!selectedElement} onClick={applyAnimation}><CheckCircle2 size={12}/> Apply &amp; save</button>
+            <button type="button" className="fs-pill" onClick={() => setShowTemplates(false)}><SlidersHorizontal size={12}/> Customize</button>
+          </div>
+          {savedAt && <div className="fs-animator__saved"><CheckCircle2 size={12}/> Saved in this project</div>}
+          {!!savedInteractions.filter((interaction) => interaction.sourceId === sourceNodeId).length && <div className="fs-animator__saved-list"><span><Bookmark size={11}/> Saved on this element</span>{savedInteractions.filter((interaction) => interaction.sourceId === sourceNodeId).map((interaction) => <button type="button" key={interaction.id} onClick={() => loadSaved(interaction)}>{String(interaction.metadata?.label ?? interaction.name)}</button>)}</div>}
         </div>
       )}
 
@@ -590,15 +636,15 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
 
           {/* Actions */}
           <div className="fs-pill-group" style={{ marginTop: 8 }}>
-            <button type="button" className={`fs-pill ${previewing ? 'is-danger' : 'is-accent'}`} onClick={previewing ? stopPreview : previewAnimation}>
+            <button type="button" className={`fs-pill ${previewing ? 'is-danger' : 'is-accent'}`} onClick={() => previewing ? stopPreview() : previewAnimation()}>
               {previewing ? <Pause size={12} /> : <Play size={12} />}
               {previewing ? 'Stop' : 'Preview'}
             </button>
-            <button type="button" className="fs-pill is-accent" onClick={applyAnimation}>
-              <Zap size={12} /> Apply
+            <button type="button" className="fs-pill is-accent" onClick={applyAnimation} disabled={!sourceNodeId}>
+              <CheckCircle2 size={12} /> Apply &amp; save
             </button>
-            {onSaveToArchive && <button type="button" className="fs-pill" onClick={onSaveToArchive} disabled={!sourceNodeId}>
-              <Archive size={12} /> Save to Archive
+            {onSaveToArchive && <button type="button" className="fs-pill" onClick={saveReusable} disabled={!sourceNodeId}>
+              <Archive size={12} /> Save reusable
             </button>}
             <button type="button" className="fs-pill" onClick={copyCSS}>
               <Copy size={12} /> Copy CSS

@@ -19,6 +19,9 @@ export declare function legacyAnimatorToInteraction(config: LegacyAnimatorConfig
     sourceId: string;
     targetIds?: string[];
 }): FroamInteraction;
+export declare function interactionToLegacyAnimator(interaction: FroamInteraction): LegacyAnimatorConfig;
+/** Stores replaceable keyframe blocks alongside canvas custom CSS. */
+export declare function upsertAnimationCss(existing: string | undefined, animationName: string, css: string): string;
 export declare function interactionInspectorRecord(interaction: FroamInteraction): {
     trigger: "click" | "drag" | "focus" | "load" | "scroll" | "custom" | "hover" | "press";
     source: string;

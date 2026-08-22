@@ -1,8 +1,8 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Play, Pause, Plus, Trash2, RotateCw, Copy, ChevronDown, Zap, Clock, MoveHorizontal, Search, Archive, } from 'lucide-react';
+import { Play, Pause, Plus, Trash2, RotateCw, Copy, ChevronDown, Zap, Clock, MoveHorizontal, Search, Archive, CheckCircle2, SlidersHorizontal, Bookmark, } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { legacyAnimatorToInteraction } from '../project/animator-adapter.js';
+import { interactionToLegacyAnimator, legacyAnimatorToInteraction } from '../project/animator-adapter.js';
 import { FROAM_ANIMATION_PRESETS } from './FroamAnimationPresets.js';
 /* ═══════════════════════════════════════════════════════════════
    Constants
@@ -134,7 +134,7 @@ const TEMPLATE_ANIMATIONS = [
     ...LEGACY_TEMPLATE_ANIMATIONS.map((preset, index) => ({ id: `essential-${index}`, category: 'Entrance', description: 'Froam essential', ...preset })),
     ...FROAM_ANIMATION_PRESETS,
 ];
-const TEMPLATE_CATEGORIES = ['All', 'Entrance', 'Reveal', 'Emphasis', 'Motion', 'Exit'];
+const TEMPLATE_CATEGORIES = ['All', 'Entrance', 'Reveal', 'Emphasis', 'Hover', 'Motion', 'Scroll', 'Loading', 'Text', 'Navigation', 'Exit'];
 /* ═══════════════════════════════════════════════════════════════
    Helpers
    ═══════════════════════════════════════════════════════════════ */
@@ -177,15 +177,18 @@ function defaultConfig() {
 /* ═══════════════════════════════════════════════════════════════
    Component
    ═══════════════════════════════════════════════════════════════ */
-export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast, sourceNodeId, onInteractionChange, onSaveToArchive }) {
+export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast, sourceNodeId, onInteractionChange, onSaveToArchive, savedInteractions = [] }) {
     const [config, setConfig] = useState(defaultConfig);
     const [previewing, setPreviewing] = useState(false);
     const [expandedKeyframe, setExpandedKeyframe] = useState(null);
     const [showTemplates, setShowTemplates] = useState(true);
     const [templateSearch, setTemplateSearch] = useState('');
     const [templateCategory, setTemplateCategory] = useState('All');
+    const [selectedPresetId, setSelectedPresetId] = useState(null);
+    const [savedAt, setSavedAt] = useState(null);
     const previewTimerRef = useRef(0);
     const mountedRef = useRef(true);
+    const loadedSourceRef = useRef(null);
     // Clean up preview on unmount
     useEffect(() => {
         mountedRef.current = true;
@@ -202,6 +205,33 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
             sourceId: sourceNodeId,
         }));
     }, [config, sourceNodeId, onInteractionChange]);
+    useEffect(() => {
+        if (!sourceNodeId) {
+            loadedSourceRef.current = null;
+            return;
+        }
+        if (loadedSourceRef.current === sourceNodeId)
+            return;
+        loadedSourceRef.current = sourceNodeId;
+        const saved = [...savedInteractions].reverse().find((interaction) => interaction.sourceId === sourceNodeId);
+        if (!saved) {
+            setConfig(defaultConfig());
+            setSelectedPresetId(null);
+            setSavedAt(null);
+            return;
+        }
+        setConfig(interactionToLegacyAnimator(saved));
+        setSelectedPresetId(String(saved.metadata?.presetId ?? '') || null);
+        setSavedAt(Date.now());
+    }, [sourceNodeId, savedInteractions]);
+    const currentInteraction = useCallback((nextConfig = config) => {
+        const interaction = legacyAnimatorToInteraction(nextConfig, {
+            id: `animator:${sourceNodeId ?? 'unbound'}:${nextConfig.name}`,
+            sourceId: sourceNodeId ?? 'unbound',
+        });
+        const selectedPreset = selectedPresetId ? TEMPLATE_ANIMATIONS.find((item) => item.id === selectedPresetId) : undefined;
+        return { ...interaction, metadata: { ...interaction.metadata, ...(selectedPreset ? { presetId: selectedPreset.id, label: selectedPreset.label, category: selectedPreset.category } : {}) } };
+    }, [config, selectedPresetId, sourceNodeId]);
     const updateConfig = useCallback((patch) => {
         setConfig((prev) => ({ ...prev, ...patch }));
     }, []);
@@ -250,7 +280,7 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
             }),
         }));
     }, []);
-    const previewAnimation = useCallback(() => {
+    const previewAnimation = useCallback((nextConfig = config) => {
         if (!selectedElement) {
             onToast('Select an element first');
             return;
@@ -264,15 +294,15 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
             styleEl.id = styleId;
             document.head.appendChild(styleEl);
         }
-        styleEl.textContent = buildKeyframesCSS(config);
+        styleEl.textContent = buildKeyframesCSS(nextConfig);
         // Apply animation
-        const inlineAnim = buildInlineAnimation(config);
+        const inlineAnim = buildInlineAnimation(nextConfig);
         // eslint-disable-next-line react-hooks/immutability
         selectedElement.style.animation = inlineAnim;
         // Clear after duration (or 5s for infinite)
-        const timeout = config.iterations === 0
+        const timeout = nextConfig.iterations === 0
             ? 5000
-            : config.duration * config.iterations + config.delay + 200;
+            : nextConfig.duration * nextConfig.iterations + nextConfig.delay + 200;
         window.clearTimeout(previewTimerRef.current);
         previewTimerRef.current = window.setTimeout(() => {
             selectedElement.style.animation = '';
@@ -291,17 +321,40 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
         setPreviewing(false);
     }, [selectedElement]);
     const applyAnimation = useCallback(() => {
+        if (!sourceNodeId) {
+            onToast('Select an element first');
+            return;
+        }
         const css = buildKeyframesCSS(config);
         const inline = buildInlineAnimation(config);
-        onApplyAnimation(css, inline);
-        onToast('Animation applied');
-    }, [config, onApplyAnimation, onToast]);
+        onApplyAnimation(css, inline, currentInteraction());
+        setSavedAt(Date.now());
+        onToast('Animation applied and saved to this project');
+    }, [config, currentInteraction, onApplyAnimation, onToast, sourceNodeId]);
     const loadTemplate = useCallback((tpl) => {
         const base = defaultConfig();
-        setConfig({ ...base, ...tpl.config, keyframes: tpl.config.keyframes ?? base.keyframes });
-        setShowTemplates(false);
-        onToast(`Loaded: ${tpl.label}`);
-    }, [onToast]);
+        const next = { ...base, ...tpl.config, keyframes: tpl.config.keyframes ?? base.keyframes };
+        setConfig(next);
+        setSelectedPresetId(tpl.id);
+        setSavedAt(null);
+        previewAnimation(next);
+    }, [previewAnimation]);
+    const saveReusable = useCallback(() => {
+        if (!sourceNodeId) {
+            onToast('Select an element first');
+            return;
+        }
+        const interaction = currentInteraction();
+        onSaveToArchive?.(interaction);
+        setSavedAt(Date.now());
+    }, [currentInteraction, onSaveToArchive, onToast, sourceNodeId]);
+    const loadSaved = useCallback((interaction) => {
+        const next = interactionToLegacyAnimator(interaction);
+        setConfig(next);
+        setSelectedPresetId(String(interaction.metadata?.presetId ?? '') || null);
+        setSavedAt(Date.now());
+        previewAnimation(next);
+    }, [previewAnimation]);
     const copyCSS = useCallback(async () => {
         const css = buildKeyframesCSS(config) + '\n\n' + `.element {\n  animation: ${buildInlineAnimation(config)};\n}`;
         await navigator.clipboard.writeText(css);
@@ -313,11 +366,11 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
         return (templateCategory === 'All' || template.category === templateCategory)
             && (!query || `${template.label} ${template.description} ${template.category}`.toLowerCase().includes(query));
     });
-    return (_jsxs("div", { className: "fs-animator", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "fs-export__section-title", style: { marginBottom: 6 }, children: [_jsx(Zap, { size: 12 }), selectedElement ? `Animating ${selectionLabel}` : 'Select an element to animate'] }), showTemplates && (_jsxs("div", { className: "fs-animator__templates", children: [_jsxs("div", { className: "fs-export__section-title", style: { marginBottom: 6 }, children: [_jsx(Zap, { size: 12 }), TEMPLATE_ANIMATIONS.length, " Quick motions"] }), _jsxs("label", { className: "fs-animator__preset-search", children: [_jsx(Search, { size: 12 }), _jsx("input", { value: templateSearch, onChange: (event) => setTemplateSearch(event.target.value), placeholder: "Search motion\u2026" })] }), _jsx("div", { className: "fs-animator__preset-categories", children: TEMPLATE_CATEGORIES.map((item) => _jsx("button", { type: "button", className: templateCategory === item ? 'is-active' : '', onClick: () => setTemplateCategory(item), children: item }, item)) }), _jsx("div", { className: "fs-animator__template-grid", children: filteredTemplates.map((tpl) => (_jsxs("button", { type: "button", className: "fs-animator__template-btn", onClick: () => loadTemplate(tpl), children: [_jsx("strong", { children: tpl.label }), _jsxs("small", { children: [tpl.category, " \u00B7 ", tpl.config.duration ?? 600, "ms"] }), _jsx("span", { children: tpl.description })] }, tpl.id))) }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => setShowTemplates(false), style: { marginTop: 6, width: '100%', justifyContent: 'center' }, children: "Custom animation" })] })), !showTemplates && (_jsxs(_Fragment, { children: [_jsxs("div", { className: "fs-stack", style: { gap: 6 }, children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Name" }), _jsx("input", { type: "text", className: "fs-input", value: config.name, onChange: (e) => updateConfig({ name: e.target.value.replace(/[^a-zA-Z0-9-_]/g, '') }) })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Duration (ms)" }), _jsx("input", { type: "number", className: "fs-input", min: "50", max: "10000", step: "50", value: config.duration, onChange: (e) => updateConfig({ duration: Number(e.target.value) }) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Delay (ms)" }), _jsx("input", { type: "number", className: "fs-input", min: "0", max: "5000", step: "50", value: config.delay, onChange: (e) => updateConfig({ delay: Number(e.target.value) }) })] })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Iterations" }), _jsx("input", { type: "number", className: "fs-input", min: "0", max: "100", value: config.iterations, onChange: (e) => updateConfig({ iterations: Number(e.target.value) }) }), _jsx("span", { style: { fontSize: '0.62rem', color: 'var(--fs-text-tertiary)' }, children: "0 = infinite" })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Direction" }), _jsxs("select", { className: "fs-select", value: config.direction, onChange: (e) => updateConfig({ direction: e.target.value }), children: [_jsx("option", { value: "normal", children: "Normal" }), _jsx("option", { value: "reverse", children: "Reverse" }), _jsx("option", { value: "alternate", children: "Alternate" }), _jsx("option", { value: "alternate-reverse", children: "Alt-Reverse" })] })] })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Easing" }), _jsx("select", { className: "fs-select", value: config.easing, onChange: (e) => updateConfig({ easing: e.target.value }), children: EASING_PRESETS.map((p) => _jsx("option", { value: p.value, children: p.label }, p.value)) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Trigger" }), _jsxs("select", { className: "fs-select", value: config.trigger, onChange: (e) => updateConfig({ trigger: e.target.value }), children: [_jsx("option", { value: "load", children: "On Load" }), _jsx("option", { value: "hover", children: "On Hover" }), _jsx("option", { value: "click", children: "On Click" }), _jsx("option", { value: "scroll", children: "On Scroll" })] })] })] })] }), _jsxs("div", { className: "fs-animator__timeline", children: [_jsxs("div", { className: "fs-export__section-title", style: { marginBottom: 4 }, children: [_jsx(Clock, { size: 12 }), "Keyframes", _jsxs("button", { type: "button", className: "fs-pill", onClick: addKeyframe, style: { marginLeft: 'auto', padding: '2px 8px' }, children: [_jsx(Plus, { size: 10 }), " Add"] })] }), _jsxs("div", { className: "fs-animator__track", children: [_jsx("div", { className: "fs-animator__track-bar" }), sortedKeyframes.map((kf) => (_jsx("div", { className: `fs-animator__track-dot ${expandedKeyframe === kf.id ? 'is-active' : ''}`, style: { left: `${kf.offset}%` }, title: `${kf.offset}%`, onClick: () => setExpandedKeyframe(expandedKeyframe === kf.id ? null : kf.id) }, kf.id)))] }), sortedKeyframes.map((kf) => (_jsxs("div", { className: "fs-animator__keyframe", children: [_jsxs("button", { type: "button", className: "fs-animator__keyframe-header", onClick: () => setExpandedKeyframe(expandedKeyframe === kf.id ? null : kf.id), children: [_jsx(MoveHorizontal, { size: 11 }), _jsxs("span", { children: [kf.offset, "%"] }), _jsxs("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.62rem' }, children: [Object.keys(kf.properties).length, " props"] }), _jsx(ChevronDown, { size: 11, style: { marginLeft: 'auto', transform: expandedKeyframe === kf.id ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' } })] }), _jsx(AnimatePresence, { initial: false, children: expandedKeyframe === kf.id && (_jsxs(motion.div, { initial: { height: 0, opacity: 0 }, animate: { height: 'auto', opacity: 1 }, exit: { height: 0, opacity: 0 }, transition: { duration: 0.18 }, className: "fs-animator__keyframe-body", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Offset (%)" }), _jsx("input", { type: "number", className: "fs-input", min: "0", max: "100", value: kf.offset, onChange: (e) => updateKeyframe(kf.id, { offset: Number(e.target.value) }) })] }), Object.entries(kf.properties).map(([prop, val]) => (_jsxs("div", { className: "fs-animator__prop-row", children: [_jsx("span", { className: "fs-animator__prop-name", children: prop }), _jsx("input", { type: "text", className: "fs-input", value: val, onChange: (e) => updateKeyframeProp(kf.id, prop, e.target.value), style: { flex: 1 } }), _jsx("button", { type: "button", className: "fs-animator__prop-remove", onClick: () => removeKeyframeProp(kf.id, prop), children: _jsx(Trash2, { size: 10 }) })] }, prop))), _jsxs("select", { className: "fs-select", value: "", onChange: (e) => {
+    return (_jsxs("div", { className: "fs-animator", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "fs-export__section-title", style: { marginBottom: 6 }, children: [_jsx(Zap, { size: 12 }), selectedElement ? `Animating ${selectionLabel}` : 'Select an element to animate'] }), showTemplates && (_jsxs("div", { className: "fs-animator__templates", children: [_jsxs("div", { className: "fs-export__section-title", style: { marginBottom: 6 }, children: [_jsx(Zap, { size: 12 }), TEMPLATE_ANIMATIONS.length, " Quick motions \u00B7 click to preview"] }), _jsxs("label", { className: "fs-animator__preset-search", children: [_jsx(Search, { size: 12 }), _jsx("input", { value: templateSearch, onChange: (event) => setTemplateSearch(event.target.value), placeholder: "Search motion\u2026" })] }), _jsx("div", { className: "fs-animator__preset-categories", children: TEMPLATE_CATEGORIES.map((item) => _jsx("button", { type: "button", className: templateCategory === item ? 'is-active' : '', onClick: () => setTemplateCategory(item), children: item }, item)) }), _jsx("div", { className: "fs-animator__template-grid", children: filteredTemplates.map((tpl) => (_jsxs("button", { type: "button", className: `fs-animator__template-btn ${selectedPresetId === tpl.id ? 'is-selected' : ''}`, onClick: () => loadTemplate(tpl), children: [_jsx("strong", { children: tpl.label }), _jsxs("small", { children: [tpl.category, " \u00B7 ", tpl.config.duration ?? 600, "ms"] }), _jsx("span", { children: tpl.description })] }, tpl.id))) }), !filteredTemplates.length && _jsx("p", { className: "fs-animator__empty", children: "No motions match this search." }), _jsxs("div", { className: "fs-animator__quick-actions", children: [_jsxs("button", { type: "button", className: `fs-pill ${previewing ? 'is-danger' : ''}`, onClick: () => previewing ? stopPreview() : previewAnimation(), children: [previewing ? _jsx(Pause, { size: 12 }) : _jsx(Play, { size: 12 }), " ", previewing ? 'Stop' : 'Replay'] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", disabled: !selectedElement, onClick: applyAnimation, children: [_jsx(CheckCircle2, { size: 12 }), " Apply & save"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => setShowTemplates(false), children: [_jsx(SlidersHorizontal, { size: 12 }), " Customize"] })] }), savedAt && _jsxs("div", { className: "fs-animator__saved", children: [_jsx(CheckCircle2, { size: 12 }), " Saved in this project"] }), !!savedInteractions.filter((interaction) => interaction.sourceId === sourceNodeId).length && _jsxs("div", { className: "fs-animator__saved-list", children: [_jsxs("span", { children: [_jsx(Bookmark, { size: 11 }), " Saved on this element"] }), savedInteractions.filter((interaction) => interaction.sourceId === sourceNodeId).map((interaction) => _jsx("button", { type: "button", onClick: () => loadSaved(interaction), children: String(interaction.metadata?.label ?? interaction.name) }, interaction.id))] })] })), !showTemplates && (_jsxs(_Fragment, { children: [_jsxs("div", { className: "fs-stack", style: { gap: 6 }, children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Name" }), _jsx("input", { type: "text", className: "fs-input", value: config.name, onChange: (e) => updateConfig({ name: e.target.value.replace(/[^a-zA-Z0-9-_]/g, '') }) })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Duration (ms)" }), _jsx("input", { type: "number", className: "fs-input", min: "50", max: "10000", step: "50", value: config.duration, onChange: (e) => updateConfig({ duration: Number(e.target.value) }) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Delay (ms)" }), _jsx("input", { type: "number", className: "fs-input", min: "0", max: "5000", step: "50", value: config.delay, onChange: (e) => updateConfig({ delay: Number(e.target.value) }) })] })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Iterations" }), _jsx("input", { type: "number", className: "fs-input", min: "0", max: "100", value: config.iterations, onChange: (e) => updateConfig({ iterations: Number(e.target.value) }) }), _jsx("span", { style: { fontSize: '0.62rem', color: 'var(--fs-text-tertiary)' }, children: "0 = infinite" })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Direction" }), _jsxs("select", { className: "fs-select", value: config.direction, onChange: (e) => updateConfig({ direction: e.target.value }), children: [_jsx("option", { value: "normal", children: "Normal" }), _jsx("option", { value: "reverse", children: "Reverse" }), _jsx("option", { value: "alternate", children: "Alternate" }), _jsx("option", { value: "alternate-reverse", children: "Alt-Reverse" })] })] })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Easing" }), _jsx("select", { className: "fs-select", value: config.easing, onChange: (e) => updateConfig({ easing: e.target.value }), children: EASING_PRESETS.map((p) => _jsx("option", { value: p.value, children: p.label }, p.value)) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Trigger" }), _jsxs("select", { className: "fs-select", value: config.trigger, onChange: (e) => updateConfig({ trigger: e.target.value }), children: [_jsx("option", { value: "load", children: "On Load" }), _jsx("option", { value: "hover", children: "On Hover" }), _jsx("option", { value: "click", children: "On Click" }), _jsx("option", { value: "scroll", children: "On Scroll" })] })] })] })] }), _jsxs("div", { className: "fs-animator__timeline", children: [_jsxs("div", { className: "fs-export__section-title", style: { marginBottom: 4 }, children: [_jsx(Clock, { size: 12 }), "Keyframes", _jsxs("button", { type: "button", className: "fs-pill", onClick: addKeyframe, style: { marginLeft: 'auto', padding: '2px 8px' }, children: [_jsx(Plus, { size: 10 }), " Add"] })] }), _jsxs("div", { className: "fs-animator__track", children: [_jsx("div", { className: "fs-animator__track-bar" }), sortedKeyframes.map((kf) => (_jsx("div", { className: `fs-animator__track-dot ${expandedKeyframe === kf.id ? 'is-active' : ''}`, style: { left: `${kf.offset}%` }, title: `${kf.offset}%`, onClick: () => setExpandedKeyframe(expandedKeyframe === kf.id ? null : kf.id) }, kf.id)))] }), sortedKeyframes.map((kf) => (_jsxs("div", { className: "fs-animator__keyframe", children: [_jsxs("button", { type: "button", className: "fs-animator__keyframe-header", onClick: () => setExpandedKeyframe(expandedKeyframe === kf.id ? null : kf.id), children: [_jsx(MoveHorizontal, { size: 11 }), _jsxs("span", { children: [kf.offset, "%"] }), _jsxs("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.62rem' }, children: [Object.keys(kf.properties).length, " props"] }), _jsx(ChevronDown, { size: 11, style: { marginLeft: 'auto', transform: expandedKeyframe === kf.id ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' } })] }), _jsx(AnimatePresence, { initial: false, children: expandedKeyframe === kf.id && (_jsxs(motion.div, { initial: { height: 0, opacity: 0 }, animate: { height: 'auto', opacity: 1 }, exit: { height: 0, opacity: 0 }, transition: { duration: 0.18 }, className: "fs-animator__keyframe-body", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Offset (%)" }), _jsx("input", { type: "number", className: "fs-input", min: "0", max: "100", value: kf.offset, onChange: (e) => updateKeyframe(kf.id, { offset: Number(e.target.value) }) })] }), Object.entries(kf.properties).map(([prop, val]) => (_jsxs("div", { className: "fs-animator__prop-row", children: [_jsx("span", { className: "fs-animator__prop-name", children: prop }), _jsx("input", { type: "text", className: "fs-input", value: val, onChange: (e) => updateKeyframeProp(kf.id, prop, e.target.value), style: { flex: 1 } }), _jsx("button", { type: "button", className: "fs-animator__prop-remove", onClick: () => removeKeyframeProp(kf.id, prop), children: _jsx(Trash2, { size: 10 }) })] }, prop))), _jsxs("select", { className: "fs-select", value: "", onChange: (e) => {
                                                         if (e.target.value) {
                                                             updateKeyframeProp(kf.id, e.target.value, '');
                                                             e.target.value = '';
                                                         }
-                                                    }, children: [_jsx("option", { value: "", children: "+ Add property\u2026" }), PROPERTY_OPTIONS.filter((p) => !(p.id in kf.properties)).map((p) => (_jsx("option", { value: p.id, children: p.label }, p.id)))] }), _jsxs("button", { type: "button", className: "fs-pill is-danger", onClick: () => removeKeyframe(kf.id), style: { marginTop: 4 }, children: [_jsx(Trash2, { size: 10 }), " Remove keyframe"] })] })) })] }, kf.id)))] }), _jsxs("div", { className: "fs-pill-group", style: { marginTop: 8 }, children: [_jsxs("button", { type: "button", className: `fs-pill ${previewing ? 'is-danger' : 'is-accent'}`, onClick: previewing ? stopPreview : previewAnimation, children: [previewing ? _jsx(Pause, { size: 12 }) : _jsx(Play, { size: 12 }), previewing ? 'Stop' : 'Preview'] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: applyAnimation, children: [_jsx(Zap, { size: 12 }), " Apply"] }), onSaveToArchive && _jsxs("button", { type: "button", className: "fs-pill", onClick: onSaveToArchive, disabled: !sourceNodeId, children: [_jsx(Archive, { size: 12 }), " Save to Archive"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: copyCSS, children: [_jsx(Copy, { size: 12 }), " Copy CSS"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => { setConfig(defaultConfig()); setShowTemplates(true); }, children: [_jsx(RotateCw, { size: 12 }), " Reset"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => setShowTemplates(true), children: [_jsx(Zap, { size: 12 }), " Motions"] })] })] }))] }));
+                                                    }, children: [_jsx("option", { value: "", children: "+ Add property\u2026" }), PROPERTY_OPTIONS.filter((p) => !(p.id in kf.properties)).map((p) => (_jsx("option", { value: p.id, children: p.label }, p.id)))] }), _jsxs("button", { type: "button", className: "fs-pill is-danger", onClick: () => removeKeyframe(kf.id), style: { marginTop: 4 }, children: [_jsx(Trash2, { size: 10 }), " Remove keyframe"] })] })) })] }, kf.id)))] }), _jsxs("div", { className: "fs-pill-group", style: { marginTop: 8 }, children: [_jsxs("button", { type: "button", className: `fs-pill ${previewing ? 'is-danger' : 'is-accent'}`, onClick: () => previewing ? stopPreview() : previewAnimation(), children: [previewing ? _jsx(Pause, { size: 12 }) : _jsx(Play, { size: 12 }), previewing ? 'Stop' : 'Preview'] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: applyAnimation, disabled: !sourceNodeId, children: [_jsx(CheckCircle2, { size: 12 }), " Apply & save"] }), onSaveToArchive && _jsxs("button", { type: "button", className: "fs-pill", onClick: saveReusable, disabled: !sourceNodeId, children: [_jsx(Archive, { size: 12 }), " Save reusable"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: copyCSS, children: [_jsx(Copy, { size: 12 }), " Copy CSS"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => { setConfig(defaultConfig()); setShowTemplates(true); }, children: [_jsx(RotateCw, { size: 12 }), " Reset"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => setShowTemplates(true), children: [_jsx(Zap, { size: 12 }), " Motions"] })] })] }))] }));
 }
 //# sourceMappingURL=FroamAnimator.js.map

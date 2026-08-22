@@ -19,12 +19,13 @@ export type AnimationConfig = {
 type Props = {
     selectedElement: HTMLElement | null;
     selectionLabel: string;
-    onApplyAnimation: (css: string, inline: string) => void;
+    onApplyAnimation: (css: string, inline: string, interaction: FroamInteraction) => void;
     onToast: (msg: string) => void;
     sourceNodeId?: string | null;
     onInteractionChange?: (interaction: FroamInteraction) => void;
-    onSaveToArchive?: () => void;
+    onSaveToArchive?: (interaction: FroamInteraction) => void;
+    savedInteractions?: FroamInteraction[];
 };
-export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast, sourceNodeId, onInteractionChange, onSaveToArchive }: Props): import("react").JSX.Element;
+export default function FroamAnimator({ selectedElement, selectionLabel, onApplyAnimation, onToast, sourceNodeId, onInteractionChange, onSaveToArchive, savedInteractions }: Props): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=FroamAnimator.d.ts.map

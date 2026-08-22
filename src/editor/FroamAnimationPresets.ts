@@ -1,54 +1,150 @@
 import type { AnimationConfig } from './FroamAnimator'
 import type { FroamInteraction } from '../project/types'
 
-export type FroamAnimationCategory = 'Entrance' | 'Reveal' | 'Emphasis' | 'Motion' | 'Exit'
+export type FroamAnimationCategory = 'Entrance' | 'Reveal' | 'Emphasis' | 'Hover' | 'Motion' | 'Scroll' | 'Loading' | 'Text' | 'Navigation' | 'Exit'
 export type FroamAnimationPreset = { id: string; label: string; category: FroamAnimationCategory; description: string; config: Partial<AnimationConfig> }
 
-const frame = (transform: string, opacity?: string) => ({ transform, ...(opacity === undefined ? {} : { opacity }) })
-const two = (from: Record<string, string>, to: Record<string, string>) => [
-  { id: 'from', offset: 0, properties: from }, { id: 'to', offset: 100, properties: to },
-] as AnimationConfig['keyframes']
+type Values = AnimationConfig['keyframes'][number]['properties']
+const frame = (transform: string, opacity?: string): Values => ({ transform, ...(opacity === undefined ? {} : { opacity }) })
+const two = (from: Values, to: Values): AnimationConfig['keyframes'] => [
+  { id: 'from', offset: 0, properties: from },
+  { id: 'to', offset: 100, properties: to },
+]
+const three = (from: Values, middle: Values, to: Values): AnimationConfig['keyframes'] => [
+  { id: 'from', offset: 0, properties: from },
+  { id: 'middle', offset: 55, properties: middle },
+  { id: 'to', offset: 100, properties: to },
+]
+const preset = (id: string, label: string, category: FroamAnimationCategory, description: string, config: Partial<AnimationConfig>): FroamAnimationPreset => ({
+  id, label, category, description, config: { name: `froam-${id}`, duration: 600, easing: 'cubic-bezier(.22,1,.36,1)', ...config },
+})
+
+const directionalEntrances: FroamAnimationPreset[] = [
+  ['up','translateY(34px)'], ['down','translateY(-34px)'], ['left','translateX(48px)'], ['right','translateX(-48px)'],
+  ['up-left','translate3d(34px,34px,0)'], ['up-right','translate3d(-34px,34px,0)'], ['down-left','translate3d(34px,-34px,0)'], ['down-right','translate3d(-34px,-34px,0)'],
+].map(([id, transform]) => preset(`enter-${id}`, `Enter ${id}`, 'Entrance', `Directional ${id.replace('-', ' ')} entrance`, { duration: 520, keyframes: two(frame(transform, '0'), frame('translate3d(0,0,0)', '1')) }))
+
+const directionalExits: FroamAnimationPreset[] = [
+  ['up','translateY(-44px)'], ['down','translateY(44px)'], ['left','translateX(-54px)'], ['right','translateX(54px)'],
+  ['up-left','translate3d(-38px,-38px,0)'], ['up-right','translate3d(38px,-38px,0)'], ['down-left','translate3d(-38px,38px,0)'], ['down-right','translate3d(38px,38px,0)'],
+].map(([id, transform]) => preset(`exit-${id}`, `Exit ${id}`, 'Exit', `Directional ${id.replace('-', ' ')} departure`, { duration: 420, easing: 'cubic-bezier(.55,0,1,.45)', fillMode: 'forwards', keyframes: two(frame('translate3d(0,0,0)', '1'), frame(transform, '0')) }))
 
 export const FROAM_ANIMATION_PRESETS: FroamAnimationPreset[] = [
-  { id:'fade-up-soft',label:'Soft rise',category:'Entrance',description:'Calm product entrance',config:{name:'froam-soft-rise',duration:650,easing:'cubic-bezier(.22,1,.36,1)',keyframes:two(frame('translateY(18px)','0'),frame('translateY(0)','1'))}},
-  { id:'fade-down',label:'Drop in',category:'Entrance',description:'Arrive from above',config:{name:'froam-drop-in',duration:520,keyframes:two(frame('translateY(-28px)','0'),frame('translateY(0)','1'))}},
-  { id:'slide-left',label:'Glide left',category:'Entrance',description:'Enter from the right',config:{name:'froam-glide-left',duration:560,keyframes:two(frame('translateX(44px)','0'),frame('translateX(0)','1'))}},
-  { id:'slide-right',label:'Glide right',category:'Entrance',description:'Enter from the left',config:{name:'froam-glide-right',duration:560,keyframes:two(frame('translateX(-44px)','0'),frame('translateX(0)','1'))}},
-  { id:'pop',label:'Pop',category:'Entrance',description:'Fast confident scale',config:{name:'froam-pop',duration:360,easing:'cubic-bezier(.34,1.56,.64,1)',keyframes:two(frame('scale(.72)','0'),frame('scale(1)','1'))}},
-  { id:'flip-card',label:'Flip card',category:'Entrance',description:'Dimensional card arrival',config:{name:'froam-flip-card',duration:680,easing:'cubic-bezier(.22,1,.36,1)',keyframes:two(frame('perspective(900px) rotateX(-18deg) translateY(18px)','0'),frame('perspective(900px) rotateX(0) translateY(0)','1'))}},
-  { id:'blur-in',label:'Focus in',category:'Reveal',description:'Blur resolves into clarity',config:{name:'froam-focus-in',duration:700,keyframes:two({filter:'blur(16px)',opacity:'0'},{filter:'blur(0)',opacity:'1'})}},
-  { id:'wipe-right',label:'Wipe right',category:'Reveal',description:'Reveal across the surface',config:{name:'froam-wipe-right',duration:720,easing:'cubic-bezier(.65,0,.35,1)',keyframes:two({clipPath:'inset(0 100% 0 0)'},{clipPath:'inset(0 0 0 0)'})}},
-  { id:'wipe-up',label:'Wipe up',category:'Reveal',description:'Reveal from the baseline',config:{name:'froam-wipe-up',duration:650,keyframes:two({clipPath:'inset(100% 0 0 0)'},{clipPath:'inset(0 0 0 0)'})}},
-  { id:'unfold',label:'Unfold',category:'Reveal',description:'Open from the top edge',config:{name:'froam-unfold',duration:620,easing:'cubic-bezier(.22,1,.36,1)',keyframes:two(frame('scaleY(.08)','0'),frame('scaleY(1)','1'))}},
-  { id:'text-focus',label:'Text focus',category:'Reveal',description:'Editorial letter reveal',config:{name:'froam-text-focus',duration:800,keyframes:[{id:'a',offset:0,properties:{filter:'blur(10px)',opacity:'0',transform:'translateY(8px)'}},{id:'b',offset:60,properties:{filter:'blur(2px)',opacity:'.75'}},{id:'c',offset:100,properties:{filter:'blur(0)',opacity:'1',transform:'translateY(0)'}}]}},
-  { id:'shine',label:'Shine',category:'Emphasis',description:'Brief luminous emphasis',config:{name:'froam-shine',duration:900,keyframes:[{id:'a',offset:0,properties:{filter:'brightness(1)'}},{id:'b',offset:45,properties:{filter:'brightness(1.55)',boxShadow:'0 0 30px rgba(94,234,212,.35)'}},{id:'c',offset:100,properties:{filter:'brightness(1)',boxShadow:'none'}}]}},
-  { id:'heartbeat',label:'Heartbeat',category:'Emphasis',description:'Double pulse for attention',config:{name:'froam-heartbeat',duration:900,keyframes:[{id:'a',offset:0,properties:frame('scale(1)')},{id:'b',offset:18,properties:frame('scale(1.08)')},{id:'c',offset:34,properties:frame('scale(1)')},{id:'d',offset:52,properties:frame('scale(1.05)')},{id:'e',offset:100,properties:frame('scale(1)')}] }},
-  { id:'jelly',label:'Jelly',category:'Emphasis',description:'Playful elastic response',config:{name:'froam-jelly',duration:720,keyframes:[{id:'a',offset:0,properties:frame('scale3d(1,1,1)')},{id:'b',offset:30,properties:frame('scale3d(1.18,.82,1)')},{id:'c',offset:45,properties:frame('scale3d(.88,1.12,1)')},{id:'d',offset:65,properties:frame('scale3d(1.06,.94,1)')},{id:'e',offset:100,properties:frame('scale3d(1,1,1)')}] }},
-  { id:'tilt',label:'Tilt',category:'Emphasis',description:'Subtle tactile acknowledgement',config:{name:'froam-tilt',duration:480,keyframes:[{id:'a',offset:0,properties:frame('rotate(0)')},{id:'b',offset:35,properties:frame('rotate(-3deg) scale(1.02)')},{id:'c',offset:70,properties:frame('rotate(2deg)')},{id:'d',offset:100,properties:frame('rotate(0)')}] }},
-  { id:'button-press',label:'Button press',category:'Emphasis',description:'Tactile click feedback',config:{name:'froam-button-press',duration:260,trigger:'click',keyframes:[{id:'a',offset:0,properties:frame('scale(1)')},{id:'b',offset:45,properties:frame('scale(.94)')},{id:'c',offset:100,properties:frame('scale(1)')}] }},
-  { id:'hover-lift',label:'Hover lift',category:'Emphasis',description:'Card hover with depth',config:{name:'froam-hover-lift',duration:320,trigger:'hover',fillMode:'forwards',keyframes:two({transform:'translateY(0)',boxShadow:'0 4px 14px rgba(0,0,0,.12)'},{transform:'translateY(-8px)',boxShadow:'0 18px 38px rgba(0,0,0,.24)'})}},
-  { id:'float-loop',label:'Float',category:'Motion',description:'Gentle ambient motion',config:{name:'froam-float-loop',duration:2600,iterations:0,direction:'alternate',easing:'ease-in-out',keyframes:two(frame('translateY(0)'),frame('translateY(-12px)'))}},
-  { id:'orbit',label:'Orbit',category:'Motion',description:'Circular ambient motion',config:{name:'froam-orbit',duration:3200,iterations:0,easing:'linear',keyframes:[{id:'a',offset:0,properties:frame('rotate(0deg) translateX(10px) rotate(0deg)')},{id:'b',offset:100,properties:frame('rotate(360deg) translateX(10px) rotate(-360deg)')}] }},
-  { id:'drift',label:'Drift',category:'Motion',description:'Slow diagonal movement',config:{name:'froam-drift',duration:4200,iterations:0,direction:'alternate',easing:'ease-in-out',keyframes:two(frame('translate3d(-6px,4px,0) rotate(-1deg)'),frame('translate3d(8px,-7px,0) rotate(1deg)'))}},
-  { id:'spin-slow',label:'Slow spin',category:'Motion',description:'Continuous rotation',config:{name:'froam-spin-slow',duration:6000,iterations:0,easing:'linear',keyframes:two(frame('rotate(0deg)'),frame('rotate(360deg)'))}},
-  { id:'marquee-nudge',label:'Marquee nudge',category:'Motion',description:'Short directional loop',config:{name:'froam-marquee-nudge',duration:1800,iterations:0,easing:'ease-in-out',keyframes:two(frame('translateX(-6px)'),frame('translateX(6px)'))}},
-  { id:'fade-out',label:'Fade out',category:'Exit',description:'Quiet disappearance',config:{name:'froam-fade-out',duration:420,fillMode:'forwards',keyframes:two({opacity:'1'},{opacity:'0'})}},
-  { id:'shrink-away',label:'Shrink away',category:'Exit',description:'Collapse into place',config:{name:'froam-shrink-away',duration:440,easing:'cubic-bezier(.55,0,1,.45)',fillMode:'forwards',keyframes:two(frame('scale(1)','1'),frame('scale(.72)','0'))}},
-  { id:'slide-away',label:'Slide away',category:'Exit',description:'Leave toward the right',config:{name:'froam-slide-away',duration:480,fillMode:'forwards',keyframes:two(frame('translateX(0)','1'),frame('translateX(48px)','0'))}},
-  { id:'blur-away',label:'Blur away',category:'Exit',description:'Dissolve out of focus',config:{name:'froam-blur-away',duration:520,fillMode:'forwards',keyframes:two({filter:'blur(0)',opacity:'1'},{filter:'blur(14px)',opacity:'0'})}},
+  ...directionalEntrances,
+  preset('soft-rise','Soft rise','Entrance','Calm product entrance',{duration:650,keyframes:two(frame('translateY(18px)','0'),frame('translateY(0)','1'))}),
+  preset('pop','Pop','Entrance','Fast confident scale',{duration:360,easing:'cubic-bezier(.34,1.56,.64,1)',keyframes:two(frame('scale(.72)','0'),frame('scale(1)','1'))}),
+  preset('micro-pop','Micro pop','Entrance','Tight interface arrival',{duration:240,keyframes:two(frame('scale(.94)','0'),frame('scale(1)','1'))}),
+  preset('zoom-through','Zoom through','Entrance','Cinematic depth entrance',{duration:720,keyframes:two(frame('scale(1.32)','0'),frame('scale(1)','1'))}),
+  preset('flip-x','Flip horizontal','Entrance','Turn into view on the Y axis',{duration:680,keyframes:two(frame('perspective(900px) rotateY(-72deg)','0'),frame('perspective(900px) rotateY(0)','1'))}),
+  preset('flip-y','Flip vertical','Entrance','Turn into view on the X axis',{duration:680,keyframes:two(frame('perspective(900px) rotateX(-62deg)','0'),frame('perspective(900px) rotateX(0)','1'))}),
+  preset('swing-in','Swing in','Entrance','Soft hinged entrance',{duration:760,easing:'cubic-bezier(.34,1.56,.64,1)',keyframes:three(frame('rotate(-8deg) translateY(-18px)','0'),frame('rotate(2deg) translateY(2px)','1'),frame('rotate(0) translateY(0)','1'))}),
+  preset('spiral-in','Spiral in','Entrance','Playful rotation and scale',{duration:760,keyframes:two(frame('rotate(-24deg) scale(.72)','0'),frame('rotate(0) scale(1)','1'))}),
+  preset('drop-bounce','Drop bounce','Entrance','Weighted arrival with rebound',{duration:820,easing:'ease-out',keyframes:[{id:'a',offset:0,properties:frame('translateY(-54px)','0')},{id:'b',offset:68,properties:frame('translateY(7px)','1')},{id:'c',offset:84,properties:frame('translateY(-3px)','1')},{id:'d',offset:100,properties:frame('translateY(0)','1')}]}),
+  preset('expand-in','Expand in','Entrance','Surface grows into its space',{duration:520,keyframes:two({transform:'scale(.82)',borderRadius:'28px',opacity:'0'},{transform:'scale(1)',borderRadius:'inherit',opacity:'1'})}),
+
+  preset('focus-in','Focus in','Reveal','Blur resolves into clarity',{duration:700,keyframes:two({filter:'blur(16px)',opacity:'0'},{filter:'blur(0)',opacity:'1'})}),
+  preset('wipe-right','Wipe right','Reveal','Reveal across the surface',{duration:720,easing:'cubic-bezier(.65,0,.35,1)',keyframes:two({clipPath:'inset(0 100% 0 0)'},{clipPath:'inset(0 0 0 0)'})}),
+  preset('wipe-left','Wipe left','Reveal','Reveal from the right edge',{duration:720,easing:'cubic-bezier(.65,0,.35,1)',keyframes:two({clipPath:'inset(0 0 0 100%)'},{clipPath:'inset(0 0 0 0)'})}),
+  preset('wipe-up','Wipe up','Reveal','Reveal from the baseline',{duration:650,keyframes:two({clipPath:'inset(100% 0 0 0)'},{clipPath:'inset(0 0 0 0)'})}),
+  preset('wipe-down','Wipe down','Reveal','Reveal from the top edge',{duration:650,keyframes:two({clipPath:'inset(0 0 100% 0)'},{clipPath:'inset(0 0 0 0)'})}),
+  preset('iris-open','Iris open','Reveal','Circular mask opens outward',{duration:720,keyframes:two({clipPath:'circle(0% at 50% 50%)'},{clipPath:'circle(75% at 50% 50%)'})}),
+  preset('diamond-open','Diamond open','Reveal','Geometric mask reveal',{duration:760,keyframes:two({clipPath:'polygon(50% 50%,50% 50%,50% 50%,50% 50%)'},{clipPath:'polygon(50% -30%,130% 50%,50% 130%,-30% 50%)'})}),
+  preset('curtain-open','Curtain open','Reveal','Two-sided cinematic reveal',{duration:820,keyframes:two({clipPath:'inset(0 50% 0 50%)'},{clipPath:'inset(0 0 0 0)'})}),
+  preset('unfold-x','Unfold horizontal','Reveal','Open from the center',{duration:620,keyframes:two(frame('scaleX(.08)','0'),frame('scaleX(1)','1'))}),
+  preset('unfold-y','Unfold vertical','Reveal','Open from the top edge',{duration:620,keyframes:two(frame('scaleY(.08)','0'),frame('scaleY(1)','1'))}),
+  preset('contrast-reveal','Contrast reveal','Reveal','Low contrast resolves crisply',{duration:680,keyframes:two({filter:'contrast(.2) brightness(1.5)',opacity:'0'},{filter:'contrast(1) brightness(1)',opacity:'1'})}),
+  preset('saturate-in','Color reveal','Reveal','Color blooms into the surface',{duration:760,keyframes:two({filter:'grayscale(1) saturate(0)',opacity:'.25'},{filter:'grayscale(0) saturate(1)',opacity:'1'})}),
+
+  preset('button-press','Button press','Emphasis','Tactile click feedback',{duration:260,trigger:'click',keyframes:three(frame('scale(1)'),frame('scale(.94)'),frame('scale(1)'))}),
+  preset('heartbeat','Heartbeat','Emphasis','Double pulse for attention',{duration:900,keyframes:[{id:'a',offset:0,properties:frame('scale(1)')},{id:'b',offset:18,properties:frame('scale(1.08)')},{id:'c',offset:34,properties:frame('scale(1)')},{id:'d',offset:52,properties:frame('scale(1.05)')},{id:'e',offset:100,properties:frame('scale(1)')}]}),
+  preset('jelly','Jelly','Emphasis','Playful elastic response',{duration:720,keyframes:[{id:'a',offset:0,properties:frame('scale3d(1,1,1)')},{id:'b',offset:30,properties:frame('scale3d(1.18,.82,1)')},{id:'c',offset:45,properties:frame('scale3d(.88,1.12,1)')},{id:'d',offset:65,properties:frame('scale3d(1.06,.94,1)')},{id:'e',offset:100,properties:frame('scale3d(1,1,1)')}]}),
+  preset('rubber','Rubber','Emphasis','Elastic horizontal acknowledgement',{duration:700,keyframes:[{id:'a',offset:0,properties:frame('scale3d(1,1,1)')},{id:'b',offset:35,properties:frame('scale3d(1.22,.82,1)')},{id:'c',offset:58,properties:frame('scale3d(.92,1.08,1)')},{id:'d',offset:100,properties:frame('scale3d(1,1,1)')}]}),
+  preset('shake-x','Shake horizontal','Emphasis','Clear error or warning feedback',{duration:520,keyframes:[{id:'a',offset:0,properties:frame('translateX(0)')},{id:'b',offset:20,properties:frame('translateX(-9px)')},{id:'c',offset:40,properties:frame('translateX(8px)')},{id:'d',offset:60,properties:frame('translateX(-5px)')},{id:'e',offset:80,properties:frame('translateX(3px)')},{id:'f',offset:100,properties:frame('translateX(0)')}]}),
+  preset('shake-y','Shake vertical','Emphasis','Vertical warning response',{duration:520,keyframes:[{id:'a',offset:0,properties:frame('translateY(0)')},{id:'b',offset:25,properties:frame('translateY(-7px)')},{id:'c',offset:50,properties:frame('translateY(6px)')},{id:'d',offset:75,properties:frame('translateY(-3px)')},{id:'e',offset:100,properties:frame('translateY(0)')}]}),
+  preset('nod','Nod','Emphasis','Friendly vertical confirmation',{duration:560,keyframes:[{id:'a',offset:0,properties:frame('rotateX(0)')},{id:'b',offset:38,properties:frame('perspective(500px) rotateX(16deg)')},{id:'c',offset:72,properties:frame('perspective(500px) rotateX(-6deg)')},{id:'d',offset:100,properties:frame('rotateX(0)')}]}),
+  preset('tilt','Tilt','Emphasis','Subtle tactile acknowledgement',{duration:480,keyframes:three(frame('rotate(0)'),frame('rotate(-3deg) scale(1.02)'),frame('rotate(0)'))}),
+  preset('shine','Shine','Emphasis','Brief luminous emphasis',{duration:900,keyframes:[{id:'a',offset:0,properties:{filter:'brightness(1)'}},{id:'b',offset:45,properties:{filter:'brightness(1.55)',boxShadow:'0 0 30px rgba(94,234,212,.35)'}},{id:'c',offset:100,properties:{filter:'brightness(1)',boxShadow:'none'}}]}),
+  preset('flash','Flash','Emphasis','Quick high-energy confirmation',{duration:460,keyframes:three({filter:'brightness(1)',opacity:'1'},{filter:'brightness(1.8)',opacity:'.72'},{filter:'brightness(1)',opacity:'1'})}),
+  preset('outline-pulse','Outline pulse','Emphasis','Accessible focus-like emphasis',{duration:900,keyframes:three({boxShadow:'0 0 0 0 rgba(59,130,246,0)'},{boxShadow:'0 0 0 7px rgba(59,130,246,.28)'},{boxShadow:'0 0 0 0 rgba(59,130,246,0)'})}),
+
+  preset('hover-lift','Hover lift','Hover','Card rises with depth',{duration:320,trigger:'hover',fillMode:'forwards',keyframes:two({transform:'translateY(0)',boxShadow:'0 4px 14px rgba(0,0,0,.12)'},{transform:'translateY(-8px)',boxShadow:'0 18px 38px rgba(0,0,0,.24)'})}),
+  preset('hover-grow','Hover grow','Hover','Confident scale response',{duration:260,trigger:'hover',fillMode:'forwards',keyframes:two(frame('scale(1)'),frame('scale(1.045)'))}),
+  preset('hover-shrink','Hover shrink','Hover','Quiet inward response',{duration:260,trigger:'hover',fillMode:'forwards',keyframes:two(frame('scale(1)'),frame('scale(.975)'))}),
+  preset('hover-tilt-left','Tilt left','Hover','Directional card hover',{duration:320,trigger:'hover',fillMode:'forwards',keyframes:two(frame('perspective(700px) rotateY(0)'),frame('perspective(700px) rotateY(-5deg) translateY(-3px)'))}),
+  preset('hover-tilt-right','Tilt right','Hover','Opposite directional hover',{duration:320,trigger:'hover',fillMode:'forwards',keyframes:two(frame('perspective(700px) rotateY(0)'),frame('perspective(700px) rotateY(5deg) translateY(-3px)'))}),
+  preset('hover-glow','Hover glow','Hover','Accent glow on hover',{duration:340,trigger:'hover',fillMode:'forwards',keyframes:two({filter:'brightness(1)',boxShadow:'0 0 0 rgba(94,234,212,0)'},{filter:'brightness(1.08)',boxShadow:'0 0 28px rgba(94,234,212,.38)'})}),
+  preset('hover-focus','Hover focus','Hover','Subtle blur-to-focus interaction',{duration:300,trigger:'hover',fillMode:'forwards',keyframes:two({filter:'blur(.8px) saturate(.8)',opacity:'.86'},{filter:'blur(0) saturate(1.08)',opacity:'1'})}),
+  preset('hover-slide-right','Hover slide','Hover','Small directional nudge',{duration:260,trigger:'hover',fillMode:'forwards',keyframes:two(frame('translateX(0)'),frame('translateX(7px)'))}),
+  preset('hover-round','Round hover','Hover','Corners soften on hover',{duration:320,trigger:'hover',fillMode:'forwards',keyframes:two({borderRadius:'8px'},{borderRadius:'22px'})}),
+  preset('hover-color','Color hover','Hover','Color and contrast wake up',{duration:340,trigger:'hover',fillMode:'forwards',keyframes:two({filter:'saturate(.7) contrast(.95)'},{filter:'saturate(1.18) contrast(1.04)'})}),
+
+  preset('float-loop','Float','Motion','Gentle ambient motion',{duration:2600,iterations:0,direction:'alternate',easing:'ease-in-out',keyframes:two(frame('translateY(0)'),frame('translateY(-12px)'))}),
+  preset('drift','Drift','Motion','Slow diagonal movement',{duration:4200,iterations:0,direction:'alternate',easing:'ease-in-out',keyframes:two(frame('translate3d(-6px,4px,0) rotate(-1deg)'),frame('translate3d(8px,-7px,0) rotate(1deg)'))}),
+  preset('orbit','Orbit','Motion','Circular ambient motion',{duration:3200,iterations:0,easing:'linear',keyframes:two(frame('rotate(0deg) translateX(10px) rotate(0deg)'),frame('rotate(360deg) translateX(10px) rotate(-360deg)'))}),
+  preset('spin-slow','Slow spin','Motion','Continuous rotation',{duration:6000,iterations:0,easing:'linear',keyframes:two(frame('rotate(0deg)'),frame('rotate(360deg)'))}),
+  preset('spin-reverse','Reverse spin','Motion','Continuous counter rotation',{duration:5200,iterations:0,easing:'linear',keyframes:two(frame('rotate(360deg)'),frame('rotate(0deg)'))}),
+  preset('breathe','Breathe','Motion','Soft organic scale loop',{duration:3200,iterations:0,direction:'alternate',easing:'ease-in-out',keyframes:two({transform:'scale(.985)',opacity:'.88'},{transform:'scale(1.025)',opacity:'1'})}),
+  preset('sway','Sway','Motion','Relaxed pendulum movement',{duration:2800,iterations:0,direction:'alternate',easing:'ease-in-out',keyframes:two(frame('rotate(-2.4deg)'),frame('rotate(2.4deg)'))}),
+  preset('bob','Bob','Motion','Compact vertical loop',{duration:1600,iterations:0,direction:'alternate',easing:'ease-in-out',keyframes:two(frame('translateY(-4px)'),frame('translateY(4px)'))}),
+  preset('pan-horizontal','Pan horizontal','Motion','Long horizontal ambient pan',{duration:4800,iterations:0,direction:'alternate',easing:'ease-in-out',keyframes:two(frame('translateX(-14px)'),frame('translateX(14px)'))}),
+  preset('depth-pulse','Depth pulse','Motion','Ambient shadow breathing',{duration:2400,iterations:0,direction:'alternate',easing:'ease-in-out',keyframes:two({boxShadow:'0 6px 18px rgba(0,0,0,.12)'},{boxShadow:'0 16px 46px rgba(0,0,0,.28)'})}),
+
+  preset('scroll-rise','Scroll rise','Scroll','Reveal as content enters view',{duration:720,trigger:'scroll',keyframes:two(frame('translateY(42px)','0'),frame('translateY(0)','1'))}),
+  preset('scroll-scale','Scroll scale','Scroll','Scale into the viewport',{duration:700,trigger:'scroll',keyframes:two(frame('scale(.88)','0'),frame('scale(1)','1'))}),
+  preset('scroll-focus','Scroll focus','Scroll','Focus content during scroll',{duration:760,trigger:'scroll',keyframes:two({filter:'blur(12px)',opacity:'0'},{filter:'blur(0)',opacity:'1'})}),
+  preset('scroll-left','Scroll from left','Scroll','Horizontal viewport entrance',{duration:720,trigger:'scroll',keyframes:two(frame('translateX(-52px)','0'),frame('translateX(0)','1'))}),
+  preset('scroll-right','Scroll from right','Scroll','Opposite viewport entrance',{duration:720,trigger:'scroll',keyframes:two(frame('translateX(52px)','0'),frame('translateX(0)','1'))}),
+  preset('scroll-rotate','Scroll rotate','Scroll','Small editorial rotation reveal',{duration:780,trigger:'scroll',keyframes:two(frame('rotate(-4deg) translateY(28px)','0'),frame('rotate(0) translateY(0)','1'))}),
+  preset('scroll-wipe','Scroll wipe','Scroll','Viewport-triggered mask reveal',{duration:820,trigger:'scroll',keyframes:two({clipPath:'inset(0 100% 0 0)'},{clipPath:'inset(0 0 0 0)'})}),
+  preset('scroll-color','Scroll color','Scroll','Color arrives with the section',{duration:850,trigger:'scroll',keyframes:two({filter:'grayscale(1)',opacity:'.3'},{filter:'grayscale(0)',opacity:'1'})}),
+
+  preset('spinner','Spinner','Loading','Classic continuous loader',{duration:900,iterations:0,easing:'linear',keyframes:two(frame('rotate(0)'),frame('rotate(360deg)'))}),
+  preset('spinner-soft','Soft spinner','Loading','Slower polished rotation',{duration:1500,iterations:0,easing:'linear',keyframes:two(frame('rotate(0) scale(.94)','0.65'),frame('rotate(360deg) scale(1)','1'))}),
+  preset('loading-pulse','Loading pulse','Loading','Neutral content placeholder',{duration:1250,iterations:0,direction:'alternate',easing:'ease-in-out',keyframes:two({opacity:'.36'},{opacity:'1'})}),
+  preset('loading-wave','Loading wave','Loading','Brightness passes through content',{duration:1300,iterations:0,direction:'alternate',easing:'ease-in-out',keyframes:two({filter:'brightness(.72)',opacity:'.55'},{filter:'brightness(1.35)',opacity:'1'})}),
+  preset('loading-dots','Loading dots','Loading','Compact bouncing indicator',{duration:780,iterations:0,direction:'alternate',easing:'ease-in-out',keyframes:three(frame('translateY(0) scale(.85)','0.55'),frame('translateY(-8px) scale(1)','1'),frame('translateY(0) scale(.85)','0.55'))}),
+  preset('loading-orbit','Loading orbit','Loading','Loader with depth and orbit',{duration:1100,iterations:0,easing:'linear',keyframes:two(frame('rotate(0) translateX(6px)'),frame('rotate(360deg) translateX(6px)'))}),
+  preset('loading-squish','Loading squish','Loading','Playful elastic placeholder',{duration:980,iterations:0,direction:'alternate',easing:'ease-in-out',keyframes:two(frame('scaleX(.86) scaleY(1.08)'),frame('scaleX(1.08) scaleY(.86)'))}),
+  preset('loading-glow','Loading glow','Loading','Ambient progress glow',{duration:1600,iterations:0,direction:'alternate',easing:'ease-in-out',keyframes:two({boxShadow:'0 0 4px rgba(59,130,246,.12)',opacity:'.7'},{boxShadow:'0 0 26px rgba(59,130,246,.5)',opacity:'1'})}),
+
+  preset('text-focus','Text focus','Text','Editorial blur reveal',{duration:800,keyframes:three({filter:'blur(10px)',opacity:'0',transform:'translateY(8px)'},{filter:'blur(2px)',opacity:'.75'},{filter:'blur(0)',opacity:'1',transform:'translateY(0)'})}),
+  preset('text-rise','Text rise','Text','Clean headline entrance',{duration:620,keyframes:two(frame('translateY(22px)','0'),frame('translateY(0)','1'))}),
+  preset('text-drop','Text drop','Text','Headline arrives from above',{duration:620,keyframes:two(frame('translateY(-20px)','0'),frame('translateY(0)','1'))}),
+  preset('text-expand','Text expand','Text','Typography expands into place',{duration:700,keyframes:two(frame('scaleX(.78)','0'),frame('scaleX(1)','1'))}),
+  preset('text-contrast','Text contrast','Text','Contrast sharpens into focus',{duration:720,keyframes:two({filter:'contrast(.1) blur(4px)',opacity:'.15'},{filter:'contrast(1) blur(0)',opacity:'1'})}),
+  preset('text-glow','Text glow','Text','Luminous heading emphasis',{duration:1300,iterations:0,direction:'alternate',keyframes:two({filter:'brightness(.9)',opacity:'.82'},{filter:'brightness(1.3)',opacity:'1'})}),
+  preset('text-slide','Text slide','Text','Compact inline movement',{duration:500,keyframes:two(frame('translateX(-18px)','0'),frame('translateX(0)','1'))}),
+  preset('text-pop','Text pop','Text','Friendly label confirmation',{duration:420,easing:'cubic-bezier(.34,1.56,.64,1)',keyframes:two(frame('scale(.84)','0'),frame('scale(1)','1'))}),
+
+  preset('menu-drop','Menu drop','Navigation','Menu opens from its top edge',{duration:360,trigger:'click',fillMode:'forwards',keyframes:two({transform:'translateY(-10px) scaleY(.92)',opacity:'0'},{transform:'translateY(0) scaleY(1)',opacity:'1'})}),
+  preset('drawer-left','Drawer left','Navigation','Panel slides in from the left',{duration:420,trigger:'click',fillMode:'forwards',keyframes:two(frame('translateX(-100%)','0'),frame('translateX(0)','1'))}),
+  preset('drawer-right','Drawer right','Navigation','Panel slides in from the right',{duration:420,trigger:'click',fillMode:'forwards',keyframes:two(frame('translateX(100%)','0'),frame('translateX(0)','1'))}),
+  preset('sheet-up','Sheet up','Navigation','Bottom sheet enters smoothly',{duration:460,trigger:'click',fillMode:'forwards',keyframes:two(frame('translateY(100%)','0'),frame('translateY(0)','1'))}),
+  preset('nav-underline','Nav underline','Navigation','Small directional navigation cue',{duration:280,trigger:'hover',fillMode:'forwards',keyframes:two(frame('scaleX(.15)','0'),frame('scaleX(1)','1'))}),
+  preset('nav-focus','Nav focus','Navigation','Navigation item gains clarity',{duration:280,trigger:'hover',fillMode:'forwards',keyframes:two({filter:'brightness(.75)',opacity:'.7'},{filter:'brightness(1.2)',opacity:'1'})}),
+  preset('modal-enter','Modal enter','Navigation','Modal scales through backdrop depth',{duration:440,trigger:'click',fillMode:'forwards',keyframes:two({transform:'scale(.9) translateY(14px)',filter:'blur(5px)',opacity:'0'},{transform:'scale(1) translateY(0)',filter:'blur(0)',opacity:'1'})}),
+  preset('toast-enter','Toast enter','Navigation','Notification enters quickly',{duration:380,trigger:'click',fillMode:'forwards',keyframes:two(frame('translateX(34px) scale(.94)','0'),frame('translateX(0) scale(1)','1'))}),
+
+  ...directionalExits,
+  preset('fade-out','Fade out','Exit','Quiet disappearance',{duration:420,fillMode:'forwards',keyframes:two({opacity:'1'},{opacity:'0'})}),
+  preset('shrink-away','Shrink away','Exit','Collapse into place',{duration:440,easing:'cubic-bezier(.55,0,1,.45)',fillMode:'forwards',keyframes:two(frame('scale(1)','1'),frame('scale(.72)','0'))}),
+  preset('blur-away','Blur away','Exit','Dissolve out of focus',{duration:520,fillMode:'forwards',keyframes:two({filter:'blur(0)',opacity:'1'},{filter:'blur(14px)',opacity:'0'})}),
+  preset('iris-close','Iris close','Exit','Circular mask closes inward',{duration:560,fillMode:'forwards',keyframes:two({clipPath:'circle(75% at 50% 50%)',opacity:'1'},{clipPath:'circle(0% at 50% 50%)',opacity:'0'})}),
+  preset('fold-away','Fold away','Exit','Surface folds toward its top edge',{duration:520,fillMode:'forwards',keyframes:two(frame('perspective(800px) rotateX(0)','1'),frame('perspective(800px) rotateX(72deg)','0'))}),
+  preset('spiral-away','Spiral away','Exit','Rotating scale departure',{duration:580,fillMode:'forwards',keyframes:two(frame('rotate(0) scale(1)','1'),frame('rotate(22deg) scale(.65)','0'))}),
 ]
 
-export function animationPresetInteraction(preset: FroamAnimationPreset, nodeId: string): FroamInteraction {
-  const config = preset.config
+export function animationPresetInteraction(animationPreset: FroamAnimationPreset, nodeId: string): FroamInteraction {
+  const config = animationPreset.config
   return {
-    id: `preset:${preset.id}:${nodeId}`,
-    name: preset.label,
+    id: `preset:${animationPreset.id}:${nodeId}`,
+    name: config.name ?? animationPreset.label,
     sourceId: nodeId,
     targetIds: [nodeId],
     trigger: config.trigger ?? 'load',
     timeline: (config.keyframes ?? []).map((keyframe) => ({ at: keyframe.offset / 100, values: { ...keyframe.properties }, easing: config.easing })),
     durationMs: config.duration ?? 600,
     delayMs: config.delay ?? 0,
-    metadata: { presetId: preset.id, category: preset.category, iterations: config.iterations ?? 1, direction: config.direction ?? 'normal', fillMode: config.fillMode ?? 'both' },
+    metadata: { presetId: animationPreset.id, label: animationPreset.label, category: animationPreset.category, iterations: config.iterations ?? 1, direction: config.direction ?? 'normal', fillMode: config.fillMode ?? 'both', legacyAnimator: { iterations: config.iterations ?? 1, direction: config.direction ?? 'normal', fillMode: config.fillMode ?? 'both' }, compilerTarget: 'css-keyframes' },
   }
 }

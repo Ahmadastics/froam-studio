@@ -141,8 +141,8 @@ test('Froam UI preferences are versioned, recoverable, and quota tolerant', () =
 })
 
 test('quick motion catalog covers reusable motion families', () => {
-  assert.ok(FROAM_ANIMATION_PRESETS.length >= 25)
-  assert.deepEqual(new Set(FROAM_ANIMATION_PRESETS.map(({ category }) => category)), new Set(['Entrance', 'Reveal', 'Emphasis', 'Motion', 'Exit']))
+  assert.ok(FROAM_ANIMATION_PRESETS.length >= 100)
+  assert.deepEqual(new Set(FROAM_ANIMATION_PRESETS.map(({ category }) => category)), new Set(['Entrance', 'Reveal', 'Emphasis', 'Hover', 'Motion', 'Scroll', 'Loading', 'Text', 'Navigation', 'Exit']))
   const interaction = animationPresetInteraction(FROAM_ANIMATION_PRESETS.find(({ id }) => id === 'button-press'), 'node:button')
   assert.equal(interaction.sourceId, 'node:button')
   assert.deepEqual(interaction.targetIds, ['node:button'])
