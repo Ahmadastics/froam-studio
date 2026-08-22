@@ -92,7 +92,8 @@ import FroamShortcutOverlay from './FroamShortcutOverlay'
 import FroamSmartGuides, { type AlignmentGuide } from './FroamSmartGuides'
 import FroamVersionPanel from './FroamVersionPanel'
 import FroamSitePlanner from './FroamSitePlanner'
-import { createFroamLibraryComponent } from './FroamComponentCatalog'
+import { createFroamLibraryComponent, FROAM_COMPONENTS } from './FroamComponentCatalog'
+import FroamDesignSystemPanel from './FroamDesignSystemPanel'
 import {
   type FroamFrameSpec,
   type FroamInsertPlacement,
@@ -136,6 +137,9 @@ import { createAnchor, resolveAnchor } from '../collab/anchor'
 import { LOCAL_ACTOR, scopeKey, type FroamAnchor, type FroamOp, type FroamViewport } from '../collab/types'
 import { captureNodeRef, resolveNodeRef, type FroamIdentityDiagnostic, type FroamNodeRegistry } from '../project/node-registry'
 import { archiveItemKind, createArchiveItem, minimalArchiveDna } from '../project/archive'
+import { componentCatalogFamilies } from '../project/component-adapter'
+import { createReusableStyle, saveReusableStyle, upsertComponentFamily } from '../project/design-system'
+import type { FroamDesignSystem, FroamStyleState } from '../project/types'
 import { createFrameworkIdentityObserver, type FroamFrameworkFinding } from '../project/framework-identity'
 import { collectStoreFontFamilies, ensureFontLinks } from './fontSources'
 import { useFroamRouteKey } from '../routing'
@@ -993,6 +997,7 @@ function applyDraft(element: HTMLElement, draft: ElementDraft) {
     }
     if (safeDraft.styles) {
       for (const [key, value] of Object.entries(safeDraft.styles)) {
+        if (key.startsWith('__froamState:')) continue
         // setProperty requires kebab-case, but our store uses camelCase
         const kebabKey = camelToKebab(key)
         element.style.setProperty(kebabKey, value)
@@ -1702,6 +1707,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     export: false,
     inspiration: false,
     tokens: false,
+    designSystem: false,
     align: false,
     transitions: false,
     assets: false,
@@ -1979,6 +1985,26 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     html: item.snapshot?.html,
   })), [activeProjectState.archive])
   const projectActorId = room.identity?.actor ?? LOCAL_ACTOR
+  const replaceDesignSystem = useCallback((designSystem: FroamDesignSystem, label: string) => {
+    projectSession.setProject((current) => appendProjectEvents(current, [createProjectEvent({
+      projectId: current.id,
+      branchId: current.activeBranchId,
+      actorId: projectActorId,
+      clock: Math.max(0, ...current.events.map((event) => event.clock)) + 1,
+      type: 'design-system.replaced',
+      payload: { designSystem },
+      targetIds: Object.keys(designSystem.variables),
+      label,
+    })]))
+  }, [projectActorId, projectSession.setProject])
+
+  useEffect(() => {
+    const catalogFamilies = componentCatalogFamilies(FROAM_COMPONENTS)
+    if (catalogFamilies.every((family) => activeProjectState.designSystem.componentFamilies[family.id])) return
+    let next = activeProjectState.designSystem
+    for (const family of catalogFamilies) if (!next.componentFamilies[family.id]) next = upsertComponentFamily(next, family)
+    replaceDesignSystem(next, 'Added component catalog families')
+  }, [activeProjectState.designSystem, replaceDesignSystem])
   const syncSitePlanGraph = useCallback((pages: readonly LegacySitePage[]) => {
     projectSession.setProject((current) => {
       const state = deriveBranchState(current)
@@ -3900,6 +3926,25 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       nextSel,
       label ?? `Style: ${Object.keys(styles).join(', ')}`,
     )
+  }
+
+  function previewEncodedStateStyles(styles: Record<string, string>) {
+    const encoded = Object.entries(styles).filter(([key]) => key.startsWith('__froamState:'))
+    if (!encoded.length || !currentSelectionRef.current) return
+    const target = currentSelectionRef.current
+    const state = encoded[0][0].split(':')[1] as Exclude<FroamStyleState, 'base'>
+    const id = target.dataset.froamStateTarget || ensureFroamNodeId(target)
+    target.dataset.froamStateTarget = id
+    target.dataset.froamPreviewState = state
+    let style = document.querySelector<HTMLStyleElement>('style[data-froam-state-preview="true"]')
+    if (!style) { style = document.createElement('style'); style.dataset.froamStatePreview = 'true'; document.head.appendChild(style) }
+    const declarations = encoded.map(([key, value]) => {
+      const property = key.split(':').slice(2).join(':')
+      if (!/^[a-zA-Z][a-zA-Z0-9-]*$/.test(property) || /[{}]/.test(value)) return ''
+      return `${camelToKebab(property)}:${value}!important`
+    }).filter(Boolean).join(';')
+    const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id.replace(/[^a-zA-Z0-9_-]/g, '\\$&')
+    style.textContent = `[data-froam-state-target="${escaped}"]:${state},[data-froam-state-target="${escaped}"][data-froam-preview-state="${state}"]{${declarations}}`
   }
 
   /* ─── Design Intelligence bridges ─── */
@@ -7732,6 +7777,26 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
             {/* ─── Align & Distribute ─── */}
             <AccordionSection
+              id="designSystem"
+              icon={<Variable size={14} />}
+              title="Design System"
+              isOpen={openSections.designSystem}
+              onToggle={() => toggleSection('designSystem')}
+            >
+              <FroamDesignSystemPanel
+                system={activeProjectState.designSystem}
+                onChange={replaceDesignSystem}
+                onToast={showToast}
+                onApplyStyle={(states, name) => {
+                  const combined: Record<string, string> = { ...(states.base ?? {}) }
+                  for (const state of ['hover', 'focus', 'active'] as const) for (const [property, value] of Object.entries(states[state] ?? {})) combined[`__froamState:${state}:${property}`] = value
+                  applyStyle(combined, undefined, `Reusable style: ${name}`)
+                  showToast(`${name} applied with ${Object.keys(states).length} states`)
+                }}
+              />
+            </AccordionSection>
+
+            <AccordionSection
               id="align"
               icon={<AlignCenterHorizontal size={14} />}
               title="Align & Distribute"
@@ -8177,8 +8242,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           zIndex={selection.zIndex}
           fontOptions={fontOptions}
           selectionCount={selections.length}
+          onSaveLook={({ name, states }) => {
+            const style = createReusableStyle({ id: `style:look:${Date.now().toString(36)}`, name: `${name} custom`, states })
+            replaceDesignSystem(saveReusableStyle(activeProjectState.designSystem, style), `Saved reusable style: ${style.name}`)
+            showToast(`${style.name} saved to Design System`)
+          }}
           onStyle={(styles, selectionPatch, label) => {
             applyStyle(styles, selectionPatch as Partial<SelectionState>, label)
+            previewEncodedStateStyles(styles)
             const root = getRoot()
             const target = root ? findElementByPath(root, selection.path) : null
             if (target) window.requestAnimationFrame(() => setSelectionRect(target.getBoundingClientRect()))

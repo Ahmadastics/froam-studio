@@ -161,9 +161,18 @@ committable files on your machine.
   keyboard round-trips.
 - **Page palette** — Froam reads the colors your site already uses and
   offers them as one-tap chips (with a contrast check for text).
-- **Quick Looks** — 71 one-tap style recipes behind the `✦` button, grouped
+- **Look Studio** — 87 searchable style recipes behind the `✦` button, grouped
   into Depth, Surface, Texture, Effect, Shape, Line, Accent, Type, Bold and
-  Reset. Most derive their shades from the accent your page already uses.
+  Reset. Pick a recipe, then tune its accent, optional fill/text overrides,
+  and corner radius before applying it. Accent-aware gradients and effects
+  derive their shades from your page palette.
+- **Design System** — project-persisted Light, Dark, Mobile and Brand modes;
+  bound primitive/semantic variables; reusable multi-state styles; component
+  families with props, slots and variants; coordinated site kits; and
+  versioned libraries with explicit publish, accept and postpone workflows.
+- **State styling** — Look Studio can target Base, Hover, Focus and Active.
+  Saved state packs compile to real pseudo-class CSS instead of editor-only
+  effects.
 - **Aa** — one tap to edit copy inline; the bar gets out of the keyboard's
   way.
 

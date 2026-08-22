@@ -18,6 +18,10 @@ function compactState(state, minimal) {
         return {
             legacyStore: { ...state.legacyStore }, nodes: { ...state.nodes }, relations: { ...state.relations },
             flows: { ...state.flows }, interactions: { ...state.interactions }, dna: {}, assets: {}, scans: {}, archive: {}, analyses: {}, responsive: {},
+            // This is the last-resort localStorage recovery shell; the complete
+            // design system remains in IndexedDB/project files and normalizes back
+            // to starter defaults if this shell is ever opened by itself.
+            designSystem: { schemaVersion: 1, activeModeIds: [], modes: {}, variables: {}, styles: {}, componentFamilies: {}, siteKits: {}, libraries: {} },
         };
     }
     const assets = Object.fromEntries(Object.entries(state.assets).map(([id, asset]) => [id, {

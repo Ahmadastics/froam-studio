@@ -10,6 +10,7 @@ import {
   type FroamProjectState,
 } from './types'
 import { applyOp } from '../collab/oplog'
+import { normalizeDesignSystem, seedStarterDesignSystem } from './design-system'
 
 export type FroamIdFactory = () => string
 
@@ -19,7 +20,7 @@ function defaultId() {
 }
 
 export function emptyProjectState(): FroamProjectState {
-  return { legacyStore: {}, nodes: {}, relations: {}, flows: {}, interactions: {}, dna: {}, assets: {}, scans: {}, archive: {}, analyses: {}, responsive: {} }
+  return { legacyStore: {}, nodes: {}, relations: {}, flows: {}, interactions: {}, dna: {}, assets: {}, scans: {}, archive: {}, analyses: {}, responsive: {}, designSystem: seedStarterDesignSystem() }
 }
 
 export function normalizeProjectState(state: Partial<FroamProjectState>): FroamProjectState {
@@ -27,6 +28,7 @@ export function normalizeProjectState(state: Partial<FroamProjectState>): FroamP
     legacyStore: { ...(state.legacyStore ?? {}) }, nodes: { ...(state.nodes ?? {}) }, relations: { ...(state.relations ?? {}) },
     flows: { ...(state.flows ?? {}) }, interactions: { ...(state.interactions ?? {}) }, dna: { ...(state.dna ?? {}) }, assets: { ...(state.assets ?? {}) },
     scans: { ...(state.scans ?? {}) }, archive: { ...(state.archive ?? {}) }, analyses: { ...(state.analyses ?? {}) }, responsive: { ...(state.responsive ?? {}) },
+    designSystem: normalizeDesignSystem(state.designSystem),
   }
 }
 
@@ -127,6 +129,9 @@ export function applyProjectEvent(current: FroamProjectState, event: FroamProjec
     }
     case 'responsive.removed':
       delete next.responsive[String(payload.nodeId ?? '')]
+      break
+    case 'design-system.replaced':
+      next.designSystem = normalizeDesignSystem(payload.designSystem as FroamProjectState['designSystem'])
       break
   }
   return next

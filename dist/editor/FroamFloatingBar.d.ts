@@ -1,3 +1,4 @@
+import type { FroamStyleState } from '../project/types';
 type FloatingAction = 'bold' | 'italic' | 'underline' | 'strike' | 'align-left' | 'align-center' | 'align-right' | 'align-justify' | 'color' | 'bg-color' | 'clear-bg' | 'image' | 'duplicate' | 'merge' | 'unmerge' | 'delete' | 'edit-text' | 'undo' | 'toggle-hidden' | 'bring-front' | 'send-back';
 type WalkDirection = 'parent' | 'prev' | 'next' | 'child';
 type SelectionPatch = Record<string, string | number>;
@@ -43,8 +44,12 @@ type Props = {
     onWalk?: (direction: WalkDirection) => void;
     onAction: (action: FloatingAction, value?: string) => void;
     onStyle: (styles: Record<string, string>, selectionPatch?: SelectionPatch, label?: string) => void;
+    onSaveLook?: (look: {
+        name: string;
+        states: Partial<Record<FroamStyleState, Record<string, string>>>;
+    }) => void;
 };
 export declare function collectPagePalette(): string[];
-export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, wordSpacing, textTransform, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, width, height, display, flexDirection, justifyContent, alignItems, gap, padding, radius, overflow, opacity, isHidden, mixBlendMode, zIndex, fontOptions, selectionCount, docked, canUndo, onWalk, onAction, onStyle, }: Props): import("react").JSX.Element | null;
+export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, wordSpacing, textTransform, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, width, height, display, flexDirection, justifyContent, alignItems, gap, padding, radius, overflow, opacity, isHidden, mixBlendMode, zIndex, fontOptions, selectionCount, docked, canUndo, onWalk, onAction, onStyle, onSaveLook, }: Props): import("react").JSX.Element | null;
 export {};
 //# sourceMappingURL=FroamFloatingBar.d.ts.map

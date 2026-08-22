@@ -25,6 +25,7 @@ export * from './adapters.js';
 export * from './serialization.js';
 export * from './scan.js';
 export * from './component-adapter.js';
+export * from './design-system.js';
 export * from './interaction-runtime.js';
 export * from './simulation.js';
 export * from './experiments.js';

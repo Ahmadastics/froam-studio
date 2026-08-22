@@ -226,6 +226,120 @@ export type FroamAsset = {
   metadata?: Record<string, unknown>
 }
 
+export type FroamDesignModeKind = 'base' | 'light' | 'dark' | 'mobile' | 'brand' | 'custom'
+export type FroamStyleState = 'base' | 'hover' | 'focus' | 'active'
+
+export type FroamDesignMode = {
+  id: FroamId
+  name: string
+  kind: FroamDesignModeKind
+  parentId?: FroamId
+  viewport?: FroamViewport
+  brand?: string
+  createdAt: number
+}
+
+export type FroamDesignVariable = {
+  id: FroamId
+  name: string
+  cssName: string
+  kind: 'color' | 'size' | 'number' | 'font' | 'shadow' | 'string'
+  role: 'primitive' | 'semantic'
+  collection: string
+  values: Record<FroamId, string>
+  aliasTo?: FroamId
+  description?: string
+}
+
+export type FroamReusableStyle = {
+  id: FroamId
+  name: string
+  category: string
+  states: Partial<Record<FroamStyleState, Record<string, string>>>
+  variableBindings?: Record<string, FroamId>
+  usageNodeIds: FroamId[]
+  createdAt: number
+  updatedAt: number
+  version: number
+}
+
+export type FroamComponentProp = {
+  id: FroamId
+  name: string
+  kind: 'text' | 'image' | 'link' | 'boolean' | 'number' | 'slot'
+  defaultValue?: string | number | boolean
+  required?: boolean
+}
+
+export type FroamComponentVariant = {
+  id: FroamId
+  name: string
+  styles?: Record<string, string>
+  slotDefaults?: Record<string, FroamId[]>
+  propDefaults?: Record<string, string | number | boolean>
+}
+
+export type FroamComponentFamily = {
+  id: FroamId
+  name: string
+  category: string
+  baseComponentId: FroamId
+  props: FroamComponentProp[]
+  slots: Array<{ id: FroamId; name: string; accepts?: string[] }>
+  variants: FroamComponentVariant[]
+  createdAt: number
+  updatedAt: number
+  version: number
+}
+
+export type FroamSiteKit = {
+  id: FroamId
+  name: string
+  description: string
+  modeIds: FroamId[]
+  variableIds: FroamId[]
+  styleIds: FroamId[]
+  componentFamilyIds: FroamId[]
+  interactionIds: FroamId[]
+  tags: string[]
+  createdAt: number
+  updatedAt: number
+  version: number
+}
+
+export type FroamLibraryRelease = {
+  version: number
+  createdAt: number
+  variableIds: FroamId[]
+  styleIds: FroamId[]
+  componentFamilyIds: FroamId[]
+  siteKitIds: FroamId[]
+  notes?: string
+}
+
+export type FroamLibrary = {
+  id: FroamId
+  name: string
+  sourceProjectId: FroamId
+  installedVersion: number
+  availableVersion: number
+  status: 'current' | 'update-available' | 'postponed'
+  releases: FroamLibraryRelease[]
+  createdAt: number
+  updatedAt: number
+}
+
+export type FroamDesignSystem = {
+  schemaVersion: 1
+  activeModeIds: FroamId[]
+  modes: Record<FroamId, FroamDesignMode>
+  variables: Record<FroamId, FroamDesignVariable>
+  styles: Record<FroamId, FroamReusableStyle>
+  componentFamilies: Record<FroamId, FroamComponentFamily>
+  siteKits: Record<FroamId, FroamSiteKit>
+  libraries: Record<FroamId, FroamLibrary>
+}
+
 /** A materialized view. Events are canonical; this shape makes reads fast. */
 export type FroamProjectState = {
   legacyStore: EditorStore
@@ -239,6 +353,7 @@ export type FroamProjectState = {
   archive: Record<FroamId, FroamArchiveItem>
   analyses: Record<FroamId, FroamAnalysis>
   responsive: Record<FroamId, FroamResponsivePolicy>
+  designSystem: FroamDesignSystem
 }
 
 export type FroamProjectEventType =
@@ -262,6 +377,7 @@ export type FroamProjectEventType =
   | 'analysis.removed'
   | 'responsive.upserted'
   | 'responsive.removed'
+  | 'design-system.replaced'
 
 export type FroamProjectEventPayload =
   | { store: EditorStore }
@@ -284,6 +400,7 @@ export type FroamProjectEventPayload =
   | { analysisId: FroamId }
   | { responsive: FroamResponsivePolicy }
   | { nodeId: FroamId; remove: 'responsive' }
+  | { designSystem: FroamDesignSystem }
 
 export type FroamProjectEvent = {
   schemaVersion: typeof FROAM_PROJECT_SCHEMA_VERSION

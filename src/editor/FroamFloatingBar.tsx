@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import type { FroamStyleState } from '../project/types'
 import {
   AlignCenter,
   AlignJustify,
@@ -29,6 +30,8 @@ import {
   Pipette,
   RectangleHorizontal,
   Rows3,
+  Search,
+  SlidersHorizontal,
   Sparkles,
   Strikethrough,
   Trash2,
@@ -104,6 +107,7 @@ type Props = {
   onWalk?: (direction: WalkDirection) => void
   onAction: (action: FloatingAction, value?: string) => void
   onStyle: (styles: Record<string, string>, selectionPatch?: SelectionPatch, label?: string) => void
+  onSaveLook?: (look: { name: string; states: Partial<Record<FroamStyleState, Record<string, string>>> }) => void
 }
 
 const VIEWPORT_GAP = 12
@@ -808,6 +812,103 @@ const LOOKS: Look[] = [
     patch: corners(4),
   },
 
+  /* Modern systems — added for the editable Look Studio */
+  {
+    name: 'Ambient', group: 'Depth',
+    swatch: { background: '#172033', boxShadow: '0 5px 13px #14b8a666', borderRadius: 8 },
+    styles: (accent) => ({ boxShadow: `0 28px 70px -24px color-mix(in srgb, ${accent} 52%, transparent), 0 10px 26px -16px rgba(0,0,0,.55)`, borderRadius: '22px' }),
+    patch: corners(22),
+  },
+  {
+    name: 'Stack', group: 'Depth',
+    swatch: { background: '#f8fafc', boxShadow: '3px 3px 0 #94a3b8,6px 6px 0 #334155', borderRadius: 4 },
+    styles: (accent) => ({ background: '#ffffff', color: '#0f172a', border: '1px solid rgba(15,23,42,.12)', boxShadow: `8px 8px 0 color-mix(in srgb, ${accent} 38%, #cbd5e1), 16px 16px 0 color-mix(in srgb, ${accent} 16%, #e2e8f0)`, borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Clay', group: 'Surface',
+    swatch: { background: '#d8b4fe', boxShadow: 'inset 2px 2px 4px #fff8,inset -2px -2px 4px #581c8766', borderRadius: 10 },
+    styles: (accent) => ({ background: `color-mix(in srgb, ${accent} 54%, #ffffff)`, color: '#1e1b2e', border: '1px solid rgba(255,255,255,.55)', boxShadow: 'inset 5px 5px 12px rgba(255,255,255,.5), inset -7px -7px 16px rgba(30,27,46,.18), 0 18px 38px -22px rgba(30,27,46,.55)', borderRadius: '28px' }),
+    patch: corners(28),
+  },
+  {
+    name: 'Carbon', group: 'Surface',
+    swatch: { background: 'linear-gradient(145deg,#0b0f17,#1e293b)', border: '1px solid #ffffff22', borderRadius: 6 },
+    styles: (accent) => ({ background: 'linear-gradient(145deg, #0b0f17, #1e293b)', color: '#f8fafc', border: `1px solid color-mix(in srgb, ${accent} 28%, rgba(255,255,255,.12))`, boxShadow: 'inset 0 1px rgba(255,255,255,.08)', borderRadius: '16px' }),
+    patch: corners(16),
+  },
+  {
+    name: 'Blueprint', group: 'Texture',
+    swatch: { background: 'linear-gradient(#38bdf822 1px,transparent 1px),linear-gradient(90deg,#38bdf822 1px,transparent 1px),#082f49', backgroundSize: '6px 6px', borderRadius: 4 },
+    styles: (accent) => ({ backgroundColor: '#082f49', backgroundImage: `linear-gradient(color-mix(in srgb, ${accent} 22%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, ${accent} 22%, transparent) 1px, transparent 1px)`, backgroundSize: '24px 24px', color: '#e0f2fe', border: `1px solid color-mix(in srgb, ${accent} 48%, transparent)`, borderRadius: '8px' }),
+    patch: corners(8),
+  },
+  {
+    name: 'Halftone', group: 'Texture',
+    swatch: { background: 'radial-gradient(circle,#0f172a 1px,transparent 1.5px),#f8fafc', backgroundSize: '5px 5px', borderRadius: 4 },
+    styles: (accent) => ({ backgroundColor: '#fff', backgroundImage: `radial-gradient(circle, color-mix(in srgb, ${accent} 72%, #0f172a) 1.2px, transparent 1.5px)`, backgroundSize: '9px 9px', color: '#0f172a', borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Notch', group: 'Shape',
+    swatch: { background: '#334155', clipPath: 'polygon(7px 0,100% 0,100% 100%,0 100%,0 7px)' },
+    styles: () => ({ clipPath: 'polygon(18px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 18px)' }),
+  },
+  {
+    name: 'Gradient edge', group: 'Line',
+    swatch: { background: '#111827', border: '2px solid #a78bfa', borderRadius: 6 },
+    styles: (accent) => ({ border: '2px solid transparent', background: `linear-gradient(#0f172a,#0f172a) padding-box, linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 35%, #ec4899)) border-box`, color: '#ffffff', borderRadius: '16px' }),
+    patch: corners(16),
+  },
+  {
+    name: 'Lagoon', group: 'Accent',
+    swatch: { background: 'linear-gradient(135deg,#06b6d4,#0f766e)', borderRadius: 7 },
+    styles: (accent) => ({ background: `linear-gradient(135deg, color-mix(in srgb, ${accent} 75%, #06b6d4), color-mix(in srgb, ${accent} 62%, #064e3b))`, color: '#ffffff', border: 'none', borderRadius: '18px' }),
+    patch: corners(18),
+  },
+  {
+    name: 'Citrus', group: 'Accent',
+    swatch: { background: 'linear-gradient(135deg,#bef264,#facc15)', borderRadius: 7 },
+    styles: () => ({ background: 'linear-gradient(135deg, #d9f99d, #facc15)', color: '#26320a', border: 'none', borderRadius: '16px' }),
+    patch: corners(16),
+  },
+  {
+    name: 'Rose gold', group: 'Accent',
+    swatch: { background: 'linear-gradient(135deg,#fda4af,#a855f7)', borderRadius: 7 },
+    styles: () => ({ background: 'linear-gradient(135deg, #fecdd3, #fb7185 48%, #a855f7)', color: '#3f1221', border: '1px solid rgba(255,255,255,.42)', borderRadius: '18px' }),
+    patch: corners(18),
+  },
+  {
+    name: 'Editorial', group: 'Type',
+    swatch: { background: '#f8fafc', borderBottom: '3px solid #0f172a' },
+    styles: () => ({ fontFamily: 'Georgia, "Times New Roman", serif', fontWeight: '700', letterSpacing: '-0.035em', lineHeight: '.96', borderBottom: '3px solid currentColor', paddingBottom: '.12em' }),
+    patch: { fontFamily: 'Georgia, "Times New Roman", serif', fontWeight: '700' },
+  },
+  {
+    name: 'Technical', group: 'Type',
+    swatch: { background: '#0f172a', border: '1px solid #22d3ee', borderRadius: 3 },
+    styles: (accent) => ({ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: accent, textTransform: 'uppercase', letterSpacing: '.13em', fontSize: '.82em', borderLeft: `3px solid ${accent}`, paddingLeft: '.7em' }),
+    patch: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+  },
+  {
+    name: 'Soft focus', group: 'Effect',
+    swatch: { background: '#8b5cf6', filter: 'blur(.4px)', borderRadius: 8 },
+    styles: (accent) => ({ background: `color-mix(in srgb, ${accent} 24%, transparent)`, border: `1px solid color-mix(in srgb, ${accent} 38%, transparent)`, boxShadow: `0 24px 70px -28px ${accent}`, backdropFilter: 'blur(18px) saturate(140%)', borderRadius: '24px' }),
+    patch: corners(24),
+  },
+  {
+    name: 'Bauhaus', group: 'Bold',
+    swatch: { background: 'linear-gradient(90deg,#ef4444 33%,#facc15 33% 66%,#2563eb 66%)', border: '2px solid #111827', borderRadius: 2 },
+    styles: () => ({ background: 'linear-gradient(110deg, #ef4444 0 32%, #facc15 32% 66%, #2563eb 66%)', color: '#0b0f14', border: '3px solid #0b0f14', boxShadow: '7px 7px 0 #0b0f14', fontWeight: '900', borderRadius: '2px' }),
+    patch: { ...corners(2), fontWeight: '900' },
+  },
+  {
+    name: 'Y2K', group: 'Bold',
+    swatch: { background: 'linear-gradient(135deg,#cffafe,#e879f9)', boxShadow: '0 0 0 2px #fff,0 0 0 3px #7c3aed', borderRadius: 10 },
+    styles: () => ({ background: 'linear-gradient(135deg, #cffafe, #f0abfc 55%, #c4b5fd)', color: '#3b0764', border: '2px solid #ffffff', boxShadow: '0 0 0 2px #7c3aed, 0 12px 30px -12px #7c3aed', fontWeight: '800', borderRadius: '22px' }),
+    patch: { ...corners(22), fontWeight: '800' },
+  },
+
   /* ─── Reset ─── */
   {
     name: 'Reset look',
@@ -911,6 +1012,7 @@ export default function FroamFloatingBar({
   onWalk,
   onAction,
   onStyle,
+  onSaveLook,
 }: Props) {
   const barRef = useRef<HTMLDivElement>(null)
   const [expanded, setExpanded] = useState(false)
@@ -919,6 +1021,18 @@ export default function FroamFloatingBar({
   const [openPop, setOpenPop] = useState<'palette' | 'looks' | null>(null)
   const [palette, setPalette] = useState<string[]>([])
   const [paletteMode, setPaletteMode] = useState<'fill' | 'text'>('fill')
+  const [lookSearch, setLookSearch] = useState('')
+  const [lookGroup, setLookGroup] = useState<'All' | LookGroup>('All')
+  const [selectedLookName, setSelectedLookName] = useState('Lift')
+  const [lookAccent, setLookAccent] = useState('#14b8a6')
+  const [lookFill, setLookFill] = useState(() => normalizeToHex(background) ?? '#ffffff')
+  const [lookText, setLookText] = useState(() => normalizeToHex(color) ?? '#111827')
+  const [overrideLookFill, setOverrideLookFill] = useState(false)
+  const [overrideLookText, setOverrideLookText] = useState(false)
+  const [overrideLookRadius, setOverrideLookRadius] = useState(false)
+  const [lookRadius, setLookRadius] = useState(Math.max(0, Math.round(radius)))
+  const [lookState, setLookState] = useState<FroamStyleState>('base')
+  const [lookStateDrafts, setLookStateDrafts] = useState<Partial<Record<FroamStyleState, Record<string, string>>>>({})
 
   const fontScrub = useScrub((steps) => {
     const next = Math.min(400, Math.max(6, Math.round(fontSize) + steps))
@@ -991,7 +1105,16 @@ export default function FroamFloatingBar({
   function togglePop(which: 'palette' | 'looks') {
     setOpenPop((current) => {
       const next = current === which ? null : which
-      if (next && palette.length === 0) setPalette(collectPagePalette())
+      if (next && palette.length === 0) {
+        const pagePalette = collectPagePalette()
+        setPalette(pagePalette)
+        if (which === 'looks') setLookAccent(pickAccent(pagePalette))
+      }
+      if (next === 'looks') {
+        setLookFill(normalizeToHex(background) ?? '#ffffff')
+        setLookText(normalizeToHex(color) ?? '#111827')
+        setLookRadius(Math.max(0, Math.round(radius)))
+      }
       return next
     })
   }
@@ -1002,12 +1125,39 @@ export default function FroamFloatingBar({
     if ('vibrate' in navigator) navigator.vibrate?.(4)
   }
 
-  function applyLook(look: Look) {
-    const accent = pickAccent(palette.length ? palette : collectPagePalette())
-    onStyle(look.styles(accent), look.patch, `Look: ${look.name}`)
-    if ('vibrate' in navigator) navigator.vibrate?.(6)
-    setOpenPop(null)
+  function customizedLook(look: Look) {
+    const styles = { ...look.styles(lookAccent) }
+    const patch = { ...(look.patch ?? {}) }
+    if (overrideLookFill && look.group !== 'Reset') {
+      styles.background = lookFill
+      styles.backgroundImage = 'none'
+    }
+    if (overrideLookText && look.group !== 'Reset') {
+      styles.color = lookText
+      if ('WebkitTextFillColor' in styles) styles.WebkitTextFillColor = lookText
+    }
+    if (overrideLookRadius && look.group !== 'Reset') {
+      styles.borderRadius = `${lookRadius}px`
+      Object.assign(patch, corners(lookRadius))
+    }
+    return { styles, patch }
   }
+
+  function applyLook(look: Look) {
+    const { styles, patch } = customizedLook(look)
+    setSelectedLookName(look.name)
+    setLookStateDrafts((current) => ({ ...current, [lookState]: styles }))
+    if (lookState === 'base') onStyle(styles, patch, `Look: ${look.name}`)
+    else onStyle(Object.fromEntries(Object.entries(styles).map(([property, value]) => [`__froamState:${lookState}:${property}`, value])), undefined, `Look: ${look.name} · ${lookState}`)
+    if ('vibrate' in navigator) navigator.vibrate?.(6)
+  }
+
+  const selectedLook = LOOKS.find((look) => look.name === selectedLookName) ?? LOOKS[0]
+  const visibleLooks = LOOKS.filter((look) => {
+    const query = lookSearch.trim().toLowerCase()
+    return (lookGroup === 'All' || look.group === lookGroup)
+      && (!query || `${look.name} ${look.group}`.toLowerCase().includes(query))
+  })
 
   return (
     <div
@@ -1248,26 +1398,48 @@ export default function FroamFloatingBar({
       {openPop === 'looks' && (
         <div className="froam-floating-bar__pop froam-floating-bar__pop--looks" data-chef-editor-root="true">
           <div className="froam-floating-bar__pop-head">
-            <span>Quick looks</span>
+            <span>Look Studio <small>{LOOKS.length} recipes</small></span>
+            <button type="button" className="froam-floating-bar__look-apply" onClick={() => applyLook(selectedLook)}>Apply changes</button>
+          </div>
+          <label className="froam-floating-bar__look-search">
+            <Search size={12} />
+            <input value={lookSearch} onChange={(event) => setLookSearch(event.target.value)} placeholder="Search looks…" />
+          </label>
+          <div className="froam-floating-bar__look-groups" role="tablist" aria-label="Look categories">
+            {(['All', ...LOOK_GROUPS] as const).map((group) => (
+              <button key={group} type="button" role="tab" aria-selected={lookGroup === group} className={lookGroup === group ? 'is-active' : ''} onClick={() => setLookGroup(group)}>{group}</button>
+            ))}
           </div>
           <div className="froam-floating-bar__looks-scroll">
-            {LOOK_GROUPS.map((group) => {
-              const looks = LOOKS.filter((look) => look.group === group)
-              if (looks.length === 0) return null
-              return (
-                <div key={group} className="froam-floating-bar__looks-section">
-                  <div className="froam-floating-bar__looks-label">{group}</div>
-                  <div className="froam-floating-bar__looks">
-                    {looks.map((look) => (
-                      <button key={look.name} type="button" onClick={() => applyLook(look)}>
-                        <i style={look.swatch} />
-                        <span>{look.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
+            <div className="froam-floating-bar__looks">
+              {visibleLooks.map((look) => (
+                <button key={look.name} type="button" className={selectedLookName === look.name ? 'is-active' : ''} onClick={() => applyLook(look)} title={`${look.group} · ${look.name}`}>
+                  <i style={look.swatch} />
+                  <span>{look.name}</span>
+                  <small>{look.group}</small>
+                </button>
+              ))}
+              {visibleLooks.length === 0 && <span className="froam-floating-bar__pop-empty">No looks match “{lookSearch}”</span>}
+            </div>
+          </div>
+          <div className="froam-floating-bar__look-editor">
+            <div className="froam-floating-bar__look-editor-title"><SlidersHorizontal size={12} /><span>Customize {selectedLook.name}</span></div>
+            <div className="froam-floating-bar__look-states" role="tablist" aria-label="Style state">
+              {(['base', 'hover', 'focus', 'active'] as const).map((state) => <button key={state} type="button" role="tab" aria-selected={lookState === state} className={lookState === state ? 'is-active' : ''} onClick={() => setLookState(state)}>{state}</button>)}
+            </div>
+            <div className="froam-floating-bar__look-colors">
+              <label title="Accent used by accent-aware looks"><span>Accent</span><input type="color" value={lookAccent} onChange={(event) => setLookAccent(event.target.value)} /></label>
+              <label className={overrideLookFill ? 'is-enabled' : ''}><input type="checkbox" checked={overrideLookFill} onChange={(event) => setOverrideLookFill(event.target.checked)} /><span>Fill</span><input type="color" value={lookFill} onChange={(event) => setLookFill(event.target.value)} disabled={!overrideLookFill} /></label>
+              <label className={overrideLookText ? 'is-enabled' : ''}><input type="checkbox" checked={overrideLookText} onChange={(event) => setOverrideLookText(event.target.checked)} /><span>Text</span><input type="color" value={lookText} onChange={(event) => setLookText(event.target.value)} disabled={!overrideLookText} /></label>
+            </div>
+            <label className={`froam-floating-bar__look-radius ${overrideLookRadius ? 'is-enabled' : ''}`}>
+              <input type="checkbox" checked={overrideLookRadius} onChange={(event) => setOverrideLookRadius(event.target.checked)} />
+              <span>Corner radius</span>
+              <input type="range" min="0" max="64" value={lookRadius} onChange={(event) => setLookRadius(Number(event.target.value))} disabled={!overrideLookRadius} />
+              <output>{lookRadius}px</output>
+            </label>
+            <p>Choose a recipe, tune its design variables, then apply changes. Accent-aware gradients and effects update automatically.</p>
+            {onSaveLook && <button type="button" className="froam-floating-bar__look-save" onClick={() => onSaveLook({ name: selectedLook.name, states: { ...lookStateDrafts, [lookState]: customizedLook(selectedLook).styles } })}>Save as reusable style</button>}
           </div>
         </div>
       )}

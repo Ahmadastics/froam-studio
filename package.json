@@ -70,7 +70,7 @@
     "build": "node scripts/clean.mjs && tsc -p tsconfig.json && node scripts/fix-js-extensions.mjs && node scripts/copy-assets.mjs && node scripts/build-standalone.mjs && node scripts/build-server.mjs",
     "build:standalone": "node scripts/build-standalone.mjs",
     "clean": "node scripts/clean.mjs",
-    "test": "node scripts/test-oplog.mjs && node scripts/test-project.mjs && node scripts/test-project-sync.mjs && node scripts/test-committer.mjs && node scripts/test-rooms.mjs && node scripts/test-room-client.mjs && node scripts/test-editor-shell.mjs && node scripts/test-intelligence.mjs && node scripts/test-reference-intelligence.mjs && node scripts/test-froam-intent.mjs && node scripts/test-reference-build.mjs",
+    "test": "node scripts/test-oplog.mjs && node scripts/test-project.mjs && node scripts/test-design-system.mjs && node scripts/test-project-sync.mjs && node scripts/test-committer.mjs && node scripts/test-rooms.mjs && node scripts/test-room-client.mjs && node scripts/test-editor-shell.mjs && node scripts/test-intelligence.mjs && node scripts/test-reference-intelligence.mjs && node scripts/test-froam-intent.mjs && node scripts/test-reference-build.mjs",
     "benchmark:v7.1": "node scripts/benchmark-intelligence.mjs",
     "benchmark:v7.2": "node scripts/benchmark-intelligence.mjs",
     "benchmark:v8": "node scripts/benchmark-intelligence.mjs && node scripts/benchmark-storage-worker.mjs && node scripts/benchmark-reference-intelligence.mjs",

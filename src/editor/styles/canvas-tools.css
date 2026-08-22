@@ -992,7 +992,7 @@ body.froam-drag-active * {
 
 .froam-floating-bar__looks {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 }
 
@@ -1017,19 +1017,32 @@ body.froam-drag-active * {
   background: rgba(var(--fs-accent-control-rgb), 0.08);
 }
 
+.froam-floating-bar__looks button.is-active {
+  border-color: rgba(var(--fs-accent-control-rgb), 0.72);
+  background: rgba(var(--fs-accent-control-rgb), 0.13);
+  box-shadow: 0 0 0 1px rgba(var(--fs-accent-control-rgb), 0.16);
+}
+
 .froam-floating-bar__looks button i {
   display: block;
-  width: 30px;
-  height: 20px;
+  width: 100%;
+  height: 28px;
+}
+
+.froam-floating-bar__looks button small {
+  color: rgba(226, 232, 240, 0.36);
+  font-size: 0.52rem;
+  font-weight: 600;
 }
 
 /* v4.8: grouped, scrollable quick-looks gallery */
 .froam-floating-bar__pop--looks {
-  max-width: min(340px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 32px));
+  max-width: min(520px, calc(100vw - 32px));
 }
 
 .froam-floating-bar__looks-scroll {
-  max-height: min(46vh, 380px);
+  max-height: min(34vh, 300px);
   overflow-y: auto;
   margin: 0 -6px;
   padding: 0 6px;
@@ -1058,6 +1071,171 @@ body.froam-drag-active * {
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: rgba(226, 232, 240, 0.4);
+}
+
+/* Editable Look Studio — recipe discovery plus theme-variable overrides. */
+.froam-floating-bar__pop-head span small {
+  margin-left: 5px;
+  color: rgba(226, 232, 240, 0.4);
+  font-size: 0.58rem;
+  font-weight: 600;
+}
+
+.froam-floating-bar__look-apply {
+  border: 1px solid rgba(var(--fs-accent-control-rgb), 0.38);
+  border-radius: 7px;
+  padding: 5px 8px;
+  background: rgba(var(--fs-accent-control-rgb), 0.14);
+  color: var(--fs-accent-control-hover);
+  font: inherit;
+  font-size: 0.64rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.froam-floating-bar__look-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(226, 232, 240, 0.46);
+}
+
+.froam-floating-bar__look-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #e2e8f0;
+  font: inherit;
+  font-size: 0.7rem;
+}
+
+.froam-floating-bar__look-groups {
+  display: flex;
+  gap: 4px;
+  margin: 0 -2px 9px;
+  padding: 0 2px 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.froam-floating-bar__look-groups::-webkit-scrollbar { display: none; }
+
+.froam-floating-bar__look-groups button {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(226, 232, 240, 0.5);
+  font: inherit;
+  font-size: 0.58rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.froam-floating-bar__look-groups button.is-active {
+  border-color: rgba(var(--fs-accent-control-rgb), 0.34);
+  background: rgba(var(--fs-accent-control-rgb), 0.14);
+  color: var(--fs-accent-control-hover);
+}
+
+.froam-floating-bar__look-editor {
+  display: grid;
+  gap: 8px;
+  margin: 10px -2px -2px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(2, 6, 12, 0.42);
+}
+
+.froam-floating-bar__look-editor-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(226, 232, 240, 0.76);
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.froam-floating-bar__look-states {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.035);
+}
+
+.froam-floating-bar__look-states button {
+  border: 0;
+  border-radius: 6px;
+  padding: 5px;
+  background: transparent;
+  color: rgba(226,232,240,.46);
+  font: inherit;
+  font-size: .56rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.froam-floating-bar__look-states button.is-active {
+  background: rgba(var(--fs-accent-control-rgb),.16);
+  color: var(--fs-accent-control-hover);
+}
+
+.froam-floating-bar__look-colors {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.froam-floating-bar__look-colors label {
+  display: grid;
+  grid-template-columns: auto 1fr 24px;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 4px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: rgba(226, 232, 240, 0.48);
+  font-size: 0.58rem;
+}
+
+.froam-floating-bar__look-colors label:first-child { grid-template-columns: 1fr 24px; }
+.froam-floating-bar__look-colors label.is-enabled { color: rgba(226, 232, 240, 0.8); }
+.froam-floating-bar__look-colors input[type='checkbox'] { width: 12px; height: 12px; accent-color: var(--fs-accent-control); }
+.froam-floating-bar__look-colors input[type='color'] { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
+.froam-floating-bar__look-colors input[type='color']:disabled { opacity: 0.25; }
+
+.froam-floating-bar__look-radius {
+  display: grid;
+  grid-template-columns: auto auto 1fr 35px;
+  align-items: center;
+  gap: 7px;
+  color: rgba(226, 232, 240, 0.45);
+  font-size: 0.6rem;
+}
+
+.froam-floating-bar__look-radius.is-enabled { color: rgba(226, 232, 240, 0.78); }
+.froam-floating-bar__look-radius input[type='checkbox'] { width: 12px; height: 12px; accent-color: var(--fs-accent-control); }
+.froam-floating-bar__look-radius input[type='range'] { width: 100%; accent-color: var(--fs-accent-control); }
+.froam-floating-bar__look-radius output { text-align: right; font-variant-numeric: tabular-nums; }
+.froam-floating-bar__look-editor p { margin: 0; color: rgba(226, 232, 240, 0.34); font-size: 0.56rem; line-height: 1.35; }
+.froam-floating-bar__look-save { border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:7px;background:rgba(255,255,255,.05);color:#e2e8f0;font:inherit;font-size:.62rem;font-weight:700;cursor:pointer }
+.froam-floating-bar__look-save:hover { border-color:rgba(var(--fs-accent-control-rgb),.4);background:rgba(var(--fs-accent-control-rgb),.1) }
+
+@media (max-width: 520px) {
+  .froam-floating-bar__looks { grid-template-columns: repeat(3, 1fr); }
+  .froam-floating-bar__look-colors { grid-template-columns: 1fr; }
 }
 
 /* ─── v4.1: opacity scrub chip ─── */

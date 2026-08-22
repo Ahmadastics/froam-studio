@@ -1,18 +1,20 @@
 import { FROAM_PROJECT_SCHEMA_VERSION, } from './types.js';
 import { applyOp } from '../collab/oplog.js';
+import { normalizeDesignSystem, seedStarterDesignSystem } from './design-system.js';
 function defaultId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
         return crypto.randomUUID();
     return `froam-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 export function emptyProjectState() {
-    return { legacyStore: {}, nodes: {}, relations: {}, flows: {}, interactions: {}, dna: {}, assets: {}, scans: {}, archive: {}, analyses: {}, responsive: {} };
+    return { legacyStore: {}, nodes: {}, relations: {}, flows: {}, interactions: {}, dna: {}, assets: {}, scans: {}, archive: {}, analyses: {}, responsive: {}, designSystem: seedStarterDesignSystem() };
 }
 export function normalizeProjectState(state) {
     return {
         legacyStore: { ...(state.legacyStore ?? {}) }, nodes: { ...(state.nodes ?? {}) }, relations: { ...(state.relations ?? {}) },
         flows: { ...(state.flows ?? {}) }, interactions: { ...(state.interactions ?? {}) }, dna: { ...(state.dna ?? {}) }, assets: { ...(state.assets ?? {}) },
         scans: { ...(state.scans ?? {}) }, archive: { ...(state.archive ?? {}) }, analyses: { ...(state.analyses ?? {}) }, responsive: { ...(state.responsive ?? {}) },
+        designSystem: normalizeDesignSystem(state.designSystem),
     };
 }
 function cloneState(state) { return normalizeProjectState(state); }
@@ -123,6 +125,9 @@ export function applyProjectEvent(current, event) {
         }
         case 'responsive.removed':
             delete next.responsive[String(payload.nodeId ?? '')];
+            break;
+        case 'design-system.replaced':
+            next.designSystem = normalizeDesignSystem(payload.designSystem);
             break;
     }
     return next;

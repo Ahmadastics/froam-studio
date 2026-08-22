@@ -85,6 +85,8 @@ function applyDraft(element, draft) {
     if (!draft.styles)
         return;
     for (const [key, value] of Object.entries(draft.styles)) {
+        if (key.startsWith('__froamState:'))
+            continue;
         const cssKey = camelToKebab(key);
         if (element.style.getPropertyValue(cssKey) === value)
             continue;
@@ -123,6 +125,8 @@ function snapshotDraftTarget(element, draft, snapshots) {
         snapshot.imageSrc = element.getAttribute('src');
     }
     for (const key of Object.keys(draft.styles ?? {})) {
+        if (key.startsWith('__froamState:'))
+            continue;
         const cssKey = camelToKebab(key);
         snapshot.styles[cssKey] = element.style.getPropertyValue(cssKey);
     }

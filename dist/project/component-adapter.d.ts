@@ -1,4 +1,4 @@
-import type { FroamNode, FroamRelation } from './types';
+import type { FroamComponentFamily, FroamNode, FroamRelation } from './types';
 export type FroamComponentDescriptor = {
     id: string;
     title: string;
@@ -11,4 +11,6 @@ export declare function componentCatalogGraphRecords(definitions: readonly Froam
     nodes: FroamNode[];
     relations: FroamRelation[];
 };
+/** Groups today's numbered catalog entries into inherited component families. */
+export declare function componentCatalogFamilies(definitions: readonly FroamComponentDescriptor[], now?: number): FroamComponentFamily[];
 //# sourceMappingURL=component-adapter.d.ts.map

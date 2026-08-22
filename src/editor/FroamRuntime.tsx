@@ -155,6 +155,7 @@ function applyDraft(element: HTMLElement, draft: ElementDraft) {
   if (!draft.styles) return
 
   for (const [key, value] of Object.entries(draft.styles)) {
+    if (key.startsWith('__froamState:')) continue
     const cssKey = camelToKebab(key)
     if (element.style.getPropertyValue(cssKey) === value) continue
     if (value) element.style.setProperty(cssKey, value)
@@ -194,6 +195,7 @@ function snapshotDraftTarget(element: HTMLElement, draft: ElementDraft, snapshot
   }
 
   for (const key of Object.keys(draft.styles ?? {})) {
+    if (key.startsWith('__froamState:')) continue
     const cssKey = camelToKebab(key)
     snapshot.styles[cssKey] = element.style.getPropertyValue(cssKey)
   }
