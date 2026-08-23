@@ -1037,8 +1037,51 @@ body.froam-drag-active * {
 
 /* v4.8: grouped, scrollable quick-looks gallery */
 .froam-floating-bar__pop--looks {
-  width: min(520px, calc(100vw - 32px));
-  max-width: min(520px, calc(100vw - 32px));
+  position: fixed;
+  z-index: 1350;
+  box-sizing: border-box;
+  margin: 0;
+  max-width: calc(100vw - 24px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  resize: vertical;
+  box-shadow:
+    0 18px 54px rgba(0, 0, 0, 0.46),
+    0 0 0 1px rgba(var(--fs-accent-control-rgb), 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.froam-floating-bar__look-window-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.froam-floating-bar__look-window-actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(226, 232, 240, 0.68);
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.froam-floating-bar__look-window-actions > button:hover {
+  border-color: rgba(var(--fs-accent-control-rgb), 0.34);
+  background: rgba(var(--fs-accent-control-rgb), 0.1);
+  color: #f0f7ff;
+}
+
+.froam-floating-bar__look-window-actions > .froam-floating-bar__look-apply {
+  border-color: rgba(var(--fs-accent-control-rgb), 0.38);
+  background: rgba(var(--fs-accent-control-rgb), 0.14);
+  color: var(--fs-accent-control-hover);
 }
 
 .froam-floating-bar__looks-scroll {
@@ -1236,6 +1279,13 @@ body.froam-drag-active * {
 @media (max-width: 520px) {
   .froam-floating-bar__looks { grid-template-columns: repeat(3, 1fr); }
   .froam-floating-bar__look-colors { grid-template-columns: 1fr; }
+  .froam-floating-bar__pop--looks {
+    resize: none;
+    border-radius: 14px 14px 10px 10px;
+  }
+  .froam-floating-bar__looks-scroll { max-height: 132px; }
+  .froam-floating-bar__pop-head { align-items: flex-start; }
+  .froam-floating-bar__pop-head > span { max-width: 150px; }
 }
 
 /* ─── v4.1: opacity scrub chip ─── */

@@ -256,6 +256,18 @@ test('Build and relocated Layers use the connected project and Reference owns sc
   assert.doesNotMatch(intelligence, /Import screenshot/)
 })
 
+test('Look Studio stays docked beside the canvas and previews variable edits live', () => {
+  const floatingBar = fs.readFileSync(new URL('../src/editor/FroamFloatingBar.tsx', import.meta.url), 'utf8')
+  const canvasTools = fs.readFileSync(new URL('../src/editor/styles/canvas-tools.css', import.meta.url), 'utf8')
+  assert.match(floatingBar, /createPortal/)
+  assert.match(floatingBar, /Look Studio live editor/)
+  assert.match(floatingBar, /live preview/)
+  assert.match(floatingBar, /applyLook\(selectedLook, \{ accent: next \}\)/)
+  assert.match(floatingBar, /applyLook\(selectedLook, \{ fill: next \}\)/)
+  assert.match(floatingBar, /setLookDockSide/)
+  assert.match(canvasTools, /\.froam-floating-bar__pop--looks\s*\{[\s\S]*?position:\s*fixed/)
+})
+
 test('Reference exposes observed and inferred evidence, separate quality, and bounded status announcements', () => {
   const reference = fs.readFileSync(new URL('../src/editor/FroamReferenceWorkspace.tsx', import.meta.url), 'utf8')
   assert.match(reference, /data-origin="observed"/)

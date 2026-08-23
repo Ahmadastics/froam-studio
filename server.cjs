@@ -154,8 +154,17 @@ function pathToSelector(draftPath) {
 function declarations(styles, indent) {
   const lines = [];
   for (const [key, value] of Object.entries(styles ?? {})) {
-    if (key === "customCSS" || value === "" || value == null) continue;
+    if (key === "customCSS" || key.startsWith("__froamState:") || value === "" || value == null) continue;
     lines.push(`${indent}${camelToKebab(key)}: ${value} !important;`);
+  }
+  return lines;
+}
+function stateDeclarations(styles, state, indent) {
+  const prefix = `__froamState:${state}:`;
+  const lines = [];
+  for (const [key, value] of Object.entries(styles ?? {})) {
+    if (!key.startsWith(prefix) || value === "" || value == null) continue;
+    lines.push(`${indent}${camelToKebab(key.slice(prefix.length))}: ${value} !important;`);
   }
   return lines;
 }
@@ -191,10 +200,15 @@ ${decls2.join("\n")}
         const selector = pathToSelector(draftPath);
         if (!selector) continue;
         const decls = declarations(draft.styles, "    ");
-        if (!decls.length) continue;
-        rules.push(`  ${scope} ${selector} {
+        if (decls.length) rules.push(`  ${scope} ${selector} {
 ${decls.join("\n")}
   }`);
+        for (const state of ["hover", "focus", "active"]) {
+          const stateDecls = stateDeclarations(draft.styles, state, "    ");
+          if (stateDecls.length) rules.push(`  ${scope} ${selector}:${state} {
+${stateDecls.join("\n")}
+  }`);
+        }
       }
       if (!rules.length) continue;
       out.push(`/* \u2500\u2500 ${routeKey} \xB7 ${viewport} \u2500\u2500 */`);

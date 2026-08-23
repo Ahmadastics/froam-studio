@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { createPortal } from 'react-dom'
 import type { FroamStyleState } from '../project/types'
 import {
   AlignCenter,
@@ -244,6 +245,16 @@ type Look = {
   swatch: CSSProperties
   styles: (accent: string) => Record<string, string>
   patch?: SelectionPatch
+}
+
+type LookOverrides = {
+  accent?: string
+  fill?: string
+  text?: string
+  radius?: number
+  overrideFill?: boolean
+  overrideText?: boolean
+  overrideRadius?: boolean
 }
 
 // Uniform corner-radius patch so the editor's own radius controls stay in sync.
@@ -1033,6 +1044,8 @@ export default function FroamFloatingBar({
   const [lookRadius, setLookRadius] = useState(Math.max(0, Math.round(radius)))
   const [lookState, setLookState] = useState<FroamStyleState>('base')
   const [lookStateDrafts, setLookStateDrafts] = useState<Partial<Record<FroamStyleState, Record<string, string>>>>({})
+  const [lookDockSide, setLookDockSide] = useState<'left' | 'right'>('right')
+  const [lookDockStyle, setLookDockStyle] = useState<CSSProperties>({})
 
   const fontScrub = useScrub((steps) => {
     const next = Math.min(400, Math.max(6, Math.round(fontSize) + steps))
@@ -1095,6 +1108,41 @@ export default function FroamFloatingBar({
     }
   }, [docked, expanded, narrow, targetRect, visible])
 
+  useLayoutEffect(() => {
+    if (openPop !== 'looks') return
+
+    const placeLookDock = () => {
+      const leftPanel = document.querySelector<HTMLElement>('.froam-figma-left')?.getBoundingClientRect()
+      const rightPanel = document.querySelector<HTMLElement>('.froam-dp:not(.froam-sheet .froam-dp)')?.getBoundingClientRect()
+      const safeLeft = leftPanel ? leftPanel.right + VIEWPORT_GAP : VIEWPORT_GAP
+      const safeRight = rightPanel ? rightPanel.left - VIEWPORT_GAP : window.innerWidth - VIEWPORT_GAP
+      const availableWidth = Math.max(280, safeRight - safeLeft)
+
+      if (availableWidth < 620 || window.innerWidth < 720) {
+        const panelHeight = Math.min(360, Math.round(window.innerHeight * 0.46))
+        setLookDockStyle({
+          left: safeLeft,
+          top: Math.max(VIEWPORT_GAP, window.innerHeight - panelHeight - VIEWPORT_GAP),
+          width: Math.max(280, availableWidth),
+          maxHeight: panelHeight,
+        })
+        return
+      }
+
+      const panelWidth = Math.min(380, Math.max(320, Math.round(availableWidth * 0.34)))
+      setLookDockStyle({
+        left: lookDockSide === 'left' ? safeLeft : safeRight - panelWidth,
+        top: VIEWPORT_GAP,
+        width: panelWidth,
+        maxHeight: window.innerHeight - VIEWPORT_GAP * 2,
+      })
+    }
+
+    placeLookDock()
+    window.addEventListener('resize', placeLookDock)
+    return () => window.removeEventListener('resize', placeLookDock)
+  }, [lookDockSide, openPop])
+
   if (!visible || !targetRect) return null
 
   const cleanDimension = (value: string, fallback: number) => Number.parseFloat(value) || fallback
@@ -1114,6 +1162,9 @@ export default function FroamFloatingBar({
         setLookFill(normalizeToHex(background) ?? '#ffffff')
         setLookText(normalizeToHex(color) ?? '#111827')
         setLookRadius(Math.max(0, Math.round(radius)))
+        const canvasMidpoint = window.innerWidth / 2
+        const targetCenter = targetRect ? targetRect.left + targetRect.width / 2 : canvasMidpoint
+        setLookDockSide(targetCenter < canvasMidpoint ? 'right' : 'left')
       }
       return next
     })
@@ -1125,26 +1176,33 @@ export default function FroamFloatingBar({
     if ('vibrate' in navigator) navigator.vibrate?.(4)
   }
 
-  function customizedLook(look: Look) {
-    const styles = { ...look.styles(lookAccent) }
+  function customizedLook(look: Look, overrides: LookOverrides = {}) {
+    const accent = overrides.accent ?? lookAccent
+    const fill = overrides.fill ?? lookFill
+    const text = overrides.text ?? lookText
+    const nextRadius = overrides.radius ?? lookRadius
+    const shouldOverrideFill = overrides.overrideFill ?? overrideLookFill
+    const shouldOverrideText = overrides.overrideText ?? overrideLookText
+    const shouldOverrideRadius = overrides.overrideRadius ?? overrideLookRadius
+    const styles = { ...look.styles(accent) }
     const patch = { ...(look.patch ?? {}) }
-    if (overrideLookFill && look.group !== 'Reset') {
-      styles.background = lookFill
+    if (shouldOverrideFill && look.group !== 'Reset') {
+      styles.background = fill
       styles.backgroundImage = 'none'
     }
-    if (overrideLookText && look.group !== 'Reset') {
-      styles.color = lookText
-      if ('WebkitTextFillColor' in styles) styles.WebkitTextFillColor = lookText
+    if (shouldOverrideText && look.group !== 'Reset') {
+      styles.color = text
+      if ('WebkitTextFillColor' in styles) styles.WebkitTextFillColor = text
     }
-    if (overrideLookRadius && look.group !== 'Reset') {
-      styles.borderRadius = `${lookRadius}px`
-      Object.assign(patch, corners(lookRadius))
+    if (shouldOverrideRadius && look.group !== 'Reset') {
+      styles.borderRadius = `${nextRadius}px`
+      Object.assign(patch, corners(nextRadius))
     }
     return { styles, patch }
   }
 
-  function applyLook(look: Look) {
-    const { styles, patch } = customizedLook(look)
+  function applyLook(look: Look, overrides: LookOverrides = {}) {
+    const { styles, patch } = customizedLook(look, overrides)
     setSelectedLookName(look.name)
     setLookStateDrafts((current) => ({ ...current, [lookState]: styles }))
     if (lookState === 'base') onStyle(styles, patch, `Look: ${look.name}`)
@@ -1395,11 +1453,22 @@ export default function FroamFloatingBar({
         </div>
       )}
 
-      {openPop === 'looks' && (
-        <div className="froam-floating-bar__pop froam-floating-bar__pop--looks" data-chef-editor-root="true">
+      {openPop === 'looks' && typeof document !== 'undefined' && createPortal(
+        <div
+          className="froam-floating-bar__pop froam-floating-bar__pop--looks"
+          data-chef-editor-root="true"
+          role="dialog"
+          aria-label="Look Studio live editor"
+          style={lookDockStyle}
+        >
           <div className="froam-floating-bar__pop-head">
-            <span>Look Studio <small>{LOOKS.length} recipes</small></span>
-            <button type="button" className="froam-floating-bar__look-apply" onClick={() => applyLook(selectedLook)}>Apply changes</button>
+            <span>Look Studio <small>{LOOKS.length} recipes · live preview</small></span>
+            <div className="froam-floating-bar__look-window-actions">
+              <button type="button" onClick={() => setLookDockSide((side) => side === 'left' ? 'right' : 'left')} title="Move Look Studio to the other side">
+                {lookDockSide === 'left' ? <ChevronRight size={12} /> : <ChevronLeft size={12} />} Move
+              </button>
+              <button type="button" className="froam-floating-bar__look-apply" onClick={() => setOpenPop(null)}>Done</button>
+            </div>
           </div>
           <label className="froam-floating-bar__look-search">
             <Search size={12} />
@@ -1428,20 +1497,21 @@ export default function FroamFloatingBar({
               {(['base', 'hover', 'focus', 'active'] as const).map((state) => <button key={state} type="button" role="tab" aria-selected={lookState === state} className={lookState === state ? 'is-active' : ''} onClick={() => setLookState(state)}>{state}</button>)}
             </div>
             <div className="froam-floating-bar__look-colors">
-              <label title="Accent used by accent-aware looks"><span>Accent</span><input type="color" value={lookAccent} onChange={(event) => setLookAccent(event.target.value)} /></label>
-              <label className={overrideLookFill ? 'is-enabled' : ''}><input type="checkbox" checked={overrideLookFill} onChange={(event) => setOverrideLookFill(event.target.checked)} /><span>Fill</span><input type="color" value={lookFill} onChange={(event) => setLookFill(event.target.value)} disabled={!overrideLookFill} /></label>
-              <label className={overrideLookText ? 'is-enabled' : ''}><input type="checkbox" checked={overrideLookText} onChange={(event) => setOverrideLookText(event.target.checked)} /><span>Text</span><input type="color" value={lookText} onChange={(event) => setLookText(event.target.value)} disabled={!overrideLookText} /></label>
+              <label title="Accent used by accent-aware looks"><span>Accent</span><input type="color" value={lookAccent} onChange={(event) => { const next = event.target.value; setLookAccent(next); applyLook(selectedLook, { accent: next }) }} /></label>
+              <label className={overrideLookFill ? 'is-enabled' : ''}><input type="checkbox" checked={overrideLookFill} onChange={(event) => { const next = event.target.checked; setOverrideLookFill(next); applyLook(selectedLook, { overrideFill: next }) }} /><span>Fill</span><input type="color" value={lookFill} onChange={(event) => { const next = event.target.value; setLookFill(next); if (overrideLookFill) applyLook(selectedLook, { fill: next }) }} disabled={!overrideLookFill} /></label>
+              <label className={overrideLookText ? 'is-enabled' : ''}><input type="checkbox" checked={overrideLookText} onChange={(event) => { const next = event.target.checked; setOverrideLookText(next); applyLook(selectedLook, { overrideText: next }) }} /><span>Text</span><input type="color" value={lookText} onChange={(event) => { const next = event.target.value; setLookText(next); if (overrideLookText) applyLook(selectedLook, { text: next }) }} disabled={!overrideLookText} /></label>
             </div>
             <label className={`froam-floating-bar__look-radius ${overrideLookRadius ? 'is-enabled' : ''}`}>
-              <input type="checkbox" checked={overrideLookRadius} onChange={(event) => setOverrideLookRadius(event.target.checked)} />
+              <input type="checkbox" checked={overrideLookRadius} onChange={(event) => { const next = event.target.checked; setOverrideLookRadius(next); applyLook(selectedLook, { overrideRadius: next }) }} />
               <span>Corner radius</span>
-              <input type="range" min="0" max="64" value={lookRadius} onChange={(event) => setLookRadius(Number(event.target.value))} disabled={!overrideLookRadius} />
+              <input type="range" min="0" max="64" value={lookRadius} onChange={(event) => { const next = Number(event.target.value); setLookRadius(next); if (overrideLookRadius) applyLook(selectedLook, { radius: next }) }} disabled={!overrideLookRadius} />
               <output>{lookRadius}px</output>
             </label>
-            <p>Choose a recipe, tune its design variables, then apply changes. Accent-aware gradients and effects update automatically.</p>
+            <p>Every recipe and design-variable change previews directly on the selected element. Keep this dock open while you inspect the page.</p>
             {onSaveLook && <button type="button" className="froam-floating-bar__look-save" onClick={() => onSaveLook({ name: selectedLook.name, states: { ...lookStateDrafts, [lookState]: customizedLook(selectedLook).styles } })}>Save as reusable style</button>}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {expanded && (
