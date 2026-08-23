@@ -217,10 +217,14 @@ export function deriveBranchState(document, branchId = document.activeBranchId) 
     if (!checkpoint)
         throw new Error(`Missing checkpoint for Froam branch: ${branchId}`);
     const folded = new Set(checkpoint.eventIds);
+    const checkpointState = {
+        ...checkpoint.state,
+        designSystem: normalizeDesignSystem(checkpoint.state.designSystem),
+    };
     return document.events
         .filter((event) => event.branchId === branchId && !folded.has(event.id))
         .sort(compareProjectEvents)
-        .reduce(applyProjectEvent, checkpoint.state);
+        .reduce(applyProjectEvent, checkpointState);
 }
 export function checkpointBranch(document, input) {
     const branchId = input.branchId ?? document.activeBranchId;

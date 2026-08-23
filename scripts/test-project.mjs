@@ -472,6 +472,21 @@ test('v6 project schema migrates to v7 without changing event ids or legacy desi
   assert.equal(migrated.file.project.branches.main.rootCheckpointId, 'v6-base')
 })
 
+test('legacy checkpoint state receives the current design system during replay', () => {
+  const document = createProjectDocument({ id: 'project:legacy-checkpoint', name: 'Legacy', actorId: 'actor:one', now: 1 })
+  const branch = document.branches[document.activeBranchId]
+  const checkpoint = document.checkpoints[branch.baseCheckpointId]
+  const legacyState = { ...checkpoint.state }
+  delete legacyState.designSystem
+  const legacyDocument = {
+    ...document,
+    checkpoints: { ...document.checkpoints, [checkpoint.id]: { ...checkpoint, state: legacyState } },
+  }
+  const state = deriveBranchState(legacyDocument)
+  assert.ok(state.designSystem.componentFamilies)
+  assert.ok(state.designSystem.variables['var:surface'])
+})
+
 test('project sidecar store persists only valid envelopes', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'froam-project-'))
   const target = path.join(directory, 'froam.project.json')
