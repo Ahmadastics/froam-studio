@@ -146,7 +146,7 @@ export default function FroamToolbar({
         </button>
         <div className="froam-tb__sep" />
         <span className="froam-tb__route froam-tb__desktop-only">{routeKey}</span>
-        <button type="button" className="froam-tb__icon-btn froam-tb__mobile-command" onClick={onCommandPalette} title="Ask Froam or run a command" aria-label="Ask Froam or run a command" data-chef-editor-root="true">
+        <button type="button" className="froam-tb__icon-btn froam-tb__mobile-command" onClick={onCommandPalette} title="Quick Edit or run a command" aria-label="Quick Edit or run a command" data-chef-editor-root="true">
           <Command size={16} />
         </button>
       </div>
@@ -311,9 +311,9 @@ export default function FroamToolbar({
           <Keyboard size={14} />
         </button>
 
-        <button type="button" className="froam-tb__ask-btn" onClick={onAskFroam} title="Ask Froam to edit the page" data-chef-editor-root="true">
+        <button type="button" className="froam-tb__ask-btn" onClick={onAskFroam} title="Open Quick Edit" data-chef-editor-root="true">
           <Sparkles size={14} />
-          <span>Ask Froam</span>
+          <span>Quick Edit</span>
         </button>
 
         {/* Save */}

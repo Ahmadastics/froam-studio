@@ -3,14 +3,22 @@
  * `froam dev` bridge: dist/standalone/froam-editor.js + froam-editor.css.
  */
 import { build } from 'esbuild'
+import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 
 const result = await build({
-  entryPoints: [join(root, 'src', 'standalone.tsx')],
+  absWorkingDir: root,
+  stdin: {
+    contents: readFileSync(join(root, 'src', 'standalone.tsx'), 'utf8'),
+    loader: 'tsx',
+    resolveDir: join(root, 'src'),
+    sourcefile: 'standalone.tsx',
+  },
   outfile: join(root, 'dist', 'standalone', 'froam-editor.js'),
+  tsconfig: join(root, 'tsconfig.json'),
   bundle: true,
   minify: true,
   format: 'iife',

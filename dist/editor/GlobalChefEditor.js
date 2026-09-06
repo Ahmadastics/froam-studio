@@ -2,7 +2,7 @@ import { jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment } from "react/jsx-run
 import { useCallback, useEffect, useMemo, useRef, useState, } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlignCenter, AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignLeft, AlignRight, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, Bold, Box, ChevronDown, ClipboardCheck, Clock, Code, Command, Copy, Download, Eraser, Eye, EyeOff, FileImage, FileText, GitCommit, Grip, ImagePlus, Italic, Keyboard, Layers, LayoutGrid, Link, Minus, Monitor, MousePointer, Share2, Smartphone, Tablet, MousePointer2, MessageSquare, Move, Paintbrush, Palette, PencilLine, Plus, Redo2, RotateCw, Save, DraftingCompass, ScanLine, Search, SlidersHorizontal, Sparkles, Square, SquareDashedBottom, Strikethrough, Type, Underline, Undo2, Unlink, Variable, Maximize2, X, Zap, Coins, AlignCenterHorizontal, AlignCenterVertical, Timer, } from 'lucide-react';
+import { AlignCenter, AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignLeft, AlignRight, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, Bold, Box, ChevronDown, ClipboardCheck, Clock, Code, Command, Copy, Download, Eraser, Eye, EyeOff, FileImage, FileText, GitCommit, Grid2X2, Grip, ImagePlus, Italic, Keyboard, Layers, LayoutGrid, ListTree, Link, Minus, Monitor, MousePointer, Share2, Smartphone, Tablet, MousePointer2, MessageSquare, Move, Paintbrush, Palette, PencilLine, Plus, Redo2, RotateCw, Save, DraftingCompass, ScanLine, Search, SlidersHorizontal, Sparkles, Square, SquareDashedBottom, Strikethrough, Type, Underline, Undo2, Unlink, Variable, Maximize2, X, Zap, Coins, AlignCenterHorizontal, AlignCenterVertical, Timer, } from 'lucide-react';
 import FroamSectionBoundary from './FroamSectionBoundary.js';
 import { apiGetFresh, apiPost } from '../lib/api.js';
 import { bridgeUrl } from '../lib/bridge.js';
@@ -43,6 +43,7 @@ import FroamWorkspaceShell from './FroamWorkspaceShell.js';
 import FroamUICustomizer from './FroamUICustomizer.js';
 import { froamUIPanelWidth, readFroamUIPreference, writeFroamUIPreference } from './froamUIPreferences.js';
 import { FROAM_WORKSPACE_SECTIONS, readWorkspacePreference, workspaceCommandMatches, writeWorkspacePreference } from './workspace-shell-model.js';
+import { projectTextLayerStyles } from './text-style-projection.js';
 import { readFroamLabsFlags, writeFroamLabsFlags } from '../project/experiments.js';
 import { appendProjectEvents, createProjectEvent, deriveBranchState, switchProjectBranch } from '../project/event-log.js';
 import { validateReferenceBuildCandidate } from '../project/reference-build.js';
@@ -60,7 +61,7 @@ import { componentCatalogFamilies } from '../project/component-adapter.js';
 import { upsertAnimationCss } from '../project/animator-adapter.js';
 import { createReusableStyle, saveReusableStyle, upsertComponentFamily } from '../project/design-system.js';
 import { createFrameworkIdentityObserver } from '../project/framework-identity.js';
-import { collectStoreFontFamilies, ensureFontLinks } from './fontSources.js';
+import { collectStoreFontFamilies, ensureBrandFontStyle, ensureFontLinks, fontOptionsFor, sanitizeBrandFonts, } from './fontSources.js';
 import { useFroamRouteKey } from '../routing.js';
 import { DEFAULT_FROAM_PERSONA, FROAM_PERSONA_PATH, PERSONA_STORAGE_KEY, readFroamPersonaDraft, sanitizeFroamPersona, isFroamPersonaPath, } from './froamPersona.js';
 const intelligenceTabs = { scan: 'scan', dna: 'dna', archive: 'archive', archaeology: 'archaeology', flow: 'flow', attention: 'attention', rhythm: 'rhythm', responsive: 'responsive' };
@@ -112,31 +113,37 @@ const VIEWPORTS_AGREE = true;
 void VIEWPORTS_AGREE;
 // ID of the portal element Froam injects to host the device shell
 const DEVICE_SHELL_ID = 'froam-device-shell';
-const fontOptions = [
-    { label: 'Editorial Sans', value: '"Editorial Sans", "Satoshi", system-ui, sans-serif' },
-    { label: 'Cabinet Grotesk', value: '"Cabinet Grotesk", "Satoshi", system-ui, sans-serif' },
-    { label: 'Satoshi', value: 'Satoshi, system-ui, sans-serif' },
-    { label: 'Neue Montreal', value: 'Neue Montreal, system-ui, sans-serif' },
-    { label: 'Inter', value: 'Inter, system-ui, sans-serif' },
-    { label: 'Manrope', value: 'Manrope, system-ui, sans-serif' },
-    { label: 'DM Sans', value: '"DM Sans", system-ui, sans-serif' },
-    { label: 'Plus Jakarta Sans', value: 'Plus Jakarta Sans, system-ui, sans-serif' },
-    { label: 'Space Grotesk', value: 'Space Grotesk, system-ui, sans-serif' },
-    { label: 'Urbanist', value: 'Urbanist, system-ui, sans-serif' },
-    { label: 'Outfit', value: 'Outfit, system-ui, sans-serif' },
-    { label: 'Poppins', value: 'Poppins, system-ui, sans-serif' },
-    { label: 'Montserrat', value: 'Montserrat, system-ui, sans-serif' },
-    { label: 'Avenir Next', value: '"Avenir Next", Avenir, system-ui, sans-serif' },
-    { label: 'SF Pro', value: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif' },
-    { label: 'Playfair Display', value: '"Playfair Display", Georgia, serif' },
-    { label: 'Cormorant Garamond', value: '"Cormorant Garamond", Georgia, serif' },
-    { label: 'Lora', value: 'Lora, Georgia, serif' },
-    { label: 'Merriweather', value: 'Merriweather, Georgia, serif' },
-    { label: 'Fraunces', value: 'Fraunces, Georgia, serif' },
-    { label: 'JetBrains Mono', value: 'JetBrains Mono, ui-monospace, monospace' },
-    { label: 'IBM Plex Mono', value: '"IBM Plex Mono", ui-monospace, monospace' },
-    { label: 'Space Mono', value: '"Space Mono", ui-monospace, monospace' },
-];
+/* The picker's list is derived from the font catalog (see fontOptionsFor),
+   so it can only ever offer families the editor and codegen can both load.
+   The list this replaced was hand-kept and had drifted: it offered
+   "Editorial Sans" and "Neue Montreal", which are in no font source, so
+   picking them changed nothing on the page. */
+const BRAND_FONTS_KEY = 'froam-brand-fonts-v1';
+/** A woff2 is usually well under 100KB; this is generous but still loadable. */
+const BRAND_FONT_MAX_BYTES = 1_000_000;
+function loadBrandFonts() {
+    if (typeof window === 'undefined')
+        return [];
+    try {
+        const raw = window.localStorage.getItem(BRAND_FONTS_KEY);
+        return raw ? sanitizeBrandFonts(JSON.parse(raw)) : [];
+    }
+    catch {
+        return [];
+    }
+}
+function saveBrandFonts(fonts) {
+    if (typeof window === 'undefined')
+        return;
+    try {
+        window.localStorage.setItem(BRAND_FONTS_KEY, JSON.stringify(fonts));
+    }
+    catch {
+        // An uploaded face can be large enough to blow the quota. The design
+        // matters more than the convenience copy, so fail quietly — the font
+        // still lives in the design once it has been saved to the repo.
+    }
+}
 const displayOptions = ['block', 'flex', 'grid', 'inline-flex', 'inline-block', 'inline', 'none'];
 const flexDirectionOptions = ['row', 'row-reverse', 'column', 'column-reverse'];
 const justifyOptions = ['flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly'];
@@ -699,6 +706,16 @@ function canApplyTextDraft(element) {
         return true;
     const tag = element.tagName.toLowerCase();
     return ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'small', 'strong', 'em', 'b', 'i', 'label', 'button', 'a', 'li'].includes(tag);
+}
+const TEXT_VISUAL_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'small', 'strong', 'em', 'b', 'i', 'blockquote', 'figcaption', 'cite', 'dt', 'dd', 'li']);
+const INLINE_TEXT_CHILD_TAGS = new Set(['span', 'small', 'strong', 'em', 'b', 'i', 'mark', 'cite', 'br', 'wbr']);
+function isTextVisualLayer(element) {
+    if (element.dataset.froamShape === 'true')
+        return false;
+    const tag = element.tagName.toLowerCase();
+    if (!TEXT_VISUAL_TAGS.has(tag) || !element.innerText.trim())
+        return false;
+    return Array.from(element.children).every((child) => INLINE_TEXT_CHILD_TAGS.has(child.tagName.toLowerCase()));
 }
 function sanitizeDraftForElement(element, draft) {
     if (draft.text === undefined || canApplyTextDraft(element))
@@ -1270,6 +1287,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }, [portalContainer]);
     // Core state
     const [store, setStore] = useState(() => loadStore());
+    const [brandFonts, setBrandFonts] = useState(() => loadBrandFonts());
     const nodeRegistryRef = useRef(loadNodeRegistry());
     const [buttonPosition, setButtonPosition] = useState(CHEF_BUTTON_START);
     const [panelPosition, setPanelPosition] = useState(null);
@@ -1321,6 +1339,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [uiPreference, setUIPreference] = useState(() => readFroamUIPreference(typeof localStorage === 'undefined' ? undefined : localStorage));
     const [uiCustomizerOpen, setUICustomizerOpen] = useState(false);
     const [leftWorkspaceMode, setLeftWorkspaceMode] = useState(() => workspacePreference.sections.understand === 'reference' ? 'reference' : workspacePreference.sections.understand === 'layers' ? 'layers' : 'plan');
+    const [plannerRequestedTab, setPlannerRequestedTab] = useState(() => workspacePreference.sections.create === 'library' ? 'library' : 'sitemap');
     // v4: phone-first editing — compact chrome on small viewports, touch behaviors on coarse pointers
     const isMobileUI = useMediaQuery(MOBILE_UI_QUERY);
     const isTouchDevice = useMediaQuery(COARSE_POINTER_QUERY);
@@ -1875,6 +1894,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     useEffect(() => {
         ensureFontLinks(collectStoreFontFamilies(routeDrafts));
     }, [routeDrafts]);
+    /* The client's own typeface, same rule: preview it exactly as it will ship. */
+    useEffect(() => {
+        ensureBrandFontStyle(brandFonts);
+        saveBrandFonts(brandFonts);
+    }, [brandFonts]);
+    /* Offer the brand faces in the picker the moment they are added. */
+    const fontOptions = useMemo(() => fontOptionsFor(brandFonts), [brandFonts]);
     /*
      * Keep the log level with the store, whoever moved it.
      *
@@ -1995,8 +2021,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             openWorkspaceSection('layers', 'understand');
             return true;
         }
-        if (wants(/\b(open|show)\s+(?:the\s+)?(?:build|components?)\b/)) {
+        if (wants(/\b(open|show)\s+(?:the\s+)?(?:pages?|sitemap|routes?|build)\b/)) {
             openWorkspaceSection('plan', 'create');
+            return true;
+        }
+        if (wants(/\b(open|show)\s+(?:the\s+)?(?:library|assets?|components?|patterns?)\b/)) {
+            openWorkspaceSection('library', 'create');
             return true;
         }
         if (wants(/\b(open|show)\s+(?:the\s+)?reference\b/)) {
@@ -2102,6 +2132,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         onActivityChange: setWorkspaceActivity,
         onToast: showToast,
         onExecuteLocalCommand: executeLocalFroamCommand,
+        enableRemoteIntent: false,
         onValidateReference: validateReferenceBuildOnCanvas,
     });
     function openPersonaEditor() {
@@ -2577,6 +2608,22 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             }
             return null;
         }
+        function resolveTextTargetAtPoint(event, fallback) {
+            const range = document.caretRangeFromPoint?.(event.clientX, event.clientY);
+            const start = range?.startContainer;
+            let element = start instanceof HTMLElement ? start : start?.parentElement ?? null;
+            while (element && rootElement.contains(element)) {
+                if (isTextVisualLayer(element)) {
+                    const rect = element.getBoundingClientRect();
+                    if (event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom)
+                        return element;
+                }
+                if (element === fallback)
+                    break;
+                element = element.parentElement;
+            }
+            return fallback;
+        }
         let hoverFrame = 0;
         function handlePointerOver(event) {
             cancelAnimationFrame(hoverFrame);
@@ -2596,7 +2643,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             hoverFrame = requestAnimationFrame(clearHover);
         }
         function handleClick(event) {
-            const target = resolveTarget(event.target);
+            const resolvedTarget = resolveTarget(event.target);
+            const target = resolvedTarget ? resolveTextTargetAtPoint(event, resolvedTarget) : null;
             if (!target) {
                 if (!(event.target instanceof HTMLElement) || event.target.closest('[data-chef-editor-root="true"]'))
                     return;
@@ -2667,11 +2715,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 textEl.addEventListener('blur', handleTextToolBlur);
                 return;
             }
-            // NOTE: Do NOT open AI here. Left-click only selects.
-            // AI is opened intentionally via right-click → "Edit with AI" in the context menu.
+            // Left-click only selects. Quick Edit opens from an explicit user command.
         }
         function handleDblClick(event) {
-            const target = resolveTarget(event.target);
+            const resolvedTarget = resolveTarget(event.target);
+            const target = resolvedTarget ? resolveTextTargetAtPoint(event, resolvedTarget) : null;
             if (!target)
                 return;
             const textTarget = target;
@@ -2737,7 +2785,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             textTarget.addEventListener('blur', handleBlur);
         }
         function handleContextMenu(event) {
-            const target = resolveTarget(event.target);
+            const resolvedTarget = resolveTarget(event.target);
+            const target = resolvedTarget ? resolveTextTargetAtPoint(event, resolvedTarget) : null;
             if (!target)
                 return;
             event.preventDefault();
@@ -3547,7 +3596,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 originalsRef.current[viewportStoreKey] = originalRoute;
             }
             const currentDraft = routeStore[sel.path] ?? {};
-            const nextDraft = sanitizeDraftForElement(target, updater(currentDraft));
+            const nextDraft = sanitizeDraftForElement(target, updater(currentDraft, target));
             applyDraft(target, nextDraft);
             syncFroamArtboardMetadata(target);
             routeStore[sel.path] = nextDraft;
@@ -3562,13 +3611,36 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         }
     }
     function applyStyle(styles, nextSel, label) {
-        updateDraft((draft) => ({ ...draft, styles: { ...(draft.styles ?? {}), ...styles } }), nextSel, label ?? `Style: ${Object.keys(styles).join(', ')}`);
+        const root = getRoot();
+        const selectedElements = root ? (selections.length ? selections : selection ? [selection] : []).map((item) => findElementByPath(root, item.path)).filter((item) => item !== null) : [];
+        const textOnlySelection = selectedElements.length > 0 && selectedElements.every(isTextVisualLayer);
+        const projectedStyles = textOnlySelection ? projectTextLayerStyles(styles) : styles;
+        const projectedSelection = textOnlySelection ? { ...(nextSel ?? {}) } : nextSel;
+        if (textOnlySelection && projectedSelection) {
+            delete projectedSelection.background;
+            delete projectedSelection.borderColor;
+            delete projectedSelection.borderWidth;
+            delete projectedSelection.borderStyle;
+            delete projectedSelection.borderRadiusTL;
+            delete projectedSelection.borderRadiusTR;
+            delete projectedSelection.borderRadiusBR;
+            delete projectedSelection.borderRadiusBL;
+            delete projectedSelection.boxShadow;
+            if (/^#[\da-f]{3,8}$/i.test(projectedStyles.color ?? ''))
+                projectedSelection.color = projectedStyles.color;
+            if (projectedStyles.textShadow !== undefined)
+                projectedSelection.textShadow = projectedStyles.textShadow === 'none' ? '' : projectedStyles.textShadow;
+        }
+        updateDraft((draft, target) => ({ ...draft, styles: { ...(draft.styles ?? {}), ...(isTextVisualLayer(target) ? projectTextLayerStyles(styles) : styles) } }), projectedSelection, label ?? `Style: ${Object.keys(styles).join(', ')}`);
     }
     function previewEncodedStateStyles(styles) {
-        const encoded = Object.entries(styles).filter(([key]) => key.startsWith('__froamState:'));
-        if (!encoded.length || !currentSelectionRef.current)
-            return;
         const target = currentSelectionRef.current;
+        if (!target)
+            return;
+        const previewStyles = isTextVisualLayer(target) ? projectTextLayerStyles(styles) : styles;
+        const encoded = Object.entries(previewStyles).filter(([key]) => key.startsWith('__froamState:'));
+        if (!encoded.length)
+            return;
         const state = encoded[0][0].split(':')[1];
         const id = target.dataset.froamStateTarget || ensureFroamNodeId(target);
         target.dataset.froamStateTarget = id;
@@ -3929,7 +4001,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             const response = await window.fetch(bridgeUrl('/__froam/repo/save'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ routeKey, viewportMode, store: cleanDrafts }),
+                body: JSON.stringify({ routeKey, viewportMode, store: cleanDrafts, brandFonts }),
             });
             const data = await response.json().catch(() => null);
             if (!response.ok || !data?.success)
@@ -4805,6 +4877,57 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         pendingImageTargetRef.current = null;
         event.target.value = '';
     }
+    /*
+     * Add the client's own typeface.
+     *
+     * The face is inlined into the design as a data URI rather than dropped in
+     * a folder, so it survives Save to Repo and reaches production through the
+     * same path as everything else — no asset pipeline to configure, nothing to
+     * host. The input is built here instead of living in the JSX so this stays
+     * self-contained.
+     */
+    function addBrandFont() {
+        keepStudioPinned();
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.woff2,.woff,.ttf,.otf';
+        input.onchange = () => {
+            const file = input.files?.[0];
+            if (!file)
+                return;
+            // Base64 costs a third on top, and this rides inside the design file.
+            if (file.size > BRAND_FONT_MAX_BYTES) {
+                showToast(`${file.name} is ${Math.round(file.size / 1024)}KB — keep brand faces under ${Math.round(BRAND_FONT_MAX_BYTES / 1024)}KB`);
+                return;
+            }
+            const extension = /\.([a-z0-9]+)$/i.exec(file.name)?.[1]?.toLowerCase();
+            const format = extension === 'woff2' ? 'woff2'
+                : extension === 'woff' ? 'woff'
+                    : extension === 'ttf' ? 'truetype'
+                        : extension === 'otf' ? 'opentype'
+                            : undefined;
+            const reader = new FileReader();
+            reader.onerror = () => showToast('Could not read that font file');
+            reader.onload = () => {
+                const src = typeof reader.result === 'string' ? reader.result : '';
+                const suggested = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
+                const family = window.prompt('Name this font — this is what the CSS will call it', suggested)?.trim();
+                if (!family)
+                    return;
+                const added = sanitizeBrandFonts([{ family, faces: [{ src, format }] }]);
+                if (!added.length) {
+                    showToast('That file could not be read as a font');
+                    return;
+                }
+                // Re-adding a family replaces it, so uploading a corrected file
+                // does the obvious thing instead of stacking a duplicate face.
+                setBrandFonts((current) => [...current.filter((font) => font.family !== family), ...added]);
+                showToast(`${family} added — it's under Brand in the font list`);
+            };
+            reader.readAsDataURL(file);
+        };
+        input.click();
+    }
     function openSelectedImageUpload() {
         keepStudioPinned();
         pendingCanvasImageRef.current = false;
@@ -5211,6 +5334,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         }
         showToast('Asset applied');
     }
+    function renameProject(name) {
+        const next = name.trim();
+        if (!next || next === projectSession.project.name)
+            return;
+        projectSession.setProject((current) => ({ ...current, name: next, updatedAt: Date.now() }));
+        showToast(`Project renamed to ${next}`);
+    }
     /* ─── Build transform string ─── */
     function buildTransformString(vals) {
         const s = selection;
@@ -5248,7 +5378,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             setIntelligenceOpen(false);
             setLabsOpen(false);
             setConnectedCanvasOpen(false);
-            setRightPanelOpen(true);
+            if (section === 'plan' || section === 'library') {
+                setRightPanelOpen(false);
+                setLeftPanelOpen(true);
+                setLeftWorkspaceMode('plan');
+                setPlannerRequestedTab(section === 'library' ? 'library' : 'sitemap');
+            }
+            else
+                setRightPanelOpen(true);
         }
         else if (mode === 'understand') {
             setLabsOpen(false);
@@ -5308,9 +5445,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             return;
         }
         if (mode === 'create') {
-            if (section === 'plan') {
+            if (section === 'plan' || section === 'library') {
                 setLeftPanelOpen(true);
-                setLeftWorkspaceMode(section);
+                setRightPanelOpen(false);
+                setLeftWorkspaceMode('plan');
+                setPlannerRequestedTab(section === 'library' ? 'library' : 'sitemap');
                 return;
             }
             if (section === 'animator') {
@@ -5735,7 +5874,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                     setCommandPaletteOpen(false);
                                     setCommandSearch('');
                                 }
-                            } }), _jsxs("ul", { className: "fs-command-palette__list", id: "froam-command-results", role: "listbox", children: [filteredCommands.map((cmd, idx) => (_jsx("li", { id: `froam-command-${cmd.id}`, role: "option", "aria-selected": idx === commandFocusIndex, className: `fs-command-palette__item ${idx === commandFocusIndex ? 'is-focused' : ''}`, onMouseEnter: () => setCommandFocusIndex(idx), children: _jsxs("button", { type: "button", tabIndex: -1, onClick: () => executePaletteCommand(cmd), children: [cmd.icon, _jsx("span", { className: "fs-command-palette__item-label", children: cmd.label }), cmd.shortcut && _jsx("span", { className: "fs-command-palette__item-shortcut", children: cmd.shortcut })] }) }, cmd.id))), askFroamVisible && (_jsx("li", { id: "froam-command-ask", role: "option", "aria-selected": commandFocusIndex === 0, className: `fs-command-palette__item fs-command-palette__ask ${commandFocusIndex === 0 ? 'is-focused' : ''}`, children: _jsxs("button", { type: "button", tabIndex: -1, "aria-label": `Ask Froam: ${commandSearch.trim()}`, onClick: executeAskFroam, children: [_jsx(Sparkles, { size: 15 }), _jsxs("span", { className: "fs-command-palette__item-label", children: [_jsx("strong", { children: "Ask Froam" }), _jsx("small", { children: commandSearch.trim() })] }), _jsx("span", { className: "fs-command-palette__item-shortcut", children: "Enter" })] }) })), filteredCommands.length === 0 && !askFroamVisible && (_jsx("li", { role: "status", className: "fs-command-palette__empty", children: "No commands found" }))] })] }) })), _jsx(FroamIntentResult, { state: froamIntent.state, onAllow: froamIntent.allow, onNotNow: froamIntent.notNow, onKeep: froamIntent.keep, onRetry: froamIntent.retry, onCancel: froamIntent.cancel, onDismiss: froamIntent.dismiss }), showPanel && !inlineEditing && (_jsx(FroamQuickChat, { open: quickChatOpen, selectionLabel: selection?.label, busy: ['preparing', 'awaiting-consent', 'requesting', 'plan-ready', 'creating-prototype', 'retrying', 'adopting'].includes(froamIntent.state.phase), onSubmit: (intent) => { setQuickChatOpen(false); void froamIntent.submit({ origin: 'contextual', intent }); }, onClose: () => setQuickChatOpen(false) })), showPanel && !studioMinimized && (_jsxs("div", { className: [
+                            } }), _jsxs("ul", { className: "fs-command-palette__list", id: "froam-command-results", role: "listbox", children: [filteredCommands.map((cmd, idx) => (_jsx("li", { id: `froam-command-${cmd.id}`, role: "option", "aria-selected": idx === commandFocusIndex, className: `fs-command-palette__item ${idx === commandFocusIndex ? 'is-focused' : ''}`, onMouseEnter: () => setCommandFocusIndex(idx), children: _jsxs("button", { type: "button", tabIndex: -1, onClick: () => executePaletteCommand(cmd), children: [cmd.icon, _jsx("span", { className: "fs-command-palette__item-label", children: cmd.label }), cmd.shortcut && _jsx("span", { className: "fs-command-palette__item-shortcut", children: cmd.shortcut })] }) }, cmd.id))), askFroamVisible && (_jsx("li", { id: "froam-command-ask", role: "option", "aria-selected": commandFocusIndex === 0, className: `fs-command-palette__item fs-command-palette__ask ${commandFocusIndex === 0 ? 'is-focused' : ''}`, children: _jsxs("button", { type: "button", tabIndex: -1, "aria-label": `Quick Edit: ${commandSearch.trim()}`, onClick: executeAskFroam, children: [_jsx(Sparkles, { size: 15 }), _jsxs("span", { className: "fs-command-palette__item-label", children: [_jsx("strong", { children: "Quick Edit" }), _jsx("small", { children: commandSearch.trim() })] }), _jsx("span", { className: "fs-command-palette__item-shortcut", children: "Enter" })] }) })), filteredCommands.length === 0 && !askFroamVisible && (_jsx("li", { role: "status", className: "fs-command-palette__empty", children: "No commands found" }))] })] }) })), _jsx(FroamIntentResult, { state: froamIntent.state, onAllow: froamIntent.allow, onNotNow: froamIntent.notNow, onKeep: froamIntent.keep, onRetry: froamIntent.retry, onCancel: froamIntent.cancel, onDismiss: froamIntent.dismiss }), showPanel && !inlineEditing && (_jsx(FroamQuickChat, { open: quickChatOpen, selectionLabel: selection?.label, busy: ['preparing', 'awaiting-consent', 'requesting', 'plan-ready', 'creating-prototype', 'retrying', 'adopting'].includes(froamIntent.state.phase), onSubmit: (intent) => { setQuickChatOpen(false); void froamIntent.submit({ origin: 'contextual', intent }); }, onClose: () => setQuickChatOpen(false) })), showPanel && !studioMinimized && (_jsxs("div", { className: [
                     'froam-figma-layout',
                     isMobileUI ? 'is-mobile' : '',
                     leftWorkspaceMode === 'plan' || leftWorkspaceMode === 'reference' ? 'is-planning' : '',
@@ -5811,10 +5950,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 setPanelOpen(false);
                                 setActive(false);
                                 setStudioMinimized(false);
-                            } }) }), _jsxs("div", { className: "froam-figma-left", "data-chef-editor-root": "true", hidden: !leftPanelOpen, children: [_jsxs("div", { className: "froam-figma-left__tabs", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: leftWorkspaceMode === 'plan' ? 'is-active' : '', onClick: () => openWorkspaceSection('plan', 'create'), children: [_jsx(LayoutGrid, { size: 13 }), " Build"] }), _jsxs("button", { type: "button", className: leftWorkspaceMode === 'reference' ? 'is-active' : '', onClick: () => openWorkspaceSection('reference', 'understand'), children: [_jsx(FileImage, { size: 13 }), " Reference"] })] }), _jsxs("div", { className: "froam-figma-left__body", "data-chef-editor-root": "true", children: [leftWorkspaceMode === 'plan' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "SitePlanner", children: _jsx(FroamSitePlanner, { routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, selection: selection ? { nodeId: selection.nodeId, label: selection.label } : null, archiveItems: plannerArchiveItems, onInsertComponent: insertLibraryComponent, onInsertBlankFrame: insertBlankFrame, onInsertBlock: addStructureBlock, onInsertArchived: insertArchivedHtml, onBuildPage: buildLibraryPage, onPlanChange: syncSitePlanGraph, onToast: showToast }) }) })) : null, _jsx("div", { className: "froam-figma-left__view", hidden: leftWorkspaceMode !== 'reference', children: _jsx(FroamSectionBoundary, { name: "ReferenceWorkspace", children: _jsx(FroamReferenceWorkspace, { project: projectSession.project, routeKey: routeKey, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, reconstructing: ['preparing', 'requesting', 'plan-ready', 'creating-prototype', 'retrying'].includes(froamIntent.state.phase), onReconstruct: (understanding, target) => { void froamIntent.submitReference({ understanding, target }); }, onReferencesChanged: () => { if (froamIntent.state.session?.origin === 'reference')
+                            } }) }), _jsxs("div", { className: "froam-figma-left", "data-chef-editor-root": "true", hidden: !leftPanelOpen, children: [_jsxs("div", { className: "froam-figma-left__tabs", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: leftWorkspaceMode === 'plan' && activeWorkspaceSection !== 'library' ? 'is-active' : '', onClick: () => openWorkspaceSection('plan', 'create'), children: [_jsx(ListTree, { size: 13 }), " Pages"] }), _jsxs("button", { type: "button", className: leftWorkspaceMode === 'plan' && activeWorkspaceSection === 'library' ? 'is-active' : '', onClick: () => openWorkspaceSection('library', 'create'), children: [_jsx(Grid2X2, { size: 13 }), " Library"] }), _jsxs("button", { type: "button", className: leftWorkspaceMode === 'reference' ? 'is-active' : '', onClick: () => openWorkspaceSection('reference', 'understand'), children: [_jsx(FileImage, { size: 13 }), " Reference"] })] }), _jsxs("div", { className: "froam-figma-left__body", "data-chef-editor-root": "true", children: [leftWorkspaceMode === 'plan' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "SitePlanner", children: _jsx(FroamSitePlanner, { routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, requestedTab: plannerRequestedTab, selection: selection ? { nodeId: selection.nodeId, label: selection.label } : null, archiveItems: plannerArchiveItems, assets: assets, onRenameProject: renameProject, onAddAsset: addAssetEntry, onApplyAsset: applyAssetToSelection, onRemoveAsset: removeAsset, onTabChange: (nextTab) => {
+                                                    setPlannerRequestedTab(nextTab);
+                                                    const section = nextTab === 'library' ? 'library' : 'plan';
+                                                    setWorkspacePreference((current) => ({ ...current, mode: 'create', sections: { ...current.sections, create: section } }));
+                                                }, onInsertComponent: insertLibraryComponent, onInsertBlankFrame: insertBlankFrame, onInsertBlock: addStructureBlock, onInsertArchived: insertArchivedHtml, onBuildPage: buildLibraryPage, onPlanChange: syncSitePlanGraph, onToast: showToast }) }) })) : null, _jsx("div", { className: "froam-figma-left__view", hidden: leftWorkspaceMode !== 'reference', children: _jsx(FroamSectionBoundary, { name: "ReferenceWorkspace", children: _jsx(FroamReferenceWorkspace, { project: projectSession.project, routeKey: routeKey, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, reconstructing: ['preparing', 'requesting', 'plan-ready', 'creating-prototype', 'retrying'].includes(froamIntent.state.phase), onReconstruct: (understanding, target) => { void froamIntent.submitReference({ understanding, target }); }, onReferencesChanged: () => { if (froamIntent.state.session?.origin === 'reference')
                                                     froamIntent.cancel(); }, onToast: showToast, onActivityChange: setWorkspaceActivity }) }) }), leftWorkspaceMode === 'layers' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "LayersPanel", children: _jsx(FroamLayersPanel, { layers: layers, selectedPath: selection?.path ?? null, selections: selections, onSelectLayer: selectLayerNode, onToggleVisibility: toggleLayerVisibility, onRefresh: () => { const root = getRoot(); if (root)
                                                     setLayers(collectLayers(root)); }, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, knowledgeByNodeId: layerKnowledge, onOpenKnowledge: (node, section) => { selectLayerNode(node); openWorkspaceSection(section); } }) }) })) : null] })] }), _jsx("div", { className: "froam-figma-layout__canvas", "data-chef-editor-root": "true" }), rightPanelOpen && workspaceMode === 'create' && (() => {
-                        const designPanel = (_jsx(FroamSectionBoundary, { name: "DesignPanel", children: _jsx(FroamDesignPanel, { selection: selection, selectionRect: selectionRect, onApplyStyle: applyStyle, onUpdateDraft: updateDraft, onOpenImageUpload: openSelectedImageUpload, onClearImage: clearAppliedImage, onClearSelectionDraft: actionsRef.current.clearSelectionDraft, marginLinked: marginLinked, paddingLinked: paddingLinked, radiusLinked: radiusLinked, onToggleMarginLinked: () => setMarginLinked((value) => !value), onTogglePaddingLinked: () => setPaddingLinked((value) => !value), onToggleRadiusLinked: () => setRadiusLinked((value) => !value), onApplySizePreset: applySizePreset, onBuildTransformString: buildTransformString, fontOptions: fontOptions, getRootEl: getRoot, onOpenBlueprint: () => setBlueprintOpen(true) }) }));
+                        const designPanel = (_jsx(FroamSectionBoundary, { name: "DesignPanel", children: _jsx(FroamDesignPanel, { selection: selection, selectionRect: selectionRect, onApplyStyle: applyStyle, onUpdateDraft: updateDraft, onOpenImageUpload: openSelectedImageUpload, onClearImage: clearAppliedImage, onClearSelectionDraft: actionsRef.current.clearSelectionDraft, marginLinked: marginLinked, paddingLinked: paddingLinked, radiusLinked: radiusLinked, onToggleMarginLinked: () => setMarginLinked((value) => !value), onTogglePaddingLinked: () => setPaddingLinked((value) => !value), onToggleRadiusLinked: () => setRadiusLinked((value) => !value), onApplySizePreset: applySizePreset, onBuildTransformString: buildTransformString, fontOptions: fontOptions, onAddBrandFont: addBrandFont, getRootEl: getRoot, onOpenBlueprint: () => setBlueprintOpen(true) }) }));
                         if (!isMobileUI)
                             return designPanel;
                         return (_jsx(FroamBottomSheet, { detent: sheetDetent, onDetentChange: setSheetDetent, title: selection?.label ?? 'Design', subtitle: selection ? 'Tap for style controls' : 'Tap any element to start', children: designPanel }));
@@ -6145,7 +6288,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         applyStyle(finalStyles, nextSelection, 'Resized element');
                     }
                     setSelectionRect(target.getBoundingClientRect());
-                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && !quickChatOpen && froamIntent.state.phase !== 'previewing' && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: canUndo, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, opacity: selection.opacity, isHidden: selection.display === 'none', mixBlendMode: selection.mixBlendMode, zIndex: selection.zIndex, fontOptions: fontOptions, selectionCount: selections.length, onSaveLook: ({ name, states }) => {
+                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && !quickChatOpen && froamIntent.state.phase !== 'previewing' && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: canUndo, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, opacity: selection.opacity, isHidden: selection.display === 'none', mixBlendMode: selection.mixBlendMode, zIndex: selection.zIndex, fontOptions: fontOptions, selectionCount: selections.length, isTextLayer: currentSelectionRef.current ? isTextVisualLayer(currentSelectionRef.current) : false, onSaveLook: ({ name, states }) => {
                     const style = createReusableStyle({ id: `style:look:${Date.now().toString(36)}`, name: `${name} custom`, states });
                     replaceDesignSystem(saveReusableStyle(activeProjectState.designSystem, style), `Saved reusable style: ${style.name}`);
                     showToast(`${style.name} saved to Design System`);

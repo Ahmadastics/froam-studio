@@ -26,7 +26,7 @@ export declare function attachSoundToInteraction(interaction: FroamInteraction, 
 }, collection: FroamSoundCollection): FroamInteraction;
 export declare function attachHapticIntent(interaction: FroamInteraction, haptic: NonNullable<FroamInteraction['feedback']>['haptic']): {
     feedback: {
-        haptic: "medium" | "light" | "heavy" | "success" | undefined;
+        haptic: "light" | "medium" | "heavy" | "success" | undefined;
         soundAssetId?: import("./types").FroamId;
         soundOffsetMs?: number;
         volume?: number;

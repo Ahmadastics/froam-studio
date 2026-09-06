@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { FroamStyleState } from '../project/types'
+import { FONT_GROUP_LABELS, groupFontOptions, type FontOption } from './fontSources'
 import {
   AlignCenter,
   AlignJustify,
@@ -101,8 +102,9 @@ type Props = {
   isHidden?: boolean
   mixBlendMode: string
   zIndex: number
-  fontOptions: Array<{ label: string; value: string }>
+  fontOptions: FontOption[]
   selectionCount: number
+  isTextLayer?: boolean
   docked?: boolean
   canUndo?: boolean
   onWalk?: (direction: WalkDirection) => void
@@ -236,7 +238,12 @@ function pickAccent(palette: string[]): string {
    verbatim to froam.generated.css, so anything valid here ships. Looks are
    accent-aware: `accent` is the site's own picked accent, and color-mix
    derives shades from it so recipes fit whatever palette they land on. */
-const LOOK_GROUPS = ['Depth', 'Surface', 'Texture', 'Shape', 'Line', 'Accent', 'Type', 'Effect', 'Bold', 'Reset'] as const
+/* Ordered by how often a designer reaches for them, not alphabetically.
+   'Pattern' was called Texture but holds Stripes/Dots/Grid/Blueprint/Halftone,
+   which are patterns; 'Vibe' was called Bold but holds Bauhaus/Y2K/Retro/Comic,
+   which are eras rather than weights. The old 'Effect' bucket was four
+   unrelated recipes, so each moved to the group its CSS actually belongs to. */
+const LOOK_GROUPS = ['Accent', 'Surface', 'Depth', 'Shape', 'Line', 'Type', 'Pattern', 'Vibe', 'Reset'] as const
 type LookGroup = (typeof LOOK_GROUPS)[number]
 
 type Look = {
@@ -562,31 +569,31 @@ const LOOKS: Look[] = [
     patch: { opacity: 0.6 },
   },
 
-  /* ─── Bold — brutalist & sticker ─── */
+  /* ─── Vibe — era & attitude (brutalist, sticker, Y2K, Bauhaus) ─── */
   {
     name: 'Sticker',
-    group: 'Bold',
+    group: 'Vibe',
     swatch: { background: '#f472b6', border: '2px solid #fff', boxShadow: '0 3px 7px rgba(0,0,0,0.4)', borderRadius: 6 },
     styles: () => ({ background: '#ffffff', color: '#0b0f14', border: '4px solid #ffffff', boxShadow: '0 6px 18px rgba(0, 0, 0, 0.28)', borderRadius: '16px' }),
     patch: corners(16),
   },
   {
     name: 'Brutal',
-    group: 'Bold',
+    group: 'Vibe',
     swatch: { background: '#fde047', border: '1.5px solid #000', boxShadow: '3px 3px 0 #000', borderRadius: 0 },
     styles: () => ({ background: '#ffffff', color: '#0b0f14', border: '2px solid #0b0f14', boxShadow: '6px 6px 0 #0b0f14', borderRadius: '0px', fontWeight: '700' }),
     patch: { ...corners(0), fontWeight: '700' },
   },
   {
     name: 'Comic',
-    group: 'Bold',
+    group: 'Vibe',
     swatch: { background: '#fff', border: '1.5px solid #000', boxShadow: '2.5px 2.5px 0 rgba(0,0,0,0.9)', borderRadius: 5 },
     styles: () => ({ background: '#ffffff', color: '#0b0f14', border: '3px solid #0b0f14', boxShadow: '5px 5px 0 rgba(11, 15, 20, 0.9)', borderRadius: '14px', fontWeight: '700' }),
     patch: { ...corners(14), fontWeight: '700' },
   },
   {
     name: 'Retro',
-    group: 'Bold',
+    group: 'Vibe',
     swatch: { background: '#fff', border: '1.5px solid #0b0f14', boxShadow: '3px 3px 0 #14b8a6', borderRadius: 4 },
     styles: (accent) => ({ background: '#ffffff', color: '#0b0f14', border: '2px solid #0b0f14', boxShadow: `5px 5px 0 ${accent}`, borderRadius: '10px' }),
     patch: corners(10),
@@ -630,28 +637,28 @@ const LOOKS: Look[] = [
   // Texture
   {
     name: 'Stripes',
-    group: 'Texture',
+    group: 'Pattern',
     swatch: { background: 'repeating-linear-gradient(45deg,rgba(20,184,166,0.4) 0 3px,#fff 3px 6px)', borderRadius: 6 },
     styles: (accent) => ({ background: `repeating-linear-gradient(45deg, color-mix(in srgb, ${accent} 12%, transparent) 0 10px, transparent 10px 20px), #ffffff`, color: '#0b0f14', borderRadius: '12px' }),
     patch: corners(12),
   },
   {
     name: 'Dots',
-    group: 'Texture',
+    group: 'Pattern',
     swatch: { background: 'radial-gradient(rgba(20,184,166,0.6) 1px,#fff 1.1px) 0 0/5px 5px', borderRadius: 6 },
     styles: (accent) => ({ background: `radial-gradient(color-mix(in srgb, ${accent} 26%, transparent) 1.5px, transparent 1.6px) 0 0 / 12px 12px, #ffffff`, color: '#0b0f14', borderRadius: '12px' }),
     patch: corners(12),
   },
   {
     name: 'Grid',
-    group: 'Texture',
+    group: 'Pattern',
     swatch: { background: 'linear-gradient(rgba(20,184,166,0.5) 1px,transparent 1px) 0 0/6px 6px,linear-gradient(90deg,rgba(20,184,166,0.5) 1px,transparent 1px) 0 0/6px 6px,#0b1220', borderRadius: 6 },
     styles: (accent) => ({ background: `linear-gradient(color-mix(in srgb, ${accent} 20%, transparent) 1px, transparent 1px) 0 0 / 16px 16px, linear-gradient(90deg, color-mix(in srgb, ${accent} 20%, transparent) 1px, transparent 1px) 0 0 / 16px 16px, #0b1220`, color: '#e2e8f0', borderRadius: '12px' }),
     patch: corners(12),
   },
   {
     name: 'Spotlight',
-    group: 'Texture',
+    group: 'Pattern',
     swatch: { background: 'radial-gradient(120% 90% at 50% -10%,rgba(20,184,166,0.6),transparent 62%),#0b1220', borderRadius: 6 },
     styles: (accent) => ({ background: `radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, ${accent} 34%, transparent), transparent 62%), #0b1220`, color: '#f8fafc', borderRadius: '16px' }),
     patch: corners(16),
@@ -779,20 +786,20 @@ const LOOKS: Look[] = [
   // Effect
   {
     name: 'Hollow',
-    group: 'Effect',
+    group: 'Type',
     swatch: { background: 'transparent', border: '1.5px solid #14b8a6', borderRadius: 3 },
     styles: (accent) => ({ color: accent, WebkitTextStrokeWidth: '1.5px', WebkitTextStrokeColor: accent, WebkitTextFillColor: 'transparent', fontWeight: '800' }),
     patch: { fontWeight: '800' },
   },
   {
     name: 'Invert',
-    group: 'Effect',
+    group: 'Accent',
     swatch: { background: 'linear-gradient(90deg,#111 50%,#eee 50%)', borderRadius: 4 },
     styles: () => ({ mixBlendMode: 'difference', color: '#ffffff' }),
   },
   {
     name: 'Echo',
-    group: 'Effect',
+    group: 'Type',
     swatch: { background: '#e2e8f0', boxShadow: '3px 3px 0 #14b8a6', borderRadius: 3 },
     styles: (accent) => ({ color: '#0b0f14', textShadow: `3px 3px 0 ${accent}`, fontWeight: '700' }),
     patch: { fontWeight: '700' },
@@ -801,7 +808,7 @@ const LOOKS: Look[] = [
   // Bold
   {
     name: 'Punch',
-    group: 'Bold',
+    group: 'Vibe',
     swatch: { background: '#14b8a6', boxShadow: '0 4px 0 #0a5c50', borderRadius: 4 },
     styles: (accent) => ({
       background: accent,
@@ -817,7 +824,7 @@ const LOOKS: Look[] = [
   },
   {
     name: 'Frame',
-    group: 'Bold',
+    group: 'Vibe',
     swatch: { background: '#fff', boxShadow: 'inset 0 0 0 3px #0b0f14', borderRadius: 3 },
     styles: () => ({ background: '#ffffff', color: '#0b0f14', border: 'none', boxShadow: 'inset 0 0 0 3px #0b0f14', borderRadius: '4px' }),
     patch: corners(4),
@@ -849,13 +856,13 @@ const LOOKS: Look[] = [
     patch: corners(16),
   },
   {
-    name: 'Blueprint', group: 'Texture',
+    name: 'Blueprint', group: 'Pattern',
     swatch: { background: 'linear-gradient(#38bdf822 1px,transparent 1px),linear-gradient(90deg,#38bdf822 1px,transparent 1px),#082f49', backgroundSize: '6px 6px', borderRadius: 4 },
     styles: (accent) => ({ backgroundColor: '#082f49', backgroundImage: `linear-gradient(color-mix(in srgb, ${accent} 22%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, ${accent} 22%, transparent) 1px, transparent 1px)`, backgroundSize: '24px 24px', color: '#e0f2fe', border: `1px solid color-mix(in srgb, ${accent} 48%, transparent)`, borderRadius: '8px' }),
     patch: corners(8),
   },
   {
-    name: 'Halftone', group: 'Texture',
+    name: 'Halftone', group: 'Pattern',
     swatch: { background: 'radial-gradient(circle,#0f172a 1px,transparent 1.5px),#f8fafc', backgroundSize: '5px 5px', borderRadius: 4 },
     styles: (accent) => ({ backgroundColor: '#fff', backgroundImage: `radial-gradient(circle, color-mix(in srgb, ${accent} 72%, #0f172a) 1.2px, transparent 1.5px)`, backgroundSize: '9px 9px', color: '#0f172a', borderRadius: '12px' }),
     patch: corners(12),
@@ -902,22 +909,131 @@ const LOOKS: Look[] = [
     patch: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
   },
   {
-    name: 'Soft focus', group: 'Effect',
+    name: 'Soft focus', group: 'Surface',
     swatch: { background: '#8b5cf6', filter: 'blur(.4px)', borderRadius: 8 },
     styles: (accent) => ({ background: `color-mix(in srgb, ${accent} 24%, transparent)`, border: `1px solid color-mix(in srgb, ${accent} 38%, transparent)`, boxShadow: `0 24px 70px -28px ${accent}`, backdropFilter: 'blur(18px) saturate(140%)', borderRadius: '24px' }),
     patch: corners(24),
   },
   {
-    name: 'Bauhaus', group: 'Bold',
+    name: 'Bauhaus', group: 'Vibe',
     swatch: { background: 'linear-gradient(90deg,#ef4444 33%,#facc15 33% 66%,#2563eb 66%)', border: '2px solid #111827', borderRadius: 2 },
     styles: () => ({ background: 'linear-gradient(110deg, #ef4444 0 32%, #facc15 32% 66%, #2563eb 66%)', color: '#0b0f14', border: '3px solid #0b0f14', boxShadow: '7px 7px 0 #0b0f14', fontWeight: '900', borderRadius: '2px' }),
     patch: { ...corners(2), fontWeight: '900' },
   },
   {
-    name: 'Y2K', group: 'Bold',
+    name: 'Y2K', group: 'Vibe',
     swatch: { background: 'linear-gradient(135deg,#cffafe,#e879f9)', boxShadow: '0 0 0 2px #fff,0 0 0 3px #7c3aed', borderRadius: 10 },
     styles: () => ({ background: 'linear-gradient(135deg, #cffafe, #f0abfc 55%, #c4b5fd)', color: '#3b0764', border: '2px solid #ffffff', boxShadow: '0 0 0 2px #7c3aed, 0 12px 30px -12px #7c3aed', fontWeight: '800', borderRadius: '22px' }),
     patch: { ...corners(22), fontWeight: '800' },
+  },
+
+  /* Outcome kit — common product and conversion patterns, ready in one tap. */
+  {
+    name: 'Hero spotlight', group: 'Depth',
+    swatch: { background: 'radial-gradient(circle at 50% 0,#7c3aed,#111827 72%)', boxShadow: '0 7px 16px #7c3aed66', borderRadius: 9 },
+    styles: (accent) => ({ background: `radial-gradient(circle at 50% 0%, color-mix(in srgb, ${accent} 42%, #1e293b), #070b12 72%)`, color: '#ffffff', border: `1px solid color-mix(in srgb, ${accent} 34%, transparent)`, boxShadow: `0 36px 100px -42px ${accent}`, borderRadius: '28px', padding: 'clamp(28px, 6vw, 80px)' }),
+    patch: corners(28),
+  },
+  {
+    name: 'Pricing card', group: 'Surface',
+    swatch: { background: '#fff', border: '2px solid #8b5cf6', boxShadow: '0 6px 14px #0f172a33', borderRadius: 9 },
+    styles: (accent) => ({ background: '#ffffff', color: '#0f172a', border: `2px solid ${accent}`, boxShadow: `0 24px 60px -30px color-mix(in srgb, ${accent} 55%, #0f172a)`, borderRadius: '22px', padding: '28px' }),
+    patch: corners(22),
+  },
+  {
+    name: 'Feature tile', group: 'Surface',
+    swatch: { background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 8 },
+    styles: (accent) => ({ background: `linear-gradient(145deg, #ffffff, color-mix(in srgb, ${accent} 7%, #f8fafc))`, color: '#172033', border: `1px solid color-mix(in srgb, ${accent} 18%, #dbe2ea)`, boxShadow: '0 14px 34px -28px rgba(15,23,42,.52)', borderRadius: '18px', padding: '22px' }),
+    patch: corners(18),
+  },
+  {
+    name: 'Testimonial', group: 'Surface',
+    swatch: { background: '#fffbeb', borderLeft: '4px solid #f59e0b', borderRadius: 5 },
+    styles: (accent) => ({ background: `color-mix(in srgb, ${accent} 8%, #fffdf7)`, color: '#292524', border: 'none', borderLeft: `5px solid ${accent}`, boxShadow: '0 18px 44px -34px rgba(41,37,36,.62)', borderRadius: '6px 18px 18px 6px', padding: '22px 24px' }),
+  },
+  {
+    name: 'Founder note', group: 'Surface',
+    swatch: { background: '#fef3c7', border: '1px solid #d9770644', transform: 'rotate(-1deg)', borderRadius: 3 },
+    styles: (accent) => ({ background: `color-mix(in srgb, ${accent} 10%, #fffbeb)`, color: '#422006', border: `1px solid color-mix(in srgb, ${accent} 28%, #f4d48a)`, boxShadow: '0 12px 24px -20px rgba(66,32,6,.5)', transform: 'rotate(-0.6deg)', borderRadius: '8px', padding: '20px 22px', fontFamily: 'Georgia, "Times New Roman", serif' }),
+    patch: { ...corners(8), fontFamily: 'Georgia, "Times New Roman", serif' },
+  },
+  {
+    name: 'App chrome', group: 'Surface',
+    swatch: { background: '#111827', border: '1px solid #334155', boxShadow: 'inset 0 1px #fff2', borderRadius: 7 },
+    styles: (accent) => ({ background: 'linear-gradient(180deg, #1b2230, #0d121b)', color: '#f8fafc', border: `1px solid color-mix(in srgb, ${accent} 20%, #334155)`, boxShadow: 'inset 0 1px rgba(255,255,255,.08), 0 18px 44px -32px #000', borderRadius: '14px', padding: '10px 14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Command bar', group: 'Surface',
+    swatch: { background: '#f8fafc', border: '1px solid #94a3b8', boxShadow: '0 4px 10px #0f172a22', borderRadius: 6 },
+    styles: (accent) => ({ background: '#ffffff', color: '#0f172a', border: `1px solid color-mix(in srgb, ${accent} 28%, #cbd5e1)`, boxShadow: '0 12px 32px -24px rgba(15,23,42,.65)', borderRadius: '14px', padding: '12px 16px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }),
+    patch: { ...corners(14), fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+  },
+  {
+    name: 'Checkout focus', group: 'Line',
+    swatch: { background: '#fff', border: '2px solid #22c55e', boxShadow: '0 0 0 3px #22c55e33', borderRadius: 7 },
+    styles: (accent) => ({ background: '#ffffff', color: '#0f172a', border: `2px solid ${accent}`, boxShadow: `0 0 0 4px color-mix(in srgb, ${accent} 16%, transparent), 0 18px 46px -32px ${accent}`, borderRadius: '16px' }),
+    patch: corners(16),
+  },
+  {
+    name: 'Keyboard key', group: 'Line',
+    swatch: { background: '#f8fafc', border: '1px solid #94a3b8', boxShadow: '0 2px 0 #64748b', borderRadius: 4 },
+    styles: () => ({ background: 'linear-gradient(#ffffff, #e9eef4)', color: '#172033', border: '1px solid #a8b3c2', borderBottomWidth: '3px', boxShadow: 'inset 0 1px #ffffff', borderRadius: '7px', padding: '.22em .55em', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: '700' }),
+    patch: { ...corners(7), fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: '700' },
+  },
+  {
+    name: 'Launch CTA', group: 'Accent',
+    swatch: { background: 'linear-gradient(135deg,#8b5cf6,#2563eb)', boxShadow: '0 5px 12px #6366f166', borderRadius: 9 },
+    styles: (accent) => ({ background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 58%, #2563eb))`, color: '#ffffff', border: '1px solid rgba(255,255,255,.2)', boxShadow: `0 18px 38px -18px ${accent}`, borderRadius: '999px', padding: '.78em 1.35em', fontWeight: '800' }),
+    patch: { ...corners(999), fontWeight: '800' },
+  },
+  {
+    name: 'Soft CTA', group: 'Accent',
+    swatch: { background: '#ede9fe', border: '1px solid #8b5cf688', borderRadius: 9 },
+    styles: (accent) => ({ background: `color-mix(in srgb, ${accent} 13%, #ffffff)`, color: `color-mix(in srgb, ${accent} 72%, #111827)`, border: `1px solid color-mix(in srgb, ${accent} 42%, transparent)`, boxShadow: 'none', borderRadius: '999px', padding: '.72em 1.2em', fontWeight: '750' }),
+    patch: { ...corners(999), fontWeight: '750' },
+  },
+  {
+    name: 'Trust badge', group: 'Accent',
+    swatch: { background: '#ecfdf5', color: '#047857', border: '1px solid #10b98155', borderRadius: 9 },
+    styles: (accent) => ({ background: `color-mix(in srgb, ${accent} 9%, #f8fffc)`, color: `color-mix(in srgb, ${accent} 70%, #064e3b)`, border: `1px solid color-mix(in srgb, ${accent} 32%, transparent)`, borderRadius: '999px', padding: '.38em .72em', fontWeight: '700', letterSpacing: '.01em' }),
+    patch: { ...corners(999), fontWeight: '700' },
+  },
+  {
+    name: 'Conversion strip', group: 'Accent',
+    swatch: { background: 'linear-gradient(90deg,#0f172a,#7c3aed)', borderRadius: 4 },
+    styles: (accent) => ({ background: `linear-gradient(100deg, #0b1020, color-mix(in srgb, ${accent} 58%, #111827))`, color: '#ffffff', border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`, boxShadow: `0 20px 54px -34px ${accent}`, borderRadius: '18px', padding: '18px 22px', fontWeight: '700' }),
+    patch: { ...corners(18), fontWeight: '700' },
+  },
+  {
+    name: 'Success state', group: 'Accent',
+    swatch: { background: '#ecfdf5', color: '#065f46', border: '1px solid #34d399', borderRadius: 6 },
+    styles: () => ({ background: '#ecfdf5', color: '#065f46', border: '1px solid #6ee7b7', boxShadow: 'inset 4px 0 #10b981', borderRadius: '12px', padding: '12px 14px', fontWeight: '650' }),
+    patch: { ...corners(12), fontWeight: '650' },
+  },
+  {
+    name: 'Warning state', group: 'Accent',
+    swatch: { background: '#fffbeb', color: '#92400e', border: '1px solid #fbbf24', borderRadius: 6 },
+    styles: () => ({ background: '#fffbeb', color: '#92400e', border: '1px solid #fcd34d', boxShadow: 'inset 4px 0 #f59e0b', borderRadius: '12px', padding: '12px 14px', fontWeight: '650' }),
+    patch: { ...corners(12), fontWeight: '650' },
+  },
+  {
+    name: 'Section label', group: 'Type',
+    swatch: { background: '#eef2ff', color: '#4338ca', borderRadius: 8 },
+    styles: (accent) => ({ color: accent, textTransform: 'uppercase', letterSpacing: '.14em', fontSize: '.76em', lineHeight: '1.2', fontWeight: '800' }),
+    patch: { fontWeight: '800' },
+  },
+  {
+    name: 'Metric', group: 'Type',
+    swatch: { background: '#0f172a', color: '#f8fafc', borderBottom: '3px solid #22c55e' },
+    styles: (accent) => ({ color: '#0f172a', fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif', fontSize: 'clamp(2rem, 6vw, 4.5rem)', fontWeight: '900', letterSpacing: '-.055em', lineHeight: '.9', textShadow: `0 .06em color-mix(in srgb, ${accent} 22%, transparent)` }),
+    patch: { fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif', fontWeight: '900' },
+  },
+  {
+    name: 'Pull quote', group: 'Type',
+    swatch: { background: '#fff', borderLeft: '4px solid #111827' },
+    styles: (accent) => ({ color: '#172033', fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '1.25em', fontStyle: 'italic', lineHeight: '1.5', borderLeft: `4px solid ${accent}`, paddingLeft: '1em' }),
+    patch: { fontFamily: 'Georgia, "Times New Roman", serif' },
   },
 
   /* ─── Reset ─── */
@@ -945,6 +1061,135 @@ const LOOKS: Look[] = [
     }),
   },
 ]
+
+/* What each recipe actually does, in a designer's terms. A swatch the size of
+   a thumbnail and a word like "Echo" or "Punch" don't tell you enough to pick
+   with; this is what the card's tooltip says. Kept beside LOOKS rather than
+   inside it so the recipes stay readable — `npm test` fails if the two drift. */
+export const LOOK_NOTES: Record<string, string> = {
+  /* Depth */
+  Lift: 'A modest drop shadow — the default way to raise a card off the page.',
+  Float: 'Tall and soft, so it reads as further off the page than Lift.',
+  Soft: 'Neumorphic: light from the top left, shadow bottom right. Needs a light background.',
+  Inset: 'Shadow on the inside, so the surface reads as pressed in.',
+  Ring: 'A tight accent ring. Good for a selected or focused state.',
+  Glow: 'A soft accent halo. Earns its keep on dark backgrounds.',
+  Layered: 'Five stacked shadows for a smooth, physical falloff.',
+  Halo: 'A wide, faint accent ring — softer than Ring.',
+  Ambient: 'Accent-tinted glow plus a dark shadow, so it lifts without floating away.',
+  Stack: 'A hard accent shadow offset down-right. Card sitting on card.',
+  'Hero spotlight': 'Accent light from above fading to near-black. Built for full-width heroes.',
+
+  /* Surface */
+  Glass: 'Frosted dark glass. Needs something behind it to blur.',
+  Frost: 'Frosted light glass — the pale counterpart to Glass.',
+  Ink: 'Near-black panel, white text. Maximum contrast.',
+  Paper: 'Warm off-white with a hairline edge. Print-like.',
+  Slate: 'Cool dark grey panel. Quieter than Ink.',
+  Tint: 'A wash of the accent at low opacity, with text to match.',
+  Sheen: 'Dark panel with light gathering along the top edge.',
+  Cream: 'Warm cream with rust text. Editorial and calm.',
+  Clay: 'Thick pastel accent with soft inner light. Claymorphism.',
+  Carbon: 'Dark graphite gradient with an accent hairline.',
+  'Soft focus': 'Accent-tinted glass under a wide glow.',
+  'Pricing card': 'White card, accent border, deep soft shadow. For the tier you want chosen.',
+  'Feature tile': 'Barely-tinted white with a soft accent edge. Holds up in a grid.',
+  Testimonial: 'Warm paper with a thick accent bar down the left.',
+  'Founder note': 'Warm amber panel. Personal, hand-written register.',
+  'App chrome': 'Dark product shell with an accent hairline.',
+  'Command bar': 'White bar, accent edge, floating shadow. Palette or search.',
+
+  /* Shape */
+  Pill: 'Fully round ends with roomy padding. The standard button shape.',
+  Slab: 'Square corners — removes all rounding.',
+  Squircle: 'Generous 28px rounding. Soft without going full pill.',
+  Blob: 'Irregular organic rounding. One per page, at most.',
+  Bevel: 'Two opposite corners cut flat.',
+  Tag: 'Pointed right edge, like a luggage tag.',
+  Arch: 'Rounded top, flat bottom. Doorway shape.',
+  Leaf: 'Alternating sharp and round corners.',
+  Chamfer: 'All four corners cut flat. Machined.',
+  Ticket: 'Notched at both sides, like a torn stub.',
+  Chevron: 'Point right, notch left. Process steps.',
+  Diamond: 'Rotated square — needs square content to survive.',
+  Notch: 'Two corners cut at 18px. A bigger bite than Bevel.',
+
+  /* Line */
+  Outline: 'Transparent with a border in the current text colour.',
+  Hairline: 'The thinnest visible border. Separates without shouting.',
+  Dashed: 'Dashed accent border. Reads as a placeholder or drop zone.',
+  Double: 'Two parallel rules. Formal, certificate-like.',
+  Underline: 'A rule under the text only.',
+  Edge: 'The border itself is a gradient.',
+  Dotted: 'Round dotted border. Lighter than Dashed.',
+  Quote: 'Thick rule down the left with padding. Blockquote.',
+  Rule: 'A rule across the top. Section divider.',
+  'Gradient edge': 'Gradient border over a dark fill.',
+  'Checkout focus': 'Accent border plus a soft focus ring. Payment fields.',
+  'Keyboard key': 'Light gradient with a thick bottom border. Keycap.',
+
+  /* Accent */
+  Pop: 'Solid accent fill, white bold text. The primary button.',
+  Gradient: 'Accent into a darker shade of itself. Safe on any palette.',
+  Sunset: 'Orange into pink. Warm and loud.',
+  Aurora: 'Green through blue to violet. Cool and synthetic.',
+  Ocean: 'Sky blue into deep blue.',
+  Candy: 'Pink into lilac. Soft and sweet.',
+  Mesh: 'Overlapping colour blooms. A modern hero background.',
+  Conic: 'The full spectrum sweeping around. Very loud.',
+  Duotone: 'A hard split between two shades of the accent.',
+  Gold: 'Yellow into amber with dark text. Premium tier.',
+  Fire: 'Orange through red. Urgent.',
+  Invert: 'Blends against whatever sits behind it, flipping over light and dark.',
+  Lagoon: 'The accent pushed toward teal and deep green.',
+  Citrus: 'Lime into yellow with dark text. Fresh.',
+  'Rose gold': 'Blush through coral into violet.',
+  'Launch CTA': 'Accent into blue with a lit edge. The one button on the page.',
+  'Soft CTA': 'Pale accent wash with accent text. The secondary action.',
+  'Trust badge': 'Faint green-accent chip. Guarantees and reassurance.',
+  'Conversion strip': 'Dark navy into accent. Full-width banner.',
+  'Success state': 'Green panel with a bar down the left. Confirmation.',
+  'Warning state': 'Amber panel with a bar down the left. Caution.',
+
+  /* Type */
+  'Grad Text': 'The gradient runs through the letterforms, not behind them.',
+  Eyebrow: 'Small uppercase accent text, widely tracked. Sits above a heading.',
+  Display: 'Heavy weight, tight tracking, tight leading. Headline setting.',
+  Marker: 'Highlighter pen behind the text.',
+  Quiet: 'Dropped to 60% opacity. Secondary information.',
+  Serif: 'Switch to a serif face. Slower, more considered.',
+  Mono: 'Switch to monospace. Reads technical.',
+  Neon: 'Accent text under a double glow. Dark backgrounds only.',
+  Emboss: 'Light above, shadow below — pressed into the surface.',
+  Hollow: 'Outlined letterforms with no fill.',
+  Echo: 'A hard accent shadow offset behind the letters.',
+  Editorial: 'Heavy serif, very tight, with a rule beneath. Magazine headline.',
+  Technical: 'Uppercase mono in the accent. Spec-sheet label.',
+  'Section label': 'Small, heavy, uppercase accent. Names a section.',
+  Metric: 'Very large, very heavy, fluid size. For one big number.',
+  'Pull quote': 'Large italic serif with a rule. A quotation lifted out of the text.',
+
+  /* Pattern */
+  Stripes: 'Accent stripes at 45° on white.',
+  Dots: 'A fine dot grid on white.',
+  Grid: 'Graph-paper ruling in the accent.',
+  Spotlight: 'A pool of accent light from above on near-black.',
+  Blueprint: 'Deep navy with accent ruling. Technical drawing.',
+  Halftone: 'Print dot screen on white.',
+
+  /* Vibe */
+  Sticker: 'White border and a soft shadow, like a die-cut sticker.',
+  Brutal: 'Hard black border, hard offset shadow, square corners.',
+  Comic: 'Thick outline and an offset shadow. Panel-art energy.',
+  Retro: 'Black outline with an accent-coloured offset shadow.',
+  Punch: 'Solid accent, uppercase, heavy. Shouts.',
+  Frame: 'A border drawn inside the edge rather than on it.',
+  Bauhaus: 'Hard red, yellow and blue bands under a black outline.',
+  Y2K: 'Iridescent cyan-pink-lilac with a white edge.',
+
+  /* Reset */
+  'Reset look': 'Strips every look back to nothing.',
+}
 
 function NumericField({
   label,
@@ -1018,6 +1263,7 @@ export default function FroamFloatingBar({
   zIndex,
   fontOptions,
   selectionCount,
+  isTextLayer = false,
   docked = false,
   canUndo = false,
   onWalk,
@@ -1185,7 +1431,7 @@ export default function FroamFloatingBar({
     const shouldOverrideText = overrides.overrideText ?? overrideLookText
     const shouldOverrideRadius = overrides.overrideRadius ?? overrideLookRadius
     const styles = { ...look.styles(accent) }
-    const patch = { ...(look.patch ?? {}) }
+    const patch = isTextLayer ? {} : { ...(look.patch ?? {}) }
     if (shouldOverrideFill && look.group !== 'Reset') {
       styles.background = fill
       styles.backgroundImage = 'none'
@@ -1194,7 +1440,7 @@ export default function FroamFloatingBar({
       styles.color = text
       if ('WebkitTextFillColor' in styles) styles.WebkitTextFillColor = text
     }
-    if (shouldOverrideRadius && look.group !== 'Reset') {
+    if (shouldOverrideRadius && look.group !== 'Reset' && !isTextLayer) {
       styles.borderRadius = `${nextRadius}px`
       Object.assign(patch, corners(nextRadius))
     }
@@ -1213,8 +1459,10 @@ export default function FroamFloatingBar({
   const selectedLook = LOOKS.find((look) => look.name === selectedLookName) ?? LOOKS[0]
   const visibleLooks = LOOKS.filter((look) => {
     const query = lookSearch.trim().toLowerCase()
+    // Search the description too, so "shadow" finds the shadows and
+    // "uppercase" finds Eyebrow — the names alone are not searchable words.
     return (lookGroup === 'All' || look.group === lookGroup)
-      && (!query || `${look.name} ${look.group}`.toLowerCase().includes(query))
+      && (!query || `${look.name} ${look.group} ${LOOK_NOTES[look.name] ?? ''}`.toLowerCase().includes(query))
   })
 
   return (
@@ -1261,7 +1509,13 @@ export default function FroamFloatingBar({
             'Changed font family',
           )}
         >
-          {fontOptions.map((font) => <option key={font.value} value={font.value}>{font.label}</option>)}
+          {/* Grouped by the job the face does — forty-five names in a flat
+              list is a scroll, not a choice. */}
+          {groupFontOptions(fontOptions).map(([role, options]) => (
+            <optgroup key={role} label={FONT_GROUP_LABELS[role]}>
+              {options.map((font) => <option key={font.value} value={font.value}>{font.label}</option>)}
+            </optgroup>
+          ))}
         </select>
 
         <div className="froam-floating-bar__stepper froam-floating-bar__stepper--scrub" title="Font size — drag the number to scrub" {...fontScrub} style={{ touchAction: 'none' }}>
@@ -1359,7 +1613,7 @@ export default function FroamFloatingBar({
           <Type size={11} />
           <input type="color" className="froam-floating-bar__color-input" value={color} onChange={(event) => onAction('color', event.target.value)} />
         </label>
-        <label className="froam-floating-bar__color-btn" title="Background" style={{ '--froam-swatch': background } as CSSProperties}>
+        <label className="froam-floating-bar__color-btn" title={isTextLayer ? 'Text fill' : 'Background'} style={{ '--froam-swatch': isTextLayer ? color : background } as CSSProperties}>
           <Palette size={11} />
           <input type="color" className="froam-floating-bar__color-input" value={background} onChange={(event) => onAction('bg-color', event.target.value)} />
         </label>
@@ -1427,7 +1681,7 @@ export default function FroamFloatingBar({
           <div className="froam-floating-bar__pop-head">
             <span>Page palette</span>
             <div className="froam-floating-bar__pop-toggle" role="group" aria-label="Apply as">
-              <button type="button" className={paletteMode === 'fill' ? 'is-active' : ''} onClick={() => setPaletteMode('fill')}>Fill</button>
+              <button type="button" className={paletteMode === 'fill' ? 'is-active' : ''} onClick={() => setPaletteMode('fill')}>{isTextLayer ? 'Glyph' : 'Fill'}</button>
               <button type="button" className={paletteMode === 'text' ? 'is-active' : ''} onClick={() => setPaletteMode('text')}>Text</button>
             </div>
           </div>
@@ -1462,7 +1716,7 @@ export default function FroamFloatingBar({
           style={lookDockStyle}
         >
           <div className="froam-floating-bar__pop-head">
-            <span>Look Studio <small>{LOOKS.length} recipes · live preview</small></span>
+            <span>Look Studio <small>{LOOKS.length} {isTextLayer ? 'text-safe ' : ''}recipes · live preview</small></span>
             <div className="froam-floating-bar__look-window-actions">
               <button type="button" onClick={() => setLookDockSide((side) => side === 'left' ? 'right' : 'left')} title="Move Look Studio to the other side">
                 {lookDockSide === 'left' ? <ChevronRight size={12} /> : <ChevronLeft size={12} />} Move
@@ -1482,7 +1736,7 @@ export default function FroamFloatingBar({
           <div className="froam-floating-bar__looks-scroll">
             <div className="froam-floating-bar__looks">
               {visibleLooks.map((look) => (
-                <button key={look.name} type="button" className={selectedLookName === look.name ? 'is-active' : ''} onClick={() => applyLook(look)} title={`${look.group} · ${look.name}`}>
+                <button key={look.name} type="button" className={selectedLookName === look.name ? 'is-active' : ''} onClick={() => applyLook(look)} title={LOOK_NOTES[look.name] ?? `${look.group} · ${look.name}`}>
                   <i style={look.swatch} />
                   <span>{look.name}</span>
                   <small>{look.group}</small>
@@ -1498,16 +1752,16 @@ export default function FroamFloatingBar({
             </div>
             <div className="froam-floating-bar__look-colors">
               <label title="Accent used by accent-aware looks"><span>Accent</span><input type="color" value={lookAccent} onChange={(event) => { const next = event.target.value; setLookAccent(next); applyLook(selectedLook, { accent: next }) }} /></label>
-              <label className={overrideLookFill ? 'is-enabled' : ''}><input type="checkbox" checked={overrideLookFill} onChange={(event) => { const next = event.target.checked; setOverrideLookFill(next); applyLook(selectedLook, { overrideFill: next }) }} /><span>Fill</span><input type="color" value={lookFill} onChange={(event) => { const next = event.target.value; setLookFill(next); if (overrideLookFill) applyLook(selectedLook, { fill: next }) }} disabled={!overrideLookFill} /></label>
+              <label className={overrideLookFill ? 'is-enabled' : ''}><input type="checkbox" checked={overrideLookFill} onChange={(event) => { const next = event.target.checked; setOverrideLookFill(next); applyLook(selectedLook, { overrideFill: next }) }} /><span>{isTextLayer ? 'Glyph' : 'Fill'}</span><input type="color" value={lookFill} onChange={(event) => { const next = event.target.value; setLookFill(next); if (overrideLookFill) applyLook(selectedLook, { fill: next }) }} disabled={!overrideLookFill} /></label>
               <label className={overrideLookText ? 'is-enabled' : ''}><input type="checkbox" checked={overrideLookText} onChange={(event) => { const next = event.target.checked; setOverrideLookText(next); applyLook(selectedLook, { overrideText: next }) }} /><span>Text</span><input type="color" value={lookText} onChange={(event) => { const next = event.target.value; setLookText(next); if (overrideLookText) applyLook(selectedLook, { text: next }) }} disabled={!overrideLookText} /></label>
             </div>
-            <label className={`froam-floating-bar__look-radius ${overrideLookRadius ? 'is-enabled' : ''}`}>
+            {!isTextLayer && <label className={`froam-floating-bar__look-radius ${overrideLookRadius ? 'is-enabled' : ''}`}>
               <input type="checkbox" checked={overrideLookRadius} onChange={(event) => { const next = event.target.checked; setOverrideLookRadius(next); applyLook(selectedLook, { overrideRadius: next }) }} />
               <span>Corner radius</span>
               <input type="range" min="0" max="64" value={lookRadius} onChange={(event) => { const next = Number(event.target.value); setLookRadius(next); if (overrideLookRadius) applyLook(selectedLook, { radius: next }) }} disabled={!overrideLookRadius} />
               <output>{lookRadius}px</output>
-            </label>
-            <p>Every recipe and design-variable change previews directly on the selected element. Keep this dock open while you inspect the page.</p>
+            </label>}
+            <p>{isTextLayer ? 'Box effects become glyph effects: fill, gradient, stroke, and text shadow stay on the words.' : 'Every recipe and design-variable change previews directly on the selected element.'} Keep this dock open while you inspect the page.</p>
             {onSaveLook && <button type="button" className="froam-floating-bar__look-save" onClick={() => onSaveLook({ name: selectedLook.name, states: { ...lookStateDrafts, [lookState]: customizedLook(selectedLook).styles } })}>Save as reusable style</button>}
           </div>
         </div>,

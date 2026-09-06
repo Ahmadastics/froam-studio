@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { Check, ChevronDown, RotateCw, Sparkles, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-const BUSY_COPY = { preparing: 'Froam is understanding...', requesting: 'Froam is understanding...', retrying: 'Froam is understanding another direction...', 'plan-ready': 'Preparing experiment...', 'creating-prototype': 'Preparing experiment...', adopting: 'Applying...' };
+const BUSY_COPY = { preparing: 'Preparing Quick Edit...', requesting: 'Preparing Quick Edit...', retrying: 'Preparing another direction...', 'plan-ready': 'Preparing preview...', 'creating-prototype': 'Preparing preview...', adopting: 'Applying...' };
 function score(value) { return value === undefined ? 'Not measured' : value >= .85 ? 'Strong' : value >= .7 ? 'Good' : value >= .5 ? 'Moderate' : 'Limited'; }
 export default function FroamIntentResult(props) {
     const { state } = props;
@@ -27,7 +27,7 @@ export default function FroamIntentResult(props) {
     if (state.phase === 'idle')
         return null;
     if (state.phase === 'awaiting-consent')
-        return _jsxs("aside", { ref: surfaceRef, className: "froam-intent-result is-consent", "data-chef-editor-root": "true", role: "dialog", "aria-label": "Froam intelligence consent", children: [_jsxs("header", { children: [_jsx(Sparkles, { size: 14 }), _jsx("strong", { children: "Ask Froam" })] }), _jsx("p", { children: "Froam can use the configured intelligence provider to prepare this protected experiment." }), _jsx("small", { children: "It sends bounded interface observations, not source code, credentials, cookies or raw screenshots." }), _jsxs("div", { className: "froam-intent-result__actions", children: [_jsx("button", { type: "button", className: "is-primary", "data-froam-intent-primary": true, onClick: props.onAllow, children: "Allow" }), _jsx("button", { type: "button", onClick: props.onNotNow, children: "Not now" })] })] });
+        return _jsxs("aside", { ref: surfaceRef, className: "froam-intent-result is-consent", "data-chef-editor-root": "true", role: "dialog", "aria-label": "Froam intelligence consent", children: [_jsxs("header", { children: [_jsx(Sparkles, { size: 14 }), _jsx("strong", { children: "Connected Edit" })] }), _jsx("p", { children: "Froam can use the configured intelligence provider to prepare this protected experiment." }), _jsx("small", { children: "It sends bounded interface observations, not source code, credentials, cookies or raw screenshots." }), _jsxs("div", { className: "froam-intent-result__actions", children: [_jsx("button", { type: "button", className: "is-primary", "data-froam-intent-primary": true, onClick: props.onAllow, children: "Allow" }), _jsx("button", { type: "button", onClick: props.onNotNow, children: "Not now" })] })] });
     const busy = BUSY_COPY[state.phase];
     if (busy)
         return _jsxs("aside", { ref: surfaceRef, className: "froam-intent-result is-busy", "data-chef-editor-root": "true", role: "status", "aria-live": "polite", "aria-atomic": "true", children: [_jsx("span", { className: "froam-intent-result__pulse" }), _jsx("strong", { children: busy }), _jsx("button", { type: "button", onClick: props.onCancel, children: "Cancel" })] });

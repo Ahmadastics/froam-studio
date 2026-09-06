@@ -1,6 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { FONT_GROUP_LABELS, groupFontOptions } from './fontSources.js';
 import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, BringToFront, ChevronDown, ChevronLeft, ChevronRight, Combine, Contrast, Copy, CornerLeftUp, CornerRightDown, Eraser, Eye, EyeOff, Grid2X2, ImagePlus, Italic, Layers, LayoutTemplate, Maximize, Palette, SendToBack, Pipette, RectangleHorizontal, Rows3, Search, SlidersHorizontal, Sparkles, Strikethrough, Trash2, Type, Underline, Undo2, Ungroup, } from 'lucide-react';
 const VIEWPORT_GAP = 12;
 const TARGET_GAP = 12;
@@ -129,7 +130,12 @@ function pickAccent(palette) {
    verbatim to froam.generated.css, so anything valid here ships. Looks are
    accent-aware: `accent` is the site's own picked accent, and color-mix
    derives shades from it so recipes fit whatever palette they land on. */
-const LOOK_GROUPS = ['Depth', 'Surface', 'Texture', 'Shape', 'Line', 'Accent', 'Type', 'Effect', 'Bold', 'Reset'];
+/* Ordered by how often a designer reaches for them, not alphabetically.
+   'Pattern' was called Texture but holds Stripes/Dots/Grid/Blueprint/Halftone,
+   which are patterns; 'Vibe' was called Bold but holds Bauhaus/Y2K/Retro/Comic,
+   which are eras rather than weights. The old 'Effect' bucket was four
+   unrelated recipes, so each moved to the group its CSS actually belongs to. */
+const LOOK_GROUPS = ['Accent', 'Surface', 'Depth', 'Shape', 'Line', 'Type', 'Pattern', 'Vibe', 'Reset'];
 // Uniform corner-radius patch so the editor's own radius controls stay in sync.
 const corners = (n) => ({ borderRadiusTL: n, borderRadiusTR: n, borderRadiusBR: n, borderRadiusBL: n });
 const LOOKS = [
@@ -428,31 +434,31 @@ const LOOKS = [
         styles: () => ({ opacity: '0.6', fontWeight: '400' }),
         patch: { opacity: 0.6 },
     },
-    /* ─── Bold — brutalist & sticker ─── */
+    /* ─── Vibe — era & attitude (brutalist, sticker, Y2K, Bauhaus) ─── */
     {
         name: 'Sticker',
-        group: 'Bold',
+        group: 'Vibe',
         swatch: { background: '#f472b6', border: '2px solid #fff', boxShadow: '0 3px 7px rgba(0,0,0,0.4)', borderRadius: 6 },
         styles: () => ({ background: '#ffffff', color: '#0b0f14', border: '4px solid #ffffff', boxShadow: '0 6px 18px rgba(0, 0, 0, 0.28)', borderRadius: '16px' }),
         patch: corners(16),
     },
     {
         name: 'Brutal',
-        group: 'Bold',
+        group: 'Vibe',
         swatch: { background: '#fde047', border: '1.5px solid #000', boxShadow: '3px 3px 0 #000', borderRadius: 0 },
         styles: () => ({ background: '#ffffff', color: '#0b0f14', border: '2px solid #0b0f14', boxShadow: '6px 6px 0 #0b0f14', borderRadius: '0px', fontWeight: '700' }),
         patch: { ...corners(0), fontWeight: '700' },
     },
     {
         name: 'Comic',
-        group: 'Bold',
+        group: 'Vibe',
         swatch: { background: '#fff', border: '1.5px solid #000', boxShadow: '2.5px 2.5px 0 rgba(0,0,0,0.9)', borderRadius: 5 },
         styles: () => ({ background: '#ffffff', color: '#0b0f14', border: '3px solid #0b0f14', boxShadow: '5px 5px 0 rgba(11, 15, 20, 0.9)', borderRadius: '14px', fontWeight: '700' }),
         patch: { ...corners(14), fontWeight: '700' },
     },
     {
         name: 'Retro',
-        group: 'Bold',
+        group: 'Vibe',
         swatch: { background: '#fff', border: '1.5px solid #0b0f14', boxShadow: '3px 3px 0 #14b8a6', borderRadius: 4 },
         styles: (accent) => ({ background: '#ffffff', color: '#0b0f14', border: '2px solid #0b0f14', boxShadow: `5px 5px 0 ${accent}`, borderRadius: '10px' }),
         patch: corners(10),
@@ -492,28 +498,28 @@ const LOOKS = [
     // Texture
     {
         name: 'Stripes',
-        group: 'Texture',
+        group: 'Pattern',
         swatch: { background: 'repeating-linear-gradient(45deg,rgba(20,184,166,0.4) 0 3px,#fff 3px 6px)', borderRadius: 6 },
         styles: (accent) => ({ background: `repeating-linear-gradient(45deg, color-mix(in srgb, ${accent} 12%, transparent) 0 10px, transparent 10px 20px), #ffffff`, color: '#0b0f14', borderRadius: '12px' }),
         patch: corners(12),
     },
     {
         name: 'Dots',
-        group: 'Texture',
+        group: 'Pattern',
         swatch: { background: 'radial-gradient(rgba(20,184,166,0.6) 1px,#fff 1.1px) 0 0/5px 5px', borderRadius: 6 },
         styles: (accent) => ({ background: `radial-gradient(color-mix(in srgb, ${accent} 26%, transparent) 1.5px, transparent 1.6px) 0 0 / 12px 12px, #ffffff`, color: '#0b0f14', borderRadius: '12px' }),
         patch: corners(12),
     },
     {
         name: 'Grid',
-        group: 'Texture',
+        group: 'Pattern',
         swatch: { background: 'linear-gradient(rgba(20,184,166,0.5) 1px,transparent 1px) 0 0/6px 6px,linear-gradient(90deg,rgba(20,184,166,0.5) 1px,transparent 1px) 0 0/6px 6px,#0b1220', borderRadius: 6 },
         styles: (accent) => ({ background: `linear-gradient(color-mix(in srgb, ${accent} 20%, transparent) 1px, transparent 1px) 0 0 / 16px 16px, linear-gradient(90deg, color-mix(in srgb, ${accent} 20%, transparent) 1px, transparent 1px) 0 0 / 16px 16px, #0b1220`, color: '#e2e8f0', borderRadius: '12px' }),
         patch: corners(12),
     },
     {
         name: 'Spotlight',
-        group: 'Texture',
+        group: 'Pattern',
         swatch: { background: 'radial-gradient(120% 90% at 50% -10%,rgba(20,184,166,0.6),transparent 62%),#0b1220', borderRadius: 6 },
         styles: (accent) => ({ background: `radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, ${accent} 34%, transparent), transparent 62%), #0b1220`, color: '#f8fafc', borderRadius: '16px' }),
         patch: corners(16),
@@ -636,20 +642,20 @@ const LOOKS = [
     // Effect
     {
         name: 'Hollow',
-        group: 'Effect',
+        group: 'Type',
         swatch: { background: 'transparent', border: '1.5px solid #14b8a6', borderRadius: 3 },
         styles: (accent) => ({ color: accent, WebkitTextStrokeWidth: '1.5px', WebkitTextStrokeColor: accent, WebkitTextFillColor: 'transparent', fontWeight: '800' }),
         patch: { fontWeight: '800' },
     },
     {
         name: 'Invert',
-        group: 'Effect',
+        group: 'Accent',
         swatch: { background: 'linear-gradient(90deg,#111 50%,#eee 50%)', borderRadius: 4 },
         styles: () => ({ mixBlendMode: 'difference', color: '#ffffff' }),
     },
     {
         name: 'Echo',
-        group: 'Effect',
+        group: 'Type',
         swatch: { background: '#e2e8f0', boxShadow: '3px 3px 0 #14b8a6', borderRadius: 3 },
         styles: (accent) => ({ color: '#0b0f14', textShadow: `3px 3px 0 ${accent}`, fontWeight: '700' }),
         patch: { fontWeight: '700' },
@@ -657,7 +663,7 @@ const LOOKS = [
     // Bold
     {
         name: 'Punch',
-        group: 'Bold',
+        group: 'Vibe',
         swatch: { background: '#14b8a6', boxShadow: '0 4px 0 #0a5c50', borderRadius: 4 },
         styles: (accent) => ({
             background: accent,
@@ -673,7 +679,7 @@ const LOOKS = [
     },
     {
         name: 'Frame',
-        group: 'Bold',
+        group: 'Vibe',
         swatch: { background: '#fff', boxShadow: 'inset 0 0 0 3px #0b0f14', borderRadius: 3 },
         styles: () => ({ background: '#ffffff', color: '#0b0f14', border: 'none', boxShadow: 'inset 0 0 0 3px #0b0f14', borderRadius: '4px' }),
         patch: corners(4),
@@ -704,13 +710,13 @@ const LOOKS = [
         patch: corners(16),
     },
     {
-        name: 'Blueprint', group: 'Texture',
+        name: 'Blueprint', group: 'Pattern',
         swatch: { background: 'linear-gradient(#38bdf822 1px,transparent 1px),linear-gradient(90deg,#38bdf822 1px,transparent 1px),#082f49', backgroundSize: '6px 6px', borderRadius: 4 },
         styles: (accent) => ({ backgroundColor: '#082f49', backgroundImage: `linear-gradient(color-mix(in srgb, ${accent} 22%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, ${accent} 22%, transparent) 1px, transparent 1px)`, backgroundSize: '24px 24px', color: '#e0f2fe', border: `1px solid color-mix(in srgb, ${accent} 48%, transparent)`, borderRadius: '8px' }),
         patch: corners(8),
     },
     {
-        name: 'Halftone', group: 'Texture',
+        name: 'Halftone', group: 'Pattern',
         swatch: { background: 'radial-gradient(circle,#0f172a 1px,transparent 1.5px),#f8fafc', backgroundSize: '5px 5px', borderRadius: 4 },
         styles: (accent) => ({ backgroundColor: '#fff', backgroundImage: `radial-gradient(circle, color-mix(in srgb, ${accent} 72%, #0f172a) 1.2px, transparent 1.5px)`, backgroundSize: '9px 9px', color: '#0f172a', borderRadius: '12px' }),
         patch: corners(12),
@@ -757,22 +763,130 @@ const LOOKS = [
         patch: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
     },
     {
-        name: 'Soft focus', group: 'Effect',
+        name: 'Soft focus', group: 'Surface',
         swatch: { background: '#8b5cf6', filter: 'blur(.4px)', borderRadius: 8 },
         styles: (accent) => ({ background: `color-mix(in srgb, ${accent} 24%, transparent)`, border: `1px solid color-mix(in srgb, ${accent} 38%, transparent)`, boxShadow: `0 24px 70px -28px ${accent}`, backdropFilter: 'blur(18px) saturate(140%)', borderRadius: '24px' }),
         patch: corners(24),
     },
     {
-        name: 'Bauhaus', group: 'Bold',
+        name: 'Bauhaus', group: 'Vibe',
         swatch: { background: 'linear-gradient(90deg,#ef4444 33%,#facc15 33% 66%,#2563eb 66%)', border: '2px solid #111827', borderRadius: 2 },
         styles: () => ({ background: 'linear-gradient(110deg, #ef4444 0 32%, #facc15 32% 66%, #2563eb 66%)', color: '#0b0f14', border: '3px solid #0b0f14', boxShadow: '7px 7px 0 #0b0f14', fontWeight: '900', borderRadius: '2px' }),
         patch: { ...corners(2), fontWeight: '900' },
     },
     {
-        name: 'Y2K', group: 'Bold',
+        name: 'Y2K', group: 'Vibe',
         swatch: { background: 'linear-gradient(135deg,#cffafe,#e879f9)', boxShadow: '0 0 0 2px #fff,0 0 0 3px #7c3aed', borderRadius: 10 },
         styles: () => ({ background: 'linear-gradient(135deg, #cffafe, #f0abfc 55%, #c4b5fd)', color: '#3b0764', border: '2px solid #ffffff', boxShadow: '0 0 0 2px #7c3aed, 0 12px 30px -12px #7c3aed', fontWeight: '800', borderRadius: '22px' }),
         patch: { ...corners(22), fontWeight: '800' },
+    },
+    /* Outcome kit — common product and conversion patterns, ready in one tap. */
+    {
+        name: 'Hero spotlight', group: 'Depth',
+        swatch: { background: 'radial-gradient(circle at 50% 0,#7c3aed,#111827 72%)', boxShadow: '0 7px 16px #7c3aed66', borderRadius: 9 },
+        styles: (accent) => ({ background: `radial-gradient(circle at 50% 0%, color-mix(in srgb, ${accent} 42%, #1e293b), #070b12 72%)`, color: '#ffffff', border: `1px solid color-mix(in srgb, ${accent} 34%, transparent)`, boxShadow: `0 36px 100px -42px ${accent}`, borderRadius: '28px', padding: 'clamp(28px, 6vw, 80px)' }),
+        patch: corners(28),
+    },
+    {
+        name: 'Pricing card', group: 'Surface',
+        swatch: { background: '#fff', border: '2px solid #8b5cf6', boxShadow: '0 6px 14px #0f172a33', borderRadius: 9 },
+        styles: (accent) => ({ background: '#ffffff', color: '#0f172a', border: `2px solid ${accent}`, boxShadow: `0 24px 60px -30px color-mix(in srgb, ${accent} 55%, #0f172a)`, borderRadius: '22px', padding: '28px' }),
+        patch: corners(22),
+    },
+    {
+        name: 'Feature tile', group: 'Surface',
+        swatch: { background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 8 },
+        styles: (accent) => ({ background: `linear-gradient(145deg, #ffffff, color-mix(in srgb, ${accent} 7%, #f8fafc))`, color: '#172033', border: `1px solid color-mix(in srgb, ${accent} 18%, #dbe2ea)`, boxShadow: '0 14px 34px -28px rgba(15,23,42,.52)', borderRadius: '18px', padding: '22px' }),
+        patch: corners(18),
+    },
+    {
+        name: 'Testimonial', group: 'Surface',
+        swatch: { background: '#fffbeb', borderLeft: '4px solid #f59e0b', borderRadius: 5 },
+        styles: (accent) => ({ background: `color-mix(in srgb, ${accent} 8%, #fffdf7)`, color: '#292524', border: 'none', borderLeft: `5px solid ${accent}`, boxShadow: '0 18px 44px -34px rgba(41,37,36,.62)', borderRadius: '6px 18px 18px 6px', padding: '22px 24px' }),
+    },
+    {
+        name: 'Founder note', group: 'Surface',
+        swatch: { background: '#fef3c7', border: '1px solid #d9770644', transform: 'rotate(-1deg)', borderRadius: 3 },
+        styles: (accent) => ({ background: `color-mix(in srgb, ${accent} 10%, #fffbeb)`, color: '#422006', border: `1px solid color-mix(in srgb, ${accent} 28%, #f4d48a)`, boxShadow: '0 12px 24px -20px rgba(66,32,6,.5)', transform: 'rotate(-0.6deg)', borderRadius: '8px', padding: '20px 22px', fontFamily: 'Georgia, "Times New Roman", serif' }),
+        patch: { ...corners(8), fontFamily: 'Georgia, "Times New Roman", serif' },
+    },
+    {
+        name: 'App chrome', group: 'Surface',
+        swatch: { background: '#111827', border: '1px solid #334155', boxShadow: 'inset 0 1px #fff2', borderRadius: 7 },
+        styles: (accent) => ({ background: 'linear-gradient(180deg, #1b2230, #0d121b)', color: '#f8fafc', border: `1px solid color-mix(in srgb, ${accent} 20%, #334155)`, boxShadow: 'inset 0 1px rgba(255,255,255,.08), 0 18px 44px -32px #000', borderRadius: '14px', padding: '10px 14px' }),
+        patch: corners(14),
+    },
+    {
+        name: 'Command bar', group: 'Surface',
+        swatch: { background: '#f8fafc', border: '1px solid #94a3b8', boxShadow: '0 4px 10px #0f172a22', borderRadius: 6 },
+        styles: (accent) => ({ background: '#ffffff', color: '#0f172a', border: `1px solid color-mix(in srgb, ${accent} 28%, #cbd5e1)`, boxShadow: '0 12px 32px -24px rgba(15,23,42,.65)', borderRadius: '14px', padding: '12px 16px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }),
+        patch: { ...corners(14), fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+    },
+    {
+        name: 'Checkout focus', group: 'Line',
+        swatch: { background: '#fff', border: '2px solid #22c55e', boxShadow: '0 0 0 3px #22c55e33', borderRadius: 7 },
+        styles: (accent) => ({ background: '#ffffff', color: '#0f172a', border: `2px solid ${accent}`, boxShadow: `0 0 0 4px color-mix(in srgb, ${accent} 16%, transparent), 0 18px 46px -32px ${accent}`, borderRadius: '16px' }),
+        patch: corners(16),
+    },
+    {
+        name: 'Keyboard key', group: 'Line',
+        swatch: { background: '#f8fafc', border: '1px solid #94a3b8', boxShadow: '0 2px 0 #64748b', borderRadius: 4 },
+        styles: () => ({ background: 'linear-gradient(#ffffff, #e9eef4)', color: '#172033', border: '1px solid #a8b3c2', borderBottomWidth: '3px', boxShadow: 'inset 0 1px #ffffff', borderRadius: '7px', padding: '.22em .55em', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: '700' }),
+        patch: { ...corners(7), fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: '700' },
+    },
+    {
+        name: 'Launch CTA', group: 'Accent',
+        swatch: { background: 'linear-gradient(135deg,#8b5cf6,#2563eb)', boxShadow: '0 5px 12px #6366f166', borderRadius: 9 },
+        styles: (accent) => ({ background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 58%, #2563eb))`, color: '#ffffff', border: '1px solid rgba(255,255,255,.2)', boxShadow: `0 18px 38px -18px ${accent}`, borderRadius: '999px', padding: '.78em 1.35em', fontWeight: '800' }),
+        patch: { ...corners(999), fontWeight: '800' },
+    },
+    {
+        name: 'Soft CTA', group: 'Accent',
+        swatch: { background: '#ede9fe', border: '1px solid #8b5cf688', borderRadius: 9 },
+        styles: (accent) => ({ background: `color-mix(in srgb, ${accent} 13%, #ffffff)`, color: `color-mix(in srgb, ${accent} 72%, #111827)`, border: `1px solid color-mix(in srgb, ${accent} 42%, transparent)`, boxShadow: 'none', borderRadius: '999px', padding: '.72em 1.2em', fontWeight: '750' }),
+        patch: { ...corners(999), fontWeight: '750' },
+    },
+    {
+        name: 'Trust badge', group: 'Accent',
+        swatch: { background: '#ecfdf5', color: '#047857', border: '1px solid #10b98155', borderRadius: 9 },
+        styles: (accent) => ({ background: `color-mix(in srgb, ${accent} 9%, #f8fffc)`, color: `color-mix(in srgb, ${accent} 70%, #064e3b)`, border: `1px solid color-mix(in srgb, ${accent} 32%, transparent)`, borderRadius: '999px', padding: '.38em .72em', fontWeight: '700', letterSpacing: '.01em' }),
+        patch: { ...corners(999), fontWeight: '700' },
+    },
+    {
+        name: 'Conversion strip', group: 'Accent',
+        swatch: { background: 'linear-gradient(90deg,#0f172a,#7c3aed)', borderRadius: 4 },
+        styles: (accent) => ({ background: `linear-gradient(100deg, #0b1020, color-mix(in srgb, ${accent} 58%, #111827))`, color: '#ffffff', border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`, boxShadow: `0 20px 54px -34px ${accent}`, borderRadius: '18px', padding: '18px 22px', fontWeight: '700' }),
+        patch: { ...corners(18), fontWeight: '700' },
+    },
+    {
+        name: 'Success state', group: 'Accent',
+        swatch: { background: '#ecfdf5', color: '#065f46', border: '1px solid #34d399', borderRadius: 6 },
+        styles: () => ({ background: '#ecfdf5', color: '#065f46', border: '1px solid #6ee7b7', boxShadow: 'inset 4px 0 #10b981', borderRadius: '12px', padding: '12px 14px', fontWeight: '650' }),
+        patch: { ...corners(12), fontWeight: '650' },
+    },
+    {
+        name: 'Warning state', group: 'Accent',
+        swatch: { background: '#fffbeb', color: '#92400e', border: '1px solid #fbbf24', borderRadius: 6 },
+        styles: () => ({ background: '#fffbeb', color: '#92400e', border: '1px solid #fcd34d', boxShadow: 'inset 4px 0 #f59e0b', borderRadius: '12px', padding: '12px 14px', fontWeight: '650' }),
+        patch: { ...corners(12), fontWeight: '650' },
+    },
+    {
+        name: 'Section label', group: 'Type',
+        swatch: { background: '#eef2ff', color: '#4338ca', borderRadius: 8 },
+        styles: (accent) => ({ color: accent, textTransform: 'uppercase', letterSpacing: '.14em', fontSize: '.76em', lineHeight: '1.2', fontWeight: '800' }),
+        patch: { fontWeight: '800' },
+    },
+    {
+        name: 'Metric', group: 'Type',
+        swatch: { background: '#0f172a', color: '#f8fafc', borderBottom: '3px solid #22c55e' },
+        styles: (accent) => ({ color: '#0f172a', fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif', fontSize: 'clamp(2rem, 6vw, 4.5rem)', fontWeight: '900', letterSpacing: '-.055em', lineHeight: '.9', textShadow: `0 .06em color-mix(in srgb, ${accent} 22%, transparent)` }),
+        patch: { fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif', fontWeight: '900' },
+    },
+    {
+        name: 'Pull quote', group: 'Type',
+        swatch: { background: '#fff', borderLeft: '4px solid #111827' },
+        styles: (accent) => ({ color: '#172033', fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '1.25em', fontStyle: 'italic', lineHeight: '1.5', borderLeft: `4px solid ${accent}`, paddingLeft: '1em' }),
+        patch: { fontFamily: 'Georgia, "Times New Roman", serif' },
     },
     /* ─── Reset ─── */
     {
@@ -799,13 +913,133 @@ const LOOKS = [
         }),
     },
 ];
+/* What each recipe actually does, in a designer's terms. A swatch the size of
+   a thumbnail and a word like "Echo" or "Punch" don't tell you enough to pick
+   with; this is what the card's tooltip says. Kept beside LOOKS rather than
+   inside it so the recipes stay readable — `npm test` fails if the two drift. */
+export const LOOK_NOTES = {
+    /* Depth */
+    Lift: 'A modest drop shadow — the default way to raise a card off the page.',
+    Float: 'Tall and soft, so it reads as further off the page than Lift.',
+    Soft: 'Neumorphic: light from the top left, shadow bottom right. Needs a light background.',
+    Inset: 'Shadow on the inside, so the surface reads as pressed in.',
+    Ring: 'A tight accent ring. Good for a selected or focused state.',
+    Glow: 'A soft accent halo. Earns its keep on dark backgrounds.',
+    Layered: 'Five stacked shadows for a smooth, physical falloff.',
+    Halo: 'A wide, faint accent ring — softer than Ring.',
+    Ambient: 'Accent-tinted glow plus a dark shadow, so it lifts without floating away.',
+    Stack: 'A hard accent shadow offset down-right. Card sitting on card.',
+    'Hero spotlight': 'Accent light from above fading to near-black. Built for full-width heroes.',
+    /* Surface */
+    Glass: 'Frosted dark glass. Needs something behind it to blur.',
+    Frost: 'Frosted light glass — the pale counterpart to Glass.',
+    Ink: 'Near-black panel, white text. Maximum contrast.',
+    Paper: 'Warm off-white with a hairline edge. Print-like.',
+    Slate: 'Cool dark grey panel. Quieter than Ink.',
+    Tint: 'A wash of the accent at low opacity, with text to match.',
+    Sheen: 'Dark panel with light gathering along the top edge.',
+    Cream: 'Warm cream with rust text. Editorial and calm.',
+    Clay: 'Thick pastel accent with soft inner light. Claymorphism.',
+    Carbon: 'Dark graphite gradient with an accent hairline.',
+    'Soft focus': 'Accent-tinted glass under a wide glow.',
+    'Pricing card': 'White card, accent border, deep soft shadow. For the tier you want chosen.',
+    'Feature tile': 'Barely-tinted white with a soft accent edge. Holds up in a grid.',
+    Testimonial: 'Warm paper with a thick accent bar down the left.',
+    'Founder note': 'Warm amber panel. Personal, hand-written register.',
+    'App chrome': 'Dark product shell with an accent hairline.',
+    'Command bar': 'White bar, accent edge, floating shadow. Palette or search.',
+    /* Shape */
+    Pill: 'Fully round ends with roomy padding. The standard button shape.',
+    Slab: 'Square corners — removes all rounding.',
+    Squircle: 'Generous 28px rounding. Soft without going full pill.',
+    Blob: 'Irregular organic rounding. One per page, at most.',
+    Bevel: 'Two opposite corners cut flat.',
+    Tag: 'Pointed right edge, like a luggage tag.',
+    Arch: 'Rounded top, flat bottom. Doorway shape.',
+    Leaf: 'Alternating sharp and round corners.',
+    Chamfer: 'All four corners cut flat. Machined.',
+    Ticket: 'Notched at both sides, like a torn stub.',
+    Chevron: 'Point right, notch left. Process steps.',
+    Diamond: 'Rotated square — needs square content to survive.',
+    Notch: 'Two corners cut at 18px. A bigger bite than Bevel.',
+    /* Line */
+    Outline: 'Transparent with a border in the current text colour.',
+    Hairline: 'The thinnest visible border. Separates without shouting.',
+    Dashed: 'Dashed accent border. Reads as a placeholder or drop zone.',
+    Double: 'Two parallel rules. Formal, certificate-like.',
+    Underline: 'A rule under the text only.',
+    Edge: 'The border itself is a gradient.',
+    Dotted: 'Round dotted border. Lighter than Dashed.',
+    Quote: 'Thick rule down the left with padding. Blockquote.',
+    Rule: 'A rule across the top. Section divider.',
+    'Gradient edge': 'Gradient border over a dark fill.',
+    'Checkout focus': 'Accent border plus a soft focus ring. Payment fields.',
+    'Keyboard key': 'Light gradient with a thick bottom border. Keycap.',
+    /* Accent */
+    Pop: 'Solid accent fill, white bold text. The primary button.',
+    Gradient: 'Accent into a darker shade of itself. Safe on any palette.',
+    Sunset: 'Orange into pink. Warm and loud.',
+    Aurora: 'Green through blue to violet. Cool and synthetic.',
+    Ocean: 'Sky blue into deep blue.',
+    Candy: 'Pink into lilac. Soft and sweet.',
+    Mesh: 'Overlapping colour blooms. A modern hero background.',
+    Conic: 'The full spectrum sweeping around. Very loud.',
+    Duotone: 'A hard split between two shades of the accent.',
+    Gold: 'Yellow into amber with dark text. Premium tier.',
+    Fire: 'Orange through red. Urgent.',
+    Invert: 'Blends against whatever sits behind it, flipping over light and dark.',
+    Lagoon: 'The accent pushed toward teal and deep green.',
+    Citrus: 'Lime into yellow with dark text. Fresh.',
+    'Rose gold': 'Blush through coral into violet.',
+    'Launch CTA': 'Accent into blue with a lit edge. The one button on the page.',
+    'Soft CTA': 'Pale accent wash with accent text. The secondary action.',
+    'Trust badge': 'Faint green-accent chip. Guarantees and reassurance.',
+    'Conversion strip': 'Dark navy into accent. Full-width banner.',
+    'Success state': 'Green panel with a bar down the left. Confirmation.',
+    'Warning state': 'Amber panel with a bar down the left. Caution.',
+    /* Type */
+    'Grad Text': 'The gradient runs through the letterforms, not behind them.',
+    Eyebrow: 'Small uppercase accent text, widely tracked. Sits above a heading.',
+    Display: 'Heavy weight, tight tracking, tight leading. Headline setting.',
+    Marker: 'Highlighter pen behind the text.',
+    Quiet: 'Dropped to 60% opacity. Secondary information.',
+    Serif: 'Switch to a serif face. Slower, more considered.',
+    Mono: 'Switch to monospace. Reads technical.',
+    Neon: 'Accent text under a double glow. Dark backgrounds only.',
+    Emboss: 'Light above, shadow below — pressed into the surface.',
+    Hollow: 'Outlined letterforms with no fill.',
+    Echo: 'A hard accent shadow offset behind the letters.',
+    Editorial: 'Heavy serif, very tight, with a rule beneath. Magazine headline.',
+    Technical: 'Uppercase mono in the accent. Spec-sheet label.',
+    'Section label': 'Small, heavy, uppercase accent. Names a section.',
+    Metric: 'Very large, very heavy, fluid size. For one big number.',
+    'Pull quote': 'Large italic serif with a rule. A quotation lifted out of the text.',
+    /* Pattern */
+    Stripes: 'Accent stripes at 45° on white.',
+    Dots: 'A fine dot grid on white.',
+    Grid: 'Graph-paper ruling in the accent.',
+    Spotlight: 'A pool of accent light from above on near-black.',
+    Blueprint: 'Deep navy with accent ruling. Technical drawing.',
+    Halftone: 'Print dot screen on white.',
+    /* Vibe */
+    Sticker: 'White border and a soft shadow, like a die-cut sticker.',
+    Brutal: 'Hard black border, hard offset shadow, square corners.',
+    Comic: 'Thick outline and an offset shadow. Panel-art energy.',
+    Retro: 'Black outline with an accent-coloured offset shadow.',
+    Punch: 'Solid accent, uppercase, heavy. Shouts.',
+    Frame: 'A border drawn inside the edge rather than on it.',
+    Bauhaus: 'Hard red, yellow and blue bands under a black outline.',
+    Y2K: 'Iridescent cyan-pink-lilac with a white edge.',
+    /* Reset */
+    'Reset look': 'Strips every look back to nothing.',
+};
 function NumericField({ label, value, min, max, step = 1, unit, onChange, }) {
     const numericValue = Number.parseFloat(String(value)) || 0;
     const clamp = (next) => Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min ?? Number.NEGATIVE_INFINITY, next));
     const scrub = useScrub((steps) => onChange(clamp(numericValue + steps * step)), 6);
     return (_jsxs("label", { className: "froam-floating-bar__field froam-floating-bar__field--scrub", children: [_jsx("span", { ...scrub, style: { touchAction: 'none', cursor: 'ew-resize' }, children: label }), _jsxs("div", { className: "froam-floating-bar__number", children: [_jsx("input", { type: "number", value: numericValue, min: min, max: max, step: step, onChange: (event) => onChange(Number(event.target.value)) }), unit && _jsx("small", { children: unit })] })] }));
 }
-export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, wordSpacing, textTransform, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, width, height, display, flexDirection, justifyContent, alignItems, gap, padding, radius, overflow, opacity, isHidden = false, mixBlendMode, zIndex, fontOptions, selectionCount, docked = false, canUndo = false, onWalk, onAction, onStyle, onSaveLook, }) {
+export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, wordSpacing, textTransform, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, width, height, display, flexDirection, justifyContent, alignItems, gap, padding, radius, overflow, opacity, isHidden = false, mixBlendMode, zIndex, fontOptions, selectionCount, isTextLayer = false, docked = false, canUndo = false, onWalk, onAction, onStyle, onSaveLook, }) {
     const barRef = useRef(null);
     const [expanded, setExpanded] = useState(false);
     const [narrow, setNarrow] = useState(false);
@@ -952,7 +1186,7 @@ export default function FroamFloatingBar({ targetRect, visible, label, fontFamil
         const shouldOverrideText = overrides.overrideText ?? overrideLookText;
         const shouldOverrideRadius = overrides.overrideRadius ?? overrideLookRadius;
         const styles = { ...look.styles(accent) };
-        const patch = { ...(look.patch ?? {}) };
+        const patch = isTextLayer ? {} : { ...(look.patch ?? {}) };
         if (shouldOverrideFill && look.group !== 'Reset') {
             styles.background = fill;
             styles.backgroundImage = 'none';
@@ -962,7 +1196,7 @@ export default function FroamFloatingBar({ targetRect, visible, label, fontFamil
             if ('WebkitTextFillColor' in styles)
                 styles.WebkitTextFillColor = text;
         }
-        if (shouldOverrideRadius && look.group !== 'Reset') {
+        if (shouldOverrideRadius && look.group !== 'Reset' && !isTextLayer) {
             styles.borderRadius = `${nextRadius}px`;
             Object.assign(patch, corners(nextRadius));
         }
@@ -982,18 +1216,20 @@ export default function FroamFloatingBar({ targetRect, visible, label, fontFamil
     const selectedLook = LOOKS.find((look) => look.name === selectedLookName) ?? LOOKS[0];
     const visibleLooks = LOOKS.filter((look) => {
         const query = lookSearch.trim().toLowerCase();
+        // Search the description too, so "shadow" finds the shadows and
+        // "uppercase" finds Eyebrow — the names alone are not searchable words.
         return (lookGroup === 'All' || look.group === lookGroup)
-            && (!query || `${look.name} ${look.group}`.toLowerCase().includes(query));
+            && (!query || `${look.name} ${look.group} ${LOOK_NOTES[look.name] ?? ''}`.toLowerCase().includes(query));
     });
-    return (_jsxs("div", { ref: barRef, className: `froam-floating-bar ${expanded ? 'is-expanded' : ''} ${narrow ? 'is-narrow' : ''} ${docked ? 'is-docked' : ''}`, "data-chef-editor-root": "true", style: docked ? undefined : { left: position.left, top: position.top }, children: [_jsxs("div", { className: "froam-floating-bar__primary", children: [onWalk && (_jsxs("div", { className: "froam-floating-bar__group froam-floating-bar__walker", role: "group", "aria-label": "Walk selection", children: [_jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Select parent", onClick: () => onWalk('parent'), children: _jsx(CornerLeftUp, { size: 13 }) }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Previous sibling", onClick: () => onWalk('prev'), children: _jsx(ChevronLeft, { size: 13 }) }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Next sibling", onClick: () => onWalk('next'), children: _jsx(ChevronRight, { size: 13 }) }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Select first child", onClick: () => onWalk('child'), children: _jsx(CornerRightDown, { size: 13 }) })] })), _jsxs("div", { className: "froam-floating-bar__identity", title: label, children: [_jsx(Type, { size: 13 }), _jsx("span", { children: label })] }), _jsx("button", { type: "button", className: "froam-floating-bar__btn froam-floating-bar__edit-text", title: "Edit text", onClick: () => onAction('edit-text'), children: _jsx("span", { className: "froam-floating-bar__aa", children: "Aa" }) }), _jsx("select", { className: "froam-floating-bar__select froam-floating-bar__font", value: fontFamily, title: "Font family", "aria-label": "Font family", onChange: (event) => onStyle({ fontFamily: event.target.value }, { fontFamily: event.target.value }, 'Changed font family'), children: fontOptions.map((font) => _jsx("option", { value: font.value, children: font.label }, font.value)) }), _jsxs("div", { className: "froam-floating-bar__stepper froam-floating-bar__stepper--scrub", title: "Font size \u2014 drag the number to scrub", ...fontScrub, style: { touchAction: 'none' }, children: [_jsx("button", { type: "button", onClick: () => onStyle({ fontSize: `${Math.max(6, fontSize - 1)}px` }, { fontSize: Math.max(6, fontSize - 1) }), children: "\u2212" }), _jsx("input", { type: "number", value: Math.round(fontSize), min: 6, max: 400, "aria-label": "Font size", onChange: (event) => {
+    return (_jsxs("div", { ref: barRef, className: `froam-floating-bar ${expanded ? 'is-expanded' : ''} ${narrow ? 'is-narrow' : ''} ${docked ? 'is-docked' : ''}`, "data-chef-editor-root": "true", style: docked ? undefined : { left: position.left, top: position.top }, children: [_jsxs("div", { className: "froam-floating-bar__primary", children: [onWalk && (_jsxs("div", { className: "froam-floating-bar__group froam-floating-bar__walker", role: "group", "aria-label": "Walk selection", children: [_jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Select parent", onClick: () => onWalk('parent'), children: _jsx(CornerLeftUp, { size: 13 }) }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Previous sibling", onClick: () => onWalk('prev'), children: _jsx(ChevronLeft, { size: 13 }) }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Next sibling", onClick: () => onWalk('next'), children: _jsx(ChevronRight, { size: 13 }) }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Select first child", onClick: () => onWalk('child'), children: _jsx(CornerRightDown, { size: 13 }) })] })), _jsxs("div", { className: "froam-floating-bar__identity", title: label, children: [_jsx(Type, { size: 13 }), _jsx("span", { children: label })] }), _jsx("button", { type: "button", className: "froam-floating-bar__btn froam-floating-bar__edit-text", title: "Edit text", onClick: () => onAction('edit-text'), children: _jsx("span", { className: "froam-floating-bar__aa", children: "Aa" }) }), _jsx("select", { className: "froam-floating-bar__select froam-floating-bar__font", value: fontFamily, title: "Font family", "aria-label": "Font family", onChange: (event) => onStyle({ fontFamily: event.target.value }, { fontFamily: event.target.value }, 'Changed font family'), children: groupFontOptions(fontOptions).map(([role, options]) => (_jsx("optgroup", { label: FONT_GROUP_LABELS[role], children: options.map((font) => _jsx("option", { value: font.value, children: font.label }, font.value)) }, role))) }), _jsxs("div", { className: "froam-floating-bar__stepper froam-floating-bar__stepper--scrub", title: "Font size \u2014 drag the number to scrub", ...fontScrub, style: { touchAction: 'none' }, children: [_jsx("button", { type: "button", onClick: () => onStyle({ fontSize: `${Math.max(6, fontSize - 1)}px` }, { fontSize: Math.max(6, fontSize - 1) }), children: "\u2212" }), _jsx("input", { type: "number", value: Math.round(fontSize), min: 6, max: 400, "aria-label": "Font size", onChange: (event) => {
                                     const next = Math.max(6, Number(event.target.value));
                                     onStyle({ fontSize: `${next}px` }, { fontSize: next }, 'Changed font size');
-                                } }), _jsx("button", { type: "button", onClick: () => onStyle({ fontSize: `${Math.min(400, fontSize + 1)}px` }, { fontSize: Math.min(400, fontSize + 1) }), children: "+" })] }), _jsx("select", { className: "froam-floating-bar__select froam-floating-bar__weight", value: fontWeight, title: "Font weight", "aria-label": "Font weight", onChange: (event) => onStyle({ fontWeight: event.target.value }, { fontWeight: event.target.value }, 'Changed font weight'), children: ['300', '400', '500', '600', '700', '800', '900'].map((weight) => _jsx("option", { value: weight, children: weight }, weight)) }), _jsx("span", { className: "froam-floating-bar__sep" }), _jsxs("div", { className: "froam-floating-bar__group", children: [_jsx("button", { type: "button", className: `froam-floating-bar__btn ${isBold ? 'is-active' : ''}`, title: "Bold", onClick: () => onAction('bold'), children: _jsx(Bold, { size: 13 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${isItalic ? 'is-active' : ''}`, title: "Italic", onClick: () => onAction('italic'), children: _jsx(Italic, { size: 13 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${isUnderline ? 'is-active' : ''}`, title: "Underline", onClick: () => onAction('underline'), children: _jsx(Underline, { size: 13 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${isStrike ? 'is-active' : ''}`, title: "Strikethrough", onClick: () => onAction('strike'), children: _jsx(Strikethrough, { size: 13 }) })] }), _jsx("span", { className: "froam-floating-bar__sep" }), _jsxs("div", { className: "froam-floating-bar__group", children: [_jsx("button", { type: "button", className: `froam-floating-bar__btn ${textAlign === 'left' || textAlign === 'start' ? 'is-active' : ''}`, title: "Align left", onClick: () => onAction('align-left'), children: _jsx(AlignLeft, { size: 13 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${textAlign === 'center' ? 'is-active' : ''}`, title: "Align center", onClick: () => onAction('align-center'), children: _jsx(AlignCenter, { size: 13 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${textAlign === 'right' || textAlign === 'end' ? 'is-active' : ''}`, title: "Align right", onClick: () => onAction('align-right'), children: _jsx(AlignRight, { size: 13 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${textAlign === 'justify' ? 'is-active' : ''}`, title: "Justify", onClick: () => onAction('align-justify'), children: _jsx(AlignJustify, { size: 13 }) })] }), _jsx("span", { className: "froam-floating-bar__sep" }), _jsxs("div", { className: "froam-floating-bar__group", children: [_jsx("button", { type: "button", className: "froam-floating-bar__btn froam-floating-bar__btn--merge", title: selectionCount > 1 ? 'Merge selected into one movable stamp' : 'Merge this with overlapping sibling shapes', onClick: () => onAction('merge'), children: _jsx(Combine, { size: 13 }) }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Ungroup merged stamp", onClick: () => onAction('unmerge'), children: _jsx(Ungroup, { size: 13 }) })] }), _jsx("span", { className: "froam-floating-bar__sep" }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${openPop === 'palette' ? 'is-active' : ''}`, title: "Page palette \u2014 colors from this site", onClick: () => togglePop('palette'), children: _jsx(Pipette, { size: 13 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${openPop === 'looks' ? 'is-active' : ''}`, title: "Quick looks \u2014 one-tap styles", onClick: () => togglePop('looks'), children: _jsx(Sparkles, { size: 13 }) }), _jsxs("label", { className: "froam-floating-bar__color-btn", title: "Text color", style: { '--froam-swatch': color }, children: [_jsx(Type, { size: 11 }), _jsx("input", { type: "color", className: "froam-floating-bar__color-input", value: color, onChange: (event) => onAction('color', event.target.value) })] }), _jsxs("label", { className: "froam-floating-bar__color-btn", title: "Background", style: { '--froam-swatch': background }, children: [_jsx(Palette, { size: 11 }), _jsx("input", { type: "color", className: "froam-floating-bar__color-input", value: background, onChange: (event) => onAction('bg-color', event.target.value) })] }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Clear fill", onClick: () => onAction('clear-bg'), children: _jsx(Eraser, { size: 13 }) }), _jsx("span", { className: "froam-floating-bar__sep" }), _jsxs("div", { className: "froam-floating-bar__opacity", title: "Opacity \u2014 drag to fade", ...opacityScrub, style: { touchAction: 'none' }, children: [_jsx(Contrast, { size: 13 }), _jsxs("span", { children: [Math.round(opacity * 100), "%"] })] }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${isHidden ? 'is-active' : ''}`, title: isHidden ? 'Show element' : 'Hide element', onClick: () => onAction('toggle-hidden'), children: isHidden ? _jsx(EyeOff, { size: 13 }) : _jsx(Eye, { size: 13 }) }), docked && (_jsxs(_Fragment, { children: [_jsx("span", { className: "froam-floating-bar__sep" }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Undo", disabled: !canUndo, onClick: () => onAction('undo'), children: _jsx(Undo2, { size: 13 }) })] })), _jsxs("button", { type: "button", className: `froam-floating-bar__expand ${expanded ? 'is-active' : ''}`, onClick: () => setExpanded((current) => !current), "aria-expanded": expanded, title: "More typography and layout controls", children: [_jsx("span", { children: "More" }), _jsx(ChevronDown, { size: 13 })] })] }), openPop === 'palette' && (_jsxs("div", { className: "froam-floating-bar__pop", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-floating-bar__pop-head", children: [_jsx("span", { children: "Page palette" }), _jsxs("div", { className: "froam-floating-bar__pop-toggle", role: "group", "aria-label": "Apply as", children: [_jsx("button", { type: "button", className: paletteMode === 'fill' ? 'is-active' : '', onClick: () => setPaletteMode('fill'), children: "Fill" }), _jsx("button", { type: "button", className: paletteMode === 'text' ? 'is-active' : '', onClick: () => setPaletteMode('text'), children: "Text" })] })] }), _jsxs("div", { className: "froam-floating-bar__chips", children: [palette.map((hex) => {
+                                } }), _jsx("button", { type: "button", onClick: () => onStyle({ fontSize: `${Math.min(400, fontSize + 1)}px` }, { fontSize: Math.min(400, fontSize + 1) }), children: "+" })] }), _jsx("select", { className: "froam-floating-bar__select froam-floating-bar__weight", value: fontWeight, title: "Font weight", "aria-label": "Font weight", onChange: (event) => onStyle({ fontWeight: event.target.value }, { fontWeight: event.target.value }, 'Changed font weight'), children: ['300', '400', '500', '600', '700', '800', '900'].map((weight) => _jsx("option", { value: weight, children: weight }, weight)) }), _jsx("span", { className: "froam-floating-bar__sep" }), _jsxs("div", { className: "froam-floating-bar__group", children: [_jsx("button", { type: "button", className: `froam-floating-bar__btn ${isBold ? 'is-active' : ''}`, title: "Bold", onClick: () => onAction('bold'), children: _jsx(Bold, { size: 13 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${isItalic ? 'is-active' : ''}`, title: "Italic", onClick: () => onAction('italic'), children: _jsx(Italic, { size: 13 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${isUnderline ? 'is-active' : ''}`, title: "Underline", onClick: () => onAction('underline'), children: _jsx(Underline, { size: 13 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${isStrike ? 'is-active' : ''}`, title: "Strikethrough", onClick: () => onAction('strike'), children: _jsx(Strikethrough, { size: 13 }) })] }), _jsx("span", { className: "froam-floating-bar__sep" }), _jsxs("div", { className: "froam-floating-bar__group", children: [_jsx("button", { type: "button", className: `froam-floating-bar__btn ${textAlign === 'left' || textAlign === 'start' ? 'is-active' : ''}`, title: "Align left", onClick: () => onAction('align-left'), children: _jsx(AlignLeft, { size: 13 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${textAlign === 'center' ? 'is-active' : ''}`, title: "Align center", onClick: () => onAction('align-center'), children: _jsx(AlignCenter, { size: 13 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${textAlign === 'right' || textAlign === 'end' ? 'is-active' : ''}`, title: "Align right", onClick: () => onAction('align-right'), children: _jsx(AlignRight, { size: 13 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${textAlign === 'justify' ? 'is-active' : ''}`, title: "Justify", onClick: () => onAction('align-justify'), children: _jsx(AlignJustify, { size: 13 }) })] }), _jsx("span", { className: "froam-floating-bar__sep" }), _jsxs("div", { className: "froam-floating-bar__group", children: [_jsx("button", { type: "button", className: "froam-floating-bar__btn froam-floating-bar__btn--merge", title: selectionCount > 1 ? 'Merge selected into one movable stamp' : 'Merge this with overlapping sibling shapes', onClick: () => onAction('merge'), children: _jsx(Combine, { size: 13 }) }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Ungroup merged stamp", onClick: () => onAction('unmerge'), children: _jsx(Ungroup, { size: 13 }) })] }), _jsx("span", { className: "froam-floating-bar__sep" }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${openPop === 'palette' ? 'is-active' : ''}`, title: "Page palette \u2014 colors from this site", onClick: () => togglePop('palette'), children: _jsx(Pipette, { size: 13 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${openPop === 'looks' ? 'is-active' : ''}`, title: "Quick looks \u2014 one-tap styles", onClick: () => togglePop('looks'), children: _jsx(Sparkles, { size: 13 }) }), _jsxs("label", { className: "froam-floating-bar__color-btn", title: "Text color", style: { '--froam-swatch': color }, children: [_jsx(Type, { size: 11 }), _jsx("input", { type: "color", className: "froam-floating-bar__color-input", value: color, onChange: (event) => onAction('color', event.target.value) })] }), _jsxs("label", { className: "froam-floating-bar__color-btn", title: isTextLayer ? 'Text fill' : 'Background', style: { '--froam-swatch': isTextLayer ? color : background }, children: [_jsx(Palette, { size: 11 }), _jsx("input", { type: "color", className: "froam-floating-bar__color-input", value: background, onChange: (event) => onAction('bg-color', event.target.value) })] }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Clear fill", onClick: () => onAction('clear-bg'), children: _jsx(Eraser, { size: 13 }) }), _jsx("span", { className: "froam-floating-bar__sep" }), _jsxs("div", { className: "froam-floating-bar__opacity", title: "Opacity \u2014 drag to fade", ...opacityScrub, style: { touchAction: 'none' }, children: [_jsx(Contrast, { size: 13 }), _jsxs("span", { children: [Math.round(opacity * 100), "%"] })] }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${isHidden ? 'is-active' : ''}`, title: isHidden ? 'Show element' : 'Hide element', onClick: () => onAction('toggle-hidden'), children: isHidden ? _jsx(EyeOff, { size: 13 }) : _jsx(Eye, { size: 13 }) }), docked && (_jsxs(_Fragment, { children: [_jsx("span", { className: "froam-floating-bar__sep" }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Undo", disabled: !canUndo, onClick: () => onAction('undo'), children: _jsx(Undo2, { size: 13 }) })] })), _jsxs("button", { type: "button", className: `froam-floating-bar__expand ${expanded ? 'is-active' : ''}`, onClick: () => setExpanded((current) => !current), "aria-expanded": expanded, title: "More typography and layout controls", children: [_jsx("span", { children: "More" }), _jsx(ChevronDown, { size: 13 })] })] }), openPop === 'palette' && (_jsxs("div", { className: "froam-floating-bar__pop", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-floating-bar__pop-head", children: [_jsx("span", { children: "Page palette" }), _jsxs("div", { className: "froam-floating-bar__pop-toggle", role: "group", "aria-label": "Apply as", children: [_jsx("button", { type: "button", className: paletteMode === 'fill' ? 'is-active' : '', onClick: () => setPaletteMode('fill'), children: isTextLayer ? 'Glyph' : 'Fill' }), _jsx("button", { type: "button", className: paletteMode === 'text' ? 'is-active' : '', onClick: () => setPaletteMode('text'), children: "Text" })] })] }), _jsxs("div", { className: "froam-floating-bar__chips", children: [palette.map((hex) => {
                                 const readable = paletteMode === 'text' && contrastRatio(hex, backgroundHex) >= 4.5;
                                 return (_jsxs("button", { type: "button", className: "froam-floating-bar__chip", style: { '--froam-chip': hex }, title: `${hex}${readable ? ' — readable on current fill' : ''}`, onClick: () => applyChip(hex), children: [paletteMode === 'text' && _jsx("span", { style: { color: hex }, children: "Aa" }), readable && _jsx("i", { className: "froam-floating-bar__chip-ok" })] }, hex));
-                            }), palette.length === 0 && _jsx("span", { className: "froam-floating-bar__pop-empty", children: "No colors found yet" })] })] })), openPop === 'looks' && typeof document !== 'undefined' && createPortal(_jsxs("div", { className: "froam-floating-bar__pop froam-floating-bar__pop--looks", "data-chef-editor-root": "true", role: "dialog", "aria-label": "Look Studio live editor", style: lookDockStyle, children: [_jsxs("div", { className: "froam-floating-bar__pop-head", children: [_jsxs("span", { children: ["Look Studio ", _jsxs("small", { children: [LOOKS.length, " recipes \u00B7 live preview"] })] }), _jsxs("div", { className: "froam-floating-bar__look-window-actions", children: [_jsxs("button", { type: "button", onClick: () => setLookDockSide((side) => side === 'left' ? 'right' : 'left'), title: "Move Look Studio to the other side", children: [lookDockSide === 'left' ? _jsx(ChevronRight, { size: 12 }) : _jsx(ChevronLeft, { size: 12 }), " Move"] }), _jsx("button", { type: "button", className: "froam-floating-bar__look-apply", onClick: () => setOpenPop(null), children: "Done" })] })] }), _jsxs("label", { className: "froam-floating-bar__look-search", children: [_jsx(Search, { size: 12 }), _jsx("input", { value: lookSearch, onChange: (event) => setLookSearch(event.target.value), placeholder: "Search looks\u2026" })] }), _jsx("div", { className: "froam-floating-bar__look-groups", role: "tablist", "aria-label": "Look categories", children: ['All', ...LOOK_GROUPS].map((group) => (_jsx("button", { type: "button", role: "tab", "aria-selected": lookGroup === group, className: lookGroup === group ? 'is-active' : '', onClick: () => setLookGroup(group), children: group }, group))) }), _jsx("div", { className: "froam-floating-bar__looks-scroll", children: _jsxs("div", { className: "froam-floating-bar__looks", children: [visibleLooks.map((look) => (_jsxs("button", { type: "button", className: selectedLookName === look.name ? 'is-active' : '', onClick: () => applyLook(look), title: `${look.group} · ${look.name}`, children: [_jsx("i", { style: look.swatch }), _jsx("span", { children: look.name }), _jsx("small", { children: look.group })] }, look.name))), visibleLooks.length === 0 && _jsxs("span", { className: "froam-floating-bar__pop-empty", children: ["No looks match \u201C", lookSearch, "\u201D"] })] }) }), _jsxs("div", { className: "froam-floating-bar__look-editor", children: [_jsxs("div", { className: "froam-floating-bar__look-editor-title", children: [_jsx(SlidersHorizontal, { size: 12 }), _jsxs("span", { children: ["Customize ", selectedLook.name] })] }), _jsx("div", { className: "froam-floating-bar__look-states", role: "tablist", "aria-label": "Style state", children: ['base', 'hover', 'focus', 'active'].map((state) => _jsx("button", { type: "button", role: "tab", "aria-selected": lookState === state, className: lookState === state ? 'is-active' : '', onClick: () => setLookState(state), children: state }, state)) }), _jsxs("div", { className: "froam-floating-bar__look-colors", children: [_jsxs("label", { title: "Accent used by accent-aware looks", children: [_jsx("span", { children: "Accent" }), _jsx("input", { type: "color", value: lookAccent, onChange: (event) => { const next = event.target.value; setLookAccent(next); applyLook(selectedLook, { accent: next }); } })] }), _jsxs("label", { className: overrideLookFill ? 'is-enabled' : '', children: [_jsx("input", { type: "checkbox", checked: overrideLookFill, onChange: (event) => { const next = event.target.checked; setOverrideLookFill(next); applyLook(selectedLook, { overrideFill: next }); } }), _jsx("span", { children: "Fill" }), _jsx("input", { type: "color", value: lookFill, onChange: (event) => { const next = event.target.value; setLookFill(next); if (overrideLookFill)
+                            }), palette.length === 0 && _jsx("span", { className: "froam-floating-bar__pop-empty", children: "No colors found yet" })] })] })), openPop === 'looks' && typeof document !== 'undefined' && createPortal(_jsxs("div", { className: "froam-floating-bar__pop froam-floating-bar__pop--looks", "data-chef-editor-root": "true", role: "dialog", "aria-label": "Look Studio live editor", style: lookDockStyle, children: [_jsxs("div", { className: "froam-floating-bar__pop-head", children: [_jsxs("span", { children: ["Look Studio ", _jsxs("small", { children: [LOOKS.length, " ", isTextLayer ? 'text-safe ' : '', "recipes \u00B7 live preview"] })] }), _jsxs("div", { className: "froam-floating-bar__look-window-actions", children: [_jsxs("button", { type: "button", onClick: () => setLookDockSide((side) => side === 'left' ? 'right' : 'left'), title: "Move Look Studio to the other side", children: [lookDockSide === 'left' ? _jsx(ChevronRight, { size: 12 }) : _jsx(ChevronLeft, { size: 12 }), " Move"] }), _jsx("button", { type: "button", className: "froam-floating-bar__look-apply", onClick: () => setOpenPop(null), children: "Done" })] })] }), _jsxs("label", { className: "froam-floating-bar__look-search", children: [_jsx(Search, { size: 12 }), _jsx("input", { value: lookSearch, onChange: (event) => setLookSearch(event.target.value), placeholder: "Search looks\u2026" })] }), _jsx("div", { className: "froam-floating-bar__look-groups", role: "tablist", "aria-label": "Look categories", children: ['All', ...LOOK_GROUPS].map((group) => (_jsx("button", { type: "button", role: "tab", "aria-selected": lookGroup === group, className: lookGroup === group ? 'is-active' : '', onClick: () => setLookGroup(group), children: group }, group))) }), _jsx("div", { className: "froam-floating-bar__looks-scroll", children: _jsxs("div", { className: "froam-floating-bar__looks", children: [visibleLooks.map((look) => (_jsxs("button", { type: "button", className: selectedLookName === look.name ? 'is-active' : '', onClick: () => applyLook(look), title: LOOK_NOTES[look.name] ?? `${look.group} · ${look.name}`, children: [_jsx("i", { style: look.swatch }), _jsx("span", { children: look.name }), _jsx("small", { children: look.group })] }, look.name))), visibleLooks.length === 0 && _jsxs("span", { className: "froam-floating-bar__pop-empty", children: ["No looks match \u201C", lookSearch, "\u201D"] })] }) }), _jsxs("div", { className: "froam-floating-bar__look-editor", children: [_jsxs("div", { className: "froam-floating-bar__look-editor-title", children: [_jsx(SlidersHorizontal, { size: 12 }), _jsxs("span", { children: ["Customize ", selectedLook.name] })] }), _jsx("div", { className: "froam-floating-bar__look-states", role: "tablist", "aria-label": "Style state", children: ['base', 'hover', 'focus', 'active'].map((state) => _jsx("button", { type: "button", role: "tab", "aria-selected": lookState === state, className: lookState === state ? 'is-active' : '', onClick: () => setLookState(state), children: state }, state)) }), _jsxs("div", { className: "froam-floating-bar__look-colors", children: [_jsxs("label", { title: "Accent used by accent-aware looks", children: [_jsx("span", { children: "Accent" }), _jsx("input", { type: "color", value: lookAccent, onChange: (event) => { const next = event.target.value; setLookAccent(next); applyLook(selectedLook, { accent: next }); } })] }), _jsxs("label", { className: overrideLookFill ? 'is-enabled' : '', children: [_jsx("input", { type: "checkbox", checked: overrideLookFill, onChange: (event) => { const next = event.target.checked; setOverrideLookFill(next); applyLook(selectedLook, { overrideFill: next }); } }), _jsx("span", { children: isTextLayer ? 'Glyph' : 'Fill' }), _jsx("input", { type: "color", value: lookFill, onChange: (event) => { const next = event.target.value; setLookFill(next); if (overrideLookFill)
                                                     applyLook(selectedLook, { fill: next }); }, disabled: !overrideLookFill })] }), _jsxs("label", { className: overrideLookText ? 'is-enabled' : '', children: [_jsx("input", { type: "checkbox", checked: overrideLookText, onChange: (event) => { const next = event.target.checked; setOverrideLookText(next); applyLook(selectedLook, { overrideText: next }); } }), _jsx("span", { children: "Text" }), _jsx("input", { type: "color", value: lookText, onChange: (event) => { const next = event.target.value; setLookText(next); if (overrideLookText)
-                                                    applyLook(selectedLook, { text: next }); }, disabled: !overrideLookText })] })] }), _jsxs("label", { className: `froam-floating-bar__look-radius ${overrideLookRadius ? 'is-enabled' : ''}`, children: [_jsx("input", { type: "checkbox", checked: overrideLookRadius, onChange: (event) => { const next = event.target.checked; setOverrideLookRadius(next); applyLook(selectedLook, { overrideRadius: next }); } }), _jsx("span", { children: "Corner radius" }), _jsx("input", { type: "range", min: "0", max: "64", value: lookRadius, onChange: (event) => { const next = Number(event.target.value); setLookRadius(next); if (overrideLookRadius)
-                                            applyLook(selectedLook, { radius: next }); }, disabled: !overrideLookRadius }), _jsxs("output", { children: [lookRadius, "px"] })] }), _jsx("p", { children: "Every recipe and design-variable change previews directly on the selected element. Keep this dock open while you inspect the page." }), onSaveLook && _jsx("button", { type: "button", className: "froam-floating-bar__look-save", onClick: () => onSaveLook({ name: selectedLook.name, states: { ...lookStateDrafts, [lookState]: customizedLook(selectedLook).styles } }), children: "Save as reusable style" })] })] }), document.body), expanded && (_jsxs("div", { className: "froam-floating-bar__advanced", children: [_jsxs("section", { children: [_jsxs("header", { children: [_jsx(Type, { size: 13 }), " Typography"] }), _jsxs("div", { className: "froam-floating-bar__fields", children: [_jsx(NumericField, { label: "Line", value: lineHeight, min: 0.5, max: 5, step: 0.05, onChange: (next) => onStyle({ lineHeight: String(next) }, { lineHeight: next }, 'Changed line height') }), _jsx(NumericField, { label: "Tracking", value: letterSpacing, min: -20, max: 100, step: 0.1, unit: "px", onChange: (next) => onStyle({ letterSpacing: `${next}px` }, { letterSpacing: next }, 'Changed letter spacing') }), _jsx(NumericField, { label: "Words", value: wordSpacing, min: -20, max: 100, step: 0.5, unit: "px", onChange: (next) => onStyle({ wordSpacing: `${next}px` }, { wordSpacing: next }, 'Changed word spacing') }), _jsxs("label", { className: "froam-floating-bar__field", children: [_jsx("span", { children: "Case" }), _jsxs("select", { value: textTransform, onChange: (event) => onStyle({ textTransform: event.target.value }, { textTransform: event.target.value }, 'Changed text case'), children: [_jsx("option", { value: "none", children: "Original" }), _jsx("option", { value: "uppercase", children: "UPPER" }), _jsx("option", { value: "lowercase", children: "lower" }), _jsx("option", { value: "capitalize", children: "Title" })] })] })] })] }), _jsxs("section", { children: [_jsxs("header", { children: [_jsx(Maximize, { size: 13 }), " Size & shape"] }), _jsxs("div", { className: "froam-floating-bar__fields", children: [_jsx(NumericField, { label: "Width", value: widthValue, min: 1, max: 5000, unit: "px", onChange: (next) => onStyle({ width: `${next}px` }, { width: `${next}px` }, 'Changed width') }), _jsx(NumericField, { label: "Height", value: heightValue, min: 1, max: 5000, unit: "px", onChange: (next) => onStyle({ height: `${next}px` }, { height: `${next}px` }, 'Changed height') }), _jsx(NumericField, { label: "Padding", value: padding, min: 0, max: 400, unit: "px", onChange: (next) => onStyle({ padding: `${next}px` }, { paddingTop: next, paddingRight: next, paddingBottom: next, paddingLeft: next }, 'Changed padding') }), _jsx(NumericField, { label: "Radius", value: radius, min: 0, max: 1000, unit: "px", onChange: (next) => onStyle({ borderRadius: `${next}px` }, { borderRadiusTL: next, borderRadiusTR: next, borderRadiusBR: next, borderRadiusBL: next }, 'Changed radius') })] }), _jsxs("div", { className: "froam-floating-bar__preset-row", children: [_jsx("button", { type: "button", onClick: () => onStyle({ width: 'auto' }, { width: 'auto' }, 'Width: auto'), children: "Auto W" }), _jsx("button", { type: "button", onClick: () => onStyle({ height: 'auto' }, { height: 'auto' }, 'Height: auto'), children: "Auto H" }), _jsx("button", { type: "button", onClick: () => onStyle({ width: '100%', maxWidth: '100%' }, { width: '100%', maxWidth: '100%' }, 'Fill parent'), children: "Fill" }), _jsx("button", { type: "button", onClick: () => onStyle({ width: 'max-content', height: 'auto', maxWidth: '100%' }, { width: 'max-content', height: 'auto' }, 'Hug content'), children: "Hug" })] })] }), _jsxs("section", { children: [_jsxs("header", { children: [_jsx(LayoutTemplate, { size: 13 }), " Layout"] }), _jsxs("div", { className: "froam-floating-bar__segmented", children: [_jsxs("button", { type: "button", className: display === 'block' ? 'is-active' : '', onClick: () => onStyle({ display: 'block' }, { display: 'block' }, 'Layout: block'), children: [_jsx(RectangleHorizontal, { size: 13 }), " Block"] }), _jsxs("button", { type: "button", className: display.includes('flex') ? 'is-active' : '', onClick: () => onStyle({ display: 'flex' }, { display: 'flex' }, 'Layout: flex'), children: [_jsx(Rows3, { size: 13 }), " Flex"] }), _jsxs("button", { type: "button", className: display === 'grid' ? 'is-active' : '', onClick: () => onStyle({ display: 'grid' }, { display: 'grid' }, 'Layout: grid'), children: [_jsx(Grid2X2, { size: 13 }), " Grid"] })] }), _jsxs("div", { className: "froam-floating-bar__fields", children: [_jsxs("label", { className: "froam-floating-bar__field", children: [_jsx("span", { children: "Direction" }), _jsxs("select", { value: flexDirection, onChange: (event) => onStyle({ display: 'flex', flexDirection: event.target.value }, { display: 'flex', flexDirection: event.target.value }, 'Changed flex direction'), children: [_jsx("option", { value: "row", children: "Row" }), _jsx("option", { value: "column", children: "Column" }), _jsx("option", { value: "row-reverse", children: "Row reverse" }), _jsx("option", { value: "column-reverse", children: "Column reverse" })] })] }), _jsxs("label", { className: "froam-floating-bar__field", children: [_jsx("span", { children: "Justify" }), _jsxs("select", { value: justifyContent, onChange: (event) => onStyle({ justifyContent: event.target.value }, { justifyContent: event.target.value }, 'Changed distribution'), children: [_jsx("option", { value: "flex-start", children: "Start" }), _jsx("option", { value: "center", children: "Center" }), _jsx("option", { value: "flex-end", children: "End" }), _jsx("option", { value: "space-between", children: "Between" }), _jsx("option", { value: "space-around", children: "Around" }), _jsx("option", { value: "space-evenly", children: "Evenly" })] })] }), _jsxs("label", { className: "froam-floating-bar__field", children: [_jsx("span", { children: "Align" }), _jsxs("select", { value: alignItems, onChange: (event) => onStyle({ alignItems: event.target.value }, { alignItems: event.target.value }, 'Changed alignment'), children: [_jsx("option", { value: "stretch", children: "Stretch" }), _jsx("option", { value: "flex-start", children: "Start" }), _jsx("option", { value: "center", children: "Center" }), _jsx("option", { value: "flex-end", children: "End" }), _jsx("option", { value: "baseline", children: "Baseline" })] })] }), _jsx(NumericField, { label: "Gap", value: gap, min: 0, max: 400, unit: "px", onChange: (next) => onStyle({ gap: `${next}px` }, { gap: next }, 'Changed gap') }), _jsxs("label", { className: "froam-floating-bar__field", children: [_jsx("span", { children: "Overflow" }), _jsxs("select", { value: overflow, onChange: (event) => onStyle({ overflow: event.target.value }, { overflow: event.target.value }, 'Changed overflow'), children: [_jsx("option", { value: "visible", children: "Visible" }), _jsx("option", { value: "hidden", children: "Hidden" }), _jsx("option", { value: "auto", children: "Auto" }), _jsx("option", { value: "scroll", children: "Scroll" })] })] })] })] }), _jsxs("section", { children: [_jsxs("header", { children: [_jsx(Layers, { size: 13 }), " Depth & blend"] }), _jsxs("div", { className: "froam-floating-bar__fields", children: [_jsx(NumericField, { label: "Z-index", value: zIndex, min: -999, max: 9999, onChange: (next) => onStyle({ zIndex: String(next) }, { zIndex: next }, 'Changed z-index') }), _jsxs("label", { className: "froam-floating-bar__field", children: [_jsx("span", { children: "Blend" }), _jsxs("select", { value: mixBlendMode, onChange: (event) => onStyle({ mixBlendMode: event.target.value }, { mixBlendMode: event.target.value }, 'Changed blend mode'), children: [_jsx("option", { value: "normal", children: "Normal" }), _jsx("option", { value: "multiply", children: "Multiply" }), _jsx("option", { value: "screen", children: "Screen" }), _jsx("option", { value: "overlay", children: "Overlay" }), _jsx("option", { value: "darken", children: "Darken" }), _jsx("option", { value: "lighten", children: "Lighten" }), _jsx("option", { value: "color-dodge", children: "Color dodge" }), _jsx("option", { value: "color-burn", children: "Color burn" }), _jsx("option", { value: "hard-light", children: "Hard light" }), _jsx("option", { value: "soft-light", children: "Soft light" }), _jsx("option", { value: "difference", children: "Difference" }), _jsx("option", { value: "exclusion", children: "Exclusion" }), _jsx("option", { value: "hue", children: "Hue" }), _jsx("option", { value: "saturation", children: "Saturation" }), _jsx("option", { value: "color", children: "Color" }), _jsx("option", { value: "luminosity", children: "Luminosity" })] })] })] }), _jsxs("div", { className: "froam-floating-bar__preset-row", children: [_jsxs("button", { type: "button", onClick: () => onAction('bring-front'), children: [_jsx(BringToFront, { size: 12 }), " Front"] }), _jsxs("button", { type: "button", onClick: () => onAction('send-back'), children: [_jsx(SendToBack, { size: 12 }), " Back"] })] })] }), _jsxs("section", { className: "froam-floating-bar__actions", children: [_jsxs("button", { type: "button", onClick: () => onAction('image'), children: [_jsx(ImagePlus, { size: 13 }), " Image"] }), _jsxs("button", { type: "button", onClick: () => onAction('duplicate'), children: [_jsx(Copy, { size: 13 }), " Duplicate"] }), _jsxs("button", { type: "button", className: "is-danger", onClick: () => onAction('delete'), children: [_jsx(Trash2, { size: 13 }), " Reset styles"] })] })] }))] }));
+                                                    applyLook(selectedLook, { text: next }); }, disabled: !overrideLookText })] })] }), !isTextLayer && _jsxs("label", { className: `froam-floating-bar__look-radius ${overrideLookRadius ? 'is-enabled' : ''}`, children: [_jsx("input", { type: "checkbox", checked: overrideLookRadius, onChange: (event) => { const next = event.target.checked; setOverrideLookRadius(next); applyLook(selectedLook, { overrideRadius: next }); } }), _jsx("span", { children: "Corner radius" }), _jsx("input", { type: "range", min: "0", max: "64", value: lookRadius, onChange: (event) => { const next = Number(event.target.value); setLookRadius(next); if (overrideLookRadius)
+                                            applyLook(selectedLook, { radius: next }); }, disabled: !overrideLookRadius }), _jsxs("output", { children: [lookRadius, "px"] })] }), _jsxs("p", { children: [isTextLayer ? 'Box effects become glyph effects: fill, gradient, stroke, and text shadow stay on the words.' : 'Every recipe and design-variable change previews directly on the selected element.', " Keep this dock open while you inspect the page."] }), onSaveLook && _jsx("button", { type: "button", className: "froam-floating-bar__look-save", onClick: () => onSaveLook({ name: selectedLook.name, states: { ...lookStateDrafts, [lookState]: customizedLook(selectedLook).styles } }), children: "Save as reusable style" })] })] }), document.body), expanded && (_jsxs("div", { className: "froam-floating-bar__advanced", children: [_jsxs("section", { children: [_jsxs("header", { children: [_jsx(Type, { size: 13 }), " Typography"] }), _jsxs("div", { className: "froam-floating-bar__fields", children: [_jsx(NumericField, { label: "Line", value: lineHeight, min: 0.5, max: 5, step: 0.05, onChange: (next) => onStyle({ lineHeight: String(next) }, { lineHeight: next }, 'Changed line height') }), _jsx(NumericField, { label: "Tracking", value: letterSpacing, min: -20, max: 100, step: 0.1, unit: "px", onChange: (next) => onStyle({ letterSpacing: `${next}px` }, { letterSpacing: next }, 'Changed letter spacing') }), _jsx(NumericField, { label: "Words", value: wordSpacing, min: -20, max: 100, step: 0.5, unit: "px", onChange: (next) => onStyle({ wordSpacing: `${next}px` }, { wordSpacing: next }, 'Changed word spacing') }), _jsxs("label", { className: "froam-floating-bar__field", children: [_jsx("span", { children: "Case" }), _jsxs("select", { value: textTransform, onChange: (event) => onStyle({ textTransform: event.target.value }, { textTransform: event.target.value }, 'Changed text case'), children: [_jsx("option", { value: "none", children: "Original" }), _jsx("option", { value: "uppercase", children: "UPPER" }), _jsx("option", { value: "lowercase", children: "lower" }), _jsx("option", { value: "capitalize", children: "Title" })] })] })] })] }), _jsxs("section", { children: [_jsxs("header", { children: [_jsx(Maximize, { size: 13 }), " Size & shape"] }), _jsxs("div", { className: "froam-floating-bar__fields", children: [_jsx(NumericField, { label: "Width", value: widthValue, min: 1, max: 5000, unit: "px", onChange: (next) => onStyle({ width: `${next}px` }, { width: `${next}px` }, 'Changed width') }), _jsx(NumericField, { label: "Height", value: heightValue, min: 1, max: 5000, unit: "px", onChange: (next) => onStyle({ height: `${next}px` }, { height: `${next}px` }, 'Changed height') }), _jsx(NumericField, { label: "Padding", value: padding, min: 0, max: 400, unit: "px", onChange: (next) => onStyle({ padding: `${next}px` }, { paddingTop: next, paddingRight: next, paddingBottom: next, paddingLeft: next }, 'Changed padding') }), _jsx(NumericField, { label: "Radius", value: radius, min: 0, max: 1000, unit: "px", onChange: (next) => onStyle({ borderRadius: `${next}px` }, { borderRadiusTL: next, borderRadiusTR: next, borderRadiusBR: next, borderRadiusBL: next }, 'Changed radius') })] }), _jsxs("div", { className: "froam-floating-bar__preset-row", children: [_jsx("button", { type: "button", onClick: () => onStyle({ width: 'auto' }, { width: 'auto' }, 'Width: auto'), children: "Auto W" }), _jsx("button", { type: "button", onClick: () => onStyle({ height: 'auto' }, { height: 'auto' }, 'Height: auto'), children: "Auto H" }), _jsx("button", { type: "button", onClick: () => onStyle({ width: '100%', maxWidth: '100%' }, { width: '100%', maxWidth: '100%' }, 'Fill parent'), children: "Fill" }), _jsx("button", { type: "button", onClick: () => onStyle({ width: 'max-content', height: 'auto', maxWidth: '100%' }, { width: 'max-content', height: 'auto' }, 'Hug content'), children: "Hug" })] })] }), _jsxs("section", { children: [_jsxs("header", { children: [_jsx(LayoutTemplate, { size: 13 }), " Layout"] }), _jsxs("div", { className: "froam-floating-bar__segmented", children: [_jsxs("button", { type: "button", className: display === 'block' ? 'is-active' : '', onClick: () => onStyle({ display: 'block' }, { display: 'block' }, 'Layout: block'), children: [_jsx(RectangleHorizontal, { size: 13 }), " Block"] }), _jsxs("button", { type: "button", className: display.includes('flex') ? 'is-active' : '', onClick: () => onStyle({ display: 'flex' }, { display: 'flex' }, 'Layout: flex'), children: [_jsx(Rows3, { size: 13 }), " Flex"] }), _jsxs("button", { type: "button", className: display === 'grid' ? 'is-active' : '', onClick: () => onStyle({ display: 'grid' }, { display: 'grid' }, 'Layout: grid'), children: [_jsx(Grid2X2, { size: 13 }), " Grid"] })] }), _jsxs("div", { className: "froam-floating-bar__fields", children: [_jsxs("label", { className: "froam-floating-bar__field", children: [_jsx("span", { children: "Direction" }), _jsxs("select", { value: flexDirection, onChange: (event) => onStyle({ display: 'flex', flexDirection: event.target.value }, { display: 'flex', flexDirection: event.target.value }, 'Changed flex direction'), children: [_jsx("option", { value: "row", children: "Row" }), _jsx("option", { value: "column", children: "Column" }), _jsx("option", { value: "row-reverse", children: "Row reverse" }), _jsx("option", { value: "column-reverse", children: "Column reverse" })] })] }), _jsxs("label", { className: "froam-floating-bar__field", children: [_jsx("span", { children: "Justify" }), _jsxs("select", { value: justifyContent, onChange: (event) => onStyle({ justifyContent: event.target.value }, { justifyContent: event.target.value }, 'Changed distribution'), children: [_jsx("option", { value: "flex-start", children: "Start" }), _jsx("option", { value: "center", children: "Center" }), _jsx("option", { value: "flex-end", children: "End" }), _jsx("option", { value: "space-between", children: "Between" }), _jsx("option", { value: "space-around", children: "Around" }), _jsx("option", { value: "space-evenly", children: "Evenly" })] })] }), _jsxs("label", { className: "froam-floating-bar__field", children: [_jsx("span", { children: "Align" }), _jsxs("select", { value: alignItems, onChange: (event) => onStyle({ alignItems: event.target.value }, { alignItems: event.target.value }, 'Changed alignment'), children: [_jsx("option", { value: "stretch", children: "Stretch" }), _jsx("option", { value: "flex-start", children: "Start" }), _jsx("option", { value: "center", children: "Center" }), _jsx("option", { value: "flex-end", children: "End" }), _jsx("option", { value: "baseline", children: "Baseline" })] })] }), _jsx(NumericField, { label: "Gap", value: gap, min: 0, max: 400, unit: "px", onChange: (next) => onStyle({ gap: `${next}px` }, { gap: next }, 'Changed gap') }), _jsxs("label", { className: "froam-floating-bar__field", children: [_jsx("span", { children: "Overflow" }), _jsxs("select", { value: overflow, onChange: (event) => onStyle({ overflow: event.target.value }, { overflow: event.target.value }, 'Changed overflow'), children: [_jsx("option", { value: "visible", children: "Visible" }), _jsx("option", { value: "hidden", children: "Hidden" }), _jsx("option", { value: "auto", children: "Auto" }), _jsx("option", { value: "scroll", children: "Scroll" })] })] })] })] }), _jsxs("section", { children: [_jsxs("header", { children: [_jsx(Layers, { size: 13 }), " Depth & blend"] }), _jsxs("div", { className: "froam-floating-bar__fields", children: [_jsx(NumericField, { label: "Z-index", value: zIndex, min: -999, max: 9999, onChange: (next) => onStyle({ zIndex: String(next) }, { zIndex: next }, 'Changed z-index') }), _jsxs("label", { className: "froam-floating-bar__field", children: [_jsx("span", { children: "Blend" }), _jsxs("select", { value: mixBlendMode, onChange: (event) => onStyle({ mixBlendMode: event.target.value }, { mixBlendMode: event.target.value }, 'Changed blend mode'), children: [_jsx("option", { value: "normal", children: "Normal" }), _jsx("option", { value: "multiply", children: "Multiply" }), _jsx("option", { value: "screen", children: "Screen" }), _jsx("option", { value: "overlay", children: "Overlay" }), _jsx("option", { value: "darken", children: "Darken" }), _jsx("option", { value: "lighten", children: "Lighten" }), _jsx("option", { value: "color-dodge", children: "Color dodge" }), _jsx("option", { value: "color-burn", children: "Color burn" }), _jsx("option", { value: "hard-light", children: "Hard light" }), _jsx("option", { value: "soft-light", children: "Soft light" }), _jsx("option", { value: "difference", children: "Difference" }), _jsx("option", { value: "exclusion", children: "Exclusion" }), _jsx("option", { value: "hue", children: "Hue" }), _jsx("option", { value: "saturation", children: "Saturation" }), _jsx("option", { value: "color", children: "Color" }), _jsx("option", { value: "luminosity", children: "Luminosity" })] })] })] }), _jsxs("div", { className: "froam-floating-bar__preset-row", children: [_jsxs("button", { type: "button", onClick: () => onAction('bring-front'), children: [_jsx(BringToFront, { size: 12 }), " Front"] }), _jsxs("button", { type: "button", onClick: () => onAction('send-back'), children: [_jsx(SendToBack, { size: 12 }), " Back"] })] })] }), _jsxs("section", { className: "froam-floating-bar__actions", children: [_jsxs("button", { type: "button", onClick: () => onAction('image'), children: [_jsx(ImagePlus, { size: 13 }), " Image"] }), _jsxs("button", { type: "button", onClick: () => onAction('duplicate'), children: [_jsx(Copy, { size: 13 }), " Duplicate"] }), _jsxs("button", { type: "button", className: "is-danger", onClick: () => onAction('delete'), children: [_jsx(Trash2, { size: 13 }), " Reset styles"] })] })] }))] }));
 }
 //# sourceMappingURL=FroamFloatingBar.js.map

@@ -124,11 +124,11 @@ export default function FroamContextMenu({
         </div>
       )}
 
-      {/* ─── Edit with AI — intentional entry point, not automatic ─── */}
+      {/* Quick Edit is intentional and only opens after a user action. */}
       <div className="froam-context-menu__group">
         <button type="button" className="froam-context-menu__item froam-context-menu__item--ai" onClick={() => handleAction('edit-with-ai')}>
           <Sparkles size={14} />
-          <span>Edit with AI</span>
+          <span>Quick Edit</span>
         </button>
       </div>
 

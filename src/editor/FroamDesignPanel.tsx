@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { FONT_GROUP_LABELS, groupFontOptions, type FontOption } from './fontSources'
 import {
   AlignCenter,
   AlignLeft,
@@ -114,7 +115,9 @@ type Props = {
   // Transform
   onBuildTransformString: (vals: Partial<{ rotate: number; scaleX: number; scaleY: number; skewX: number; skewY: number; translateX: number; translateY: number }>) => string
   // Font options
-  fontOptions: { label: string; value: string }[]
+  fontOptions: FontOption[]
+  /** Add the client's own typeface. Absent outside the repo-connected editor. */
+  onAddBrandFont?: () => void
   // v4.5 Blueprint (Prototype tab)
   getRootEl: () => HTMLElement | null
   onOpenBlueprint: () => void
@@ -266,6 +269,7 @@ export default function FroamDesignPanel({
   onApplySizePreset,
   onBuildTransformString,
   fontOptions,
+  onAddBrandFont,
   getRootEl,
   onOpenBlueprint,
 }: Props) {
@@ -770,10 +774,21 @@ export default function FroamDesignPanel({
         {/* ═══ TYPOGRAPHY ═══ */}
         <SectionHeader title="Text" icon={<Type size={12} />} isOpen={openSections.typography} onToggle={() => toggle('typography')}>
           <div className="froam-dp__stack">
-            {/* Font family */}
+            {/* Font family — grouped by the job the face does, because a flat
+                list of forty families is a scroll, not a choice. */}
             <select className="froam-dp__compact-select froam-dp__full-width" value={s.fontFamily} onChange={(e) => onApplyStyle({ fontFamily: e.target.value }, { fontFamily: e.target.value })} data-chef-editor-root="true">
-              {fontOptions.map((f) => <option key={f.label} value={f.value}>{f.label}</option>)}
+              {groupFontOptions(fontOptions).map(([role, options]) => (
+                <optgroup key={role} label={FONT_GROUP_LABELS[role]}>
+                  {options.map((f) => <option key={f.label} value={f.value}>{f.label}</option>)}
+                </optgroup>
+              ))}
             </select>
+
+            {onAddBrandFont && (
+              <button type="button" className="froam-dp__compact-select froam-dp__full-width" onClick={onAddBrandFont} data-chef-editor-root="true">
+                + Use the client&rsquo;s own font
+              </button>
+            )}
 
             {/* Size, Weight */}
             <div className="froam-dp__row-2">

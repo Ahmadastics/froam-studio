@@ -23,7 +23,7 @@ export declare function validateReferenceDimensions(width: number, height: numbe
     reason?: undefined;
 };
 /** A suggestion from observable width, never a claim about the originating device. */
-export declare function suggestReferenceLabel(width: number): "Desktop" | "Mobile" | "Tablet";
+export declare function suggestReferenceLabel(width: number): "Mobile" | "Desktop" | "Tablet";
 export declare function referenceQualityLabel(value: number | undefined): {
     label: string;
     detail: string;

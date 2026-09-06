@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react'
 import type { FroamIntentState } from './froam-intent-model'
 
 type Props = { state: FroamIntentState; onAllow: () => void; onNotNow: () => void; onKeep: () => void; onRetry: () => void; onCancel: () => void; onDismiss: () => void }
-const BUSY_COPY: Partial<Record<FroamIntentState['phase'], string>> = { preparing: 'Froam is understanding...', requesting: 'Froam is understanding...', retrying: 'Froam is understanding another direction...', 'plan-ready': 'Preparing experiment...', 'creating-prototype': 'Preparing experiment...', adopting: 'Applying...' }
+const BUSY_COPY: Partial<Record<FroamIntentState['phase'], string>> = { preparing: 'Preparing Quick Edit...', requesting: 'Preparing Quick Edit...', retrying: 'Preparing another direction...', 'plan-ready': 'Preparing preview...', 'creating-prototype': 'Preparing preview...', adopting: 'Applying...' }
 function score(value: number | undefined) { return value === undefined ? 'Not measured' : value >= .85 ? 'Strong' : value >= .7 ? 'Good' : value >= .5 ? 'Moderate' : 'Limited' }
 
 export default function FroamIntentResult(props: Props) {
@@ -26,7 +26,7 @@ export default function FroamIntentResult(props: Props) {
   }, [state.phase])
   if (state.phase === 'idle') return null
   if (state.phase === 'awaiting-consent') return <aside ref={surfaceRef} className="froam-intent-result is-consent" data-chef-editor-root="true" role="dialog" aria-label="Froam intelligence consent">
-    <header><Sparkles size={14}/><strong>Ask Froam</strong></header>
+    <header><Sparkles size={14}/><strong>Connected Edit</strong></header>
     <p>Froam can use the configured intelligence provider to prepare this protected experiment.</p>
     <small>It sends bounded interface observations, not source code, credentials, cookies or raw screenshots.</small>
     <div className="froam-intent-result__actions"><button type="button" className="is-primary" data-froam-intent-primary onClick={props.onAllow}>Allow</button><button type="button" onClick={props.onNotNow}>Not now</button></div>

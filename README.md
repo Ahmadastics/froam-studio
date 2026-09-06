@@ -6,23 +6,56 @@
 > Project schema remains v2; Repo Mode and path-based output are unchanged.
 
 [![CI](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-14b8a0.svg)](LICENSE)
+[![License: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-14b8a0.svg)](LICENSE)
 [![Node >= 18](https://img.shields.io/badge/node-%3E%3D18-5eead4.svg)](package.json)
 
 <p align="center">
   <img src="docs/froam-mark.svg" alt="Froam" width="460">
 </p>
 
-Your own visual web editor — Figma-style editing on top of **any live website**,
-with **Repo Mode**: every visual edit compiles to real files in your git repo,
-so `git push` ships your design to production. No database, no runtime API
-dependency, no drift.
+**The visual editor for the site you already have.**
+
+```bash
+npx froam http://localhost:3000
+```
+
+That's the whole setup. Froam opens a Figma-style editor on top of the real,
+running page — and with **Repo Mode**, every visual edit compiles to real files
+in your git repo, so `git push` ships your design to production. No database,
+no runtime API dependency, no drift.
 
 ![Froam Studio — toolbar, site planner, design panel and first-open quick tips over a live page](docs/froam-editor.png)
 
-**Froam works with any project.** Vite, Next.js, Nuxt, SvelteKit,
-Astro, Rails, Django, PHP, WordPress themes, plain HTML — if it serves a page,
-Froam can edit it.
+**Froam reaches stacks other visual editors can't.** It edits the live DOM
+through a proxy instead of parsing your source, so Vite, Next.js, Nuxt,
+SvelteKit, Astro, Rails, Django, PHP, WordPress themes and plain HTML all work
+the same way — including sites Froam didn't build and whose code it never sees.
+Nothing is added to your project to try it.
+
+## Why Froam instead of a design-file editor?
+
+Froam is not trying to be a better blank canvas. It is built for the moment
+after a real site already exists, when the expensive question is not "can we
+mock this up?" but "can we make the thing people are actually visiting feel
+better and ship that change safely?"
+
+What Froam can do that a traditional design-file workflow cannot do on its own:
+
+- **Edit the running site.** The DOM, routes, fonts, content, responsive layout
+  and weird production realities are the canvas.
+- **Ship the edit as code.** Repo Mode compiles visual changes into ordinary
+  files that can be committed, reviewed and deployed.
+- **Avoid design drift.** There is no separate mockup that has to be translated
+  back into implementation later.
+- **Work across stacks.** The universal bridge can sit in front of any project
+  that serves a page, while deeper integrations remain available for React/Vite.
+- **Review the real thing.** Rooms, comments and approvals happen on the live
+  page instead of screenshots floating around a chat thread.
+- **Stay honest about intelligence.** Local editing works without remote AI,
+  remote interpretation is opt-in, and inferred results are labelled as
+  inferred instead of pretending to recover hidden source.
+
+The wedge is simple: **Froam turns live-site taste into shippable code.**
 
 ## The mark
 
@@ -39,6 +72,13 @@ from READMEs, so canvas and WebGL are off the table there.
 
 ## ✨ What's new
 
+**Weekend focus pass — dependable before clever.** The shipping editor now
+presents natural-language editing as **Quick Edit**: common page and
+selected-element commands run locally, suggested commands execute in one tap,
+and remote model-backed intent is disabled by default. Look Studio now includes
+**105** recipes, with a new outcome-focused kit for pricing, trust, calls to
+action, testimonials, product chrome, status messages and conversion sections.
+
 **Unified Froam workflow.** Build organizes pages, composition and reusable
 components. Reference accepts up to 20 PNG, JPEG or WebP screenshots, compares
 observable layout evidence across viewports, and can reconstruct a protected
@@ -47,21 +87,17 @@ not expose original source code, assets, component boundaries or exact
 breakpoints, so Froam labels results as Observed or Inferred rather than claiming
 an exact clone.
 
-**Ask Froam.** Natural-language intent is available through the existing command
-palette when a stable element is selected. Any proposed change is validated into
-ordinary Froam operations on an isolated prototype. The user chooses **Keep**,
-**Try again**, or **Cancel**; Froam never keeps or publishes automatically.
-Deterministic editing, Build, Reference analysis, Save and Repo Mode continue to
-work when remote intelligence is unconfigured.
+**Quick Edit.** Natural-language commands are available from the toolbar,
+context menu and command palette. Common visual, type, spacing, layout, movement,
+copy and page-building requests run locally through validated Froam operations.
+The user chooses **Keep**, **Try again**, or **Cancel**; Froam never keeps or
+publishes automatically. Suggested commands execute in one tap and do not upload
+the page or wait for a model.
 
-Remote interpretation is optional and requires explicit consent. It receives a
-bounded request containing the intent, project/branch/route/viewport identifiers,
-selected-node Scan and DNA summaries, nearby relationships, responsive evidence,
-Reference summaries, constraints and bounded project memory. It does not receive
-credentials, cookies, local storage, repository source, arbitrary files or raw
-screenshot pixels through the intelligence JSON route. Configure a compatible
-server-side provider with `FROAM_AI_API_KEY`, `FROAM_AI_MODEL` and
-`FROAM_AI_BASE_URL`; never expose these values in browser configuration.
+The remote interpretation path remains in the codebase for controlled future
+testing, but is disabled in the shipping editor until it is at least as reliable
+as local Quick Edit. Deterministic editing, Build, Reference analysis, Save and
+Repo Mode do not depend on remote intelligence.
 
 All adopted results remain framework-independent Froam project state and compile
 through the same Save to Repo path used by ordinary editing.
@@ -110,7 +146,7 @@ from 6 to **71**, in ten browsable groups: Depth, Surface, Texture, Effect,
 Shape, Line, Accent, Type, Bold, Reset.
 
 **4.8 — publish everywhere.** The bridge is also a publish backend, and
-`froam-studio/server` mounts the same contract on any stack.
+`froam/server` mounts the same contract on any stack.
 
 **4.7 — perfect fidelity.** Fonts ship with the design, and a trailing slash
 can no longer hide one.
@@ -161,7 +197,7 @@ committable files on your machine.
   keyboard round-trips.
 - **Page palette** — Froam reads the colors your site already uses and
   offers them as one-tap chips (with a contrast check for text).
-- **Look Studio** — 87 searchable style recipes behind the `✦` button, grouped
+- **Look Studio** — 105 searchable style recipes behind the `✦` button, grouped
   into Depth, Surface, Texture, Effect, Shape, Line, Accent, Type, Bold and
   Reset. Pick a recipe, then tune its accent, optional fill/text overrides,
   and corner radius before applying it. Accent-aware gradients and effects
@@ -181,23 +217,37 @@ committable files on your machine.
   previews immediately; **Apply & save** persists both the interaction and its
   keyframes, while **Save reusable** adds the exact motion to Archive.
 
-## Install
+## Quick start
+
+Nothing to install into your project, no config, no build step:
+
+```bash
+npx froam http://localhost:3000    # edit a running site — any stack
+npx froam ./public                 # edit a folder of static HTML
+```
+
+Froam proxies the site on `:4600` with the editor injected, and opens it. Your
+project is untouched — no dependency added, no code changed. Node 18+.
+
+Edit visually, then **Save to Repo** (`Ctrl+Shift+S`). Froam writes committable
+files — commit and push, done.
+
+## Install (optional)
+
+You only need this for Repo Mode's React components and the Vite plugin:
 
 ```bash
 npm install --save-dev git+https://github.com/Ahmadastics/froam-studio.git
 ```
 
-That's it — the package ships prebuilt (`dist/` is committed), so installing
-from GitHub needs no compile step, no registry, no token. Node 18+.
-
-## Quick start (any project)
+The package ships prebuilt (`dist/` is committed), so installing from GitHub
+needs no compile step, no registry, no token.
 
 ```bash
 npx froam init     # detects your stack, scaffolds froam/, wires what it can
-npx froam dev      # universal editor bridge
 ```
 
-`froam dev` has three modes — pick whichever fits:
+`froam dev` is the long form, with three modes — pick whichever fits:
 
 | Mode | Command | What happens |
 | --- | --- | --- |
@@ -241,9 +291,9 @@ text edits, image swaps and injected blocks; the CSS carries all styling.
 **Vite + React apps** get the deepest integration (as in v2):
 
 ```tsx
-import { FroamGate, FroamRuntime, type FroamLocalDesign } from 'froam-studio'
-import 'froam-studio/css'
-import 'froam-studio/gate-css'
+import { FroamGate, FroamRuntime, type FroamLocalDesign } from 'froam'
+import 'froam/css'
+import 'froam/gate-css'
 import froamDesign from './froam'
 
 <FroamRuntime design={froamDesign as FroamLocalDesign} routes="*" />
@@ -269,7 +319,7 @@ Wi-Fi) picks them up.
 For production, mount the same two-endpoint contract on your backend:
 
 ```js
-import { createFroamPublishApi } from 'froam-studio/server'
+import { createFroamPublishApi } from 'froam/server'
 
 const froamApi = createFroamPublishApi({
   file: 'froam/froam.published.json',
@@ -308,7 +358,7 @@ the same contract.
 the identical rules over its own storage:
 
 ```js
-import { createFroamRoomApi } from 'froam-studio/server'
+import { createFroamRoomApi } from 'froam/server'
 
 const rooms = createFroamRoomApi({
   storage: {
@@ -334,7 +384,7 @@ need branch/checkpoint intelligence records across devices. It is intentionally
 separate from—and subordinate to—the Room operation log:
 
 ```js
-import { createFroamProjectSyncApi } from 'froam-studio/server'
+import { createFroamProjectSyncApi } from 'froam/server'
 
 const projectSync = createFroamProjectSyncApi({
   storage: projectStorage,
@@ -358,7 +408,7 @@ written through the GitHub Contents API, and whatever deploys from that repo —
 Vercel, Netlify, Pages — picks it up on its own. No CI, no runner, no bridge.
 
 ```js
-import { createFroamPublishApi, createGitHubCommitter } from 'froam-studio/server'
+import { createFroamPublishApi, createGitHubCommitter } from 'froam/server'
 
 const froamApi = createFroamPublishApi({
   file: 'froam/froam.published.json',
@@ -391,7 +441,7 @@ froam build            recompile design.json → generated.css + runtime.js (CI-
 froam status           design summary, artifact freshness, git state
 froam doctor           health-check the whole setup
 froam migrate          upgrade froam.design.json to v3
-froam version          print the installed froam-studio version
+froam version          print the installed froam version
 ```
 
 All commands accept `--dir <path>` for a custom froam directory.
@@ -420,4 +470,28 @@ when a host app needs explicit wiring. The vite plugin accepts
 
 Designs migrate automatically on load; run `froam migrate` to rewrite the file
 (v2 → v3 adds `meta` and the generated `froam.runtime.js`). The v2 React API
-(`FroamGate`, `FroamRuntime`, `froam-studio/vite`) is unchanged.
+(`FroamGate`, `FroamRuntime`, `froam/vite`) is unchanged.
+
+## License
+
+[FSL-1.1-MIT](LICENSE) — the Functional Source License, with an MIT future
+license. In plain terms:
+
+**You can** use Froam at work, on client projects, inside your company, in
+commercial products you build with it, for teaching and for research. You can
+fork it, modify it and redistribute it. You do not owe anything for any of that.
+
+**You cannot** take Froam and offer it to other people as a competing visual
+editor — a hosted Froam, or a product that is substantially the same thing.
+That is the only restriction.
+
+**It becomes MIT anyway.** Every release converts to the full MIT license two
+years after it ships, automatically and irrevocably. Nothing here can be
+withdrawn later.
+
+One honest caveat: this is *source-available*, not OSI-approved open source.
+If your organisation only permits OSI licenses, use a release that has already
+passed its two-year mark, or get in touch.
+
+Code Froam generates into your repo is yours — the license covers Froam itself,
+not the CSS and design files it writes for you.

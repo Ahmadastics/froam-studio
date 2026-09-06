@@ -10,3 +10,14 @@ Thumbs.db
 
 # Local AI playground — contains user-specific config and credentials
 froam-ai-lab/
+
+# Local editor settings
+.vscode/
+
+# Commercial planning — this repository is PUBLIC. Pricing, pipeline and
+# positioning notes stay on disk; never let `git add -A` sweep them up.
+docs/REVENUE_SPRINT.md
+docs/PROSPECTING_TRACKER.csv
+docs/FROAM_48_HOUR_POLISH_OFFER.md
+docs/COMPETITIVE_POSITIONING.md
+docs/WEEKEND_PRODUCT_READINESS.md

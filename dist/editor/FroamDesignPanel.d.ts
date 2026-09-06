@@ -1,3 +1,4 @@
+import { type FontOption } from './fontSources';
 type SelectionState = {
     path: string;
     label: string;
@@ -95,13 +96,12 @@ type Props = {
         translateX: number;
         translateY: number;
     }>) => string;
-    fontOptions: {
-        label: string;
-        value: string;
-    }[];
+    fontOptions: FontOption[];
+    /** Add the client's own typeface. Absent outside the repo-connected editor. */
+    onAddBrandFont?: () => void;
     getRootEl: () => HTMLElement | null;
     onOpenBlueprint: () => void;
 };
-export default function FroamDesignPanel({ selection, selectionRect, onApplyStyle, onUpdateDraft, onOpenImageUpload, onClearImage, onClearSelectionDraft, marginLinked, paddingLinked, radiusLinked, onToggleMarginLinked, onTogglePaddingLinked, onToggleRadiusLinked, onApplySizePreset, onBuildTransformString, fontOptions, getRootEl, onOpenBlueprint, }: Props): import("react").JSX.Element;
+export default function FroamDesignPanel({ selection, selectionRect, onApplyStyle, onUpdateDraft, onOpenImageUpload, onClearImage, onClearSelectionDraft, marginLinked, paddingLinked, radiusLinked, onToggleMarginLinked, onTogglePaddingLinked, onToggleRadiusLinked, onApplySizePreset, onBuildTransformString, fontOptions, onAddBrandFont, getRootEl, onOpenBlueprint, }: Props): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=FroamDesignPanel.d.ts.map

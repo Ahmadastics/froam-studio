@@ -1,5 +1,43 @@
 # Changelog
 
+## 8.2.0 - 2026-09-05
+
+**Renamed to `froam`.** The package is now `froam`, not `froam-studio`, so
+`npx froam <url>` resolves. Import specifiers move with it: `froam`,
+`froam/css`, `froam/vite`, `froam/server`. The GitHub repository keeps its
+existing name.
+
+**`froam <url>` and `froam <dir>`** are shorthand for the matching `froam dev`
+mode and open the browser, so the first command a newcomer types is one that
+works. Explicit commands still win, so a folder named `build` cannot shadow
+`froam build`.
+
+**Relicensed from MIT to [FSL-1.1-MIT](LICENSE)**, effective 2026-09-05. Free
+for commercial work, client projects, internal use, teaching and research; the
+only prohibition is offering Froam itself as a competing product. Every release
+converts to MIT two years after it ships. Copies obtained under MIT before this
+date remain MIT — the change is not retroactive.
+
+**Brand fonts.** A client's own typeface can be added as an uploaded file or a
+self-hosted https URL. The face travels inside the design as `brandFonts`,
+compiles to `@font-face` in `froam.generated.css`, and so survives Save to Repo
+rather than living only in the editor. Sources are restricted to base64 font
+data URIs and https, and family names are CSS-escaped.
+
+**41 font families, offered honestly.** The picker is derived from a font
+catalog instead of a hand-kept list, and grouped by the job each face does. The
+old list offered "Editorial Sans" and "Neue Montreal", which were in no font
+source and silently fell back; the picker can now only offer families the editor
+and codegen can both load. Adds display, humanist, condensed, slab, editorial
+serif and further mono faces.
+
+**Look Studio: 9 groups, and every recipe explains itself.** `Texture` became
+`Pattern` and `Bold` became `Vibe`, which is what those recipes actually are;
+the four-recipe `Effect` bucket dissolved into the groups its CSS belongs to.
+All 105 recipes carry a one-line description, shown on hover and searchable —
+so "shadow" now finds the fourteen shadow recipes, none of which have "shadow"
+in their name.
+
 ## 8.0.5 - 2026-08-09
 
 **Unified Archive and project memory.** Archive now stores backward-compatible

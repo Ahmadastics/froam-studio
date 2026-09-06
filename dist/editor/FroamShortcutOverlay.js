@@ -30,7 +30,7 @@ const SHORTCUT_GROUPS = [
             { keys: 'Click', label: 'Select element' },
             { keys: 'Shift + Click', label: 'Multi-select' },
             { keys: 'Double-click', label: 'Edit text inline' },
-            { keys: 'Right-click', label: 'Context menu + Edit with AI' },
+            { keys: 'Right-click', label: 'Context menu + Quick Edit' },
             { keys: 'Delete', label: 'Clear element styles' },
         ],
     },

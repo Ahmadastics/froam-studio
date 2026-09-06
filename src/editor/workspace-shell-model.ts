@@ -4,7 +4,7 @@ export type FroamWorkspaceMode = 'create' | 'understand' | 'experiment'
 export type FroamWorkspaceMaturity = 'production' | 'beta' | 'experimental' | 'research' | 'advanced'
 export type FroamTemporalOwner = 'animator' | 'replay' | 'sampling' | 'breakpoint-cinema' | 'trailer' | null
 export type FroamWorkspaceSection =
-  | 'design' | 'plan' | 'blueprint' | 'animator' | 'interactions-create' | 'responsive-create'
+  | 'design' | 'plan' | 'library' | 'blueprint' | 'animator' | 'interactions-create' | 'responsive-create'
   | 'reference' | 'layers' | 'scan' | 'dna' | 'archive' | 'archaeology' | 'flow' | 'attention' | 'rhythm' | 'responsive'
   | 'laboratory' | 'mutate' | 'sample' | 'interactions' | 'physics' | 'gravity' | 'break' | 'test-user' | 'sound' | 'trailer' | 'reality'
   | 'replay' | 'prototypes' | 'advanced'
@@ -29,7 +29,8 @@ export const FROAM_WORKSPACE_MODES: ReadonlyArray<{ id: FroamWorkspaceMode; labe
 
 export const FROAM_WORKSPACE_SECTIONS: readonly FroamWorkspaceSectionDefinition[] = [
   { id: 'design', mode: 'create', label: 'Design', description: 'Style and layout the selection', maturity: 'production', aliases: ['style', 'typography', 'layout'] },
-  { id: 'plan', mode: 'create', label: 'Build', description: 'Draft pages, compose structure and add reusable components', maturity: 'production', aliases: ['insert', 'site planner', 'components', 'compose'] },
+  { id: 'plan', mode: 'create', label: 'Pages', description: 'Organize the live site, draft routes and compose page structure', maturity: 'production', aliases: ['build', 'site planner', 'sitemap', 'routes', 'compose'] },
+  { id: 'library', mode: 'create', label: 'Library', description: 'Reuse production patterns, saved project artifacts and media', maturity: 'production', aliases: ['assets', 'components', 'patterns', 'media', 'archive'] },
   { id: 'blueprint', mode: 'create', label: 'Blueprint', description: 'Open the existing 2D/3D structural view', maturity: 'production', aliases: ['blueprint 2d', 'blueprint 3d'] },
   { id: 'animator', mode: 'create', label: 'Animator', description: 'Edit time-based interaction motion', maturity: 'production', requiresSelection: true, temporalOwner: 'animator', aliases: ['animation', 'timeline'] },
   { id: 'interactions-create', mode: 'create', label: 'Interactions', description: 'Apply behavior to the selection', maturity: 'experimental', requiresSelection: true, labFlag: 'interactionLibrary' },

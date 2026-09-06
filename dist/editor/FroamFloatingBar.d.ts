@@ -1,4 +1,5 @@
 import type { FroamStyleState } from '../project/types';
+import { type FontOption } from './fontSources';
 type FloatingAction = 'bold' | 'italic' | 'underline' | 'strike' | 'align-left' | 'align-center' | 'align-right' | 'align-justify' | 'color' | 'bg-color' | 'clear-bg' | 'image' | 'duplicate' | 'merge' | 'unmerge' | 'delete' | 'edit-text' | 'undo' | 'toggle-hidden' | 'bring-front' | 'send-back';
 type WalkDirection = 'parent' | 'prev' | 'next' | 'child';
 type SelectionPatch = Record<string, string | number>;
@@ -34,11 +35,9 @@ type Props = {
     isHidden?: boolean;
     mixBlendMode: string;
     zIndex: number;
-    fontOptions: Array<{
-        label: string;
-        value: string;
-    }>;
+    fontOptions: FontOption[];
     selectionCount: number;
+    isTextLayer?: boolean;
     docked?: boolean;
     canUndo?: boolean;
     onWalk?: (direction: WalkDirection) => void;
@@ -50,6 +49,7 @@ type Props = {
     }) => void;
 };
 export declare function collectPagePalette(): string[];
-export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, wordSpacing, textTransform, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, width, height, display, flexDirection, justifyContent, alignItems, gap, padding, radius, overflow, opacity, isHidden, mixBlendMode, zIndex, fontOptions, selectionCount, docked, canUndo, onWalk, onAction, onStyle, onSaveLook, }: Props): import("react").JSX.Element | null;
+export declare const LOOK_NOTES: Record<string, string>;
+export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, wordSpacing, textTransform, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, width, height, display, flexDirection, justifyContent, alignItems, gap, padding, radius, overflow, opacity, isHidden, mixBlendMode, zIndex, fontOptions, selectionCount, isTextLayer, docked, canUndo, onWalk, onAction, onStyle, onSaveLook, }: Props): import("react").JSX.Element | null;
 export {};
 //# sourceMappingURL=FroamFloatingBar.d.ts.map

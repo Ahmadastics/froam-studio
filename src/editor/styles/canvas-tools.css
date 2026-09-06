@@ -622,7 +622,7 @@
   color: #ff9786;
 }
 
-/* ─── Edit with AI entry — intentional, not automatic ─── */
+/* Quick Edit entry — intentional, not automatic */
 .froam-context-menu__item--ai {
   color: rgba(var(--fs-accent-control-rgb), 0.9);
   font-weight: 600;

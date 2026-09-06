@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * froam — the Froam Studio v3 CLI. Visual editing for ANY project:
+ * froam — the Froam Studio CLI. Visual editing for ANY project:
  * Vite, Next.js, Nuxt, SvelteKit, Astro, Rails, PHP, plain HTML —
  * if it serves a page, Froam can edit it and write the design into
  * your repo as committable files.
@@ -275,7 +275,7 @@ function init(flags) {
   const froamDir = resolveFroamDir(flags.dir)
   const froamDirRel = relDir(froamDir)
 
-  log(`${teal('◆')} ${bold('Froam Studio v3')} ${dim('· init')}`)
+  log(`${teal('◆')} ${bold('Froam Studio')} ${dim(`v${packageVersion()} · init`)}`)
   log(`${OK} detected ${bold(FRAMEWORK_LABELS[framework])}`)
 
   ensureScaffold(froamDir, { glue: isBundledReact })
@@ -326,7 +326,7 @@ function dev(flags) {
   const exposeHost = flags.host === true ? '0.0.0.0' : typeof flags.host === 'string' ? flags.host : null
 
   server.listen(port, exposeHost ?? '127.0.0.1', () => {
-    log(`${teal('◆')} ${bold('Froam Bridge')} ${dim('v3')}`)
+    log(`${teal('◆')} ${bold('Froam Bridge')} ${dim(`v${packageVersion()}`)}`)
     log()
     if (appTarget) {
       log(`  ${bold('mode')}     proxy → ${teal(appTarget.origin)} ${dim('(editor injected into every page)')}`)
@@ -472,7 +472,11 @@ function migrate(flags) {
 
 /* ── help ────────────────────────────────────────────────────── */
 function help() {
-  log(`${teal('◆')} ${bold('froam')} ${dim('v3')} — visual editor that writes git-ready design files, for any project`)
+  log(`${teal('◆')} ${bold('froam')} ${dim(`v${packageVersion()}`)} — visual editor that writes git-ready design files, for any project`)
+  log()
+  log(bold('Quick start'))
+  log(`  ${teal('froam <url>')}        edit a running site   ${dim('froam http://localhost:3000')}`)
+  log(`  ${teal('froam <dir>')}        edit a static folder  ${dim('froam ./public')}`)
   log()
   log(bold('Commands'))
   log(`  ${teal('init')}               detect project type, scaffold froam files, wire everything`)
@@ -491,10 +495,41 @@ function help() {
   log(dim('  All commands accept --dir <path> to point at a custom froam directory.'))
 }
 
-/* ── dispatch ────────────────────────────────────────────────── */
-const { flags } = parseFlags(rest)
+/* ── shorthand ───────────────────────────────────────────────── */
+const KNOWN_COMMANDS = new Set([
+  'init', 'dev', 'build', 'status', 'doctor', 'migrate',
+  'version', '--version', '-v', 'help', '--help', '-h',
+])
 
-switch (cmd) {
+/**
+ * `froam <url>` and `froam <dir>` are shorthand for the matching `froam dev`,
+ * so the first thing a newcomer types is the thing that works. A real command
+ * always wins, so a folder called `build` still can't shadow `froam build`.
+ */
+function resolveShorthand(command, args) {
+  if (command === undefined || KNOWN_COMMANDS.has(command)) return { command, args }
+
+  const looksLikeUrl = /^https?:\/\//i.test(command)
+  const looksLikeHost = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(\/|$)/i.test(command)
+  const looksLikePort = /^\d{2,5}$/.test(command)
+  if (looksLikeUrl || looksLikeHost || looksLikePort) {
+    return { command: 'dev', args: ['--app', command, '--open', ...args] }
+  }
+
+  let isDirectory = false
+  try {
+    isDirectory = fs.statSync(path.resolve(cwd, command)).isDirectory()
+  } catch { /* not a path we can serve — fall through to the unknown-command error */ }
+  if (isDirectory) return { command: 'dev', args: ['--serve', command, '--open', ...args] }
+
+  return { command, args }
+}
+
+/* ── dispatch ────────────────────────────────────────────────── */
+const { command: resolvedCommand, args: resolvedArgs } = resolveShorthand(cmd, rest)
+const { flags } = parseFlags(resolvedArgs)
+
+switch (resolvedCommand) {
   case 'init': init(flags); break
   case 'dev': dev(flags); break
   case 'build': build(flags); break
@@ -503,7 +538,7 @@ switch (cmd) {
   case 'migrate': migrate(flags); break
   case 'version':
   case '--version':
-  case '-v': log(`froam-studio v${packageVersion()}`); break
+  case '-v': log(`froam v${packageVersion()}`); break
   case 'help':
   case '--help':
   case '-h':

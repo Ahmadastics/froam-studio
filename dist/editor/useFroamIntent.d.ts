@@ -29,6 +29,7 @@ type Props = {
     onActivityChange: (activity: Activity) => void;
     onToast: (message: string) => void;
     onExecuteLocalCommand?: (intent: string) => boolean;
+    enableRemoteIntent?: boolean;
     onValidateReference?: (plan: FroamReferenceBuildPlan, signal: AbortSignal) => Promise<FroamReferenceBuildValidation>;
     request?: (request: Parameters<typeof requestIntelligencePlan>[0], signal: AbortSignal) => Promise<FroamIntelligenceResponse | FroamIntelligenceNotConfiguredResponse>;
 };

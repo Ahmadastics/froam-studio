@@ -24,21 +24,24 @@ export default function FroamQuickChat({ open, selectionLabel, busy, onSubmit, o
   if (!open) return null
   const targetLabel = selectionLabel || 'this page'
   const suggestions = selectionLabel ? selectedSuggestions : pageSuggestions
+  const submitIntent = (intent: string) => {
+    const command = intent.trim()
+    if (!command || busy) return
+    onSubmit(command)
+  }
   const send = (event?: FormEvent) => {
     event?.preventDefault()
-    const intent = value.trim()
-    if (!intent || busy) return
-    onSubmit(intent)
+    submitIntent(value)
   }
-  return <section className="froam-quick-chat" data-chef-editor-root="true" role="dialog" aria-label={`Edit ${targetLabel} with Froam`}>
-    <header><span><Sparkles size={14}/><b>Ask Froam · {targetLabel}</b></span><button type="button" onClick={onClose} aria-label="Close Ask Froam"><X size={14}/></button></header>
+  return <section className="froam-quick-chat" data-chef-editor-root="true" role="dialog" aria-label={`Quick Edit ${targetLabel}`}>
+    <header><span><Sparkles size={14}/><b>Quick Edit · {targetLabel}</b></span><button type="button" onClick={onClose} aria-label="Close Quick Edit"><X size={14}/></button></header>
     <form onSubmit={send}>
-      <input ref={inputRef} value={value} onChange={(event) => setValue(event.target.value)} placeholder={selectionLabel ? 'Describe the change…' : 'What should Froam change or add?'} aria-label="Describe the change" disabled={busy}/>
+      <input ref={inputRef} value={value} onChange={(event) => setValue(event.target.value)} placeholder={selectionLabel ? 'Describe a visual change…' : 'Run a quick local command…'} aria-label="Describe the change" disabled={busy}/>
       <button type="submit" className="is-send" disabled={!value.trim() || busy} aria-label="Preview change"><ArrowUp size={16}/></button>
     </form>
-    <div className="froam-quick-chat__suggestions" aria-label="Quick commands">
-      {suggestions.map((suggestion) => <button type="button" key={suggestion} onClick={() => { setValue(suggestion); inputRef.current?.focus() }}>{suggestion}</button>)}
+    <div className="froam-quick-chat__suggestions" aria-label="One-tap commands">
+      {suggestions.map((suggestion) => <button type="button" key={suggestion} disabled={busy} onClick={() => submitIntent(suggestion)}>{suggestion}</button>)}
     </div>
-    <small>{busy ? 'Understanding your request…' : 'Common edits run locally; configured intelligence handles more complex requests. You review changes before keeping them.'}</small>
+    <small>{busy ? 'Preparing a safe preview…' : 'Fast local edits first. Nothing is uploaded, and you review every change before keeping it.'}</small>
   </section>
 }

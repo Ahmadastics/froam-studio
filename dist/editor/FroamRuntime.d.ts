@@ -1,4 +1,5 @@
 import { type FroamStudioConfig } from '../config';
+import { type BrandFont } from './fontSources';
 type ElementDraft = {
     text?: string;
     imageUrl?: string;
@@ -9,6 +10,8 @@ export type FroamLocalDesign = {
     version: number;
     updatedAt?: string | null;
     routes: Record<string, Partial<Record<ViewportMode, Record<string, ElementDraft>>>>;
+    /** Client typefaces carried by the design itself — see fontSources. */
+    brandFonts?: BrandFont[];
 };
 export type FroamRuntimeProps = Pick<FroamStudioConfig, 'apiBaseUrl' | 'fetch' | 'rootSelector'> & {
     enabled?: boolean;

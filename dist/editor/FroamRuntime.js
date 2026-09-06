@@ -4,7 +4,7 @@ import { configureFroamStudio, getFroamRootElement, getFroamStudioConfig, } from
 import { apiGetFresh } from '../lib/api.js';
 import FroamReview from './FroamReview.js';
 import { readRoomFromLocation } from '../collab/room.js';
-import { collectStoreFontFamilies, ensureFontLinks } from './fontSources.js';
+import { collectStoreFontFamilies, ensureBrandFontStyle, ensureFontLinks } from './fontSources.js';
 import { normalizeFroamRouteKey, useFroamRouteKey } from '../routing.js';
 import { isFroamPersonaPath } from './froamPersona.js';
 const CANVAS_KEY = '__froam_canvas__';
@@ -370,6 +370,12 @@ export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true
             return;
         ensureFontLinks(collectStoreFontFamilies(publishedStore));
     }, [publishedStore, isRuntimeRoute]);
+    /* Brand faces travel inside the design, so they load without a stylesheet. */
+    useEffect(() => {
+        if (!isRuntimeRoute)
+            return;
+        ensureBrandFontStyle(design?.brandFonts);
+    }, [design, isRuntimeRoute]);
     useEffect(() => {
         const root = getRoot();
         restoreRuntimeSnapshots(appliedSnapshotsRef.current);

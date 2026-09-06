@@ -8,6 +8,7 @@ import { emptyProjectState } from '../dist/project/event-log.js'
 import { animationPresetInteraction, FROAM_ANIMATION_PRESETS } from '../dist/editor/FroamAnimationPresets.js'
 import { DEFAULT_FROAM_UI_PREFERENCE, froamUIPanelWidth, readFroamUIPreference, sanitizeFroamUIPreference, writeFroamUIPreference } from '../dist/editor/froamUIPreferences.js'
 import { FROAM_REFERENCE_ACCEPTED_TYPES, FROAM_REFERENCE_CONSENT_KEY, readReferenceConsent, referenceQualityLabel, suggestReferenceLabel, validateReferenceDimensions, validateReferenceFile, writeReferenceConsent } from '../dist/editor/reference-workspace-model.js'
+import { projectTextLayerStyles } from '../dist/editor/text-style-projection.js'
 import {
   FROAM_WORKSPACE_MODES,
   readWorkspacePreference,
@@ -37,13 +38,34 @@ test('contextual selection tools disable without hiding their meaning', () => {
   assert.equal(workspaceSections('create', flags, true).find(({ id }) => id === 'animator')?.contextual, true)
 })
 
-test('Build remains in Create while Reference and Layers are structural Understand surfaces', () => {
+test('Pages and Library remain in Create while Reference and Layers are structural Understand surfaces', () => {
   const create = workspaceSections('create', defaultFroamLabsFlags(), true)
   const understand = workspaceSections('understand', defaultFroamLabsFlags(), true)
-  assert.equal(create.find(({ id }) => id === 'plan')?.label, 'Build')
+  assert.equal(create.find(({ id }) => id === 'plan')?.label, 'Pages')
+  assert.equal(create.find(({ id }) => id === 'library')?.label, 'Library')
   assert.equal(create.some(({ id }) => id === 'layers'), false)
   assert.equal(understand.find(({ id }) => id === 'reference')?.label, 'Reference')
   assert.equal(understand.find(({ id }) => id === 'layers')?.label, 'Layers')
+})
+
+test('text layers receive glyph effects instead of accidental boxes', () => {
+  const projected = projectTextLayerStyles({ background: '#111827', color: '#f8fafc', boxShadow: '0 14px 34px rgba(0, 0, 0, 0.22)', border: '2px solid #14b8a6', borderRadius: '16px' })
+  assert.equal(projected.color, '#f8fafc')
+  assert.equal(projected.WebkitTextFillColor, '#f8fafc')
+  assert.equal(projected.textShadow, '0 14px 34px rgba(0, 0, 0, 0.22)')
+  assert.equal(projected.WebkitTextStrokeWidth, '2px')
+  assert.equal(projected.WebkitTextStrokeColor, '#14b8a6')
+  assert.equal('background' in projected, false)
+  assert.equal('boxShadow' in projected, false)
+  assert.equal('borderRadius' in projected, false)
+
+  const gradient = projectTextLayerStyles({ backgroundImage: 'linear-gradient(90deg, #14b8a6, #60a5fa)' })
+  assert.equal(gradient.backgroundClip, 'text')
+  assert.equal(gradient.WebkitTextFillColor, 'transparent')
+
+  const hover = projectTextLayerStyles({ '__froamState:hover:boxShadow': '0 4px 10px #0008' })
+  assert.equal(hover['__froamState:hover:textShadow'], '0 4px 10px #0008')
+  assert.equal('__froamState:hover:boxShadow' in hover, false)
 })
 
 test('Blueprint has one canonical workspace home', () => {
@@ -197,14 +219,19 @@ test('simple shell, quick chat, mobile, reduced-motion, and advanced surfaces st
   const editor = fs.readFileSync(new URL('../src/editor/GlobalChefEditor.tsx', import.meta.url), 'utf8')
   const css = fs.readFileSync(new URL('../src/editor/styles/workspace-shell.css', import.meta.url), 'utf8')
   assert.match(shell, /label: 'Design'/)
-  assert.match(shell, /label: 'Build'/)
+  assert.match(shell, /label: 'Pages'/)
+  assert.match(shell, /label: 'Library'/)
   assert.match(shell, /label: 'Reference'/)
   assert.match(shell, /label: 'Layers'/)
   assert.match(shell, /label: 'Animate'/)
   assert.match(shell, /onOpenCommands/)
   assert.match(shell, /onAskFroam/)
-  assert.match(quickChat, /What should Froam change or add\?/)
-  assert.match(quickChat, /Common edits run locally/)
+  assert.match(shell, /Quick Edit/)
+  assert.match(quickChat, /Run a quick local command/)
+  assert.match(quickChat, /Fast local edits first/)
+  assert.match(quickChat, /onClick=\{\(\) => submitIntent\(suggestion\)\}/)
+  assert.doesNotMatch(`${shell}\n${quickChat}\n${toolbar}`, /Ask Froam|Edit with AI/)
+  assert.match(editor, /enableRemoteIntent: false/)
   assert.match(editor, /role="dialog"/)
   assert.match(editor, /workspacePreference\.advancedOpen/)
   assert.match(editor, /FroamBlueprint/)
@@ -229,22 +256,31 @@ test('simple shell, quick chat, mobile, reduced-motion, and advanced surfaces st
   assert.match(css, /froam-intelligence>nav,.froam-labs>nav\{display:none\}/)
 })
 
-test('Build and relocated Layers use the connected project and Reference owns screenshot reconstruction', () => {
+test('Pages and Library use the connected project while Reference owns screenshot reconstruction', () => {
   const planner = fs.readFileSync(new URL('../src/editor/FroamSitePlanner.tsx', import.meta.url), 'utf8')
   const layers = fs.readFileSync(new URL('../src/editor/FroamLayersPanel.tsx', import.meta.url), 'utf8')
   const editor = fs.readFileSync(new URL('../src/editor/GlobalChefEditor.tsx', import.meta.url), 'utf8')
   const reference = fs.readFileSync(new URL('../src/editor/FroamReferenceWorkspace.tsx', import.meta.url), 'utf8')
   const intelligence = fs.readFileSync(new URL('../src/editor/FroamIntelligence.tsx', import.meta.url), 'utf8')
   const blueprint = fs.readFileSync(new URL('../src/editor/FroamBlueprint.tsx', import.meta.url), 'utf8')
+  const floatingBar = fs.readFileSync(new URL('../src/editor/FroamFloatingBar.tsx', import.meta.url), 'utf8')
   assert.match(planner, /Graph synced/)
   assert.match(planner, /onPlanChange\(plan\.pages\)/)
   assert.match(planner, /Saved in this project/)
+  assert.match(planner, /Project media/)
+  assert.match(planner, /aria-label="Project name"/)
   assert.match(layers, /role="tree"/)
   assert.match(layers, /role="treeitem"/)
   assert.match(layers, /Stable identity connected/)
   assert.match(layers, /event\.key === 'ArrowDown'/)
   assert.match(editor, /sitePlanGraphRecords\(pages\)/)
-  assert.match(editor, /LayoutGrid size=\{13\} \/> Build/)
+  assert.match(editor, /ListTree size=\{13\} \/> Pages/)
+  assert.match(editor, /Grid2X2 size=\{13\} \/> Library/)
+  assert.match(editor, /onAddAsset=\{addAssetEntry\}/)
+  assert.match(editor, /onApplyAsset=\{applyAssetToSelection\}/)
+  assert.match(editor, /caretRangeFromPoint/)
+  assert.match(editor, /projectTextLayerStyles\(styles\)/)
+  assert.match(floatingBar, /text-safe/)
   assert.match(editor, /FileImage size=\{13\} \/> Reference/)
   assert.doesNotMatch(editor, /Layers size=\{13\} \/> Outline/)
   assert.match(blueprint, /Open Layers and DOM structure/)
@@ -259,6 +295,10 @@ test('Build and relocated Layers use the connected project and Reference owns sc
 test('Look Studio stays docked beside the canvas and previews variable edits live', () => {
   const floatingBar = fs.readFileSync(new URL('../src/editor/FroamFloatingBar.tsx', import.meta.url), 'utf8')
   const canvasTools = fs.readFileSync(new URL('../src/editor/styles/canvas-tools.css', import.meta.url), 'utf8')
+  const lookBlock = floatingBar.slice(floatingBar.indexOf('const LOOKS: Look[] = ['), floatingBar.indexOf('\nfunction NumericField'))
+  const recipeNames = [...lookBlock.matchAll(/\n\s+name: '([^']+)'/g)].map((match) => match[1])
+  assert.equal(recipeNames.length, 105)
+  for (const name of ['Pricing card', 'Feature tile', 'Testimonial', 'Launch CTA', 'Trust badge', 'Conversion strip', 'Success state', 'Warning state']) assert.ok(recipeNames.includes(name), `${name} recipe missing`)
   assert.match(floatingBar, /createPortal/)
   assert.match(floatingBar, /Look Studio live editor/)
   assert.match(floatingBar, /live preview/)

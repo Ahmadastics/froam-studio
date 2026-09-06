@@ -8,7 +8,7 @@ import {
 import { apiGetFresh } from '../lib/api'
 import FroamReview from './FroamReview'
 import { readRoomFromLocation } from '../collab/room'
-import { collectStoreFontFamilies, ensureFontLinks } from './fontSources'
+import { type BrandFont, collectStoreFontFamilies, ensureBrandFontStyle, ensureFontLinks } from './fontSources'
 import { normalizeFroamRouteKey, useFroamRouteKey } from '../routing'
 import { isFroamPersonaPath } from './froamPersona'
 
@@ -55,6 +55,8 @@ export type FroamLocalDesign = {
   version: number
   updatedAt?: string | null
   routes: Record<string, Partial<Record<ViewportMode, Record<string, ElementDraft>>>>
+  /** Client typefaces carried by the design itself — see fontSources. */
+  brandFonts?: BrandFont[]
 }
 
 export type FroamRuntimeProps = Pick<FroamStudioConfig, 'apiBaseUrl' | 'fetch' | 'rootSelector'> & {
@@ -459,6 +461,12 @@ export default function FroamRuntime({
     if (!isRuntimeRoute || !publishedStore) return
     ensureFontLinks(collectStoreFontFamilies(publishedStore))
   }, [publishedStore, isRuntimeRoute])
+
+  /* Brand faces travel inside the design, so they load without a stylesheet. */
+  useEffect(() => {
+    if (!isRuntimeRoute) return
+    ensureBrandFontStyle(design?.brandFonts)
+  }, [design, isRuntimeRoute])
 
   useEffect(() => {
     const root = getRoot()

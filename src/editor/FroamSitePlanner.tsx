@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDown,
   ArrowUp,
@@ -9,6 +9,7 @@ import {
   Frame,
   Grid2X2,
   Heart,
+  ImagePlus,
   LayoutTemplate,
   ListTree,
   Network,
@@ -32,7 +33,7 @@ import {
   type FroamWireframeSection,
 } from './FroamPlannerTypes'
 
-type PlannerTab = 'blueprint' | 'sitemap' | 'wireframe' | 'library'
+export type PlannerTab = 'blueprint' | 'sitemap' | 'wireframe' | 'library'
 
 type SitePage = {
   id: string
@@ -74,8 +75,15 @@ type Props = {
   routeKey: string
   projectName: string
   branchName: string
+  requestedTab?: PlannerTab
   selection: { nodeId?: string; label: string } | null
   archiveItems: Array<{ id: string; name: string; html?: string }>
+  assets?: Array<{ id: string; name: string; url: string }>
+  onRenameProject?: (name: string) => void
+  onAddAsset?: (url: string, name: string) => void
+  onApplyAsset?: (url: string) => void
+  onRemoveAsset?: (id: string) => void
+  onTabChange?: (tab: PlannerTab) => void
   onInsertComponent: (componentId: string, placement: FroamInsertPlacement, frame: FroamFrameSpec) => void
   onInsertBlankFrame: (placement: FroamInsertPlacement, frame: FroamFrameSpec) => void
   onInsertBlock: (kind: 'section' | 'container' | 'grid' | 'text' | 'image' | 'button', placement: 'inside' | 'after') => void
@@ -463,11 +471,14 @@ function ComponentPreview({ componentId }: { componentId: string }) {
   )
 }
 
-export default function FroamSitePlanner({ routeKey, projectName, branchName, selection, archiveItems, onInsertComponent, onInsertBlankFrame, onInsertBlock, onInsertArchived, onBuildPage, onPlanChange, onToast }: Props) {
+export default function FroamSitePlanner({ routeKey, projectName, branchName, requestedTab, selection, archiveItems, assets = [], onRenameProject, onAddAsset, onApplyAsset, onRemoveAsset, onTabChange, onInsertComponent, onInsertBlankFrame, onInsertBlock, onInsertArchived, onBuildPage, onPlanChange, onToast }: Props) {
   const [plan, setPlan] = useState<SitePlan>(() => loadPlan(routeKey))
   const [blueprintDraft, setBlueprintDraft] = useState<BlueprintDraft>(() => loadBlueprintDraft(routeKey))
   const [planningPrompt, setPlanningPrompt] = useState('')
   const [tab, setTab] = useState<PlannerTab>('blueprint')
+  const [projectNameDraft, setProjectNameDraft] = useState(projectName)
+  const [assetUrlDraft, setAssetUrlDraft] = useState('')
+  const mediaInputRef = useRef<HTMLInputElement | null>(null)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<(typeof FROAM_CATEGORIES)[number]>('All')
   const [favoritesOnly, setFavoritesOnly] = useState(false)
@@ -478,6 +489,9 @@ export default function FroamSitePlanner({ routeKey, projectName, branchName, se
     setPlan(loadPlan(routeKey))
     setBlueprintDraft(loadBlueprintDraft(routeKey))
   }, [routeKey])
+
+  useEffect(() => { if (requestedTab) setTab(requestedTab) }, [requestedTab])
+  useEffect(() => { setProjectNameDraft(projectName) }, [projectName])
 
   useEffect(() => {
     try { window.localStorage.setItem(storageKey(routeKey), JSON.stringify(plan)) } catch { /* project graph remains authoritative when browser preferences are full */ }
@@ -766,6 +780,27 @@ export default function FroamSitePlanner({ routeKey, projectName, branchName, se
     }))
   }
 
+  function commitProjectName() {
+    const next = projectNameDraft.trim()
+    if (!next) { setProjectNameDraft(projectName); return }
+    setPlan((current) => ({ ...current, projectName: next }))
+    if (next !== projectName) onRenameProject?.(next)
+  }
+
+  function addMediaUrl() {
+    const url = assetUrlDraft.trim()
+    if (!url) return
+    if (!/^(https?:\/\/|data:image\/)/i.test(url)) { onToast('Use an http(s) image URL or upload an image'); return }
+    const name = url.startsWith('data:image/') ? 'Pasted image' : url.split('/').pop()?.split('?')[0] || 'Image'
+    onAddAsset?.(url, name)
+    setAssetUrlDraft('')
+  }
+
+  function selectTab(next: PlannerTab) {
+    setTab(next)
+    onTabChange?.(next)
+  }
+
   function renderPageCard(page: SitePage, depth = 0) {
     const children = plan.pages.filter((candidate) => candidate.parentId === page.id)
     return (
@@ -793,7 +828,20 @@ export default function FroamSitePlanner({ routeKey, projectName, branchName, se
       <header className="fsp-context">
         <div className="fsp-context__project">
           <Network size={14} />
-          <span><strong>{projectName}</strong><small>{branchName} · {routeKey}</small></span>
+          <span>
+            <input
+              className="fsp-project-name-input"
+              aria-label="Project name"
+              value={projectNameDraft}
+              onChange={(event) => setProjectNameDraft(event.target.value)}
+              onBlur={commitProjectName}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur()
+                if (event.key === 'Escape') { setProjectNameDraft(projectName); event.currentTarget.blur() }
+              }}
+            />
+            <small>{branchName} · {routeKey}</small>
+          </span>
           <em>Graph synced</em>
         </div>
         <div className={`fsp-context__selection ${selection ? 'has-selection' : ''}`}>
@@ -803,17 +851,17 @@ export default function FroamSitePlanner({ routeKey, projectName, branchName, se
         </div>
       </header>
       <div className="fsp-tabs" role="tablist" aria-label="Froam planning tools">
-        <button type="button" className={tab === 'blueprint' ? 'is-active' : ''} onClick={() => setTab('blueprint')}>
+        <button type="button" className={tab === 'blueprint' ? 'is-active' : ''} onClick={() => selectTab('blueprint')}>
           <Frame size={14} /> Draft
         </button>
-        <button type="button" className={tab === 'sitemap' ? 'is-active' : ''} onClick={() => setTab('sitemap')}>
+        <button type="button" className={tab === 'sitemap' ? 'is-active' : ''} onClick={() => selectTab('sitemap')}>
           <ListTree size={14} /> Pages
         </button>
-        <button type="button" className={tab === 'wireframe' ? 'is-active' : ''} onClick={() => setTab('wireframe')}>
+        <button type="button" className={tab === 'wireframe' ? 'is-active' : ''} onClick={() => selectTab('wireframe')}>
           <LayoutTemplate size={14} /> Compose
         </button>
-        <button type="button" className={tab === 'library' ? 'is-active' : ''} onClick={() => setTab('library')}>
-          <Grid2X2 size={14} /> Add
+        <button type="button" className={tab === 'library' ? 'is-active' : ''} onClick={() => selectTab('library')}>
+          <Grid2X2 size={14} /> Library
         </button>
       </div>
 
@@ -993,7 +1041,7 @@ export default function FroamSitePlanner({ routeKey, projectName, branchName, se
             </div>
             <div className="fsp-page-editor__actions">
               <button type="button" onClick={() => addPage(selectedPage.id)}><Plus size={13} /> Child page</button>
-              <button type="button" onClick={() => setTab('wireframe')}><LayoutTemplate size={13} /> Open wireframe</button>
+              <button type="button" onClick={() => selectTab('wireframe')}><LayoutTemplate size={13} /> Open wireframe</button>
             </div>
           </div>
         </div>
@@ -1072,7 +1120,7 @@ export default function FroamSitePlanner({ routeKey, projectName, branchName, se
               )
             })}
             {selectedPage.sections.length === 0 && (
-              <button type="button" className="fsp-empty" onClick={() => setTab('library')}>
+              <button type="button" className="fsp-empty" onClick={() => selectTab('library')}>
                 <Grid2X2 size={22} />
                 Add the first section from the library
               </button>
@@ -1080,7 +1128,7 @@ export default function FroamSitePlanner({ routeKey, projectName, branchName, se
           </div>
 
           <div className="fsp-build-bar">
-            <button type="button" className="is-secondary" onClick={() => setTab('library')}>
+            <button type="button" className="is-secondary" onClick={() => selectTab('library')}>
               <Plus size={14} /> Add section
             </button>
             <button type="button" className="is-primary" onClick={buildSelectedPage} disabled={selectedPage.sections.length === 0}>
@@ -1092,6 +1140,43 @@ export default function FroamSitePlanner({ routeKey, projectName, branchName, se
 
       {tab === 'library' && (
         <div className="fsp-pane">
+          <section className="fsp-media-shelf" aria-label="Project media">
+            <div className="fsp-shelf-heading">
+              <span><strong>Project media</strong><small>{assets.length} reusable image{assets.length === 1 ? '' : 's'}</small></span>
+              <button type="button" onClick={() => mediaInputRef.current?.click()} disabled={!onAddAsset}><ImagePlus size={12}/> Upload</button>
+            </div>
+            <div className="fsp-media-url">
+              <input value={assetUrlDraft} onChange={(event) => setAssetUrlDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') addMediaUrl() }} placeholder="Paste an image URL…" aria-label="Image URL" />
+              <button type="button" onClick={addMediaUrl} disabled={!assetUrlDraft.trim() || !onAddAsset}>Add</button>
+            </div>
+            <input
+              ref={mediaInputRef}
+              className="fsp-visually-hidden"
+              type="file"
+              accept="image/*"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                event.target.value = ''
+                if (!file || !onAddAsset) return
+                const reader = new FileReader()
+                reader.onload = () => { if (typeof reader.result === 'string') onAddAsset(reader.result, file.name.replace(/\.[^.]+$/, '')) }
+                reader.readAsDataURL(file)
+              }}
+            />
+            {assets.length > 0 ? (
+              <div className="fsp-media-grid">
+                {assets.map((asset) => (
+                  <article key={asset.id} className="fsp-media-card">
+                    <button type="button" className="fsp-media-card__use" onClick={() => onApplyAsset?.(asset.url)} title={selection ? `Apply ${asset.name} to ${selection.label}` : `Insert ${asset.name}`}>
+                      <img src={asset.url} alt="" loading="lazy" />
+                      <span>{asset.name}</span>
+                    </button>
+                    <button type="button" className="fsp-media-card__remove" onClick={() => onRemoveAsset?.(asset.id)} aria-label={`Remove ${asset.name}`}><Trash2 size={11}/></button>
+                  </article>
+                ))}
+              </div>
+            ) : <p className="fsp-shelf-empty">Upload once, then reuse the image anywhere on the live site.</p>}
+          </section>
           <section className="fsp-quick-add" aria-label="Quick building blocks">
             <div><span>Quick add</span><small>{selection ? `to ${selection.label}` : 'to page end'}</small></div>
             <div className="fsp-quick-add__grid">
@@ -1123,7 +1208,7 @@ export default function FroamSitePlanner({ routeKey, projectName, branchName, se
           </div>
 
           {archiveItems.length > 0 && (
-            <section className="fsp-archive-shelf" aria-label="Component Archive">
+            <section className="fsp-archive-shelf" aria-label="Saved project artifacts">
               <div className="fsp-library-count"><strong>Saved in this project</strong><span>{archiveItems.length} reusable</span></div>
               <div className="fsp-archive-shelf__items">
                 {archiveItems.slice(0, 8).map((item) => (

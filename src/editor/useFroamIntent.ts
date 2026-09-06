@@ -36,6 +36,7 @@ type Props = {
   onActivityChange: (activity: Activity) => void
   onToast: (message: string) => void
   onExecuteLocalCommand?: (intent: string) => boolean
+  enableRemoteIntent?: boolean
   onValidateReference?: (plan: FroamReferenceBuildPlan, signal: AbortSignal) => Promise<FroamReferenceBuildValidation>
   request?: (request: Parameters<typeof requestIntelligencePlan>[0], signal: AbortSignal) => Promise<FroamIntelligenceResponse | FroamIntelligenceNotConfiguredResponse>
 }
@@ -43,6 +44,7 @@ type Props = {
 function safeIntentError(error: unknown) {
   const code = error instanceof Error ? error.message : 'provider_unavailable'
   if (code === 'not_configured') return 'That request needs connected intelligence. Configure a provider for the Froam bridge, then restart Froam.'
+  if (code === 'remote_intent_disabled') return 'Quick Edit is focused on safe local edits right now. Try a direct visual command like "make it bolder", "center the content", or "add more space".'
   if (code === 'provider_unavailable') return 'The connected intelligence provider did not respond. Check the provider settings and try again.'
   if (code === 'no_valid_proposals') return "Froam couldn't find a safe change for that request."
   if (code === 'provider_invalid_response' || code === 'invalid_request') return "Froam couldn't prepare a safe experiment."
@@ -162,6 +164,7 @@ export function useFroamIntent(props: Props) {
     if (!request) { if (abortRef.current === operation.controller) abortRef.current = null; dispatch({ type: 'fail', message: 'Froam couldn\'t identify that element reliably. Select it again and retry.' }); return }
     try {
       const localProposals = createLocalFroamIntentProposals(pending.snapshot, pending.session.intent)
+      if (!localProposals.length && !props.enableRemoteIntent) throw new Error('remote_intent_disabled')
       const response: FroamIntelligenceResponse | FroamIntelligenceNotConfiguredResponse = localProposals.length
         ? { schemaVersion: 1, purpose: 'mutate', provider: 'froam-local-command@1', proposals: localProposals, rationale: 'Prepared instantly on this device.', confidence: .98 }
         : props.request ? await props.request(request, operation.controller.signal) : await requestIntelligencePlan(request, fetch, operation.controller.signal)
@@ -186,7 +189,7 @@ export function useFroamIntent(props: Props) {
       if (!operation.current() || operation.controller.signal.aborted) return
       dispatch({ type: 'fail', message: safeIntentError(error) })
     } finally { if (abortRef.current === operation.controller) abortRef.current = null }
-  }, [contextIsCurrent, props.actorId, props.onPreviewStore, props.request, props.routeKey, props.setProject, props.viewport, startOperation])
+  }, [contextIsCurrent, props.actorId, props.enableRemoteIntent, props.onPreviewStore, props.request, props.routeKey, props.setProject, props.viewport, startOperation])
 
   const performReference = useCallback(async (pending: PendingReferenceIntent) => {
     const operation = startOperation(pending)
@@ -239,9 +242,9 @@ export function useFroamIntent(props: Props) {
     const session: FroamIntentSession = { id: `intent:${Date.now().toString(36)}`, origin: input.origin, intent, selectedNodeId: snapshot.node.id, selectedPath: snapshot.path, targetLabel, automaticTarget, sourceBranchId: projectRef.current.activeBranchId, attempt: 1, maxAttempts: FROAM_INTENT_MAX_ATTEMPTS }
     const pending: PendingIntelligenceIntent = { kind: 'intelligence', session, snapshot, source: sourceContext(), targetElement, targetLabel, automaticTarget, elementFingerprint: fingerprint(targetElement), feedback: null }; pendingRef.current = pending
     dispatch({ type: 'submit', session })
-    if (createLocalFroamIntentProposals(snapshot, intent).length === 0 && readFroamIntelligenceConsent(typeof localStorage === 'undefined' ? undefined : localStorage) !== 'allowed') { dispatch({ type: 'require-consent' }); return }
+    if (props.enableRemoteIntent && createLocalFroamIntentProposals(snapshot, intent).length === 0 && readFroamIntelligenceConsent(typeof localStorage === 'undefined' ? undefined : localStorage) !== 'allowed') { dispatch({ type: 'require-consent' }); return }
     await performRequest(pending)
-  }, [fingerprint, observeTarget, performRequest, props.onExecuteLocalCommand, props.root, resolveAutomaticTarget, sourceContext])
+  }, [fingerprint, observeTarget, performRequest, props.enableRemoteIntent, props.onExecuteLocalCommand, props.root, resolveAutomaticTarget, sourceContext])
 
   const submitReference = useCallback(async (input: { understanding: FroamReferenceUnderstanding; target: FroamReferenceBuildTarget; intent?: string }) => {
     if (stateRef.current.phase !== 'idle' && stateRef.current.phase !== 'completed' && stateRef.current.phase !== 'error') return

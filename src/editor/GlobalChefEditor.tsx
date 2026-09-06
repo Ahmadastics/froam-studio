@@ -34,12 +34,14 @@ import {
   FileImage,
   FileText,
   GitCommit,
+  Grid2X2,
   Grip,
   ImagePlus,
   Italic,
   Keyboard,
   Layers,
   LayoutGrid,
+  ListTree,
   Link,
   Minus,
   Monitor,
@@ -91,7 +93,7 @@ import FroamExport from './FroamExport'
 import FroamShortcutOverlay from './FroamShortcutOverlay'
 import FroamSmartGuides, { type AlignmentGuide } from './FroamSmartGuides'
 import FroamVersionPanel from './FroamVersionPanel'
-import FroamSitePlanner from './FroamSitePlanner'
+import FroamSitePlanner, { type PlannerTab } from './FroamSitePlanner'
 import { createFroamLibraryComponent, FROAM_COMPONENTS } from './FroamComponentCatalog'
 import FroamDesignSystemPanel from './FroamDesignSystemPanel'
 import {
@@ -124,6 +126,7 @@ import FroamWorkspaceShell from './FroamWorkspaceShell'
 import FroamUICustomizer from './FroamUICustomizer'
 import { froamUIPanelWidth, readFroamUIPreference, writeFroamUIPreference } from './froamUIPreferences'
 import { FROAM_WORKSPACE_SECTIONS, readWorkspacePreference, workspaceCommandMatches, writeWorkspacePreference, type FroamTemporalOwner, type FroamWorkspaceMode, type FroamWorkspaceSection } from './workspace-shell-model'
+import { projectTextLayerStyles } from './text-style-projection'
 import { readFroamLabsFlags, writeFroamLabsFlags } from '../project/experiments'
 import { appendProjectEvents, createProjectEvent, deriveBranchState, switchProjectBranch } from '../project/event-log'
 import { validateReferenceBuildCandidate, type FroamReferenceBuildPlan, type FroamReferenceCandidateObservation } from '../project/reference-build'
@@ -142,7 +145,14 @@ import { upsertAnimationCss } from '../project/animator-adapter'
 import { createReusableStyle, saveReusableStyle, upsertComponentFamily } from '../project/design-system'
 import type { FroamDesignSystem, FroamStyleState } from '../project/types'
 import { createFrameworkIdentityObserver, type FroamFrameworkFinding } from '../project/framework-identity'
-import { collectStoreFontFamilies, ensureFontLinks } from './fontSources'
+import {
+  type BrandFont,
+  collectStoreFontFamilies,
+  ensureBrandFontStyle,
+  ensureFontLinks,
+  fontOptionsFor,
+  sanitizeBrandFonts,
+} from './fontSources'
 import { useFroamRouteKey } from '../routing'
 import {
   DEFAULT_FROAM_PERSONA,
@@ -363,31 +373,36 @@ type FroamToolMode = 'pointer' | 'hand' | 'text' | 'frame' | 'shape' | 'move'
 // ID of the portal element Froam injects to host the device shell
 const DEVICE_SHELL_ID = 'froam-device-shell'
 
-const fontOptions = [
-  { label: 'Editorial Sans', value: '"Editorial Sans", "Satoshi", system-ui, sans-serif' },
-  { label: 'Cabinet Grotesk', value: '"Cabinet Grotesk", "Satoshi", system-ui, sans-serif' },
-  { label: 'Satoshi', value: 'Satoshi, system-ui, sans-serif' },
-  { label: 'Neue Montreal', value: 'Neue Montreal, system-ui, sans-serif' },
-  { label: 'Inter', value: 'Inter, system-ui, sans-serif' },
-  { label: 'Manrope', value: 'Manrope, system-ui, sans-serif' },
-  { label: 'DM Sans', value: '"DM Sans", system-ui, sans-serif' },
-  { label: 'Plus Jakarta Sans', value: 'Plus Jakarta Sans, system-ui, sans-serif' },
-  { label: 'Space Grotesk', value: 'Space Grotesk, system-ui, sans-serif' },
-  { label: 'Urbanist', value: 'Urbanist, system-ui, sans-serif' },
-  { label: 'Outfit', value: 'Outfit, system-ui, sans-serif' },
-  { label: 'Poppins', value: 'Poppins, system-ui, sans-serif' },
-  { label: 'Montserrat', value: 'Montserrat, system-ui, sans-serif' },
-  { label: 'Avenir Next', value: '"Avenir Next", Avenir, system-ui, sans-serif' },
-  { label: 'SF Pro', value: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif' },
-  { label: 'Playfair Display', value: '"Playfair Display", Georgia, serif' },
-  { label: 'Cormorant Garamond', value: '"Cormorant Garamond", Georgia, serif' },
-  { label: 'Lora', value: 'Lora, Georgia, serif' },
-  { label: 'Merriweather', value: 'Merriweather, Georgia, serif' },
-  { label: 'Fraunces', value: 'Fraunces, Georgia, serif' },
-  { label: 'JetBrains Mono', value: 'JetBrains Mono, ui-monospace, monospace' },
-  { label: 'IBM Plex Mono', value: '"IBM Plex Mono", ui-monospace, monospace' },
-  { label: 'Space Mono', value: '"Space Mono", ui-monospace, monospace' },
-]
+/* The picker's list is derived from the font catalog (see fontOptionsFor),
+   so it can only ever offer families the editor and codegen can both load.
+   The list this replaced was hand-kept and had drifted: it offered
+   "Editorial Sans" and "Neue Montreal", which are in no font source, so
+   picking them changed nothing on the page. */
+
+const BRAND_FONTS_KEY = 'froam-brand-fonts-v1'
+/** A woff2 is usually well under 100KB; this is generous but still loadable. */
+const BRAND_FONT_MAX_BYTES = 1_000_000
+
+function loadBrandFonts(): BrandFont[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(BRAND_FONTS_KEY)
+    return raw ? sanitizeBrandFonts(JSON.parse(raw)) : []
+  } catch {
+    return []
+  }
+}
+
+function saveBrandFonts(fonts: BrandFont[]) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(BRAND_FONTS_KEY, JSON.stringify(fonts))
+  } catch {
+    // An uploaded face can be large enough to blow the quota. The design
+    // matters more than the convenience copy, so fail quietly — the font
+    // still lives in the design once it has been saved to the repo.
+  }
+}
 
 const displayOptions = ['block', 'flex', 'grid', 'inline-flex', 'inline-block', 'inline', 'none']
 const flexDirectionOptions = ['row', 'row-reverse', 'column', 'column-reverse']
@@ -974,6 +989,16 @@ function canApplyTextDraft(element: HTMLElement) {
   if (element.children.length === 0) return true
   const tag = element.tagName.toLowerCase()
   return ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'small', 'strong', 'em', 'b', 'i', 'label', 'button', 'a', 'li'].includes(tag)
+}
+
+const TEXT_VISUAL_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'small', 'strong', 'em', 'b', 'i', 'blockquote', 'figcaption', 'cite', 'dt', 'dd', 'li'])
+const INLINE_TEXT_CHILD_TAGS = new Set(['span', 'small', 'strong', 'em', 'b', 'i', 'mark', 'cite', 'br', 'wbr'])
+
+function isTextVisualLayer(element: HTMLElement) {
+  if (element.dataset.froamShape === 'true') return false
+  const tag = element.tagName.toLowerCase()
+  if (!TEXT_VISUAL_TAGS.has(tag) || !element.innerText.trim()) return false
+  return Array.from(element.children).every((child) => INLINE_TEXT_CHILD_TAGS.has(child.tagName.toLowerCase()))
 }
 
 function sanitizeDraftForElement(element: HTMLElement, draft: ElementDraft): ElementDraft {
@@ -1667,6 +1692,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   // Core state
   const [store, setStore] = useState<EditorStore>(() => loadStore())
+  const [brandFonts, setBrandFonts] = useState<BrandFont[]>(() => loadBrandFonts())
   const nodeRegistryRef = useRef<FroamNodeRegistry>(loadNodeRegistry())
   const [buttonPosition, setButtonPosition] = useState(CHEF_BUTTON_START)
   const [panelPosition, setPanelPosition] = useState<{ x: number; y: number } | null>(null)
@@ -1719,6 +1745,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [uiPreference, setUIPreference] = useState(() => readFroamUIPreference(typeof localStorage === 'undefined' ? undefined : localStorage))
   const [uiCustomizerOpen, setUICustomizerOpen] = useState(false)
   const [leftWorkspaceMode, setLeftWorkspaceMode] = useState<'plan' | 'reference' | 'layers'>(() => workspacePreference.sections.understand === 'reference' ? 'reference' : workspacePreference.sections.understand === 'layers' ? 'layers' : 'plan')
+  const [plannerRequestedTab, setPlannerRequestedTab] = useState<PlannerTab>(() => workspacePreference.sections.create === 'library' ? 'library' : 'sitemap')
   // v4: phone-first editing — compact chrome on small viewports, touch behaviors on coarse pointers
   const isMobileUI = useMediaQuery(MOBILE_UI_QUERY)
   const isTouchDevice = useMediaQuery(COARSE_POINTER_QUERY)
@@ -2268,6 +2295,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     ensureFontLinks(collectStoreFontFamilies(routeDrafts))
   }, [routeDrafts])
 
+  /* The client's own typeface, same rule: preview it exactly as it will ship. */
+  useEffect(() => {
+    ensureBrandFontStyle(brandFonts)
+    saveBrandFonts(brandFonts)
+  }, [brandFonts])
+
+  /* Offer the brand faces in the picker the moment they are added. */
+  const fontOptions = useMemo(() => fontOptionsFor(brandFonts), [brandFonts])
+
   /*
    * Keep the log level with the store, whoever moved it.
    *
@@ -2376,7 +2412,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     if (wants(/^(?:redo|redo that)$/)) { redo(); return true }
     if (wants(/\b(save|save draft)\b/) && request.split(/\s+/).length <= 4) { saveToRunam(); return true }
     if (wants(/\b(open|show)\s+(?:the\s+)?layers\b/)) { openWorkspaceSection('layers', 'understand'); return true }
-    if (wants(/\b(open|show)\s+(?:the\s+)?(?:build|components?)\b/)) { openWorkspaceSection('plan', 'create'); return true }
+    if (wants(/\b(open|show)\s+(?:the\s+)?(?:pages?|sitemap|routes?|build)\b/)) { openWorkspaceSection('plan', 'create'); return true }
+    if (wants(/\b(open|show)\s+(?:the\s+)?(?:library|assets?|components?|patterns?)\b/)) { openWorkspaceSection('library', 'create'); return true }
     if (wants(/\b(open|show)\s+(?:the\s+)?reference\b/)) { openWorkspaceSection('reference', 'understand'); return true }
     if (wants(/\b(?:turn on|enable|use|enter)\s+move(?: mode)?\b|\bmove mode\b/)) { setActiveTool('move'); setMoveMode(true); showToast('Move mode on — drag any element freely'); return true }
     if (wants(/\b(?:select|pointer) tool\b/)) { setActiveTool('pointer'); setMoveMode(false); showToast('Select tool active'); return true }
@@ -2440,6 +2477,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     onActivityChange: setWorkspaceActivity,
     onToast: showToast,
     onExecuteLocalCommand: executeLocalFroamCommand,
+    enableRemoteIntent: false,
     onValidateReference: validateReferenceBuildOnCanvas,
   })
 
@@ -2930,6 +2968,21 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       return null
     }
 
+    function resolveTextTargetAtPoint(event: MouseEvent, fallback: HTMLElement) {
+      const range = document.caretRangeFromPoint?.(event.clientX, event.clientY)
+      const start = range?.startContainer
+      let element = start instanceof HTMLElement ? start : start?.parentElement ?? null
+      while (element && rootElement.contains(element)) {
+        if (isTextVisualLayer(element)) {
+          const rect = element.getBoundingClientRect()
+          if (event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) return element
+        }
+        if (element === fallback) break
+        element = element.parentElement
+      }
+      return fallback
+    }
+
     let hoverFrame = 0
 
     function handlePointerOver(event: Event) {
@@ -2950,7 +3003,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
 
     function handleClick(event: MouseEvent) {
-      const target = resolveTarget(event.target)
+      const resolvedTarget = resolveTarget(event.target)
+      const target = resolvedTarget ? resolveTextTargetAtPoint(event, resolvedTarget) : null
       if (!target) {
         if (!(event.target instanceof HTMLElement) || event.target.closest('[data-chef-editor-root="true"]')) return
         if (panelOpenRef.current) {
@@ -3024,12 +3078,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         return
       }
 
-      // NOTE: Do NOT open AI here. Left-click only selects.
-      // AI is opened intentionally via right-click → "Edit with AI" in the context menu.
+      // Left-click only selects. Quick Edit opens from an explicit user command.
     }
 
     function handleDblClick(event: MouseEvent) {
-      const target = resolveTarget(event.target)
+      const resolvedTarget = resolveTarget(event.target)
+      const target = resolvedTarget ? resolveTextTargetAtPoint(event, resolvedTarget) : null
       if (!target) return
       const textTarget = target
       setQuickChatOpen(false)
@@ -3097,7 +3151,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
 
     function handleContextMenu(event: MouseEvent) {
-      const target = resolveTarget(event.target)
+      const resolvedTarget = resolveTarget(event.target)
+      const target = resolvedTarget ? resolveTextTargetAtPoint(event, resolvedTarget) : null
       if (!target) return
       event.preventDefault()
       event.stopPropagation()
@@ -3811,7 +3866,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   }
 
   /* ─── Draft update ─── */
-  function updateDraft(updater: (draft: ElementDraft) => ElementDraft, nextSelection?: Partial<SelectionState>, historyLabel?: string) {
+  function updateDraft(updater: (draft: ElementDraft, target: HTMLElement) => ElementDraft, nextSelection?: Partial<SelectionState>, historyLabel?: string) {
     if (!selection) return
     if ((selections.length ? selections : [selection]).some((item) => guardRemoteLock(item.path))) return
     const root = getRoot()
@@ -3903,7 +3958,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       }
 
       const currentDraft = routeStore[sel.path] ?? {}
-      const nextDraft = sanitizeDraftForElement(target, updater(currentDraft))
+      const nextDraft = sanitizeDraftForElement(target, updater(currentDraft, target))
       applyDraft(target, nextDraft)
       syncFroamArtboardMetadata(target)
       routeStore[sel.path] = nextDraft
@@ -3922,17 +3977,37 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   }
 
   function applyStyle(styles: Record<string, string>, nextSel?: Partial<SelectionState>, label?: string) {
+    const root = getRoot()
+    const selectedElements = root ? (selections.length ? selections : selection ? [selection] : []).map((item) => findElementByPath(root, item.path)).filter((item): item is HTMLElement => item !== null) : []
+    const textOnlySelection = selectedElements.length > 0 && selectedElements.every(isTextVisualLayer)
+    const projectedStyles = textOnlySelection ? projectTextLayerStyles(styles) : styles
+    const projectedSelection = textOnlySelection ? { ...(nextSel ?? {}) } : nextSel
+    if (textOnlySelection && projectedSelection) {
+      delete projectedSelection.background
+      delete projectedSelection.borderColor
+      delete projectedSelection.borderWidth
+      delete projectedSelection.borderStyle
+      delete projectedSelection.borderRadiusTL
+      delete projectedSelection.borderRadiusTR
+      delete projectedSelection.borderRadiusBR
+      delete projectedSelection.borderRadiusBL
+      delete projectedSelection.boxShadow
+      if (/^#[\da-f]{3,8}$/i.test(projectedStyles.color ?? '')) projectedSelection.color = projectedStyles.color
+      if (projectedStyles.textShadow !== undefined) projectedSelection.textShadow = projectedStyles.textShadow === 'none' ? '' : projectedStyles.textShadow
+    }
     updateDraft(
-      (draft) => ({ ...draft, styles: { ...(draft.styles ?? {}), ...styles } }),
-      nextSel,
+      (draft, target) => ({ ...draft, styles: { ...(draft.styles ?? {}), ...(isTextVisualLayer(target) ? projectTextLayerStyles(styles) : styles) } }),
+      projectedSelection,
       label ?? `Style: ${Object.keys(styles).join(', ')}`,
     )
   }
 
   function previewEncodedStateStyles(styles: Record<string, string>) {
-    const encoded = Object.entries(styles).filter(([key]) => key.startsWith('__froamState:'))
-    if (!encoded.length || !currentSelectionRef.current) return
     const target = currentSelectionRef.current
+    if (!target) return
+    const previewStyles = isTextVisualLayer(target) ? projectTextLayerStyles(styles) : styles
+    const encoded = Object.entries(previewStyles).filter(([key]) => key.startsWith('__froamState:'))
+    if (!encoded.length) return
     const state = encoded[0][0].split(':')[1] as Exclude<FroamStyleState, 'base'>
     const id = target.dataset.froamStateTarget || ensureFroamNodeId(target)
     target.dataset.froamStateTarget = id
@@ -4321,7 +4396,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       const response = await window.fetch(bridgeUrl('/__froam/repo/save'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ routeKey, viewportMode, store: cleanDrafts }),
+        body: JSON.stringify({ routeKey, viewportMode, store: cleanDrafts, brandFonts }),
       })
       const data = await response.json().catch(() => null) as { success?: boolean; error?: string } | null
       if (!response.ok || !data?.success) throw new Error(data?.error || 'Repo bridge unavailable')
@@ -5222,6 +5297,56 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     event.target.value = ''
   }
 
+  /*
+   * Add the client's own typeface.
+   *
+   * The face is inlined into the design as a data URI rather than dropped in
+   * a folder, so it survives Save to Repo and reaches production through the
+   * same path as everything else — no asset pipeline to configure, nothing to
+   * host. The input is built here instead of living in the JSX so this stays
+   * self-contained.
+   */
+  function addBrandFont() {
+    keepStudioPinned()
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.woff2,.woff,.ttf,.otf'
+    input.onchange = () => {
+      const file = input.files?.[0]
+      if (!file) return
+      // Base64 costs a third on top, and this rides inside the design file.
+      if (file.size > BRAND_FONT_MAX_BYTES) {
+        showToast(`${file.name} is ${Math.round(file.size / 1024)}KB — keep brand faces under ${Math.round(BRAND_FONT_MAX_BYTES / 1024)}KB`)
+        return
+      }
+      const extension = /\.([a-z0-9]+)$/i.exec(file.name)?.[1]?.toLowerCase()
+      const format = extension === 'woff2' ? 'woff2'
+        : extension === 'woff' ? 'woff'
+        : extension === 'ttf' ? 'truetype'
+        : extension === 'otf' ? 'opentype'
+        : undefined
+      const reader = new FileReader()
+      reader.onerror = () => showToast('Could not read that font file')
+      reader.onload = () => {
+        const src = typeof reader.result === 'string' ? reader.result : ''
+        const suggested = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim()
+        const family = window.prompt('Name this font — this is what the CSS will call it', suggested)?.trim()
+        if (!family) return
+        const added = sanitizeBrandFonts([{ family, faces: [{ src, format }] }])
+        if (!added.length) {
+          showToast('That file could not be read as a font')
+          return
+        }
+        // Re-adding a family replaces it, so uploading a corrected file
+        // does the obvious thing instead of stacking a duplicate face.
+        setBrandFonts((current) => [...current.filter((font) => font.family !== family), ...added])
+        showToast(`${family} added — it's under Brand in the font list`)
+      }
+      reader.readAsDataURL(file)
+    }
+    input.click()
+  }
+
   function openSelectedImageUpload() {
     keepStudioPinned()
     pendingCanvasImageRef.current = false
@@ -5601,6 +5726,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     showToast('Asset applied')
   }
 
+  function renameProject(name: string) {
+    const next = name.trim()
+    if (!next || next === projectSession.project.name) return
+    projectSession.setProject((current) => ({ ...current, name: next, updatedAt: Date.now() }))
+    showToast(`Project renamed to ${next}`)
+  }
+
   /* ─── Build transform string ─── */
   function buildTransformString(vals: { rotate?: number; scaleX?: number; scaleY?: number; skewX?: number; skewY?: number; translateX?: number; translateY?: number }) {
     const s = selection
@@ -5629,7 +5761,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     setWorkspacePreference((current) => ({ ...current, mode }))
     setWorkspaceActivity(null)
     setTemporalOwner(null)
-    if (mode === 'create') { setIntelligenceOpen(false); setLabsOpen(false); setConnectedCanvasOpen(false); setRightPanelOpen(true) }
+    if (mode === 'create') {
+      setIntelligenceOpen(false); setLabsOpen(false); setConnectedCanvasOpen(false)
+      if (section === 'plan' || section === 'library') {
+        setRightPanelOpen(false); setLeftPanelOpen(true); setLeftWorkspaceMode('plan'); setPlannerRequestedTab(section === 'library' ? 'library' : 'sitemap')
+      } else setRightPanelOpen(true)
+    }
     else if (mode === 'understand') {
       setLabsOpen(false); setConnectedCanvasOpen(false); setRightPanelOpen(false)
       if (section === 'reference' || section === 'layers') { setIntelligenceOpen(false); setLeftPanelOpen(true); setLeftWorkspaceMode(section); if (section === 'layers') { const root = getRoot(); if (root) setLayers(collectLayers(root)) } }
@@ -5654,9 +5791,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       return
     }
     if (mode === 'create') {
-      if (section === 'plan') {
+      if (section === 'plan' || section === 'library') {
         setLeftPanelOpen(true)
-        setLeftWorkspaceMode(section)
+        setRightPanelOpen(false)
+        setLeftWorkspaceMode('plan')
+        setPlannerRequestedTab(section === 'library' ? 'library' : 'sitemap')
         return
       }
       if (section === 'animator') { setRequestedConnectedTab('interaction'); setConnectedCanvasOpen(true); return }
@@ -6138,8 +6277,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               ))}
               {askFroamVisible && (
                 <li id="froam-command-ask" role="option" aria-selected={commandFocusIndex === 0} className={`fs-command-palette__item fs-command-palette__ask ${commandFocusIndex === 0 ? 'is-focused' : ''}`}>
-                  <button type="button" tabIndex={-1} aria-label={`Ask Froam: ${commandSearch.trim()}`} onClick={executeAskFroam}>
-                    <Sparkles size={15}/><span className="fs-command-palette__item-label"><strong>Ask Froam</strong><small>{commandSearch.trim()}</small></span><span className="fs-command-palette__item-shortcut">Enter</span>
+                  <button type="button" tabIndex={-1} aria-label={`Quick Edit: ${commandSearch.trim()}`} onClick={executeAskFroam}>
+                    <Sparkles size={15}/><span className="fs-command-palette__item-label"><strong>Quick Edit</strong><small>{commandSearch.trim()}</small></span><span className="fs-command-palette__item-shortcut">Enter</span>
                   </button>
                 </li>
               )}
@@ -6316,10 +6455,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             <div className="froam-figma-left__tabs" data-chef-editor-root="true">
               <button
                 type="button"
-                className={leftWorkspaceMode === 'plan' ? 'is-active' : ''}
+                className={leftWorkspaceMode === 'plan' && activeWorkspaceSection !== 'library' ? 'is-active' : ''}
                 onClick={() => openWorkspaceSection('plan', 'create')}
               >
-                <LayoutGrid size={13} /> Build
+                <ListTree size={13} /> Pages
+              </button>
+              <button
+                type="button"
+                className={leftWorkspaceMode === 'plan' && activeWorkspaceSection === 'library' ? 'is-active' : ''}
+                onClick={() => openWorkspaceSection('library', 'create')}
+              >
+                <Grid2X2 size={13} /> Library
               </button>
               <button
                 type="button"
@@ -6337,8 +6483,19 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                       routeKey={routeKey}
                       projectName={projectSession.project.name}
                       branchName={projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId}
+                      requestedTab={plannerRequestedTab}
                       selection={selection ? { nodeId: selection.nodeId, label: selection.label } : null}
                       archiveItems={plannerArchiveItems}
+                      assets={assets}
+                      onRenameProject={renameProject}
+                      onAddAsset={addAssetEntry}
+                      onApplyAsset={applyAssetToSelection}
+                      onRemoveAsset={removeAsset}
+                      onTabChange={(nextTab) => {
+                        setPlannerRequestedTab(nextTab)
+                        const section = nextTab === 'library' ? 'library' : 'plan'
+                        setWorkspacePreference((current) => ({ ...current, mode: 'create', sections: { ...current.sections, create: section } }))
+                      }}
                       onInsertComponent={insertLibraryComponent}
                       onInsertBlankFrame={insertBlankFrame}
                       onInsertBlock={addStructureBlock}
@@ -6406,6 +6563,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   onApplySizePreset={applySizePreset}
                   onBuildTransformString={buildTransformString}
                   fontOptions={fontOptions}
+                  onAddBrandFont={addBrandFont}
                   getRootEl={getRoot}
                   onOpenBlueprint={() => setBlueprintOpen(true)}
                 />
@@ -8256,6 +8414,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           zIndex={selection.zIndex}
           fontOptions={fontOptions}
           selectionCount={selections.length}
+          isTextLayer={currentSelectionRef.current ? isTextVisualLayer(currentSelectionRef.current) : false}
           onSaveLook={({ name, states }) => {
             const style = createReusableStyle({ id: `style:look:${Date.now().toString(36)}`, name: `${name} custom`, states })
             replaceDesignSystem(saveReusableStyle(activeProjectState.designSystem, style), `Saved reusable style: ${style.name}`)
