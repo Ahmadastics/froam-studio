@@ -14,6 +14,9 @@ froam-ai-lab/
 # Local editor settings
 .vscode/
 
+# npm pack output
+*.tgz
+
 # Commercial planning — this repository is PUBLIC. Pricing, pipeline and
 # positioning notes stay on disk; never let `git add -A` sweep them up.
 docs/REVENUE_SPRINT.md
