@@ -16,7 +16,7 @@
 **The visual editor for the site you already have.**
 
 ```bash
-npx froam http://localhost:3000
+npx @ahmadastic/froam http://localhost:3000
 ```
 
 That's the whole setup. Froam opens a Figma-style editor on top of the real,
@@ -222,8 +222,8 @@ committable files on your machine.
 Nothing to install into your project, no config, no build step:
 
 ```bash
-npx froam http://localhost:3000    # edit a running site — any stack
-npx froam ./public                 # edit a folder of static HTML
+npx @ahmadastic/froam http://localhost:3000    # edit a running site — any stack
+npx @ahmadastic/froam ./public                 # edit a folder of static HTML
 ```
 
 Froam proxies the site on `:4600` with the editor injected, and opens it. Your
@@ -237,7 +237,7 @@ files — commit and push, done.
 You only need this for Repo Mode's React components and the Vite plugin:
 
 ```bash
-npm install --save-dev froam
+npm install --save-dev @ahmadastic/froam
 ```
 
 The npm package ships prebuilt, so installation needs no compile step. The

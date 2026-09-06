@@ -1,5 +1,5 @@
 {
-  "name": "froam",
+  "name": "@ahmadastic/froam",
   "version": "8.2.0",
   "description": "The visual editor for the site you already have. Point it at any running site or static folder — React, Rails, Django, WordPress, plain HTML — edit visually, and every change compiles to committable files in your repo.",
   "author": "Ahmad Modibbo <ahmadnuhu14@gmail.com>",

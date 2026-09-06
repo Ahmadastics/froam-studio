@@ -11,7 +11,7 @@ This is a deliberately simple static page for proving the core Froam workflow:
 Run from the repository root:
 
 ```bash
-npx froam dev --serve experiments/weekend-demo --port 4610
+npx @ahmadastic/froam dev --serve experiments/weekend-demo --port 4610
 ```
 
 Then open:
