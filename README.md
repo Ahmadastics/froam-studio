@@ -237,11 +237,11 @@ files — commit and push, done.
 You only need this for Repo Mode's React components and the Vite plugin:
 
 ```bash
-npm install --save-dev git+https://github.com/Ahmadastics/froam-studio.git
+npm install --save-dev froam
 ```
 
-The package ships prebuilt (`dist/` is committed), so installing from GitHub
-needs no compile step, no registry, no token.
+The npm package ships prebuilt, so installation needs no compile step. The
+GitHub repository also keeps `dist/` committed for direct-source installs.
 
 ```bash
 npx froam init     # detects your stack, scaffolds froam/, wires what it can
