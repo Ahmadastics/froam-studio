@@ -65,6 +65,7 @@ type SelectionState = {
     imageUrl: string;
 };
 type Props = {
+    projectKey: string;
     selection: SelectionState | null;
     selectionRect: DOMRect | null;
     onApplyStyle: (styles: Record<string, string>, nextSel?: Partial<SelectionState>, label?: string) => void;
@@ -102,6 +103,6 @@ type Props = {
     getRootEl: () => HTMLElement | null;
     onOpenBlueprint: () => void;
 };
-export default function FroamDesignPanel({ selection, selectionRect, onApplyStyle, onUpdateDraft, onOpenImageUpload, onClearImage, onClearSelectionDraft, marginLinked, paddingLinked, radiusLinked, onToggleMarginLinked, onTogglePaddingLinked, onToggleRadiusLinked, onApplySizePreset, onBuildTransformString, fontOptions, onAddBrandFont, getRootEl, onOpenBlueprint, }: Props): import("react").JSX.Element;
+export default function FroamDesignPanel({ projectKey, selection, selectionRect, onApplyStyle, onUpdateDraft, onOpenImageUpload, onClearImage, onClearSelectionDraft, marginLinked, paddingLinked, radiusLinked, onToggleMarginLinked, onTogglePaddingLinked, onToggleRadiusLinked, onApplySizePreset, onBuildTransformString, fontOptions, onAddBrandFont, getRootEl, onOpenBlueprint, }: Props): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=FroamDesignPanel.d.ts.map

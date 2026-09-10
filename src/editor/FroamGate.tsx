@@ -6,6 +6,7 @@ import {
   type FroamStudioConfig,
 } from '../config'
 import { useFroamRouteKey } from '../routing'
+import { resolveFroamProjectKey } from '../project/storage-scope'
 
 const GlobalChefEditor = lazy(() => import('./GlobalChefEditor'))
 
@@ -13,6 +14,8 @@ export type FroamGateProps = Pick<FroamStudioConfig, 'apiBaseUrl' | 'authProvide
   enabled?: boolean
   initialOpen?: boolean
   routeKey?: string
+  /** Stable per-project key. The Froam bridge supplies this automatically. */
+  projectKey?: string
   ownerEmails?: readonly string[] | string
   allowLocalhost?: boolean
   localRoutes?: readonly string[] | '*'
@@ -74,9 +77,11 @@ export default function FroamGate({
   ownerEmails,
   rootSelector,
   routeKey: explicitRouteKey,
+  projectKey: explicitProjectKey,
   allowLocalhost = true,
 }: FroamGateProps) {
   const routeKey = useFroamRouteKey(explicitRouteKey)
+  const projectKey = useMemo(() => resolveFroamProjectKey(explicitProjectKey), [explicitProjectKey])
   const resolvedOwnerEmails = useMemo(
     () => normalizeOwnerEmails(ownerEmails ?? getFroamStudioConfig().ownerEmails ?? getEnvOwnerEmails()),
     [ownerEmails],
@@ -131,7 +136,7 @@ export default function FroamGate({
   return (
     <FroamBoundary onReset={() => setKey((k) => k + 1)}>
       <Suspense fallback={fallback}>
-        <GlobalChefEditor key={key} initialOpen={initialOpen} routeKey={routeKey} />
+        <GlobalChefEditor key={`${key}:${projectKey}`} initialOpen={initialOpen} routeKey={routeKey} projectKey={projectKey} />
       </Suspense>
     </FroamBoundary>
   )

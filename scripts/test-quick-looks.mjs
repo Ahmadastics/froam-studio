@@ -31,7 +31,7 @@ const noteKeys = [...notesBlock.matchAll(/^\s{2}(?:'([^']+)'|([A-Za-z][A-Za-z0-9
   .map((match) => match[1] ?? match[2])
 
 test('the recipe list is intact', () => {
-  assert.equal(lookNames.length, 105, `expected 105 recipes, found ${lookNames.length}`)
+  assert.equal(lookNames.length, 205, `expected 205 recipes, found ${lookNames.length}`)
   assert.equal(lookGroups.length, lookNames.length, 'a recipe is missing its group')
   assert.equal(new Set(lookNames).size, lookNames.length, 'two recipes share a name')
 })

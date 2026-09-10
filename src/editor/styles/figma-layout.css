@@ -133,19 +133,22 @@
   scrollbar-color: rgba(94, 234, 212, 0.2) transparent;
 }
 
-.froam-figma-left__body > .froam-lp {
+.froam-figma-left__body > .froam-lp,
+.froam-figma-left__view > .froam-lp {
   grid-area: auto;
-  min-height: 100%;
-  margin: -10px;
+  min-height: 0;
+  height: 100%;
   border-right: 0;
 }
+
+.froam-figma-left__body > .froam-lp { margin: -10px; }
 
 /* The canvas area is transparent / pass-through */
 .froam-figma-layout__canvas {
   grid-area: canvas;
   pointer-events: none;
 }
-.froam-figma-left__view{height:100%;min-height:0}.froam-figma-left__view[hidden]{display:none}
+.froam-figma-left__view{height:100%;min-height:0;display:flex;flex-direction:column}.froam-figma-left__view[hidden]{display:none}
 
 .froam-reference__header > .froam-reference__header-actions {
   display: flex;

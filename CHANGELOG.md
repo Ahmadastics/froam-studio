@@ -2,10 +2,10 @@
 
 ## 8.2.0 - 2026-09-05
 
-**Renamed to `froam`.** The package is now `froam`, not `froam-studio`, so
-`npx froam <url>` resolves. Import specifiers move with it: `froam`,
-`froam/css`, `froam/vite`, `froam/server`. The GitHub repository keeps its
-existing name.
+**Published as `@ahmadastic/froam`.** The executable remains `froam`, while the
+public one-shot command is `npx @ahmadastic/froam <url>`. Import specifiers are
+`@ahmadastic/froam`, `@ahmadastic/froam/css`, `@ahmadastic/froam/vite`, and
+`@ahmadastic/froam/server`. The GitHub repository keeps its existing name.
 
 **`froam <url>` and `froam <dir>`** are shorthand for the matching `froam dev`
 mode and open the browser, so the first command a newcomer types is one that

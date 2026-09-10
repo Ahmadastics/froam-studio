@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { FONT_GROUP_LABELS, groupFontOptions } from './fontSources.js';
 import { AlignCenter, AlignLeft, AlignRight, Bold, ChevronDown, DraftingCompass, Eraser, ImagePlus, Italic, Link, Maximize2, Palette, PencilLine, RotateCw, Sparkles, Square, SquareDashedBottom, Strikethrough, Type, Underline, Unlink, X, } from 'lucide-react';
 import { computeBlueprintData, BlueprintSheet, BLUEPRINT_CATEGORY_COLOR, BLUEPRINT_CATEGORY_LABEL } from './FroamBlueprint.js';
+import { froamStorageKey } from '../project/storage-scope.js';
 /* ═══════════════════════════════════════════════════════════════
    Section Header (Figma-style, no accordion — always visible)
    ═══════════════════════════════════════════════════════════════ */
@@ -49,7 +50,7 @@ function BlueprintTabView({ getRootEl, onOpen }) {
 /* ═══════════════════════════════════════════════════════════════
    Component
    ═══════════════════════════════════════════════════════════════ */
-export default function FroamDesignPanel({ selection, selectionRect, onApplyStyle, onUpdateDraft, onOpenImageUpload, onClearImage, onClearSelectionDraft, marginLinked, paddingLinked, radiusLinked, onToggleMarginLinked, onTogglePaddingLinked, onToggleRadiusLinked, onApplySizePreset, onBuildTransformString, fontOptions, onAddBrandFont, getRootEl, onOpenBlueprint, }) {
+export default function FroamDesignPanel({ projectKey, selection, selectionRect, onApplyStyle, onUpdateDraft, onOpenImageUpload, onClearImage, onClearSelectionDraft, marginLinked, paddingLinked, radiusLinked, onToggleMarginLinked, onTogglePaddingLinked, onToggleRadiusLinked, onApplySizePreset, onBuildTransformString, fontOptions, onAddBrandFont, getRootEl, onOpenBlueprint, }) {
     const [tab, setTab] = useState('design');
     const [openSections, setOpenSections] = useState({
         position: true,
@@ -65,7 +66,7 @@ export default function FroamDesignPanel({ selection, selectionRect, onApplyStyl
         if (typeof window === 'undefined')
             return ['#ef4444', '#5eead4', '#0f172a', '#ffffff'];
         try {
-            const parsed = JSON.parse(window.localStorage.getItem('froam-design-colors-v1') || '[]');
+            const parsed = JSON.parse(window.localStorage.getItem(froamStorageKey('froam-design-colors-v1', projectKey)) || '[]');
             return parsed.length ? parsed : ['#ef4444', '#5eead4', '#0f172a', '#ffffff'];
         }
         catch {
@@ -82,7 +83,7 @@ export default function FroamDesignPanel({ selection, selectionRect, onApplyStyl
         setSavedColors((current) => {
             const next = [normalized, ...current.filter((item) => item.toLowerCase() !== normalized.toLowerCase())].slice(0, 18);
             try {
-                window.localStorage.setItem('froam-design-colors-v1', JSON.stringify(next));
+                window.localStorage.setItem(froamStorageKey('froam-design-colors-v1', projectKey), JSON.stringify(next));
             }
             catch { /* optional */ }
             return next;

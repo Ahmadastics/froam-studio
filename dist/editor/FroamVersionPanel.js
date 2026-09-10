@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronRight, GitBranch, GitCommit, Image, Loader2, Plus, Radio, Search, Tag, Trash2, X, Zap, } from 'lucide-react';
 import { apiGetFresh, apiPost, apiDelete } from '../lib/api.js';
 import { getFroamRootElement } from '../config.js';
+import { froamStorageKey } from '../project/storage-scope.js';
 const LOCAL_VERSION_PREFIX = 'local:';
 const LOCAL_VERSIONS_KEY = 'froam:local-versions:v1';
 const LOCAL_THUMBS_KEY = 'froam:thumbs:v1';
@@ -23,33 +24,33 @@ if (typeof window !== 'undefined') {
     }
     catch { /* storage unavailable */ }
 }
-function readThumbs() {
+function readThumbs(projectKey) {
     if (typeof window === 'undefined')
         return {};
     try {
-        return JSON.parse(window.localStorage.getItem(LOCAL_THUMBS_KEY) ?? '{}');
+        return JSON.parse(window.localStorage.getItem(froamStorageKey(LOCAL_THUMBS_KEY, projectKey)) ?? '{}');
     }
     catch {
         return {};
     }
 }
-function saveThumb(versionId, dataUrl) {
+function saveThumb(projectKey, versionId, dataUrl) {
     if (typeof window === 'undefined')
         return;
-    const thumbs = readThumbs();
+    const thumbs = readThumbs(projectKey);
     thumbs[versionId] = dataUrl;
     // keep max 40 thumbs — evict oldest by simple key count
     const keys = Object.keys(thumbs);
     if (keys.length > 40)
         delete thumbs[keys[0]];
-    window.localStorage.setItem(LOCAL_THUMBS_KEY, JSON.stringify(thumbs));
+    window.localStorage.setItem(froamStorageKey(LOCAL_THUMBS_KEY, projectKey), JSON.stringify(thumbs));
 }
-function deleteThumb(versionId) {
+function deleteThumb(projectKey, versionId) {
     if (typeof window === 'undefined')
         return;
-    const thumbs = readThumbs();
+    const thumbs = readThumbs(projectKey);
     delete thumbs[versionId];
-    window.localStorage.setItem(LOCAL_THUMBS_KEY, JSON.stringify(thumbs));
+    window.localStorage.setItem(froamStorageKey(LOCAL_THUMBS_KEY, projectKey), JSON.stringify(thumbs));
 }
 async function capturePageThumb() {
     try {
@@ -110,11 +111,11 @@ function getErrorMessage(error) {
         return error;
     return 'Server sync failed';
 }
-function readLocalVersions() {
+function readLocalVersions(projectKey) {
     if (typeof window === 'undefined')
         return [];
     try {
-        const raw = window.localStorage.getItem(LOCAL_VERSIONS_KEY);
+        const raw = window.localStorage.getItem(froamStorageKey(LOCAL_VERSIONS_KEY, projectKey));
         if (!raw)
             return [];
         const parsed = JSON.parse(raw);
@@ -124,10 +125,10 @@ function readLocalVersions() {
         return [];
     }
 }
-function writeLocalVersions(versions) {
+function writeLocalVersions(projectKey, versions) {
     if (typeof window === 'undefined')
         return;
-    window.localStorage.setItem(LOCAL_VERSIONS_KEY, JSON.stringify(versions.slice(0, 80)));
+    window.localStorage.setItem(froamStorageKey(LOCAL_VERSIONS_KEY, projectKey), JSON.stringify(versions.slice(0, 80)));
 }
 function isLocalVersion(value) {
     if (!value || typeof value !== 'object')
@@ -143,12 +144,12 @@ function isLocalVersion(value) {
         typeof candidate.store === 'object' &&
         !Array.isArray(candidate.store));
 }
-function getScopedLocalVersions(routeKey, viewportMode) {
-    return readLocalVersions()
+function getScopedLocalVersions(projectKey, routeKey, viewportMode) {
+    return readLocalVersions(projectKey)
         .filter((version) => version.routeKey === routeKey && version.viewportMode === viewportMode)
         .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
-function saveLocalVersion(routeKey, viewportMode, store, name, description, tags = [], notes, changeSummary, imageRefs) {
+function saveLocalVersion(projectKey, routeKey, viewportMode, store, name, description, tags = [], notes, changeSummary, imageRefs) {
     const version = {
         id: `${LOCAL_VERSION_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
         routeKey,
@@ -165,14 +166,14 @@ function saveLocalVersion(routeKey, viewportMode, store, name, description, tags
         createdAt: new Date().toISOString(),
         localOnly: true,
     };
-    writeLocalVersions([version, ...readLocalVersions()]);
+    writeLocalVersions(projectKey, [version, ...readLocalVersions(projectKey)]);
     return version;
 }
-function findLocalVersion(versionId) {
-    return readLocalVersions().find((version) => version.id === versionId) ?? null;
+function findLocalVersion(projectKey, versionId) {
+    return readLocalVersions(projectKey).find((version) => version.id === versionId) ?? null;
 }
-function deleteLocalVersion(versionId) {
-    writeLocalVersions(readLocalVersions().filter((version) => version.id !== versionId));
+function deleteLocalVersion(projectKey, versionId) {
+    writeLocalVersions(projectKey, readLocalVersions(projectKey).filter((version) => version.id !== versionId));
 }
 function countInsertedBlocks(store) {
     return Object.keys(store).filter((key) => key.startsWith('__froam_injection__:')).length;
@@ -262,9 +263,9 @@ function summaryParts(summary) {
     ].filter(Boolean);
 }
 /* ── FroamVersionPanel ──────────────────────────────────────── */
-export default function FroamVersionPanel({ routeKey, viewportMode, currentStore, getCurrentStore, onLoadVersion, onClose, captureThumb, }) {
+export default function FroamVersionPanel({ projectKey, routeKey, viewportMode, currentStore, getCurrentStore, onLoadVersion, onClose, captureThumb, }) {
     const [versions, setVersions] = useState([]);
-    const [thumbs, setThumbs] = useState(() => readThumbs());
+    const [thumbs, setThumbs] = useState(() => readThumbs(projectKey));
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [promoting, setPromoting] = useState(null);
@@ -295,8 +296,8 @@ export default function FroamVersionPanel({ routeKey, viewportMode, currentStore
     const loadVersions = useCallback(async () => {
         setLoading(true);
         const localVersions = libraryScope === 'all'
-            ? readLocalVersions().sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
-            : getScopedLocalVersions(routeKey, viewportMode);
+            ? readLocalVersions(projectKey).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+            : getScopedLocalVersions(projectKey, routeKey, viewportMode);
         try {
             if (libraryScope === 'all') {
                 const res = await apiGetFresh('/api/froam/library');
@@ -316,7 +317,7 @@ export default function FroamVersionPanel({ routeKey, viewportMode, currentStore
         finally {
             setLoading(false);
         }
-    }, [libraryScope, routeKey, viewportMode, showToast]);
+    }, [libraryScope, projectKey, routeKey, viewportMode, showToast]);
     useEffect(() => { void loadVersions(); }, [loadVersions]);
     async function handleSave() {
         if (!saveName.trim())
@@ -341,7 +342,7 @@ export default function FroamVersionPanel({ routeKey, viewportMode, currentStore
                 notes: notes || undefined,
             });
             if (thumb && res.version?.id) {
-                saveThumb(res.version.id, thumb);
+                saveThumb(projectKey, res.version.id, thumb);
                 setThumbs((prev) => ({ ...prev, [res.version.id]: thumb }));
             }
             setSaveName('');
@@ -353,9 +354,9 @@ export default function FroamVersionPanel({ routeKey, viewportMode, currentStore
             await loadVersions();
         }
         catch (error) {
-            const localVersion = saveLocalVersion(routeKey, viewportMode, storeToSave, saveName.trim(), saveDesc.trim() || undefined, tags, notes || undefined, changeSummary, imageRefs);
+            const localVersion = saveLocalVersion(projectKey, routeKey, viewportMode, storeToSave, saveName.trim(), saveDesc.trim() || undefined, tags, notes || undefined, changeSummary, imageRefs);
             if (thumb) {
-                saveThumb(localVersion.id, thumb);
+                saveThumb(projectKey, localVersion.id, thumb);
                 setThumbs((prev) => ({ ...prev, [localVersion.id]: thumb }));
             }
             setVersions((prev) => [localVersion, ...prev]);
@@ -395,7 +396,7 @@ export default function FroamVersionPanel({ routeKey, viewportMode, currentStore
     }
     async function handleLoadVersion(versionId, versionName) {
         if (versionId.startsWith(LOCAL_VERSION_PREFIX)) {
-            const localVersion = findLocalVersion(versionId);
+            const localVersion = findLocalVersion(projectKey, versionId);
             if (localVersion) {
                 onLoadVersion(localVersion.store, versionName);
                 showToast(`Loaded local "${versionName}"`);
@@ -420,14 +421,14 @@ export default function FroamVersionPanel({ routeKey, viewportMode, currentStore
         if (!branchName.trim() || !branchFromId)
             return;
         if (branchFromId.startsWith(LOCAL_VERSION_PREFIX)) {
-            const localVersion = findLocalVersion(branchFromId);
+            const localVersion = findLocalVersion(projectKey, branchFromId);
             if (!localVersion) {
                 showToast('Local version not found');
                 return;
             }
-            const branch = saveLocalVersion(routeKey, viewportMode, localVersion.store, branchName.trim(), `Local branch from ${localVersion.name}`, localVersion.tags ?? [], localVersion.notes ?? undefined, localVersion.changeSummary ?? summarizeStore(localVersion.store), localVersion.imageRefs ?? extractImageRefs(localVersion.store));
+            const branch = saveLocalVersion(projectKey, routeKey, viewportMode, localVersion.store, branchName.trim(), `Local branch from ${localVersion.name}`, localVersion.tags ?? [], localVersion.notes ?? undefined, localVersion.changeSummary ?? summarizeStore(localVersion.store), localVersion.imageRefs ?? extractImageRefs(localVersion.store));
             branch.parentVersionId = branchFromId;
-            writeLocalVersions(readLocalVersions().map((version) => (version.id === branch.id ? branch : version)));
+            writeLocalVersions(projectKey, readLocalVersions(projectKey).map((version) => (version.id === branch.id ? branch : version)));
             setVersions((prev) => [branch, ...prev]);
             setBranchName('');
             setBranchFromId(null);
@@ -455,8 +456,8 @@ export default function FroamVersionPanel({ routeKey, viewportMode, currentStore
     }
     async function handleDelete(versionId) {
         if (versionId.startsWith(LOCAL_VERSION_PREFIX)) {
-            deleteLocalVersion(versionId);
-            deleteThumb(versionId);
+            deleteLocalVersion(projectKey, versionId);
+            deleteThumb(projectKey, versionId);
             setThumbs((prev) => { const n = { ...prev }; delete n[versionId]; return n; });
             setVersions((prev) => prev.filter((version) => version.id !== versionId));
             setDiffResult(null);
@@ -466,7 +467,7 @@ export default function FroamVersionPanel({ routeKey, viewportMode, currentStore
         setDeleting(versionId);
         try {
             await apiDelete(`/api/froam/versions/${versionId}`);
-            deleteThumb(versionId);
+            deleteThumb(projectKey, versionId);
             setThumbs((prev) => { const n = { ...prev }; delete n[versionId]; return n; });
             showToast('Version deleted');
             setDiffResult(null);

@@ -30,6 +30,7 @@ type FroamImageRef = {
     preview?: string;
 };
 type Props = {
+    projectKey: string;
     routeKey: string;
     viewportMode: string;
     currentStore: Record<string, unknown>;
@@ -38,6 +39,6 @@ type Props = {
     onClose: () => void;
     captureThumb?: () => Promise<string | null>;
 };
-export default function FroamVersionPanel({ routeKey, viewportMode, currentStore, getCurrentStore, onLoadVersion, onClose, captureThumb, }: Props): import("react").JSX.Element;
+export default function FroamVersionPanel({ projectKey, routeKey, viewportMode, currentStore, getCurrentStore, onLoadVersion, onClose, captureThumb, }: Props): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=FroamVersionPanel.d.ts.map

@@ -129,28 +129,38 @@ export function createLocalFroamIntentProposals(snapshot: FroamMutationSelection
   if (/dark(?:er)? (?:background|surface|fill)|(?:background|surface|fill).{0,12}dark/.test(normalized)) add('visual', 'backgroundColor', '#0b0f14')
   if (/white text|light text/.test(normalized)) add('visual', 'color', '#ffffff')
   if (/black text|dark text/.test(normalized)) add('visual', 'color', '#111827')
-  if (/bold|stronger text|heavier text/.test(normalized)) add('typography', 'fontWeight', '700')
-  if (/lighter text|less bold/.test(normalized)) add('typography', 'fontWeight', '400')
+  const fontWeight = normalized.match(/font\s+weight(?:\s+(?:to|of))?\s+(300|400|500|600|700|800|900)\b/)
+  if (fontWeight) add('typography', 'fontWeight', fontWeight[1])
+  // The lighter branch runs first on purpose: "less bold" contains "bold", so
+  // testing for bold first would read a request to lighten as a request to
+  // embolden. Ordering keeps this readable without a lookbehind.
+  else if (/regular text|text regular|lighter text|less bold/.test(normalized)) add('typography', 'fontWeight', '400')
+  else if (/\bbold(?:er)?\b|stronger text|heavier text/.test(normalized)) add('typography', 'fontWeight', '700')
   if (/uppercase|all caps/.test(normalized)) add('typography', 'textTransform', 'uppercase')
   if (/lowercase/.test(normalized)) add('typography', 'textTransform', 'lowercase')
-  if (/italic/.test(normalized)) add('typography', 'fontStyle', 'italic')
-  if (/underline/.test(normalized)) add('typography', 'textDecorationLine', 'underline')
+  if (/remove (?:the )?italic|not italic|normal font style/.test(normalized)) add('typography', 'fontStyle', 'normal')
+  else if (/italic/.test(normalized)) add('typography', 'fontStyle', 'italic')
+  if (/remove (?:the )?underline|no underline/.test(normalized)) add('typography', 'textDecorationLine', 'none')
+  else if (/underline/.test(normalized)) add('typography', 'textDecorationLine', 'underline')
   const fontSize = firstNumber(normalized, 'font(?:\\s+size)?|text\\s+size')
   if (fontSize) add('typography', 'fontSize', `${fontSize.value}${fontSize.unit}`)
   else if (/bigger|larger|increase (?:the )?(?:text|font)|make (?:the )?(?:text|font) bigger/.test(normalized)) add('typography', 'fontSize', `${Math.round(pixels(visual.fontSize, 16) * 1.15)}px`)
   if (/smaller|reduce (?:the )?(?:text|font)|make (?:the )?(?:text|font) smaller/.test(normalized)) add('typography', 'fontSize', `${Math.max(10, Math.round(pixels(visual.fontSize, 16) * .88))}px`)
   const lineHeight = firstNumber(normalized, 'line[-\\s]?height')
-  if (lineHeight) add('typography', 'lineHeight', `${lineHeight.value}${lineHeight.unit}`)
+  if (lineHeight) add('typography', 'lineHeight', normalized.includes(`${lineHeight.value}${lineHeight.unit}`) ? `${lineHeight.value}${lineHeight.unit}` : String(lineHeight.value))
   const letterSpacing = firstNumber(normalized, 'letter[-\\s]?spacing|tracking')
   if (letterSpacing) add('typography', 'letterSpacing', `${letterSpacing.value}${letterSpacing.unit}`)
   if (/align (?:the )?text (?:to the )?center|center (?:the )?text/.test(normalized)) add('typography', 'textAlign', 'center')
   if (/align (?:the )?text (?:to the )?left|left[- ]align/.test(normalized)) add('typography', 'textAlign', 'left')
   if (/align (?:the )?text (?:to the )?right|right[- ]align/.test(normalized)) add('typography', 'textAlign', 'right')
+  if (/justify (?:the )?text|text align(?:ment)? justify/.test(normalized)) add('typography', 'textAlign', 'justify')
+  if (/capitalize|title case/.test(normalized)) add('typography', 'textTransform', 'capitalize')
   if (/rounder|rounded|soft corners/.test(normalized)) add('visual', 'borderRadius', /pill|fully/.test(normalized) ? '999px' : '16px')
   const radius = firstNumber(normalized, 'border[-\\s]?radius|corner(?:\\s+radius)?|radius')
   if (radius) add('visual', 'borderRadius', `${radius.value}${radius.unit}`)
   if (/square corners|sharp corners|remove (?:the )?radius/.test(normalized)) add('visual', 'borderRadius', '0px')
-  if (/shadow|depth|premium|polished|prominent|stand out|pop/.test(normalized)) add('visual', 'boxShadow', '0 16px 42px rgba(0, 0, 0, 0.28)')
+  if (/soft shadow/.test(normalized)) add('visual', 'boxShadow', '0 8px 24px rgba(0, 0, 0, 0.16)')
+  else if (/shadow|depth|premium|polished|prominent|stand out|pop/.test(normalized)) add('visual', 'boxShadow', '0 16px 42px rgba(0, 0, 0, 0.28)')
   if (/remove (?:the )?shadow|flat/.test(normalized)) add('visual', 'boxShadow', 'none')
   if (/remove (?:the )?border|borderless/.test(normalized)) add('visual', 'border', 'none')
   const border = normalized.match(/(?:add|set|make)?\s*(?:a\s+)?(\d+(?:\.\d+)?px)\s+(solid|dashed|dotted)\s+border/)
@@ -168,8 +178,11 @@ export function createLocalFroamIntentProposals(snapshot: FroamMutationSelection
   if (margin) add('spacing', 'margin', `${margin.value}${margin.unit}`)
   if (gap) add('spacing', 'gap', `${gap.value}${gap.unit}`)
 
-  if (/display (?:as )?grid|make (?:it|this) (?:a )?grid|grid layout/.test(normalized)) add('layout', 'display', 'grid')
-  if (/display (?:as )?flex|use flex|flex layout/.test(normalized)) add('layout', 'display', 'flex')
+  // "display this as grid" is how the Quick Edit catalog phrases these, so the
+  // optional subject has to be allowed between the verb and the value.
+  if (/display (?:this |it )?(?:as )?grid|make (?:it|this) (?:a )?grid|grid layout/.test(normalized)) add('layout', 'display', 'grid')
+  if (/display (?:this |it )?(?:as )?flex|use flex|flex layout/.test(normalized)) add('layout', 'display', 'flex')
+  if (/display (?:this |it )?(?:as )?block/.test(normalized)) add('layout', 'display', 'block')
   if (/stack|vertical|column/.test(normalized)) { add('layout', 'display', 'flex'); add('layout', 'flexDirection', 'column') }
   if (/horizontal|row layout|side by side/.test(normalized)) { add('layout', 'display', 'flex'); add('layout', 'flexDirection', 'row') }
   if (/center (?:the )?(?:content|items|children)|align (?:everything|items) (?:to the )?center/.test(normalized)) { add('layout', 'display', 'flex'); add('layout', 'justifyContent', 'center'); add('layout', 'alignItems', 'center') }
@@ -177,13 +190,30 @@ export function createLocalFroamIntentProposals(snapshot: FroamMutationSelection
   if (/allow (?:it|items|content) to wrap|wrap (?:the )?(?:items|content)|make (?:it|this) wrap/.test(normalized)) add('layout', 'flexWrap', 'wrap')
   if (/hide overflow|clip overflow/.test(normalized)) add('layout', 'overflow', 'hidden')
   if (/show overflow/.test(normalized)) add('layout', 'overflow', 'visible')
-  if (/\bhide (?:it|this|the element)?\b/.test(normalized)) add('layout', 'display', 'none')
+  const justify = normalized.match(/justify-content\s+(?:to\s+)?(start|center|end|space-between|space-around|space-evenly)/)
+  if (justify) add('layout', 'justifyContent', justify[1])
+  const align = normalized.match(/align-items\s+(?:to\s+)?(start|center|end|stretch|baseline)/)
+  if (align) add('layout', 'alignItems', align[1])
+  const direction = normalized.match(/flex\s+direction\s+(?:to\s+)?(row|column)/)
+  if (direction) { add('layout', 'display', 'flex'); add('layout', 'flexDirection', direction[1]) }
+  const wrap = normalized.match(/flex-wrap\s+(?:to\s+)?(wrap|nowrap)/)
+  if (wrap) add('layout', 'flexWrap', wrap[1])
+  const overflow = normalized.match(/overflow\s+(?:to\s+)?(hidden|visible|auto)/)
+  if (overflow) add('layout', 'overflow', overflow[1])
+  // The trailing space has to sit inside every alternative, not just the last
+  // one — `(?:it|this|the )?` only ever matched "the ", so "hide this element"
+  // fell through to no proposal at all.
+  if (/\bhide (?:it |this |the )?element\b/.test(normalized)) add('layout', 'display', 'none')
+  if (/\bshow (?:it |this |the )?element\b/.test(normalized)) add('layout', 'display', 'revert')
 
-  const width = firstNumber(normalized, 'width|make\\s+(?:it|this)\\s+wide')
+  const width = firstNumber(normalized, '(?<!max[-\\s])width|make\\s+(?:it|this)\\s+wide')
   const height = firstNumber(normalized, 'height|make\\s+(?:it|this)\\s+tall')
   if (width) add('layout', 'width', `${width.value}${width.unit}`)
   else if (/full width|fill (?:the )?(?:parent|container|width)/.test(normalized)) add('layout', 'width', '100%')
   if (height) add('layout', 'height', `${height.value}${height.unit}`)
+  const maxWidth = firstNumber(normalized, 'max(?:imum)?[-\\s]?width')
+  if (maxWidth) add('layout', 'maxWidth', `${maxWidth.value}${maxWidth.unit}`)
+  if (/aspect ratio (?:to )?square|square aspect ratio/.test(normalized)) add('layout', 'aspectRatio', '1 / 1')
   if (/responsive|fit (?:on )?(?:mobile|all screens)/.test(normalized)) { add('layout', 'width', '100%'); add('layout', 'maxWidth', '100%'); add('layout', 'flexWrap', 'wrap') }
 
   const distance = normalized.match(/(?:move|shift)\s+(?:it|this)?\s*(up|down|left|right)(?:\s+by)?\s*(\d+(?:\.\d+)?)?\s*(px|rem|em|%)?/)
@@ -192,13 +222,18 @@ export function createLocalFroamIntentProposals(snapshot: FroamMutationSelection
     const negative = distance[1] === 'up' || distance[1] === 'left' ? '-' : ''
     add('motion', 'transform', distance[1] === 'up' || distance[1] === 'down' ? `translateY(${negative}${amount})` : `translateX(${negative}${amount})`)
   } else if (/lift|raise|slightly up/.test(normalized)) add('motion', 'transform', 'translateY(-4px)')
-  const rotate = firstNumber(normalized, 'rotate')
-  if (rotate) add('motion', 'transform', `rotate(${rotate.value}deg)`)
-  if (/smooth|animate|add (?:a )?transition/.test(normalized)) add('motion', 'transition', 'all 220ms ease')
+  const rotate = normalized.match(/rotate(?: this| it)?(?:\s+(?:to|of|by))?\s*(-?\d+(?:\.\d+)?)/)
+  if (rotate) add('motion', 'transform', `rotate(${rotate[1]}deg)`)
+  const scale = normalized.match(/scale (?:this|it)?\s*(?:to\s*)?(\d+(?:\.\d+)?)\s*%/)
+  if (scale) add('motion', 'transform', `scale(${Number(scale[1]) / 100})`)
+  if (/remove (?:the )?transition|transition none/.test(normalized)) add('motion', 'transition', 'none')
+  else if (/smooth|animate|add (?:a )?transition/.test(normalized)) add('motion', 'transition', 'all 220ms ease')
+  if (/reset (?:the )?transform|remove (?:the )?transform/.test(normalized)) add('motion', 'transform', 'none')
 
   if (/minimal|cleaner|simpler/.test(normalized)) { add('visual', 'boxShadow', 'none'); add('visual', 'borderRadius', '12px') }
   if (/premium|polish(?:ed)?|modern|make (?:it|this) better|improve (?:it|this)/.test(normalized)) { add('visual', 'borderRadius', '16px'); add('visual', 'boxShadow', '0 16px 42px rgba(0, 0, 0, 0.24)'); add('motion', 'transition', 'all 220ms ease') }
   if (/accessible|easier to read|more readable/.test(normalized)) { add('typography', 'lineHeight', '1.6'); add('visual', 'opacity', '1') }
+  if (/remove visual effects/.test(normalized)) { add('visual', 'boxShadow', 'none'); add('visual', 'border', 'none'); add('visual', 'opacity', '1') }
 
   const nextText = replacementText(intent)
   if (nextText) add('typography', 'textContent', nextText)

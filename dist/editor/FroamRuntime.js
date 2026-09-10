@@ -7,9 +7,11 @@ import { readRoomFromLocation } from '../collab/room.js';
 import { collectStoreFontFamilies, ensureBrandFontStyle, ensureFontLinks } from './fontSources.js';
 import { normalizeFroamRouteKey, useFroamRouteKey } from '../routing.js';
 import { isFroamPersonaPath } from './froamPersona.js';
+import { SECTION_STRUCTURE_KEY } from './section-structure.js';
 const CANVAS_KEY = '__froam_canvas__';
 const INJECTION_KEY = '__froam_injection__';
 const ROOT_PARENT_KEY = '__froam_root__';
+const RUNTIME_VISIBILITY_STYLE_ID = 'froam-runtime-visibility';
 const DEFAULT_RUNTIME_ROUTES = '*';
 /**
  * How often a follower re-asks for the design during a session.
@@ -185,12 +187,94 @@ function readInjectionDraft(draft) {
         return {
             html: parsed.html,
             parentPath: parsed.parentPath,
+            parentId: typeof parsed.parentId === 'string' ? parsed.parentId : undefined,
             order: typeof parsed.order === 'number' ? parsed.order : 0,
         };
     }
     catch {
         return null;
     }
+}
+function restoreSectionRuntimeSnapshots(snapshots) {
+    snapshots.slice().sort((left, right) => left.order - right.order).forEach((snapshot) => {
+        const currentOrder = snapshot.element.parentElement === snapshot.parent
+            ? Array.from(snapshot.parent.children).indexOf(snapshot.element)
+            : -1;
+        if (currentOrder !== snapshot.order) {
+            snapshot.element.remove();
+            snapshot.parent.insertBefore(snapshot.element, snapshot.parent.children.item(snapshot.order));
+        }
+        snapshot.element.hidden = snapshot.hidden;
+        if (snapshot.exportHidden === null)
+            snapshot.element.removeAttribute('data-froam-export-hidden');
+        else
+            snapshot.element.setAttribute('data-froam-export-hidden', snapshot.exportHidden);
+        if (snapshot.deleted === null)
+            snapshot.element.removeAttribute('data-froam-structure-deleted');
+        else
+            snapshot.element.setAttribute('data-froam-structure-deleted', snapshot.deleted);
+    });
+}
+function applySectionStructure(store, snapshots) {
+    const root = getRoot();
+    const draft = store[SECTION_STRUCTURE_KEY];
+    if (!root || !draft?.text)
+        return;
+    try {
+        const manifest = JSON.parse(draft.text);
+        if (manifest.version !== 1 || !Array.isArray(manifest.sections))
+            return;
+        const resolved = manifest.sections.map((value) => {
+            const entry = value;
+            if (typeof entry.nodeId !== 'string' || typeof entry.sourcePath !== 'string' || typeof entry.parentPath !== 'string' || typeof entry.order !== 'number')
+                return null;
+            const element = root.querySelector(`[data-froam-id="${CSS.escape(entry.nodeId)}"]`) ?? findElementByPath(root, entry.sourcePath);
+            if (!element || element.dataset.froamRuntimeInjected === 'true' || !element.parentElement)
+                return null;
+            snapshots.push({
+                element,
+                parent: element.parentElement,
+                order: Array.from(element.parentElement.children).indexOf(element),
+                hidden: element.hidden,
+                exportHidden: element.getAttribute('data-froam-export-hidden'),
+                deleted: element.getAttribute('data-froam-structure-deleted'),
+            });
+            element.dataset.froamId = entry.nodeId;
+            return { entry, element };
+        }).filter((item) => item !== null);
+        resolved.filter(({ entry }) => !entry.deleted).sort((left, right) => left.entry.order - right.entry.order).forEach(({ entry, element }) => {
+            const parent = entry.parentPath === ROOT_PARENT_KEY ? root : findElementByPath(root, entry.parentPath);
+            if (parent) {
+                const currentOrder = element.parentElement === parent ? Array.from(parent.children).indexOf(element) : -1;
+                if (currentOrder !== entry.order) {
+                    element.remove();
+                    parent.insertBefore(element, parent.children.item(entry.order));
+                }
+            }
+            element.hidden = Boolean(entry.exportHidden);
+            if (entry.exportHidden)
+                element.dataset.froamExportHidden = 'true';
+            else
+                element.removeAttribute('data-froam-export-hidden');
+            element.removeAttribute('data-froam-structure-deleted');
+        });
+        resolved.filter(({ entry }) => entry.deleted).forEach(({ element }) => {
+            element.hidden = true;
+            element.dataset.froamStructureDeleted = 'true';
+        });
+    }
+    catch {
+        // Ignore a malformed structure draft without blocking ordinary styling.
+    }
+}
+function ensureRuntimeVisibilityStyle() {
+    let style = document.getElementById(RUNTIME_VISIBILITY_STYLE_ID);
+    if (!style) {
+        style = document.createElement('style');
+        style.id = RUNTIME_VISIBILITY_STYLE_ID;
+        document.head.appendChild(style);
+    }
+    style.textContent = 'html:not([data-chef-editing]) [data-froam-export-hidden="true"],html:not([data-chef-editing]) [data-froam-structure-deleted="true"]{display:none!important}';
 }
 function removeRuntimeInjectedBlocks() {
     const root = getRoot();
@@ -210,9 +294,11 @@ function restoreInjectedBlocks(store) {
         .filter((draft) => draft !== null)
         .sort((a, b) => a.order - b.order)
         .forEach((injection) => {
-        const parent = injection.parentPath === ROOT_PARENT_KEY
-            ? root
-            : findElementByPath(root, injection.parentPath);
+        const parent = injection.parentId
+            ? root.querySelector(`[data-froam-id="${CSS.escape(injection.parentId)}"]`)
+            : injection.parentPath === ROOT_PARENT_KEY
+                ? root
+                : findElementByPath(root, injection.parentPath);
         if (!parent)
             return;
         const template = document.createElement('template');
@@ -223,19 +309,21 @@ function restoreInjectedBlocks(store) {
         node.setAttribute('data-froam-runtime-injected', 'true');
         node.removeAttribute('data-chef-selected');
         node.removeAttribute('data-chef-hovered');
-        parent.appendChild(node);
+        parent.insertBefore(node, parent.children.item(injection.order));
     });
 }
-function applyFroamStore(store, snapshots) {
+function applyFroamStore(store, snapshots, sectionSnapshots) {
+    ensureRuntimeVisibilityStyle();
     if (document.documentElement.hasAttribute('data-chef-editing'))
         return;
     const root = getRoot();
     if (!root)
         return;
     removeRuntimeInjectedBlocks();
+    applySectionStructure(store, sectionSnapshots);
     restoreInjectedBlocks(store);
     for (const [path, draft] of Object.entries(store)) {
-        if (path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path))
+        if (path === CANVAS_KEY || path === SECTION_STRUCTURE_KEY || isInjectionPath(path) || isFroamPersonaPath(path))
             continue;
         const target = findElementByPath(root, path);
         if (target)
@@ -253,6 +341,7 @@ export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true
     // session, and nothing else should start a poll loop.
     const inSession = useMemo(() => readRoomFromLocation() !== null, []);
     const appliedSnapshotsRef = useRef([]);
+    const appliedSectionSnapshotsRef = useRef([]);
     const endpoint = useMemo(() => {
         const params = new URLSearchParams({ routeKey, viewportMode });
         return `/api/froam/published?${params.toString()}`;
@@ -290,7 +379,9 @@ export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true
         if (!isRuntimeRoute) {
             setPublishedStore(null);
             restoreRuntimeSnapshots(appliedSnapshotsRef.current);
+            restoreSectionRuntimeSnapshots(appliedSectionSnapshotsRef.current);
             appliedSnapshotsRef.current = [];
+            appliedSectionSnapshotsRef.current = [];
             removeRuntimeInjectedBlocks();
             return;
         }
@@ -379,7 +470,9 @@ export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true
     useEffect(() => {
         const root = getRoot();
         restoreRuntimeSnapshots(appliedSnapshotsRef.current);
+        restoreSectionRuntimeSnapshots(appliedSectionSnapshotsRef.current);
         appliedSnapshotsRef.current = [];
+        appliedSectionSnapshotsRef.current = [];
         removeRuntimeInjectedBlocks();
         if (!isRuntimeRoute || !publishedStore || !root)
             return;
@@ -387,10 +480,13 @@ export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true
         function paint() {
             try {
                 restoreRuntimeSnapshots(appliedSnapshotsRef.current);
+                restoreSectionRuntimeSnapshots(appliedSectionSnapshotsRef.current);
                 removeRuntimeInjectedBlocks();
                 const snapshots = [];
-                applyFroamStore(storeToPaint, snapshots);
+                const sectionSnapshots = [];
+                applyFroamStore(storeToPaint, snapshots, sectionSnapshots);
                 appliedSnapshotsRef.current = snapshots;
+                appliedSectionSnapshotsRef.current = sectionSnapshots;
             }
             catch {
                 // DOM may be mid-render — safe to skip this paint frame
@@ -407,8 +503,10 @@ export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true
             cancelAnimationFrame(paintFrame);
             observer.disconnect();
             restoreRuntimeSnapshots(appliedSnapshotsRef.current);
+            restoreSectionRuntimeSnapshots(appliedSectionSnapshotsRef.current);
             removeRuntimeInjectedBlocks();
             appliedSnapshotsRef.current = [];
+            appliedSectionSnapshotsRef.current = [];
         };
     }, [publishedStore, isRuntimeRoute]);
     // The runtime paints a design and otherwise renders nothing. A review

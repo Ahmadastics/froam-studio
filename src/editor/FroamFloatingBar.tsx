@@ -1036,6 +1036,806 @@ const LOOKS: Look[] = [
     patch: { fontFamily: 'Georgia, "Times New Roman", serif' },
   },
 
+  /* ─── Depth, second pass ─── */
+  {
+    name: 'Drape', group: 'Depth',
+    swatch: { background: '#1f2937', boxShadow: '0 6px 8px -2px rgba(0,0,0,0.75)', borderRadius: 6 },
+    styles: () => ({ boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.35)', borderRadius: '18px' }),
+    patch: corners(18),
+  },
+  {
+    name: 'Cast', group: 'Depth',
+    swatch: { background: '#1f2937', boxShadow: '5px 5px 0 rgba(0,0,0,0.55)', borderRadius: 4 },
+    styles: () => ({ boxShadow: '10px 10px 0 rgba(11, 15, 20, 0.18)', borderRadius: '10px' }),
+    patch: corners(10),
+  },
+  {
+    name: 'Lofted', group: 'Depth',
+    swatch: { background: '#1f2937', boxShadow: '0 12px 16px -6px rgba(0,0,0,0.85)', borderRadius: 8 },
+    styles: () => ({ boxShadow: '0 48px 90px -32px rgba(0, 0, 0, 0.6)', borderRadius: '24px' }),
+    patch: corners(24),
+  },
+  {
+    name: 'Rim light', group: 'Depth',
+    swatch: { background: '#111827', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)', borderRadius: 6 },
+    styles: () => ({ boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 18px 40px rgba(0, 0, 0, 0.4)', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Pressed', group: 'Depth',
+    swatch: { background: '#1f2937', boxShadow: 'inset 0 3px 5px rgba(0,0,0,0.8)', borderRadius: 6 },
+    styles: () => ({ boxShadow: 'inset 0 3px 8px rgba(0, 0, 0, 0.35)', transform: 'translateY(1px)', borderRadius: '10px' }),
+    patch: corners(10),
+  },
+  {
+    name: 'Deep well', group: 'Depth',
+    swatch: { background: '#0f172a', boxShadow: 'inset 0 6px 12px rgba(0,0,0,0.9)', borderRadius: 8 },
+    styles: () => ({ background: 'rgba(0, 0, 0, 0.06)', boxShadow: 'inset 0 6px 20px rgba(0, 0, 0, 0.32)', border: 'none', borderRadius: '18px' }),
+    patch: corners(18),
+  },
+  {
+    name: 'Soft rise', group: 'Depth',
+    swatch: { background: '#1f2937', boxShadow: '0 2px 5px rgba(0,0,0,0.4)', borderRadius: 6 },
+    styles: () => ({ boxShadow: '0 6px 16px rgba(0, 0, 0, 0.1)', borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Drop line', group: 'Depth',
+    swatch: { background: '#1f2937', boxShadow: '0 4px 0 rgba(0,0,0,0.6)', borderRadius: 5 },
+    styles: (accent) => ({ boxShadow: `0 4px 0 color-mix(in srgb, ${accent} 45%, #000)`, borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Cushion', group: 'Depth',
+    swatch: { background: '#e8ecf3', boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.15), 0 4px 8px rgba(0,0,0,0.3)', borderRadius: 10 },
+    styles: () => ({ boxShadow: 'inset 0 -3px 8px rgba(0, 0, 0, 0.1), 0 14px 28px rgba(0, 0, 0, 0.16)', borderRadius: '22px' }),
+    patch: corners(22),
+  },
+  {
+    name: 'Beacon', group: 'Depth',
+    swatch: { background: '#0b1220', boxShadow: '0 0 12px 4px rgba(20,184,166,0.85)', borderRadius: 6 },
+    styles: (accent) => ({
+      boxShadow: `0 0 0 2px color-mix(in srgb, ${accent} 55%, transparent), 0 0 34px color-mix(in srgb, ${accent} 60%, transparent)`,
+      borderRadius: '14px',
+    }),
+    patch: corners(14),
+  },
+
+  /* ─── Surface, second pass ─── */
+  {
+    name: 'Velvet', group: 'Surface',
+    swatch: { background: 'linear-gradient(145deg,#3b1d52,#1c0f2b)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(145deg, #3b1d52, #1c0f2b)', color: '#f3e8ff', border: 'none', borderRadius: '16px' }),
+    patch: corners(16),
+  },
+  {
+    name: 'Marble', group: 'Surface',
+    swatch: { background: 'linear-gradient(115deg,#fdfdfb,#e7e5e0 45%,#fdfdfb)', borderRadius: 6 },
+    styles: () => ({
+      background: 'linear-gradient(115deg, #fdfdfb, #e9e7e2 42%, #fdfdfb 68%, #e4e2dd)',
+      color: '#1f2430',
+      border: '1px solid rgba(0, 0, 0, 0.07)',
+      borderRadius: '14px',
+    }),
+    patch: corners(14),
+  },
+  {
+    name: 'Sandstone', group: 'Surface',
+    swatch: { background: '#e7d6bd', borderRadius: 6 },
+    styles: () => ({ background: '#e7d6bd', color: '#4a3823', border: '1px solid rgba(74, 56, 35, 0.14)', borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Obsidian', group: 'Surface',
+    swatch: { background: 'linear-gradient(160deg,#15171c,#05060a)', borderRadius: 6 },
+    styles: () => ({
+      background: 'linear-gradient(160deg, #15171c, #05060a)',
+      color: '#f8fafc',
+      border: '1px solid rgba(255, 255, 255, 0.07)',
+      boxShadow: 'inset 0 1px rgba(255, 255, 255, 0.06)',
+      borderRadius: '16px',
+    }),
+    patch: corners(16),
+  },
+  {
+    name: 'Linen', group: 'Surface',
+    swatch: { background: '#f4f1e8', borderRadius: 6 },
+    styles: () => ({ background: '#f4f1e8', color: '#3a3730', border: '1px solid rgba(58, 55, 48, 0.12)', borderRadius: '10px' }),
+    patch: corners(10),
+  },
+  {
+    name: 'Porcelain', group: 'Surface',
+    swatch: { background: '#ffffff', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 6 },
+    styles: () => ({ background: '#ffffff', color: '#111827', border: '1px solid rgba(17, 24, 39, 0.08)', boxShadow: '0 1px 2px rgba(17, 24, 39, 0.05)', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Brushed', group: 'Surface',
+    swatch: { background: 'repeating-linear-gradient(90deg,#d7dbe0 0 2px,#c5cad1 2px 4px)', borderRadius: 6 },
+    styles: () => ({
+      background: 'repeating-linear-gradient(90deg, #d9dde2 0 2px, #cbd0d7 2px 4px)',
+      color: '#1f2430',
+      border: '1px solid rgba(31, 36, 48, 0.16)',
+      borderRadius: '12px',
+    }),
+    patch: corners(12),
+  },
+  {
+    name: 'Mist', group: 'Surface',
+    swatch: { background: 'rgba(203,213,225,0.5)', borderRadius: 6 },
+    styles: () => ({ background: 'rgba(203, 213, 225, 0.28)', backdropFilter: 'blur(8px)', color: '#1e293b', border: '1px solid rgba(148, 163, 184, 0.3)', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Moss', group: 'Surface',
+    swatch: { background: '#1f3b2c', borderRadius: 6 },
+    styles: () => ({ background: '#1f3b2c', color: '#dcfce7', border: '1px solid rgba(220, 252, 231, 0.14)', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Navy panel', group: 'Surface',
+    swatch: { background: '#132139', borderRadius: 6 },
+    styles: () => ({ background: '#132139', color: '#e2e8f0', border: '1px solid rgba(226, 232, 240, 0.12)', borderRadius: '16px' }),
+    patch: corners(16),
+  },
+  {
+    name: 'Blush', group: 'Surface',
+    swatch: { background: '#fdeef0', borderRadius: 6 },
+    styles: () => ({ background: '#fdeef0', color: '#7a2740', border: '1px solid rgba(122, 39, 64, 0.14)', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Charcoal card', group: 'Surface',
+    swatch: { background: '#26262b', borderRadius: 6 },
+    styles: () => ({ background: '#26262b', color: '#ededf0', border: '1px solid rgba(237, 237, 240, 0.1)', boxShadow: '0 12px 30px rgba(0, 0, 0, 0.35)', borderRadius: '16px' }),
+    patch: corners(16),
+  },
+  {
+    name: 'Onboarding card', group: 'Surface',
+    swatch: { background: 'linear-gradient(160deg,rgba(20,184,166,0.18),#fff)', border: '1px solid rgba(20,184,166,0.4)', borderRadius: 6 },
+    styles: (accent) => ({
+      background: `linear-gradient(160deg, color-mix(in srgb, ${accent} 14%, #ffffff), #ffffff)`,
+      color: '#0f172a',
+      border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`,
+      boxShadow: '0 16px 40px rgba(15, 23, 42, 0.08)',
+      borderRadius: '20px',
+    }),
+    patch: corners(20),
+  },
+  {
+    name: 'Empty state', group: 'Surface',
+    swatch: { background: 'transparent', border: '1.5px dashed rgba(148,163,184,0.8)', borderRadius: 6 },
+    styles: () => ({
+      background: 'rgba(148, 163, 184, 0.06)',
+      color: '#64748b',
+      border: '2px dashed rgba(148, 163, 184, 0.45)',
+      textAlign: 'center',
+      borderRadius: '16px',
+    }),
+    patch: corners(16),
+  },
+  {
+    name: 'Alert panel', group: 'Surface',
+    swatch: { background: '#fff7e6', borderLeft: '4px solid #f59e0b', borderRadius: 4 },
+    styles: () => ({ background: '#fff7e6', color: '#7c4a03', borderLeft: '4px solid #f59e0b', borderRadius: '10px', paddingLeft: '14px' }),
+    patch: corners(10),
+  },
+  {
+    name: 'Sidebar rail', group: 'Surface',
+    swatch: { background: '#f8fafc', borderRight: '1px solid rgba(0,0,0,0.1)', borderRadius: 4 },
+    styles: () => ({ background: '#f8fafc', color: '#334155', borderRight: '1px solid rgba(15, 23, 42, 0.09)', borderRadius: '0px' }),
+    patch: corners(0),
+  },
+
+  /* ─── Shape, second pass ─── */
+  {
+    name: 'Capsule', group: 'Shape',
+    swatch: { background: '#334155', borderRadius: 999, height: 10 },
+    styles: () => ({ borderRadius: '999px', paddingTop: '6px', paddingBottom: '6px', paddingLeft: '14px', paddingRight: '14px' }),
+    patch: corners(999),
+  },
+  {
+    name: 'Wedge', group: 'Shape',
+    swatch: { background: '#334155', clipPath: 'polygon(0 0,100% 0,100% 100%,0 calc(100% - 8px))' },
+    styles: () => ({ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 calc(100% - 22px))' }),
+  },
+  {
+    name: 'Shield', group: 'Shape',
+    swatch: { background: '#334155', borderRadius: '10px 10px 40% 40%' },
+    styles: () => ({ borderRadius: '16px 16px 48% 48%' }),
+    patch: { borderRadiusTL: 16, borderRadiusTR: 16 },
+  },
+  {
+    name: 'Stamp', group: 'Shape',
+    swatch: { background: '#334155', clipPath: 'polygon(0 0,25% 6%,50% 0,75% 6%,100% 0,100% 100%,75% 94%,50% 100%,25% 94%,0 100%)' },
+    styles: () => ({ clipPath: 'polygon(0 0, 12.5% 5%, 25% 0, 37.5% 5%, 50% 0, 62.5% 5%, 75% 0, 87.5% 5%, 100% 0, 100% 100%, 87.5% 95%, 75% 100%, 62.5% 95%, 50% 100%, 37.5% 95%, 25% 100%, 12.5% 95%, 0 100%)' }),
+  },
+  {
+    name: 'Scallop', group: 'Shape',
+    swatch: { background: '#334155', borderRadius: '50% / 14px' },
+    styles: () => ({ borderRadius: '50% / 26px' }),
+  },
+  {
+    name: 'Cutout', group: 'Shape',
+    swatch: { background: '#334155', clipPath: 'polygon(0 0,100% 0,100% 100%,8px 100%,0 calc(100% - 8px))' },
+    styles: () => ({ clipPath: 'polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px))' }),
+  },
+  {
+    name: 'Trapezoid', group: 'Shape',
+    swatch: { background: '#334155', clipPath: 'polygon(8% 0,92% 0,100% 100%,0 100%)' },
+    styles: () => ({ clipPath: 'polygon(6% 0, 94% 0, 100% 100%, 0 100%)' }),
+  },
+  {
+    name: 'Hexagon', group: 'Shape',
+    swatch: { background: '#334155', clipPath: 'polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)' },
+    styles: () => ({ clipPath: 'polygon(14% 0, 86% 0, 100% 50%, 86% 100%, 14% 100%, 0 50%)' }),
+  },
+  {
+    name: 'Drop', group: 'Shape',
+    swatch: { background: '#334155', borderRadius: '50% 50% 50% 2px' },
+    styles: () => ({ borderRadius: '50% 50% 50% 4px' }),
+    patch: { borderRadiusBL: 4 },
+  },
+  {
+    name: 'Ribbon', group: 'Shape',
+    swatch: { background: '#334155', clipPath: 'polygon(0 0,100% 0,92% 50%,100% 100%,0 100%,8% 50%)' },
+    styles: () => ({ clipPath: 'polygon(0 0, 100% 0, calc(100% - 16px) 50%, 100% 100%, 0 100%, 16px 50%)' }),
+  },
+  {
+    name: 'Bookmark', group: 'Shape',
+    swatch: { background: '#334155', clipPath: 'polygon(0 0,100% 0,100% 100%,50% 82%,0 100%)' },
+    styles: () => ({ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%)' }),
+  },
+  {
+    name: 'Rounded top', group: 'Shape',
+    swatch: { background: '#334155', borderRadius: '10px 10px 0 0' },
+    styles: () => ({ borderRadius: '20px 20px 0 0' }),
+    patch: { borderRadiusTL: 20, borderRadiusTR: 20, borderRadiusBR: 0, borderRadiusBL: 0 },
+  },
+
+  /* ─── Line, second pass ─── */
+  {
+    name: 'Groove', group: 'Line',
+    swatch: { background: 'transparent', border: '3px groove rgba(148,163,184,0.9)', borderRadius: 5 },
+    styles: () => ({ background: 'transparent', border: '3px groove rgba(148, 163, 184, 0.8)', borderRadius: '8px' }),
+    patch: corners(8),
+  },
+  {
+    name: 'Ridge', group: 'Line',
+    swatch: { background: 'transparent', border: '3px ridge rgba(148,163,184,0.9)', borderRadius: 5 },
+    styles: () => ({ background: 'transparent', border: '3px ridge rgba(148, 163, 184, 0.8)', borderRadius: '8px' }),
+    patch: corners(8),
+  },
+  {
+    name: 'Bracket', group: 'Line',
+    swatch: { background: 'transparent', borderLeft: '2px solid #14b8a6', borderRight: '2px solid #14b8a6' },
+    styles: (accent) => ({ background: 'transparent', borderLeft: `2px solid ${accent}`, borderRight: `2px solid ${accent}`, paddingLeft: '12px', paddingRight: '12px' }),
+  },
+  {
+    name: 'Side rule', group: 'Line',
+    swatch: { background: 'transparent', borderLeft: '4px solid #14b8a6' },
+    styles: (accent) => ({ borderLeft: `4px solid ${accent}`, paddingLeft: '14px' }),
+  },
+  {
+    name: 'Top rule', group: 'Line',
+    swatch: { background: 'transparent', borderTop: '3px solid #14b8a6' },
+    styles: (accent) => ({ borderTop: `3px solid ${accent}`, paddingTop: '10px' }),
+  },
+  {
+    name: 'Dot leader', group: 'Line',
+    swatch: { background: 'transparent', borderBottom: '2px dotted rgba(148,163,184,0.9)' },
+    styles: () => ({ borderBottom: '2px dotted rgba(128, 128, 128, 0.55)', paddingBottom: '4px' }),
+  },
+  {
+    name: 'Inline code', group: 'Line',
+    swatch: { background: 'rgba(148,163,184,0.2)', border: '1px solid rgba(148,163,184,0.5)', borderRadius: 4 },
+    styles: () => ({
+      background: 'rgba(128, 128, 128, 0.12)',
+      border: '1px solid rgba(128, 128, 128, 0.28)',
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+      fontSize: '0.9em',
+      paddingLeft: '6px',
+      paddingRight: '6px',
+      borderRadius: '6px',
+    }),
+    patch: { ...corners(6), fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+  },
+  {
+    name: 'Accent corner', group: 'Line',
+    swatch: { background: 'transparent', borderTop: '2px solid #14b8a6', borderLeft: '2px solid #14b8a6' },
+    styles: (accent) => ({ background: 'transparent', borderTop: `3px solid ${accent}`, borderLeft: `3px solid ${accent}`, paddingTop: '10px', paddingLeft: '12px', borderRadius: '0px' }),
+    patch: corners(0),
+  },
+  {
+    name: 'Focus ring', group: 'Line',
+    swatch: { background: 'transparent', outline: '2px solid #14b8a6', outlineOffset: 2, borderRadius: 5 },
+    styles: (accent) => ({ outline: `2px solid ${accent}`, outlineOffset: '3px', borderRadius: '10px' }),
+    patch: corners(10),
+  },
+  {
+    name: 'Divider', group: 'Line',
+    swatch: { background: 'transparent', borderBottom: '1px solid rgba(148,163,184,0.7)' },
+    styles: () => ({ borderBottom: '1px solid rgba(128, 128, 128, 0.22)', paddingBottom: '12px' }),
+  },
+
+  /* ─── Accent, second pass ─── */
+  {
+    name: 'Midnight', group: 'Accent',
+    swatch: { background: 'linear-gradient(160deg,#1e3a8a,#0f172a)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(160deg, #1e3a8a, #0f172a)', color: '#e0e7ff', border: 'none', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Ember', group: 'Accent',
+    swatch: { background: 'linear-gradient(140deg,#7f1d1d,#f97316)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(140deg, #7f1d1d, #f97316)', color: '#fff7ed', border: 'none', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Forest', group: 'Accent',
+    swatch: { background: 'linear-gradient(150deg,#14532d,#4ade80)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(150deg, #14532d, #4ade80)', color: '#f0fdf4', border: 'none', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Plum', group: 'Accent',
+    swatch: { background: 'linear-gradient(140deg,#581c87,#c026d3)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(140deg, #581c87, #c026d3)', color: '#fae8ff', border: 'none', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Steel', group: 'Accent',
+    swatch: { background: 'linear-gradient(150deg,#64748b,#1e293b)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(150deg, #64748b, #1e293b)', color: '#f1f5f9', border: 'none', borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Peach', group: 'Accent',
+    swatch: { background: 'linear-gradient(135deg,#fed7aa,#fb7185)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(135deg, #fed7aa, #fb7185)', color: '#4c1d24', border: 'none', borderRadius: '16px' }),
+    patch: corners(16),
+  },
+  {
+    name: 'Mint', group: 'Accent',
+    swatch: { background: 'linear-gradient(135deg,#a7f3d0,#5eead4)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(135deg, #a7f3d0, #5eead4)', color: '#064e3b', border: 'none', borderRadius: '16px' }),
+    patch: corners(16),
+  },
+  {
+    name: 'Copper', group: 'Accent',
+    swatch: { background: 'linear-gradient(135deg,#b45309,#f59e0b,#b45309)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(135deg, #b45309, #f8c471 45%, #b45309)', color: '#2b1503', border: 'none', borderRadius: '12px' }),
+    patch: corners(12),
+  },
+  {
+    name: 'Twilight', group: 'Accent',
+    swatch: { background: 'linear-gradient(150deg,#312e81,#db2777)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(150deg, #312e81, #db2777)', color: '#fdf2f8', border: 'none', borderRadius: '16px' }),
+    patch: corners(16),
+  },
+  {
+    name: 'Sky', group: 'Accent',
+    swatch: { background: 'linear-gradient(170deg,#bae6fd,#38bdf8)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(170deg, #bae6fd, #38bdf8)', color: '#082f49', border: 'none', borderRadius: '16px' }),
+    patch: corners(16),
+  },
+  {
+    name: 'Coral', group: 'Accent',
+    swatch: { background: 'linear-gradient(135deg,#fb7185,#f97316)', borderRadius: 6 },
+    styles: () => ({ background: 'linear-gradient(135deg, #fb7185, #f97316)', color: '#ffffff', border: 'none', borderRadius: '14px' }),
+    patch: corners(14),
+  },
+  {
+    name: 'Radial pop', group: 'Accent',
+    swatch: { background: 'radial-gradient(circle at 30% 25%,#14b8a6,#0f172a 70%)', borderRadius: 6 },
+    styles: (accent) => ({
+      background: `radial-gradient(circle at 30% 25%, ${accent}, color-mix(in srgb, ${accent} 20%, #0b1220) 72%)`,
+      color: '#ffffff',
+      border: 'none',
+      borderRadius: '16px',
+    }),
+    patch: corners(16),
+  },
+  {
+    name: 'Split', group: 'Accent',
+    swatch: { background: 'linear-gradient(90deg,#14b8a6 0 50%,#0f172a 50% 100%)', borderRadius: 6 },
+    styles: (accent) => ({
+      background: `linear-gradient(90deg, ${accent} 0 50%, color-mix(in srgb, ${accent} 25%, #0b1220) 50% 100%)`,
+      color: '#ffffff',
+      border: 'none',
+      borderRadius: '12px',
+    }),
+    patch: corners(12),
+  },
+  {
+    name: 'Danger state', group: 'Accent',
+    swatch: { background: '#fee2e2', border: '1px solid #ef4444', borderRadius: 6 },
+    styles: () => ({ background: '#fee2e2', color: '#991b1b', border: '1px solid rgba(239, 68, 68, 0.45)', fontWeight: '600', borderRadius: '10px' }),
+    patch: { ...corners(10), fontWeight: '600' },
+  },
+
+  /* ─── Type, second pass ─── */
+  {
+    name: 'Caps lock', group: 'Type',
+    swatch: { background: '#cbd5e1', borderRadius: 3 },
+    styles: () => ({ textTransform: 'uppercase', fontWeight: '800', letterSpacing: '0.04em' }),
+    patch: { fontWeight: '800' },
+  },
+  {
+    name: 'Condensed', group: 'Type',
+    swatch: { background: 'repeating-linear-gradient(90deg,#94a3b8 0 2px,transparent 2px 4px)', borderRadius: 3 },
+    styles: () => ({ letterSpacing: '-0.03em', fontWeight: '700', lineHeight: '1.05' }),
+    patch: { fontWeight: '700' },
+  },
+  {
+    name: 'Airy', group: 'Type',
+    swatch: { background: 'repeating-linear-gradient(0deg,#94a3b8 0 1px,transparent 1px 5px)', borderRadius: 3 },
+    styles: () => ({ letterSpacing: '0.04em', lineHeight: '1.9', fontWeight: '400' }),
+    patch: { fontWeight: '400' },
+  },
+  {
+    name: 'Tight', group: 'Type',
+    swatch: { background: 'repeating-linear-gradient(0deg,#94a3b8 0 2px,transparent 2px 3px)', borderRadius: 3 },
+    styles: () => ({ lineHeight: '1.15', letterSpacing: '-0.01em' }),
+  },
+  {
+    name: 'Small print', group: 'Type',
+    swatch: { background: 'rgba(148,163,184,0.5)', borderRadius: 2 },
+    styles: () => ({ fontSize: '0.78em', lineHeight: '1.5', opacity: '0.75' }),
+    patch: { opacity: 0.75 },
+  },
+  {
+    name: 'Strike', group: 'Type',
+    swatch: { background: 'transparent', borderTop: '2px solid #94a3b8', height: 6 },
+    styles: () => ({ textDecoration: 'line-through', opacity: '0.65' }),
+    patch: { opacity: 0.65 },
+  },
+  {
+    name: 'Superscript', group: 'Type',
+    swatch: { background: '#cbd5e1', borderRadius: 2, height: 7 },
+    styles: () => ({ fontSize: '0.7em', verticalAlign: 'super', lineHeight: '1' }),
+  },
+  {
+    name: 'Ledger', group: 'Type',
+    swatch: { background: '#0f172a', borderRadius: 3 },
+    styles: () => ({
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+      fontVariantNumeric: 'tabular-nums',
+      letterSpacing: '0.01em',
+    }),
+    patch: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+  },
+  {
+    name: 'Lead in', group: 'Type',
+    swatch: { background: '#cbd5e1', borderRadius: 3, height: 9 },
+    styles: () => ({ fontSize: '1.2em', lineHeight: '1.6', fontWeight: '400', opacity: '0.9' }),
+    patch: { fontWeight: '400', opacity: 0.9 },
+  },
+  {
+    name: 'Kicker', group: 'Type',
+    swatch: { background: 'repeating-linear-gradient(90deg,#14b8a6 0 5px,transparent 5px 8px)', borderRadius: 2 },
+    styles: (accent) => ({ textTransform: 'uppercase', letterSpacing: '0.22em', fontSize: '0.7em', fontWeight: '700', color: accent }),
+    patch: { fontWeight: '700' },
+  },
+  {
+    name: 'Byline', group: 'Type',
+    swatch: { background: 'rgba(148,163,184,0.45)', borderRadius: 2 },
+    styles: () => ({ fontFamily: 'Georgia, "Times New Roman", serif', fontStyle: 'italic', fontSize: '0.92em', opacity: '0.78' }),
+    patch: { fontFamily: 'Georgia, "Times New Roman", serif', opacity: 0.78 },
+  },
+  {
+    name: 'Caption', group: 'Type',
+    swatch: { background: 'rgba(148,163,184,0.4)', borderRadius: 2, height: 6 },
+    styles: () => ({ fontSize: '0.8em', lineHeight: '1.45', opacity: '0.7', textAlign: 'center' }),
+    patch: { opacity: 0.7 },
+  },
+  {
+    name: 'Price tag', group: 'Type',
+    swatch: { background: '#0f172a', borderRadius: 3 },
+    styles: () => ({ fontSize: '1.9em', fontWeight: '800', letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: '1.05' }),
+    patch: { fontWeight: '800' },
+  },
+  {
+    name: 'Badge text', group: 'Type',
+    swatch: { background: 'rgba(20,184,166,0.35)', borderRadius: 999 },
+    styles: (accent) => ({
+      textTransform: 'uppercase',
+      letterSpacing: '0.1em',
+      fontSize: '0.68em',
+      fontWeight: '800',
+      color: accent,
+      background: `color-mix(in srgb, ${accent} 14%, transparent)`,
+      paddingLeft: '8px',
+      paddingRight: '8px',
+      borderRadius: '999px',
+    }),
+    patch: { ...corners(999), fontWeight: '800' },
+  },
+
+  /* ─── Vibe, second pass ─── */
+  {
+    name: 'Arcade', group: 'Vibe',
+    swatch: { background: '#0b0f2a', border: '2px solid #22d3ee', boxShadow: '0 0 8px #22d3ee', borderRadius: 0 },
+    styles: () => ({
+      background: '#0b0f2a',
+      color: '#22d3ee',
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+      border: '3px solid #22d3ee',
+      boxShadow: '0 0 18px rgba(34, 211, 238, 0.6), inset 0 0 14px rgba(34, 211, 238, 0.2)',
+      textTransform: 'uppercase',
+      borderRadius: '0px',
+    }),
+    patch: { ...corners(0), fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+  },
+  {
+    name: 'Zine', group: 'Vibe',
+    swatch: { background: '#f4f4f0', border: '2px solid #111', boxShadow: '2px 2px 0 #111', borderRadius: 0 },
+    styles: () => ({
+      background: '#f4f4f0',
+      color: '#111111',
+      border: '2px solid #111111',
+      boxShadow: '4px 4px 0 #111111',
+      filter: 'contrast(1.15)',
+      borderRadius: '0px',
+      fontWeight: '700',
+    }),
+    patch: { ...corners(0), fontWeight: '700' },
+  },
+  {
+    name: 'Memphis', group: 'Vibe',
+    swatch: { background: '#fde68a', border: '2px solid #0f172a', boxShadow: '3px 3px 0 #ec4899', borderRadius: 8 },
+    styles: () => ({
+      background: '#fde68a',
+      color: '#0f172a',
+      border: '3px solid #0f172a',
+      boxShadow: '6px 6px 0 #ec4899, 12px 12px 0 #38bdf8',
+      borderRadius: '14px',
+      fontWeight: '700',
+    }),
+    patch: { ...corners(14), fontWeight: '700' },
+  },
+  {
+    name: 'Swiss', group: 'Vibe',
+    swatch: { background: '#ffffff', borderLeft: '5px solid #dc2626', borderRadius: 0 },
+    styles: () => ({
+      background: '#ffffff',
+      color: '#111111',
+      borderLeft: '6px solid #dc2626',
+      borderRadius: '0px',
+      fontWeight: '700',
+      letterSpacing: '-0.02em',
+      paddingLeft: '16px',
+    }),
+    patch: { ...corners(0), fontWeight: '700' },
+  },
+  {
+    name: 'Grunge', group: 'Vibe',
+    swatch: { background: '#2b2b28', border: '2px solid #57534e', borderRadius: 3 },
+    styles: () => ({
+      background: 'repeating-linear-gradient(115deg, #2b2b28 0 3px, #34342f 3px 6px)',
+      color: '#e7e5e4',
+      border: '2px solid #57534e',
+      boxShadow: 'inset 0 0 24px rgba(0, 0, 0, 0.55)',
+      borderRadius: '4px',
+    }),
+    patch: corners(4),
+  },
+  {
+    name: 'Pastel pop', group: 'Vibe',
+    swatch: { background: '#e9d5ff', border: '2px solid #a855f7', boxShadow: '3px 3px 0 #f9a8d4', borderRadius: 10 },
+    styles: () => ({
+      background: '#e9d5ff',
+      color: '#4c1d95',
+      border: '2px solid #a855f7',
+      boxShadow: '5px 5px 0 #f9a8d4',
+      borderRadius: '18px',
+      fontWeight: '700',
+    }),
+    patch: { ...corners(18), fontWeight: '700' },
+  },
+  {
+    name: 'Noir', group: 'Vibe',
+    swatch: { background: '#0a0a0a', border: '1px solid #fff', borderRadius: 0 },
+    styles: () => ({
+      background: '#0a0a0a',
+      color: '#fafafa',
+      border: '1px solid #fafafa',
+      filter: 'grayscale(1) contrast(1.2)',
+      letterSpacing: '0.08em',
+      textTransform: 'uppercase',
+      borderRadius: '0px',
+    }),
+    patch: corners(0),
+  },
+  {
+    name: 'Neo brutal', group: 'Vibe',
+    swatch: { background: '#4ade80', border: '2px solid #000', boxShadow: '4px 4px 0 #000', borderRadius: 4 },
+    styles: (accent) => ({
+      background: accent,
+      color: '#0b0f14',
+      border: '3px solid #0b0f14',
+      boxShadow: '8px 8px 0 #0b0f14',
+      borderRadius: '8px',
+      fontWeight: '800',
+    }),
+    patch: { ...corners(8), fontWeight: '800' },
+  },
+  {
+    name: 'Cyber', group: 'Vibe',
+    swatch: { background: '#08080f', border: '1px solid #f0f', boxShadow: '0 0 8px #0ff', borderRadius: 3 },
+    styles: () => ({
+      background: '#08080f',
+      color: '#00fff0',
+      border: '1px solid #ff00e5',
+      boxShadow: '0 0 14px rgba(0, 255, 240, 0.45), inset 0 0 14px rgba(255, 0, 229, 0.22)',
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+      borderRadius: '4px',
+    }),
+    patch: { ...corners(4), fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+  },
+  {
+    name: 'Vaporwave', group: 'Vibe',
+    swatch: { background: 'linear-gradient(135deg,#ff71ce,#01cdfe,#b967ff)', borderRadius: 5 },
+    styles: () => ({
+      background: 'linear-gradient(135deg, #ff71ce, #01cdfe 55%, #b967ff)',
+      color: '#1a0033',
+      border: 'none',
+      textShadow: '2px 2px 0 rgba(255, 255, 255, 0.45)',
+      borderRadius: '10px',
+      fontWeight: '700',
+    }),
+    patch: { ...corners(10), fontWeight: '700' },
+  },
+  {
+    name: 'Playbill', group: 'Vibe',
+    swatch: { background: '#fdf6e3', border: '3px double #7c2d12', borderRadius: 2 },
+    styles: () => ({
+      background: '#fdf6e3',
+      color: '#7c2d12',
+      border: '4px double #7c2d12',
+      fontFamily: 'Georgia, "Times New Roman", serif',
+      textAlign: 'center',
+      letterSpacing: '0.06em',
+      borderRadius: '2px',
+    }),
+    patch: { ...corners(2), fontFamily: 'Georgia, "Times New Roman", serif' },
+  },
+  {
+    name: 'Terminal', group: 'Vibe',
+    swatch: { background: '#020a02', border: '1px solid #22c55e', borderRadius: 3 },
+    styles: () => ({
+      background: '#020a02',
+      color: '#4ade80',
+      border: '1px solid rgba(74, 222, 128, 0.45)',
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+      textShadow: '0 0 6px rgba(74, 222, 128, 0.55)',
+      borderRadius: '4px',
+    }),
+    patch: { ...corners(4), fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+  },
+
+  /* ─── Pattern, second pass ─── */
+  {
+    name: 'Checks', group: 'Pattern',
+    swatch: { background: 'conic-gradient(#cbd5e1 0 25%,#fff 0 50%,#cbd5e1 0 75%,#fff 0) 0 0/6px 6px', borderRadius: 6 },
+    styles: (accent) => ({
+      background: `conic-gradient(color-mix(in srgb, ${accent} 16%, transparent) 0 25%, transparent 0 50%, color-mix(in srgb, ${accent} 16%, transparent) 0 75%, transparent 0) 0 0 / 20px 20px, #ffffff`,
+      color: '#0b0f14',
+      borderRadius: '12px',
+    }),
+    patch: corners(12),
+  },
+  {
+    name: 'Barber', group: 'Pattern',
+    swatch: { background: 'repeating-linear-gradient(70deg,#14b8a6 0 4px,#fff 4px 8px)', borderRadius: 6 },
+    styles: (accent) => ({
+      background: `repeating-linear-gradient(70deg, color-mix(in srgb, ${accent} 22%, transparent) 0 12px, transparent 12px 24px), #ffffff`,
+      color: '#0b0f14',
+      borderRadius: '12px',
+    }),
+    patch: corners(12),
+  },
+  {
+    name: 'Waves', group: 'Pattern',
+    swatch: { background: 'repeating-radial-gradient(circle at 50% 100%,#14b8a6 0 2px,#fff 2px 5px)', borderRadius: 6 },
+    styles: (accent) => ({
+      background: `repeating-radial-gradient(circle at 50% 120%, color-mix(in srgb, ${accent} 20%, transparent) 0 6px, transparent 6px 16px), #ffffff`,
+      color: '#0b0f14',
+      borderRadius: '14px',
+    }),
+    patch: corners(14),
+  },
+  {
+    name: 'Graph paper', group: 'Pattern',
+    swatch: { background: 'linear-gradient(#93c5fd 1px,transparent 1px) 0 0/4px 4px,linear-gradient(90deg,#93c5fd 1px,transparent 1px) 0 0/4px 4px,#fff', borderRadius: 6 },
+    styles: () => ({
+      background: 'linear-gradient(rgba(37, 99, 235, 0.28) 1px, transparent 1px) 0 0 / 40px 40px, linear-gradient(90deg, rgba(37, 99, 235, 0.28) 1px, transparent 1px) 0 0 / 40px 40px, linear-gradient(rgba(37, 99, 235, 0.12) 1px, transparent 1px) 0 0 / 8px 8px, linear-gradient(90deg, rgba(37, 99, 235, 0.12) 1px, transparent 1px) 0 0 / 8px 8px, #ffffff',
+      color: '#1e3a8a',
+      borderRadius: '10px',
+    }),
+    patch: corners(10),
+  },
+  {
+    name: 'Noise', group: 'Pattern',
+    swatch: { background: 'repeating-conic-gradient(#e2e8f0 0 25%,#fff 0 50%) 0 0/3px 3px', borderRadius: 6 },
+    styles: () => ({
+      background: 'repeating-conic-gradient(rgba(15, 23, 42, 0.05) 0 25%, transparent 0 50%) 0 0 / 4px 4px, #f8fafc',
+      color: '#0f172a',
+      borderRadius: '12px',
+    }),
+    patch: corners(12),
+  },
+  {
+    name: 'Confetti', group: 'Pattern',
+    swatch: { background: 'radial-gradient(#f472b6 1px,transparent 1.2px) 0 0/6px 6px,radial-gradient(#38bdf8 1px,transparent 1.2px) 3px 3px/6px 6px,#fff', borderRadius: 6 },
+    styles: () => ({
+      background: 'radial-gradient(#f472b6 2px, transparent 2.2px) 0 0 / 26px 26px, radial-gradient(#38bdf8 2px, transparent 2.2px) 13px 13px / 26px 26px, radial-gradient(#fbbf24 2px, transparent 2.2px) 7px 19px / 26px 26px, #ffffff',
+      color: '#0b0f14',
+      borderRadius: '14px',
+    }),
+    patch: corners(14),
+  },
+  {
+    name: 'Weave', group: 'Pattern',
+    swatch: { background: 'repeating-linear-gradient(0deg,#cbd5e1 0 2px,#fff 2px 4px),repeating-linear-gradient(90deg,rgba(203,213,225,0.6) 0 2px,transparent 2px 4px)', borderRadius: 6 },
+    styles: (accent) => ({
+      background: `repeating-linear-gradient(0deg, color-mix(in srgb, ${accent} 14%, transparent) 0 6px, transparent 6px 12px), repeating-linear-gradient(90deg, color-mix(in srgb, ${accent} 14%, transparent) 0 6px, transparent 6px 12px), #ffffff`,
+      color: '#0b0f14',
+      borderRadius: '12px',
+    }),
+    patch: corners(12),
+  },
+  {
+    name: 'Crosshatch', group: 'Pattern',
+    swatch: { background: 'repeating-linear-gradient(45deg,#94a3b8 0 1px,transparent 1px 4px),repeating-linear-gradient(-45deg,#94a3b8 0 1px,transparent 1px 4px),#fff', borderRadius: 6 },
+    styles: () => ({
+      background: 'repeating-linear-gradient(45deg, rgba(15, 23, 42, 0.16) 0 1px, transparent 1px 8px), repeating-linear-gradient(-45deg, rgba(15, 23, 42, 0.16) 0 1px, transparent 1px 8px), #ffffff',
+      color: '#0f172a',
+      borderRadius: '12px',
+    }),
+    patch: corners(12),
+  },
+  {
+    name: 'Scanlines', group: 'Pattern',
+    swatch: { background: 'repeating-linear-gradient(0deg,rgba(0,0,0,0.55) 0 1px,#0b1220 1px 3px)', borderRadius: 6 },
+    styles: () => ({
+      background: 'repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.35) 0 1px, transparent 1px 4px), #0b1220',
+      color: '#e2e8f0',
+      borderRadius: '10px',
+    }),
+    patch: corners(10),
+  },
+  {
+    name: 'Bricks', group: 'Pattern',
+    swatch: { background: 'repeating-linear-gradient(0deg,#cbd5e1 0 1px,transparent 1px 5px),repeating-linear-gradient(90deg,#cbd5e1 0 1px,transparent 1px 9px),#fff', borderRadius: 6 },
+    styles: () => ({
+      background: 'repeating-linear-gradient(0deg, rgba(120, 53, 15, 0.28) 0 1px, transparent 1px 14px), repeating-linear-gradient(90deg, rgba(120, 53, 15, 0.28) 0 1px, transparent 1px 30px), #f5ede4',
+      color: '#78350f',
+      borderRadius: '8px',
+    }),
+    patch: corners(8),
+  },
+  {
+    name: 'Zigzag', group: 'Pattern',
+    swatch: { background: 'repeating-linear-gradient(135deg,#14b8a6 0 3px,transparent 3px 6px)', borderRadius: 6 },
+    styles: (accent) => ({
+      background: `repeating-linear-gradient(135deg, color-mix(in srgb, ${accent} 20%, transparent) 0 8px, transparent 8px 16px), repeating-linear-gradient(45deg, color-mix(in srgb, ${accent} 20%, transparent) 0 8px, transparent 8px 16px), #ffffff`,
+      color: '#0b0f14',
+      borderRadius: '12px',
+    }),
+    patch: corners(12),
+  },
+  {
+    name: 'Speckle', group: 'Pattern',
+    swatch: { background: 'radial-gradient(#64748b 0.8px,transparent 1px) 0 0/5px 5px,#f8fafc', borderRadius: 6 },
+    styles: () => ({
+      background: 'radial-gradient(rgba(15, 23, 42, 0.3) 1px, transparent 1.2px) 0 0 / 14px 14px, radial-gradient(rgba(15, 23, 42, 0.18) 1px, transparent 1.2px) 7px 9px / 14px 14px, #f8fafc',
+      color: '#0f172a',
+      borderRadius: '12px',
+    }),
+    patch: corners(12),
+  },
+
   /* ─── Reset ─── */
   {
     name: 'Reset look',
@@ -1187,6 +1987,122 @@ export const LOOK_NOTES: Record<string, string> = {
   Bauhaus: 'Hard red, yellow and blue bands under a black outline.',
   Y2K: 'Iridescent cyan-pink-lilac with a white edge.',
 
+  /* Depth, second pass */
+  Drape: 'A long, soft shadow falling straight down. Quietly expensive.',
+  Cast: 'A hard shadow offset down and right, with no blur at all.',
+  Lofted: 'The tallest shadow here — the element reads as properly airborne.',
+  'Rim light': 'A bright hairline along the top edge plus a deep shadow below.',
+  Pressed: 'Inner shadow and a one-pixel nudge down. The pressed-button state.',
+  'Deep well': 'A deep inner shadow, so the area reads as carved into the page.',
+  'Soft rise': 'The smallest lift in the set. Use when Lift is already too much.',
+  'Drop line': 'A flat accent shadow directly underneath, like a printed ledge.',
+  Cushion: 'Inner and outer shadow together, so the surface reads as padded.',
+  Beacon: 'A tight accent ring inside a wide accent glow. Hard to miss.',
+
+  /* Surface, second pass */
+  Velvet: 'Deep aubergine gradient with pale text. Rich and low-lit.',
+  Marble: 'Off-white with soft diagonal veining. Reads as polished stone.',
+  Sandstone: 'Warm desert beige with brown text. Dry and earthy.',
+  Obsidian: 'Glossy near-black with a lit top edge. Darker than Ink.',
+  Linen: 'Soft natural off-white. Calmer and warmer than Paper.',
+  Porcelain: 'Pure white with a hairline edge and the faintest shadow.',
+  Brushed: 'Fine vertical striping, like brushed aluminium.',
+  Mist: 'Pale translucent grey-blue with a blur behind it.',
+  Moss: 'Deep forest green panel with pale mint text.',
+  'Navy panel': 'Deep navy with cool light text. A steady dark surface.',
+  Blush: 'Pale pink with deep rose text. Soft without being sweet.',
+  'Charcoal card': 'Neutral dark grey card with a deep shadow under it.',
+  'Onboarding card': 'White fading into a wash of accent. Friendly first impression.',
+  'Empty state': 'Dashed border with muted centred text. For the nothing-here case.',
+  'Alert panel': 'Amber panel with a thick warning bar down the left.',
+  'Sidebar rail': 'Pale panel with a single dividing edge on the right.',
+
+  /* Shape, second pass */
+  Capsule: 'Fully round ends with tighter padding than Pill.',
+  Wedge: 'The bottom edge slices away on a diagonal.',
+  Shield: 'Square shoulders with a deep rounded base. Crest-shaped.',
+  Stamp: 'Perforated top and bottom edges, like a postage stamp.',
+  Scallop: 'Wide elliptical corners that curve along the long edge.',
+  Cutout: 'Two opposite corners cut away on the diagonal.',
+  Trapezoid: 'Narrower at the top than the bottom. Plinth-like.',
+  Hexagon: 'Six sides with points on the left and right.',
+  Drop: 'Three round corners and one sharp — a teardrop.',
+  Ribbon: 'Notched into a point at both ends, like a banner tail.',
+  Bookmark: 'A V cut out of the bottom edge, like a ribbon marker.',
+  'Rounded top': 'Round on the top corners only, square along the base.',
+
+  /* Line, second pass */
+  Groove: 'A carved-in border using the classic groove style.',
+  Ridge: 'A raised border — the inverse of Groove.',
+  Bracket: 'Accent rules on the left and right only, like a quotation.',
+  'Side rule': 'One thick accent rule down the left, with padding to clear it.',
+  'Top rule': 'A single accent rule across the top. Section opener.',
+  'Dot leader': 'A dotted baseline, like a table of contents.',
+  'Inline code': 'Tinted box, thin edge and a monospace face for code spans.',
+  'Accent corner': 'Accent rules on the top and left only. Frames a corner.',
+  'Focus ring': 'An offset accent outline — the keyboard focus state.',
+  Divider: 'A single hairline underneath with space above it.',
+
+  /* Accent, second pass */
+  Midnight: 'Deep blue falling into near-black. Calm and corporate.',
+  Ember: 'Dark red burning up into orange. Heat without alarm.',
+  Forest: 'Deep green rising to a bright leaf green.',
+  Plum: 'Dark violet into magenta. Luxurious and loud.',
+  Steel: 'Cool grey-blue metal gradient. Industrial and neutral.',
+  Peach: 'Warm apricot into rose. Soft and welcoming.',
+  Mint: 'Pale green into aqua with deep green text.',
+  Copper: 'A metallic sweep with a bright highlight through the middle.',
+  Twilight: 'Deep indigo into hot pink. Dusk in two colours.',
+  Sky: 'Pale blue into a clear mid blue. Open and light.',
+  Coral: 'Pink into orange. Warm, friendly and modern.',
+  'Radial pop': 'Accent light from the top left falling into shadow.',
+  Split: 'Two hard-edged accent tones meeting down the middle.',
+  'Danger state': 'Red tinted panel with a red edge. Destructive actions.',
+
+  /* Type, second pass */
+  'Caps lock': 'Uppercase and heavy with a little tracking added.',
+  Condensed: 'Negative tracking and tight leading. Fits more in.',
+  Airy: 'Open tracking and generous line height. Lets text breathe.',
+  Tight: 'Close leading for headlines that run to several lines.',
+  'Small print': 'Smaller and faded. Terms, footnotes and disclaimers.',
+  Strike: 'Struck through and faded, for a price that no longer applies.',
+  Superscript: 'Small and raised, for footnote marks and units.',
+  Ledger: 'Monospace with tabular figures so numbers line up in columns.',
+  'Lead in': 'Slightly larger and looser. The opening paragraph.',
+  Kicker: 'Tiny accent caps with wide tracking, sitting above a headline.',
+  Byline: 'Italic serif at reduced weight. An author credit.',
+  Caption: 'Small, centred and faded. Sits under an image.',
+  'Price tag': 'Large, heavy and tabular. Built for a number.',
+  'Badge text': 'Tiny accent caps in a tinted pill. Status labels.',
+
+  /* Vibe, second pass */
+  Arcade: 'Neon cyan on midnight with a hard glowing border. Cabinet energy.',
+  Zine: 'High-contrast photocopy: hard black edge, hard offset shadow.',
+  Memphis: 'Yellow panel with stacked pink and blue shadows. Eighties.',
+  Swiss: 'White, black type and one red rule. Grid-school restraint.',
+  Grunge: 'Scratched dark stripes with heavy inner shadow. Worn out.',
+  'Pastel pop': 'Lilac with a purple edge and a pink offset shadow.',
+  Noir: 'Black and white, fully desaturated, with wide uppercase tracking.',
+  'Neo brutal': 'Accent fill, thick black edge and a big hard shadow.',
+  Cyber: 'Cyan on black with a magenta edge and a monospace face.',
+  Vaporwave: 'Pink into cyan into lilac, with a hard white text shadow.',
+  Playbill: 'Cream, double border and centred serif. Theatre poster.',
+  Terminal: 'Phosphor green on black with a soft glow. A console window.',
+
+  /* Pattern, second pass */
+  Checks: 'A checkerboard in the accent at low opacity.',
+  Barber: 'Wide accent stripes on a steep angle, like a barber pole.',
+  Waves: 'Concentric accent arcs rising from the bottom edge.',
+  'Graph paper': 'Fine blue squares with a heavier line every fifth one.',
+  Noise: 'A fine speckled tooth over off-white. Takes the flatness off.',
+  Confetti: 'Scattered pink, blue and amber dots on white. Celebratory.',
+  Weave: 'Accent bands crossing at right angles, like woven fabric.',
+  Crosshatch: 'Fine diagonal hatching in both directions. Engraved.',
+  Scanlines: 'Horizontal dark lines over navy, like an old monitor.',
+  Bricks: 'A brick course in clay tones with mortar lines.',
+  Zigzag: 'Accent hatching crossing in a chevron. Busy and rhythmic.',
+  Speckle: 'Two offset dot grids for an uneven, stone-like scatter.',
+
   /* Reset */
   'Reset look': 'Strips every look back to nothing.',
 }
@@ -1315,8 +2231,12 @@ export default function FroamFloatingBar({
       if (!bar) return
       const leftPanel = document.querySelector<HTMLElement>('.froam-figma-left')?.getBoundingClientRect()
       const rightPanel = document.querySelector<HTMLElement>('.froam-dp:not(.froam-sheet .froam-dp)')?.getBoundingClientRect()
+      const toolbar = document.querySelector<HTMLElement>('.froam-chrome')?.getBoundingClientRect()
       const safeLeft = leftPanel ? leftPanel.right + VIEWPORT_GAP : VIEWPORT_GAP
       const safeRight = rightPanel ? rightPanel.left - VIEWPORT_GAP : window.innerWidth - VIEWPORT_GAP
+      const toolbarAtTop = Boolean(toolbar && toolbar.top <= VIEWPORT_GAP)
+      const safeTop = toolbarAtTop && toolbar ? toolbar.bottom + VIEWPORT_GAP : VIEWPORT_GAP
+      const safeBottom = !toolbarAtTop && toolbar ? toolbar.top - VIEWPORT_GAP : window.innerHeight - VIEWPORT_GAP
       const availableWidth = Math.max(280, safeRight - safeLeft)
       const nextNarrow = availableWidth < 760
 
@@ -1331,8 +2251,8 @@ export default function FroamFloatingBar({
       )
       const above = targetRect.top - constrainedRect.height - TARGET_GAP
       const below = targetRect.bottom + TARGET_GAP
-      const maxTop = Math.max(VIEWPORT_GAP, window.innerHeight - constrainedRect.height - VIEWPORT_GAP)
-      const top = above >= VIEWPORT_GAP ? above : Math.min(below, maxTop)
+      const maxTop = Math.max(safeTop, safeBottom - constrainedRect.height)
+      const top = above >= safeTop ? Math.min(above, maxTop) : Math.min(Math.max(safeTop, below), maxTop)
 
       bar.style.left = `${left}px`
       bar.style.top = `${top}px`

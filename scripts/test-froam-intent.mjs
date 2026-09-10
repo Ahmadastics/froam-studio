@@ -7,6 +7,7 @@ const { assembleFroamIntelligenceRequest, looksLikeNaturalLanguageIntent } = awa
 const { requestFroamIntelligence } = await import('../dist/project/bridge.js')
 const { adoptMutationChanges, compareMutationBranches, createMutationPrototypeFromProposals, normalizeMutationConstraints } = await import('../dist/project/mutation.js')
 const { FROAM_INTENT_MAX_ATTEMPTS, createLocalFroamIntentProposals, froamIntentPreferences, froamIntentPrototypeName, froamIntentReducer, froamIntentRetryFeedback, initialFroamIntentState, shouldOfferAskFroam } = await import('../dist/editor/froam-intent-model.js')
+const { FROAM_QUICK_EDIT_ACTIONS, FROAM_QUICK_EDIT_CONTRIBUTION_COUNT, searchFroamQuickEdits } = await import('../dist/editor/quick-edit-catalog.js')
 const { FROAM_INTELLIGENCE_CONSENT_KEY, readFroamIntelligenceConsent, writeFroamIntelligenceConsent } = await import('../dist/editor/intelligence-consent.js')
 
 const tests = []
@@ -42,6 +43,25 @@ const contextRequest = (overrides = {}) => assembleFroamIntelligenceRequest({ pr
 const session = (attempt = 1) => ({ id: 'intent-1', origin: 'command-palette', intent: 'Make this premium', selectedNodeId: 'cta', selectedPath: snapshot.path, sourceBranchId: 'main', attempt, maxAttempts: FROAM_INTENT_MAX_ATTEMPTS })
 
 test('known commands remain first-class', () => assert.equal(shouldOfferAskFroam('Blueprint', 1), false))
+test('Quick Edit contribution contains exactly 100 unique searchable actions', () => {
+  assert.equal(FROAM_QUICK_EDIT_CONTRIBUTION_COUNT, 100)
+  assert.equal(FROAM_QUICK_EDIT_ACTIONS.length, FROAM_QUICK_EDIT_CONTRIBUTION_COUNT)
+  assert.equal(new Set(FROAM_QUICK_EDIT_ACTIONS.map(({ id }) => id)).size, FROAM_QUICK_EDIT_ACTIONS.length)
+  assert.equal(new Set(FROAM_QUICK_EDIT_ACTIONS.map(({ label }) => label)).size, FROAM_QUICK_EDIT_ACTIONS.length)
+})
+test('all 100 Quick Edits produce bounded local mutation proposals', () => {
+  for (const action of FROAM_QUICK_EDIT_ACTIONS) {
+    const proposals = createLocalFroamIntentProposals(snapshot, action.intent)
+    assert.ok(proposals.length > 0, `${action.id} did not produce a proposal`)
+    assert.ok(proposals.every(({ targetIds }) => targetIds.length === 1 && targetIds[0] === snapshot.node.id), `${action.id} escaped selection scope`)
+  }
+})
+test('Quick Edit search is compact, categorized, and keyword aware', () => {
+  assert.deepEqual(searchFroamQuickEdits(''), [])
+  assert.ok(searchFroamQuickEdits('font 48').some(({ id }) => id === 'quick-edit:font-size-48'))
+  assert.ok(searchFroamQuickEdits('responsive flow').some(({ id }) => id === 'quick-edit:wrap'))
+  assert.ok(searchFroamQuickEdits('padding', 4).length <= 4)
+})
 test('unmatched language produces Ask Froam', () => assert.equal(shouldOfferAskFroam('Make this button stronger', 0), true))
 test('blank input never produces Ask Froam', () => { assert.equal(shouldOfferAskFroam('', 0), false); assert.equal(shouldOfferAskFroam('   ', 0), false) })
 test('short non-language input stays a normal empty result', () => assert.equal(looksLikeNaturalLanguageIntent('x'), false))

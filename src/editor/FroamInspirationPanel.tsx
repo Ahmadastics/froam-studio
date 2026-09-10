@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { ImagePlus, Trash2, X, Link, Download, ZoomIn } from 'lucide-react'
+import { froamStorageKey } from '../project/storage-scope'
 
 type InspirationImage = {
   id: string
@@ -9,33 +10,34 @@ type InspirationImage = {
 }
 
 type Props = {
+  projectKey: string
   onToast: (msg: string) => void
 }
 
 const STORAGE_KEY = 'froam-inspiration-v1'
 const MAX_IMAGES = 60
 
-function loadImages(): InspirationImage[] {
+function loadImages(projectKey: string): InspirationImage[] {
   if (typeof window === 'undefined') return []
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
+    const raw = window.localStorage.getItem(froamStorageKey(STORAGE_KEY, projectKey))
     return raw ? (JSON.parse(raw) as InspirationImage[]) : []
   } catch {
     return []
   }
 }
 
-function saveImages(images: InspirationImage[]) {
+function saveImages(projectKey: string, images: InspirationImage[]) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(images))
+  window.localStorage.setItem(froamStorageKey(STORAGE_KEY, projectKey), JSON.stringify(images))
 }
 
 function makeId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-export default function FroamInspirationPanel({ onToast }: Props) {
-  const [images, setImages] = useState<InspirationImage[]>(() => loadImages())
+export default function FroamInspirationPanel({ projectKey, onToast }: Props) {
+  const [images, setImages] = useState<InspirationImage[]>(() => loadImages(projectKey))
   const [urlInput, setUrlInput] = useState('')
   const [lightbox, setLightbox] = useState<InspirationImage | null>(null)
   const [draggingOver, setDraggingOver] = useState(false)
@@ -44,8 +46,8 @@ export default function FroamInspirationPanel({ onToast }: Props) {
   const dropZoneRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    saveImages(images)
-  }, [images])
+    saveImages(projectKey, images)
+  }, [images, projectKey])
 
   // Paste from clipboard (images)
   useEffect(() => {

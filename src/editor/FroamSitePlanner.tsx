@@ -32,6 +32,7 @@ import {
   type FroamInsertPlacement,
   type FroamWireframeSection,
 } from './FroamPlannerTypes'
+import { froamStorageKey } from '../project/storage-scope'
 
 export type PlannerTab = 'blueprint' | 'sitemap' | 'wireframe' | 'library'
 
@@ -72,6 +73,7 @@ type BlueprintPreset = {
 }
 
 type Props = {
+  projectKey: string
   routeKey: string
   projectName: string
   branchName: string
@@ -369,18 +371,18 @@ function createDefaultPlan(): SitePlan {
   }
 }
 
-function storageKey(routeKey: string) {
-  return `froam-site-plan-v1:${routeKey}`
+function storageKey(projectKey: string, routeKey: string) {
+  return froamStorageKey(`froam-site-plan-v1:${routeKey}`, projectKey)
 }
 
-function blueprintStorageKey(routeKey: string) {
-  return `froam-blueprint-v1:${routeKey}`
+function blueprintStorageKey(projectKey: string, routeKey: string) {
+  return froamStorageKey(`froam-blueprint-v1:${routeKey}`, projectKey)
 }
 
-function loadPlan(routeKey: string): SitePlan {
+function loadPlan(projectKey: string, routeKey: string): SitePlan {
   if (typeof window === 'undefined') return createDefaultPlan()
   try {
-    const raw = window.localStorage.getItem(storageKey(routeKey))
+    const raw = window.localStorage.getItem(storageKey(projectKey, routeKey))
     if (!raw) return createDefaultPlan()
     const parsed = JSON.parse(raw) as Partial<SitePlan>
     if (!Array.isArray(parsed.pages) || parsed.pages.length === 0) return createDefaultPlan()
@@ -413,11 +415,11 @@ function loadPlan(routeKey: string): SitePlan {
   }
 }
 
-function loadBlueprintDraft(routeKey: string): BlueprintDraft {
+function loadBlueprintDraft(projectKey: string, routeKey: string): BlueprintDraft {
   const fallback = createDefaultBlueprintDraft()
   if (typeof window === 'undefined') return fallback
   try {
-    const raw = window.localStorage.getItem(blueprintStorageKey(routeKey))
+    const raw = window.localStorage.getItem(blueprintStorageKey(projectKey, routeKey))
     if (!raw) return fallback
     const parsed = JSON.parse(raw) as Partial<BlueprintDraft>
     return {
@@ -471,9 +473,9 @@ function ComponentPreview({ componentId }: { componentId: string }) {
   )
 }
 
-export default function FroamSitePlanner({ routeKey, projectName, branchName, requestedTab, selection, archiveItems, assets = [], onRenameProject, onAddAsset, onApplyAsset, onRemoveAsset, onTabChange, onInsertComponent, onInsertBlankFrame, onInsertBlock, onInsertArchived, onBuildPage, onPlanChange, onToast }: Props) {
-  const [plan, setPlan] = useState<SitePlan>(() => loadPlan(routeKey))
-  const [blueprintDraft, setBlueprintDraft] = useState<BlueprintDraft>(() => loadBlueprintDraft(routeKey))
+export default function FroamSitePlanner({ projectKey, routeKey, projectName, branchName, requestedTab, selection, archiveItems, assets = [], onRenameProject, onAddAsset, onApplyAsset, onRemoveAsset, onTabChange, onInsertComponent, onInsertBlankFrame, onInsertBlock, onInsertArchived, onBuildPage, onPlanChange, onToast }: Props) {
+  const [plan, setPlan] = useState<SitePlan>(() => loadPlan(projectKey, routeKey))
+  const [blueprintDraft, setBlueprintDraft] = useState<BlueprintDraft>(() => loadBlueprintDraft(projectKey, routeKey))
   const [planningPrompt, setPlanningPrompt] = useState('')
   const [tab, setTab] = useState<PlannerTab>('blueprint')
   const [projectNameDraft, setProjectNameDraft] = useState(projectName)
@@ -486,20 +488,20 @@ export default function FroamSitePlanner({ routeKey, projectName, branchName, re
   const [insertFrame, setInsertFrame] = useState<FroamFrameSpec>({ ...FROAM_FRAME_PRESETS.responsive })
 
   useEffect(() => {
-    setPlan(loadPlan(routeKey))
-    setBlueprintDraft(loadBlueprintDraft(routeKey))
-  }, [routeKey])
+    setPlan(loadPlan(projectKey, routeKey))
+    setBlueprintDraft(loadBlueprintDraft(projectKey, routeKey))
+  }, [projectKey, routeKey])
 
   useEffect(() => { if (requestedTab) setTab(requestedTab) }, [requestedTab])
   useEffect(() => { setProjectNameDraft(projectName) }, [projectName])
 
   useEffect(() => {
-    try { window.localStorage.setItem(storageKey(routeKey), JSON.stringify(plan)) } catch { /* project graph remains authoritative when browser preferences are full */ }
-  }, [plan, routeKey])
+    try { window.localStorage.setItem(storageKey(projectKey, routeKey), JSON.stringify(plan)) } catch { /* project graph remains authoritative when browser preferences are full */ }
+  }, [plan, projectKey, routeKey])
 
   useEffect(() => {
-    try { window.localStorage.setItem(blueprintStorageKey(routeKey), JSON.stringify(blueprintDraft)) } catch { /* optional planning draft */ }
-  }, [blueprintDraft, routeKey])
+    try { window.localStorage.setItem(blueprintStorageKey(projectKey, routeKey), JSON.stringify(blueprintDraft)) } catch { /* optional planning draft */ }
+  }, [blueprintDraft, projectKey, routeKey])
 
   useEffect(() => { onPlanChange(plan.pages) }, [plan.pages, onPlanChange])
 

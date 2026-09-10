@@ -4,11 +4,13 @@ export type FroamGateProps = Pick<FroamStudioConfig, 'apiBaseUrl' | 'authProvide
     enabled?: boolean;
     initialOpen?: boolean;
     routeKey?: string;
+    /** Stable per-project key. The Froam bridge supplies this automatically. */
+    projectKey?: string;
     ownerEmails?: readonly string[] | string;
     allowLocalhost?: boolean;
     localRoutes?: readonly string[] | '*';
     fallback?: ReactNode;
     lockedFallback?: ReactNode;
 };
-export default function FroamGate({ apiBaseUrl, authProvider, enabled, fallback, fetch, initialOpen, localRoutes, lockedFallback, ownerEmails, rootSelector, routeKey: explicitRouteKey, allowLocalhost, }: FroamGateProps): import("react").JSX.Element;
+export default function FroamGate({ apiBaseUrl, authProvider, enabled, fallback, fetch, initialOpen, localRoutes, lockedFallback, ownerEmails, rootSelector, routeKey: explicitRouteKey, projectKey: explicitProjectKey, allowLocalhost, }: FroamGateProps): import("react").JSX.Element;
 //# sourceMappingURL=FroamGate.d.ts.map

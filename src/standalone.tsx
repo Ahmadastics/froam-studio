@@ -26,6 +26,11 @@ type BridgeWindow = Window & {
   __FROAM_STANDALONE_MOUNTED__?: boolean
 }
 
+type BridgeConfig = {
+  success?: boolean
+  projectKey?: string
+}
+
 function resolveScriptConfig() {
   const script = document.currentScript as HTMLScriptElement | null
   let origin = window.location.origin
@@ -38,6 +43,7 @@ function resolveScriptConfig() {
     origin,
     initialOpen: script?.dataset.open === 'true',
     routes: script?.dataset.routes ?? '*',
+    projectKey: script?.dataset.froamProject ?? null,
   }
 }
 
@@ -68,17 +74,21 @@ function injectEditorStyles(origin: string) {
   document.head.appendChild(link)
 }
 
-function StandaloneApp({ origin, initialOpen }: { origin: string; initialOpen: boolean }) {
+function StandaloneApp({ origin, initialOpen, initialProjectKey }: { origin: string; initialOpen: boolean; initialProjectKey: string | null }) {
   const [design, setDesign] = useState<FroamLocalDesign | null>(null)
+  const [projectKey, setProjectKey] = useState<string | null>(initialProjectKey)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    window
-      .fetch(`${origin}/__froam/repo/load`, { cache: 'no-store' })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: { success?: boolean; design?: FroamLocalDesign } | null) => {
-        if (!cancelled && data?.success && data.design) setDesign(data.design)
+    Promise.all([
+      window.fetch(`${origin}/__froam/repo/load`, { cache: 'no-store' }).then((res) => (res.ok ? res.json() : null)),
+      window.fetch(`${origin}/__froam/config`, { cache: 'no-store' }).then((res) => (res.ok ? res.json() : null)),
+    ])
+      .then(([designData, configData]: [{ success?: boolean; design?: FroamLocalDesign } | null, BridgeConfig | null]) => {
+        if (cancelled) return
+        if (designData?.success && designData.design) setDesign(designData.design)
+        if (configData?.success && configData.projectKey) setProjectKey(configData.projectKey)
       })
       .catch(() => {
         /* bridge offline — editor still opens, cloud/local drafts only */
@@ -98,7 +108,7 @@ function StandaloneApp({ origin, initialOpen }: { origin: string; initialOpen: b
       {/* apiBaseUrl = bridge origin so publish + published-designs hit the
           bridge's /api/froam/published even in script-tag mode. */}
       <FroamRuntime apiBaseUrl={origin} design={design} routes="*" />
-      <FroamGate apiBaseUrl={origin} enabled initialOpen={initialOpen} localRoutes="*" />
+      <FroamGate apiBaseUrl={origin} enabled initialOpen={initialOpen} localRoutes="*" projectKey={projectKey ?? origin} />
     </StrictMode>
   )
 }
@@ -108,7 +118,7 @@ function boot() {
   if (win.__FROAM_STANDALONE_MOUNTED__) return
   win.__FROAM_STANDALONE_MOUNTED__ = true
 
-  const { origin, initialOpen } = resolveScriptConfig()
+  const { origin, initialOpen, projectKey } = resolveScriptConfig()
   win.__FROAM_BRIDGE_ORIGIN__ = origin
 
   const mount = () => {
@@ -121,7 +131,7 @@ function boot() {
       host.setAttribute('data-chef-editor-root', 'true')
       document.body.appendChild(host)
     }
-    createRoot(host).render(<StandaloneApp origin={origin} initialOpen={initialOpen} />)
+    createRoot(host).render(<StandaloneApp origin={origin} initialOpen={initialOpen} initialProjectKey={projectKey} />)
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount)

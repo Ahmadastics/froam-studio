@@ -11,8 +11,13 @@
  */
 import { compactLog } from './oplog'
 import { FROAM_VIEWPORTS, type FroamOp, type FroamViewport } from './types'
+import { froamStorageKey } from '../project/storage-scope'
 
 export const FROAM_OPLOG_KEY = 'froam-oplog-v1'
+
+export function froamOpLogStorageKey(projectKey?: string): string {
+  return projectKey ? froamStorageKey(FROAM_OPLOG_KEY, projectKey) : FROAM_OPLOG_KEY
+}
 
 /** Comfortably under a 5 MB origin quota, and the design store comes first. */
 const MAX_OPLOG_BYTES = 900_000
@@ -58,11 +63,11 @@ function isOp(value: unknown): value is FroamOp {
   )
 }
 
-export function loadOpLog(): FroamOp[] {
+export function loadOpLog(projectKey?: string): FroamOp[] {
   const store = storage()
   if (!store) return []
   try {
-    const raw = store.getItem(FROAM_OPLOG_KEY)
+    const raw = store.getItem(froamOpLogStorageKey(projectKey))
     if (!raw) return []
     const parsed = JSON.parse(raw) as Payload
     if (!parsed || parsed.v !== 1 || !Array.isArray(parsed.ops)) return []
@@ -72,9 +77,9 @@ export function loadOpLog(): FroamOp[] {
   }
 }
 
-export function clearOpLog() {
+export function clearOpLog(projectKey?: string) {
   try {
-    storage()?.removeItem(FROAM_OPLOG_KEY)
+    storage()?.removeItem(froamOpLogStorageKey(projectKey))
   } catch {
     /* nothing to do */
   }
@@ -87,7 +92,7 @@ export function clearOpLog() {
  * that list, so the in-memory log gets the same compaction and doesn't grow
  * forever in a long editing session.
  */
-export function saveOpLog(ops: readonly FroamOp[]): FroamOp[] {
+export function saveOpLog(ops: readonly FroamOp[], projectKey?: string): FroamOp[] {
   const store = storage()
   if (!store) return [...ops]
 
@@ -96,7 +101,7 @@ export function saveOpLog(ops: readonly FroamOp[]): FroamOp[] {
     const serialized = JSON.stringify({ v: 1, ops: candidate } satisfies Payload)
     if (serialized.length > MAX_OPLOG_BYTES) continue
     try {
-      store.setItem(FROAM_OPLOG_KEY, serialized)
+      store.setItem(froamOpLogStorageKey(projectKey), serialized)
       return candidate
     } catch {
       // Quota — try again with less history.
@@ -105,6 +110,6 @@ export function saveOpLog(ops: readonly FroamOp[]): FroamOp[] {
 
   // Even the baseline won't fit. Drop the log rather than leave a stale one
   // that would contradict the design on the next boot.
-  clearOpLog()
+  clearOpLog(projectKey)
   return [...ops]
 }

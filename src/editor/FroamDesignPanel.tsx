@@ -25,6 +25,7 @@ import {
   X,
 } from 'lucide-react'
 import { computeBlueprintData, BlueprintSheet, BLUEPRINT_CATEGORY_COLOR, BLUEPRINT_CATEGORY_LABEL } from './FroamBlueprint'
+import { froamStorageKey } from '../project/storage-scope'
 
 /* ═══════════════════════════════════════════════════════════════
    Types
@@ -96,6 +97,7 @@ type SelectionState = {
 }
 
 type Props = {
+  projectKey: string
   selection: SelectionState | null
   selectionRect: DOMRect | null
   onApplyStyle: (styles: Record<string, string>, nextSel?: Partial<SelectionState>, label?: string) => void
@@ -253,6 +255,7 @@ function BlueprintTabView({ getRootEl, onOpen }: { getRootEl: () => HTMLElement 
    Component
    ═══════════════════════════════════════════════════════════════ */
 export default function FroamDesignPanel({
+  projectKey,
   selection,
   selectionRect,
   onApplyStyle,
@@ -287,7 +290,7 @@ export default function FroamDesignPanel({
   const [savedColors, setSavedColors] = useState<string[]>(() => {
     if (typeof window === 'undefined') return ['#ef4444', '#5eead4', '#0f172a', '#ffffff']
     try {
-      const parsed = JSON.parse(window.localStorage.getItem('froam-design-colors-v1') || '[]') as string[]
+      const parsed = JSON.parse(window.localStorage.getItem(froamStorageKey('froam-design-colors-v1', projectKey)) || '[]') as string[]
       return parsed.length ? parsed : ['#ef4444', '#5eead4', '#0f172a', '#ffffff']
     } catch {
       return ['#ef4444', '#5eead4', '#0f172a', '#ffffff']
@@ -302,7 +305,7 @@ export default function FroamDesignPanel({
     if (!normalized) return
     setSavedColors((current) => {
       const next = [normalized, ...current.filter((item) => item.toLowerCase() !== normalized.toLowerCase())].slice(0, 18)
-      try { window.localStorage.setItem('froam-design-colors-v1', JSON.stringify(next)) } catch { /* optional */ }
+      try { window.localStorage.setItem(froamStorageKey('froam-design-colors-v1', projectKey), JSON.stringify(next)) } catch { /* optional */ }
       return next
     })
   }

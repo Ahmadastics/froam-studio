@@ -1,29 +1,30 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { ImagePlus, Trash2, X, Link, Download, ZoomIn } from 'lucide-react';
+import { froamStorageKey } from '../project/storage-scope.js';
 const STORAGE_KEY = 'froam-inspiration-v1';
 const MAX_IMAGES = 60;
-function loadImages() {
+function loadImages(projectKey) {
     if (typeof window === 'undefined')
         return [];
     try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
+        const raw = window.localStorage.getItem(froamStorageKey(STORAGE_KEY, projectKey));
         return raw ? JSON.parse(raw) : [];
     }
     catch {
         return [];
     }
 }
-function saveImages(images) {
+function saveImages(projectKey, images) {
     if (typeof window === 'undefined')
         return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(images));
+    window.localStorage.setItem(froamStorageKey(STORAGE_KEY, projectKey), JSON.stringify(images));
 }
 function makeId() {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
-export default function FroamInspirationPanel({ onToast }) {
-    const [images, setImages] = useState(() => loadImages());
+export default function FroamInspirationPanel({ projectKey, onToast }) {
+    const [images, setImages] = useState(() => loadImages(projectKey));
     const [urlInput, setUrlInput] = useState('');
     const [lightbox, setLightbox] = useState(null);
     const [draggingOver, setDraggingOver] = useState(false);
@@ -31,8 +32,8 @@ export default function FroamInspirationPanel({ onToast }) {
     const fileInputRef = useRef(null);
     const dropZoneRef = useRef(null);
     useEffect(() => {
-        saveImages(images);
-    }, [images]);
+        saveImages(projectKey, images);
+    }, [images, projectKey]);
     // Paste from clipboard (images)
     useEffect(() => {
         function handlePaste(e) {

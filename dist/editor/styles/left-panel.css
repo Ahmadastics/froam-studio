@@ -101,6 +101,137 @@
 
 .froam-lp__search-input::placeholder { color: var(--fs-text-tertiary); }
 
+.froam-lp__breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.froam-lp__breadcrumbs::-webkit-scrollbar { display: none; }
+
+.froam-lp__breadcrumbs button {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 130px;
+  min-height: 24px;
+  padding: 3px 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fs-text-tertiary);
+  font: inherit;
+  font-size: 0.58rem;
+  cursor: pointer;
+}
+
+.froam-lp__breadcrumbs button:hover,
+.froam-lp__breadcrumbs button:focus-visible,
+.froam-lp__breadcrumbs button.is-current {
+  border-color: rgba(var(--fs-accent-control-rgb), 0.2);
+  background: rgba(var(--fs-accent-control-rgb), 0.08);
+  color: var(--fs-text-primary);
+}
+
+.froam-lp__breadcrumbs span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.froam-lp__ladder {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.froam-lp__ladder button {
+  min-width: 0;
+  min-height: 25px;
+  padding: 4px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--fs-text-secondary);
+  font: inherit;
+  font-size: 0.58rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.froam-lp__ladder button:hover:not(:disabled),
+.froam-lp__ladder button:focus-visible:not(:disabled) {
+  border-color: rgba(var(--fs-accent-control-rgb), 0.28);
+  color: var(--fs-text-primary);
+}
+
+.froam-lp__ladder button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.froam-lp__stack {
+  display: grid;
+  gap: 5px;
+  padding: 7px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(var(--fs-accent-control-rgb), 0.045);
+}
+
+.froam-lp__stack > span {
+  color: var(--fs-text-tertiary);
+  font-size: 0.55rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.froam-lp__stack > div {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.froam-lp__stack > div::-webkit-scrollbar { display: none; }
+
+.froam-lp__stack button {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 150px;
+  min-height: 26px;
+  padding: 4px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  background: rgba(18, 20, 24, 0.78);
+  color: var(--fs-text-secondary);
+  font: inherit;
+  font-size: 0.6rem;
+  cursor: pointer;
+}
+
+.froam-lp__stack button:hover,
+.froam-lp__stack button:focus-visible,
+.froam-lp__stack button.is-current {
+  border-color: rgba(var(--fs-accent-control-rgb), 0.35);
+  color: var(--fs-text-primary);
+}
+
+.froam-lp__stack button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Tree */
 .froam-lp__tree {
   flex: 1;
@@ -240,10 +371,29 @@
 .froam-lp__vis-btn:hover { color: var(--fs-text-primary); }
 .froam-lp__vis-btn.is-hidden { color: var(--fs-warm); }
 
-.froam-lp__inspector { display: grid; gap: 8px; padding: 10px; border-top: 1px solid rgba(255,255,255,.07); background: linear-gradient(180deg, rgba(27,28,31,.98), rgba(22,23,26,.98)); }
+.froam-lp__inspector { display: grid; gap: 8px; max-height: 250px; overflow-y: auto; flex-shrink: 0; padding: 10px; border-top: 1px solid rgba(255,255,255,.07); background: linear-gradient(180deg, rgba(27,28,31,.98), rgba(22,23,26,.98)); scrollbar-width: thin; }
 .froam-lp__inspector > div:first-child { display: grid; gap: 2px; }
 .froam-lp__inspector span, .froam-lp__inspector small { color: var(--fs-text-tertiary); font-size: .58rem; }
 .froam-lp__inspector strong { color: var(--fs-text-primary); font-size: .72rem; }
 .froam-lp__knowledge-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
 .froam-lp__knowledge-actions button { min-width: 0; padding: 6px; border: 1px solid rgba(255,255,255,.08); border-radius: 6px; background: rgba(255,255,255,.025); color: var(--fs-text-secondary); font: inherit; font-size: .6rem; cursor: pointer; }
 .froam-lp__knowledge-actions button:hover { border-color: rgba(var(--fs-accent-control-rgb), .25); color: var(--fs-text-primary); }
+
+.froam-lp__section-controls { display: grid; gap: 6px; padding: 8px; border: 1px solid rgba(var(--fs-accent-control-rgb), .18); border-radius: 6px; background: rgba(var(--fs-accent-control-rgb), .04); }
+.froam-lp__section-controls > span { color: var(--fs-text-secondary); font-size: .6rem; font-weight: 800; text-transform: uppercase; }
+.froam-lp__section-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.froam-lp__section-actions button { position: relative; min-width: 0; height: 28px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.09); border-radius: 5px; background: rgba(255,255,255,.025); color: var(--fs-text-secondary); cursor: pointer; }
+.froam-lp__section-actions button:first-child svg:last-child,
+.froam-lp__section-actions button:nth-child(2) svg:last-child { position: absolute; right: 4px; bottom: 3px; }
+.froam-lp__section-actions button:hover:not(:disabled) { border-color: rgba(var(--fs-accent-control-rgb), .34); color: var(--fs-text-primary); }
+.froam-lp__section-actions button:disabled { opacity: .32; cursor: not-allowed; }
+.froam-lp__section-visibility { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.froam-lp__section-visibility button,
+.froam-lp__section-delete { min-width: 0; min-height: 28px; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 6px; border: 1px solid rgba(255,255,255,.09); border-radius: 5px; background: rgba(255,255,255,.025); color: var(--fs-text-secondary); font: inherit; font-size: .58rem; cursor: pointer; }
+.froam-lp__section-visibility button span,
+.froam-lp__section-delete span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.froam-lp__section-visibility button:hover { border-color: rgba(var(--fs-accent-control-rgb), .34); color: var(--fs-text-primary); }
+.froam-lp__section-visibility button.is-active { border-color: rgba(248,193,92,.34); color: #f8c15c; background: rgba(248,193,92,.07); }
+.froam-lp__section-delete { width: 100%; border-color: rgba(248,113,113,.18); color: #fca5a5; }
+.froam-lp__section-delete:hover { border-color: rgba(248,113,113,.42); background: rgba(248,113,113,.07); }
+.froam-lp__section-controls > small { line-height: 1.45; }

@@ -9,6 +9,7 @@ type SitePage = {
     sections: FroamWireframeSection[];
 };
 type Props = {
+    projectKey: string;
     routeKey: string;
     projectName: string;
     branchName: string;
@@ -40,6 +41,6 @@ type Props = {
     onPlanChange: (pages: SitePage[]) => void;
     onToast: (message: string) => void;
 };
-export default function FroamSitePlanner({ routeKey, projectName, branchName, requestedTab, selection, archiveItems, assets, onRenameProject, onAddAsset, onApplyAsset, onRemoveAsset, onTabChange, onInsertComponent, onInsertBlankFrame, onInsertBlock, onInsertArchived, onBuildPage, onPlanChange, onToast }: Props): import("react").JSX.Element;
+export default function FroamSitePlanner({ projectKey, routeKey, projectName, branchName, requestedTab, selection, archiveItems, assets, onRenameProject, onAddAsset, onApplyAsset, onRemoveAsset, onTabChange, onInsertComponent, onInsertBlankFrame, onInsertBlock, onInsertArchived, onBuildPage, onPlanChange, onToast }: Props): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=FroamSitePlanner.d.ts.map

@@ -38,12 +38,14 @@ import FroamIntentResult from './FroamIntentResult.js';
 import FroamQuickChat from './FroamQuickChat.js';
 import { useFroamIntent } from './useFroamIntent.js';
 import { shouldOfferAskFroam } from './froam-intent-model.js';
+import { searchFroamQuickEdits } from './quick-edit-catalog.js';
 import FroamLabs from './FroamLabs.js';
 import FroamWorkspaceShell from './FroamWorkspaceShell.js';
 import FroamUICustomizer from './FroamUICustomizer.js';
 import { froamUIPanelWidth, readFroamUIPreference, writeFroamUIPreference } from './froamUIPreferences.js';
 import { FROAM_WORKSPACE_SECTIONS, readWorkspacePreference, workspaceCommandMatches, writeWorkspacePreference } from './workspace-shell-model.js';
 import { projectTextLayerStyles } from './text-style-projection.js';
+import { SECTION_STRUCTURE_KEY, assignFreshFroamNodeIds, readSectionStructureDraft, writeSectionStructureDraft, } from './section-structure.js';
 import { readFroamLabsFlags, writeFroamLabsFlags } from '../project/experiments.js';
 import { appendProjectEvents, createProjectEvent, deriveBranchState, switchProjectBranch } from '../project/event-log.js';
 import { validateReferenceBuildCandidate } from '../project/reference-build.js';
@@ -61,6 +63,7 @@ import { componentCatalogFamilies } from '../project/component-adapter.js';
 import { upsertAnimationCss } from '../project/animator-adapter.js';
 import { createReusableStyle, saveReusableStyle, upsertComponentFamily } from '../project/design-system.js';
 import { createFrameworkIdentityObserver } from '../project/framework-identity.js';
+import { froamProjectId as createFroamProjectId, froamStorageKey, resolveFroamProjectKey } from '../project/storage-scope.js';
 import { collectStoreFontFamilies, ensureBrandFontStyle, ensureFontLinks, fontOptionsFor, sanitizeBrandFonts, } from './fontSources.js';
 import { useFroamRouteKey } from '../routing.js';
 import { DEFAULT_FROAM_PERSONA, FROAM_PERSONA_PATH, PERSONA_STORAGE_KEY, readFroamPersonaDraft, sanitizeFroamPersona, isFroamPersonaPath, } from './froamPersona.js';
@@ -104,6 +107,7 @@ const CHEF_BUTTON_START = { x: 20, y: 480 };
 const CANVAS_KEY = '__froam_canvas__';
 const INJECTION_KEY = '__froam_injection__';
 const ROOT_PARENT_KEY = '__froam_root__';
+const INJECTED_BLOCK_SELECTOR = '[data-froam-injected="true"][data-froam-block="true"], [data-froam-runtime-injected="true"]';
 const VIEWPORT_MODES = [
     { id: 'desktop', label: 'Desktop', width: null, height: null },
     { id: 'tablet', label: 'Tablet', width: 768, height: 1024 },
@@ -121,22 +125,22 @@ const DEVICE_SHELL_ID = 'froam-device-shell';
 const BRAND_FONTS_KEY = 'froam-brand-fonts-v1';
 /** A woff2 is usually well under 100KB; this is generous but still loadable. */
 const BRAND_FONT_MAX_BYTES = 1_000_000;
-function loadBrandFonts() {
+function loadBrandFonts(projectKey) {
     if (typeof window === 'undefined')
         return [];
     try {
-        const raw = window.localStorage.getItem(BRAND_FONTS_KEY);
+        const raw = window.localStorage.getItem(froamStorageKey(BRAND_FONTS_KEY, projectKey));
         return raw ? sanitizeBrandFonts(JSON.parse(raw)) : [];
     }
     catch {
         return [];
     }
 }
-function saveBrandFonts(fonts) {
+function saveBrandFontsForProject(fonts, projectKey) {
     if (typeof window === 'undefined')
         return;
     try {
-        window.localStorage.setItem(BRAND_FONTS_KEY, JSON.stringify(fonts));
+        window.localStorage.setItem(froamStorageKey(BRAND_FONTS_KEY, projectKey), JSON.stringify(fonts));
     }
     catch {
         // An uploaded face can be large enough to blow the quota. The design
@@ -168,11 +172,11 @@ const persistedStyleKeys = [
 /* ═══════════════════════════════════════════════════════════════
    Utility functions
    ═══════════════════════════════════════════════════════════════ */
-function loadStore() {
+function loadStore(projectKey) {
     if (typeof window === 'undefined')
         return {};
     try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
+        const raw = window.localStorage.getItem(froamStorageKey(STORAGE_KEY, projectKey));
         if (!raw)
             return {};
         return sanitizeStore(JSON.parse(raw));
@@ -181,12 +185,12 @@ function loadStore() {
         return {};
     }
 }
-function saveStore(store) {
+function saveStoreForProject(store, projectKey) {
     if (typeof window === 'undefined')
         return;
     const serialized = JSON.stringify(sanitizeStore(store));
     try {
-        window.localStorage.setItem(STORAGE_KEY, serialized);
+        window.localStorage.setItem(froamStorageKey(STORAGE_KEY, projectKey), serialized);
     }
     catch {
         // History is disposable and the design is not. Clear both records of how
@@ -195,30 +199,30 @@ function saveStore(store) {
             window.localStorage.removeItem(LEGACY_HISTORY_KEY);
         }
         catch { /* ignore */ }
-        clearOpLog();
+        clearOpLog(projectKey);
         try {
-            window.localStorage.setItem(STORAGE_KEY, serialized);
+            window.localStorage.setItem(froamStorageKey(STORAGE_KEY, projectKey), serialized);
         }
         catch {
             // Keep the in-memory editor usable even when persistence is unavailable.
         }
     }
 }
-function loadNodeRegistry() {
+function loadNodeRegistry(projectKey) {
     try {
-        const parsed = JSON.parse(window.localStorage.getItem(NODE_REGISTRY_KEY) ?? '{}');
+        const parsed = JSON.parse(window.localStorage.getItem(froamStorageKey(NODE_REGISTRY_KEY, projectKey)) ?? '{}');
         return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
     }
     catch {
         return {};
     }
 }
-function saveNodeRegistry(registry) {
+function saveNodeRegistryForProject(registry, projectKey) {
     try {
         const entries = Object.entries(registry)
             .sort(([, left], [, right]) => right.updatedAt - left.updatedAt)
             .slice(0, 5_000);
-        window.localStorage.setItem(NODE_REGISTRY_KEY, JSON.stringify(Object.fromEntries(entries)));
+        window.localStorage.setItem(froamStorageKey(NODE_REGISTRY_KEY, projectKey), JSON.stringify(Object.fromEntries(entries)));
     }
     catch { /* private mode or quota pressure */ }
 }
@@ -755,6 +759,9 @@ function applyDraft(element, draft) {
 function isInjectionPath(path) {
     return path.startsWith(`${INJECTION_KEY}:`);
 }
+function isSectionStructurePath(path) {
+    return path === SECTION_STRUCTURE_KEY;
+}
 function ensureFroamNodeId(element) {
     const existing = element.dataset.froamId;
     if (existing)
@@ -763,13 +770,54 @@ function ensureFroamNodeId(element) {
     element.dataset.froamId = id;
     return id;
 }
-function assignFreshFroamNodeIds(element) {
-    if (element.dataset.froamInjected === 'true') {
-        element.dataset.froamId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+function layerDepthFromPath(path) {
+    return Math.max(0, path.split('/').filter(Boolean).length - 1);
+}
+function labelLayerElement(element) {
+    return element.dataset.froamMerged === 'true'
+        ? 'Stamp group'
+        : element.dataset.froamShape === 'true'
+            ? 'Shape'
+            : element.dataset.froamFrameLabel
+                || element.getAttribute('aria-label')
+                || element.dataset.froamComponentCategory
+                || element.tagName.toLowerCase();
+}
+function isStructuralLayerElement(element) {
+    return ['section', 'header', 'footer', 'main', 'article', 'nav', 'aside'].includes(element.tagName.toLowerCase());
+}
+function syncStructureBoundaryLabel(element) {
+    if (isStructuralLayerElement(element)) {
+        element.dataset.froamBoundaryLabel = labelLayerElement(element);
+        if (window.getComputedStyle(element).position === 'static')
+            element.dataset.froamStaticBoundary = 'true';
+        else
+            element.removeAttribute('data-froam-static-boundary');
     }
-    element.querySelectorAll('[data-froam-injected="true"]').forEach((child) => {
-        child.dataset.froamId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    });
+    else {
+        element.removeAttribute('data-froam-boundary-label');
+        element.removeAttribute('data-froam-static-boundary');
+    }
+}
+function buildLayerNode(element, root) {
+    const path = getElementPath(element, root);
+    const computed = window.getComputedStyle(element);
+    const elementChildren = Array.from(element.children).filter((child) => child instanceof HTMLElement && !shouldSkipElement(child));
+    return {
+        element,
+        path,
+        tag: element.tagName.toLowerCase(),
+        label: labelLayerElement(element),
+        kind: element.dataset.froamMerged === 'true' ? 'stamp' : element.dataset.froamShape === 'true' ? 'shape' : 'element',
+        className: typeof element.className === 'string' ? element.className.split(' ').filter(Boolean).slice(0, 2).join(' ') : '',
+        depth: layerDepthFromPath(path),
+        hidden: computed.display === 'none',
+        editorHidden: element.dataset.froamEditorHidden === 'true',
+        exportHidden: element.dataset.froamExportHidden === 'true',
+        hasChildren: elementChildren.length > 0,
+        childCount: elementChildren.length,
+        nodeId: element.dataset.froamId || undefined,
+    };
 }
 function readInjectionDraft(draft) {
     if (!draft.text)
@@ -783,6 +831,7 @@ function readInjectionDraft(draft) {
         return {
             html: parsed.html,
             parentPath: parsed.parentPath,
+            parentId: typeof parsed.parentId === 'string' ? parsed.parentId : undefined,
             order: typeof parsed.order === 'number' ? parsed.order : 0,
         };
     }
@@ -997,26 +1046,8 @@ function collectLayers(root, maxDepth = 8) {
             return;
         if (shouldSkipElement(el))
             return;
-        const path = getElementPath(el, root);
-        const computed = window.getComputedStyle(el);
         const elementChildren = Array.from(el.children).filter((child) => child instanceof HTMLElement && !shouldSkipElement(child));
-        nodes.push({
-            element: el,
-            path,
-            tag: el.tagName.toLowerCase(),
-            label: el.dataset.froamMerged === 'true'
-                ? 'Stamp group'
-                : el.dataset.froamShape === 'true'
-                    ? 'Shape'
-                    : el.dataset.froamFrameLabel || el.getAttribute('aria-label') || el.dataset.froamComponentCategory || el.tagName.toLowerCase(),
-            kind: el.dataset.froamMerged === 'true' ? 'stamp' : el.dataset.froamShape === 'true' ? 'shape' : 'element',
-            className: typeof el.className === 'string' ? el.className.split(' ').filter(Boolean).slice(0, 2).join(' ') : '',
-            depth,
-            hidden: computed.display === 'none',
-            hasChildren: elementChildren.length > 0,
-            childCount: elementChildren.length,
-            nodeId: el.dataset.froamId || undefined,
-        });
+        nodes.push(buildLayerNode(el, root));
         elementChildren.forEach((child) => walk(child, depth + 1));
     }
     for (const child of Array.from(root.children)) {
@@ -1267,8 +1298,12 @@ function SelectionHandoffOverlay({ rect, label, mode, count, pulseKey, }) {
     const left = Math.min(Math.max(10, rect.left), Math.max(10, window.innerWidth - 210));
     return (_jsxs("div", { className: "froam-selection-handoff", "data-chef-editor-root": "true", style: { left, top }, children: [_jsx("span", { className: "froam-selection-handoff__dot" }), _jsx("span", { className: "froam-selection-handoff__mode", children: mode }), _jsx("span", { className: "froam-selection-handoff__label", children: count > 1 ? `${count} selected` : label })] }, pulseKey));
 }
-export default function GlobalChefEditor({ initialOpen = false, routeKey: explicitRouteKey }) {
+export default function GlobalChefEditor({ initialOpen = false, routeKey: explicitRouteKey, projectKey: explicitProjectKey }) {
     const routeKey = useFroamRouteKey(explicitRouteKey);
+    const projectKey = useMemo(() => resolveFroamProjectKey(explicitProjectKey), [explicitProjectKey]);
+    const saveStore = useCallback((next) => saveStoreForProject(next, projectKey), [projectKey]);
+    const saveBrandFonts = useCallback((next) => saveBrandFontsForProject(next, projectKey), [projectKey]);
+    const saveNodeRegistry = useCallback((next) => saveNodeRegistryForProject(next, projectKey), [projectKey]);
     const [portalContainer] = useState(() => {
         if (typeof document === 'undefined')
             return null;
@@ -1286,9 +1321,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         };
     }, [portalContainer]);
     // Core state
-    const [store, setStore] = useState(() => loadStore());
-    const [brandFonts, setBrandFonts] = useState(() => loadBrandFonts());
-    const nodeRegistryRef = useRef(loadNodeRegistry());
+    const [store, setStore] = useState(() => loadStore(projectKey));
+    const [brandFonts, setBrandFonts] = useState(() => loadBrandFonts(projectKey));
+    const nodeRegistryRef = useRef(loadNodeRegistry(projectKey));
     const [buttonPosition, setButtonPosition] = useState(CHEF_BUTTON_START);
     const [panelPosition, setPanelPosition] = useState(null);
     const panelDragRef = useRef(null);
@@ -1296,6 +1331,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [active, setActive] = useState(initialOpen);
     const [selection, setSelection] = useState(null);
     const [selections, setSelections] = useState([]);
+    const [selectionCandidates, setSelectionCandidates] = useState([]);
     const [canvas, setCanvas] = useState(() => ({ background: '#050505', text: '#ffffff' }));
     const [zoom, setZoom] = useState(1);
     const [persona, setPersona] = useState(() => loadPersonaPreference());
@@ -1364,7 +1400,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [frameworkIdentityFinding, setFrameworkIdentityFinding] = useState(null);
     const [tipsReady, setTipsReady] = useState(() => {
         try {
-            return window.localStorage.getItem(SCAN_DONE_KEY) === '1';
+            return window.localStorage.getItem(froamStorageKey(SCAN_DONE_KEY, projectKey)) === '1';
         }
         catch {
             return true;
@@ -1434,7 +1470,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         // no-op and yesterday's undo history survives intact. When they disagree,
         // because the design was changed by something other than this editor, the
         // difference lands as baseline and the log tells the truth again.
-        const session = createOpLogSession({ ops: loadOpLog() });
+        const session = createOpLogSession({ ops: loadOpLog(projectKey) });
         session.seed(store);
         opLogRef.current = session;
     }
@@ -1485,7 +1521,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         if (typeof window === 'undefined')
             return [];
         try {
-            return JSON.parse(window.localStorage.getItem('froam-tokens-v1') || '[]');
+            return JSON.parse(window.localStorage.getItem(froamStorageKey('froam-tokens-v1', projectKey)) || '[]');
         }
         catch {
             return [];
@@ -1504,7 +1540,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         if (typeof window === 'undefined')
             return [];
         try {
-            return JSON.parse(window.localStorage.getItem('froam-assets-v1') || '[]');
+            return JSON.parse(window.localStorage.getItem(froamStorageKey('froam-assets-v1', projectKey)) || '[]');
         }
         catch {
             return [];
@@ -1523,6 +1559,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const selectionSwitchTimerRef = useRef(0);
     const currentHoverRef = useRef(null);
     const originalsRef = useRef({});
+    const sectionBaselineRef = useRef(new Map());
     const toastTimerRef = useRef(0);
     const suspendDraftPaintingRef = useRef(false);
     const pendingDraftPaintResumeRef = useRef(false);
@@ -1563,7 +1600,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         autoJoinProfile: { avatarUrl: persona.imageUrl || null },
     });
     const roomPresence = room.present;
-    const froamProjectId = `project:${typeof window !== 'undefined' ? window.location.host : 'froam'}`;
+    const froamProjectId = createFroamProjectId(projectKey);
     const projectSession = useFroamProjectDocument({ projectId: froamProjectId, actorId: room.identity?.actor ?? LOCAL_ACTOR, ops: opLog.all(), store, revision: logVersion });
     const activeProjectState = useMemo(() => deriveBranchState(projectSession.project), [projectSession.project]);
     const layerKnowledge = useMemo(() => {
@@ -1946,7 +1983,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         const session = opLog;
         const timer = window.setTimeout(() => {
             try {
-                const stored = saveOpLog(session.all());
+                const stored = saveOpLog(session.all(), projectKey);
                 if (stored.length !== session.size())
                     session.load(stored);
             }
@@ -2533,9 +2570,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             try {
                 if (suspendDraftPaintingRef.current)
                     return;
+                applySectionStructure(routeDrafts);
                 restoreInjectedBlocks(routeDrafts);
                 Object.entries(routeDrafts).forEach(([path, draft]) => {
-                    if (path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path))
+                    if (path === CANVAS_KEY || isInjectionPath(path) || isSectionStructurePath(path) || isFroamPersonaPath(path))
                         return;
                     const target = findElementByPath(rootElement, path);
                     if (target)
@@ -2595,6 +2633,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         const rootElement = root;
         function clearHover() {
             currentHoverRef.current?.removeAttribute('data-chef-hovered');
+            currentHoverRef.current?.removeAttribute('data-froam-boundary-label');
+            currentHoverRef.current?.removeAttribute('data-froam-static-boundary');
             currentHoverRef.current = null;
         }
         function resolveTarget(rawTarget) {
@@ -2624,6 +2664,48 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             }
             return fallback;
         }
+        function pushSelectionCandidate(candidates, element) {
+            if (!element || !rootElement.contains(element))
+                return;
+            if (element.closest('[data-chef-editor-root="true"]'))
+                return;
+            if (shouldSkipElement(element))
+                return;
+            if (!candidates.includes(element))
+                candidates.push(element);
+        }
+        function selectableAncestors(element) {
+            const ancestors = [];
+            let current = element;
+            while (current && current !== rootElement && rootElement.contains(current)) {
+                pushSelectionCandidate(ancestors, current);
+                current = current.parentElement;
+            }
+            return ancestors;
+        }
+        function selectionStackAtPoint(event, primary) {
+            const elements = typeof document.elementsFromPoint === 'function'
+                ? document.elementsFromPoint(event.clientX, event.clientY)
+                : [];
+            const stack = [];
+            pushSelectionCandidate(stack, primary);
+            for (const element of elements) {
+                if (element instanceof HTMLElement)
+                    pushSelectionCandidate(stack, resolveTarget(element));
+            }
+            for (const ancestor of selectableAncestors(primary))
+                pushSelectionCandidate(stack, ancestor);
+            return stack;
+        }
+        function chooseSelectionTarget(event, stack) {
+            if (!event.altKey || stack.length < 2)
+                return stack[0] ?? null;
+            const selectedPath = selectionRef.current?.path;
+            const selectedIndex = selectedPath
+                ? stack.findIndex((candidate) => getElementPath(candidate, rootElement) === selectedPath)
+                : -1;
+            return stack[(selectedIndex + 1 + stack.length) % stack.length] ?? stack[0] ?? null;
+        }
         let hoverFrame = 0;
         function handlePointerOver(event) {
             cancelAnimationFrame(hoverFrame);
@@ -2636,6 +2718,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 clearHover();
                 currentHoverRef.current = target;
                 target.setAttribute('data-chef-hovered', 'true');
+                syncStructureBoundaryLabel(target);
             });
         }
         function handlePointerLeave() {
@@ -2644,7 +2727,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         }
         function handleClick(event) {
             const resolvedTarget = resolveTarget(event.target);
-            const target = resolvedTarget ? resolveTextTargetAtPoint(event, resolvedTarget) : null;
+            const primaryTarget = resolvedTarget ? resolveTextTargetAtPoint(event, resolvedTarget) : null;
+            const stack = primaryTarget ? selectionStackAtPoint(event, primaryTarget) : [];
+            const target = chooseSelectionTarget(event, stack);
             if (!target) {
                 if (!(event.target instanceof HTMLElement) || event.target.closest('[data-chef-editor-root="true"]'))
                     return;
@@ -2671,6 +2756,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 setInlineEditing(false);
             }
             const path = getElementPath(target, rootElement);
+            setSelectionCandidates(stack.map((element) => buildLayerNode(element, rootElement)));
             if (event.shiftKey) {
                 const currentSels = selectionsRef.current;
                 const isAlreadySelected = currentSels.some((sel) => sel.path === path);
@@ -3137,6 +3223,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             const refreshed = { ...buildSelection(target, path), nodeId: selection.nodeId };
             currentSelectionRef.current = target;
             target.setAttribute('data-chef-selected', 'true');
+            syncStructureBoundaryLabel(target);
             setSelection(refreshed);
             setSelections((current) => current.map((item) => item.path === selection.path ? refreshed : item));
             setSelectionRect(target.getBoundingClientRect());
@@ -3344,6 +3431,185 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         }
         applyLogToStore(`Undid ${describeChange(change)}`);
     }
+    function structureBaselineKey(sourcePath) {
+        return `${viewportStoreKeyRef.current}\u0000${sourcePath}`;
+    }
+    function rememberSectionBaseline(element, sourcePath) {
+        const key = structureBaselineKey(sourcePath);
+        const existing = sectionBaselineRef.current.get(key);
+        if (existing)
+            return existing;
+        const parent = element.parentElement;
+        if (!parent)
+            return null;
+        const baseline = {
+            element,
+            parent,
+            order: Array.from(parent.children).indexOf(element),
+            hidden: element.hidden,
+            editorHidden: element.getAttribute('data-froam-editor-hidden'),
+            exportHidden: element.getAttribute('data-froam-export-hidden'),
+        };
+        sectionBaselineRef.current.set(key, baseline);
+        element.dataset.froamStructureSource = sourcePath;
+        return baseline;
+    }
+    function restoreSectionStructure() {
+        const prefix = `${viewportStoreKeyRef.current}\u0000`;
+        const entries = Array.from(sectionBaselineRef.current.entries())
+            .filter(([key]) => key.startsWith(prefix))
+            .map(([, value]) => value)
+            .sort((left, right) => left.order - right.order);
+        entries.forEach((baseline) => {
+            const { element, parent, order } = baseline;
+            const currentOrder = element.parentElement === parent ? Array.from(parent.children).indexOf(element) : -1;
+            if (currentOrder !== order) {
+                element.remove();
+                parent.insertBefore(element, parent.children.item(order));
+            }
+            element.hidden = baseline.hidden;
+            if (baseline.editorHidden === null)
+                element.removeAttribute('data-froam-editor-hidden');
+            else
+                element.setAttribute('data-froam-editor-hidden', baseline.editorHidden);
+            if (baseline.exportHidden === null)
+                element.removeAttribute('data-froam-export-hidden');
+            else
+                element.setAttribute('data-froam-export-hidden', baseline.exportHidden);
+            element.removeAttribute('data-froam-structure-deleted');
+        });
+    }
+    function findSectionStructureSource(root, entry) {
+        const remembered = sectionBaselineRef.current.get(structureBaselineKey(entry.sourcePath));
+        if (remembered)
+            return remembered.element;
+        const byIdentity = root.querySelector(`[data-froam-id="${CSS.escape(entry.nodeId)}"]`);
+        if (byIdentity && byIdentity.dataset.froamInjected !== 'true')
+            return byIdentity;
+        const byPath = findElementByPath(root, entry.sourcePath);
+        return byPath && byPath.dataset.froamInjected !== 'true' ? byPath : null;
+    }
+    function applySectionStructure(routeDraftsToApply) {
+        const root = getRoot();
+        if (!root)
+            return;
+        const manifest = readSectionStructureDraft(routeDraftsToApply[SECTION_STRUCTURE_KEY]);
+        if (!manifest.sections.length)
+            return;
+        const resolved = manifest.sections.map((entry) => {
+            const element = findSectionStructureSource(root, entry);
+            if (!element)
+                return null;
+            rememberSectionBaseline(element, entry.sourcePath);
+            element.dataset.froamId = entry.nodeId;
+            element.dataset.froamStructureSource = entry.sourcePath;
+            return { entry, element };
+        }).filter((item) => item !== null);
+        resolved.filter(({ entry }) => !entry.deleted).sort((left, right) => left.entry.order - right.entry.order).forEach(({ entry, element }) => {
+            const parent = entry.parentPath === ROOT_PARENT_KEY ? root : findElementByPath(root, entry.parentPath);
+            if (parent) {
+                const currentOrder = element.parentElement === parent ? Array.from(parent.children).indexOf(element) : -1;
+                if (currentOrder !== entry.order) {
+                    element.remove();
+                    parent.insertBefore(element, parent.children.item(entry.order));
+                }
+            }
+            if (entry.editorHidden)
+                element.dataset.froamEditorHidden = 'true';
+            else
+                element.removeAttribute('data-froam-editor-hidden');
+            if (entry.exportHidden)
+                element.dataset.froamExportHidden = 'true';
+            else
+                element.removeAttribute('data-froam-export-hidden');
+            element.hidden = false;
+            element.removeAttribute('data-froam-structure-deleted');
+        });
+        resolved.filter(({ entry }) => entry.deleted).forEach(({ element }) => {
+            element.dataset.froamStructureDeleted = 'true';
+            element.remove();
+        });
+    }
+    function remapLiveDraftPaths(routeDraftsToRemap, root) {
+        const collect = (drafts) => {
+            const tracked = [];
+            const next = {};
+            Object.entries(drafts).forEach(([path, draft]) => {
+                if (path === CANVAS_KEY || isInjectionPath(path) || isSectionStructurePath(path) || isFroamPersonaPath(path)) {
+                    next[path] = draft;
+                    return;
+                }
+                const element = findElementByPath(root, path);
+                if (element)
+                    tracked.push({ element, draft, path });
+                else
+                    next[path] = draft;
+            });
+            return { next, tracked };
+        };
+        const live = collect(routeDraftsToRemap);
+        const originals = collect(originalsRef.current[viewportStoreKeyRef.current] ?? {});
+        return { ...live, originalNext: originals.next, originalTracked: originals.tracked };
+    }
+    function finishSectionMutation(label, remapped, selectedElement) {
+        const root = getRoot();
+        if (!root)
+            return;
+        remapped.tracked.forEach(({ element, draft }) => {
+            if (!root.contains(element) || element.closest(INJECTED_BLOCK_SELECTOR))
+                return;
+            const path = getElementPath(element, root);
+            if (path)
+                remapped.next[path] = draft;
+        });
+        remapped.originalTracked.forEach(({ element, draft, path: priorPath }) => {
+            if (!root.contains(element)) {
+                remapped.originalNext[priorPath] = draft;
+                return;
+            }
+            if (element.closest(INJECTED_BLOCK_SELECTOR))
+                return;
+            const path = getElementPath(element, root);
+            if (path)
+                remapped.originalNext[path] = draft;
+        });
+        originalsRef.current[viewportStoreKeyRef.current] = remapped.originalNext;
+        storeRef.current = {
+            ...storeRef.current,
+            [viewportStoreKeyRef.current]: remapped.next,
+        };
+        const routeSnapshot = collectVersionRouteDrafts();
+        const candidate = {
+            ...storeRef.current,
+            [viewportStoreKeyRef.current]: stripPersonaDrafts(routeSnapshot),
+        };
+        opLog.reconcile(candidate, label);
+        const next = opLog.store();
+        storeRef.current = next;
+        setStore(next);
+        saveStore(next);
+        bumpLog();
+        if (selectedElement && root.contains(selectedElement))
+            selectInsertedElement(selectedElement);
+        else
+            updateSelectionsState([]);
+        setLayers(collectLayers(root));
+    }
+    function serializableElementHtml(element) {
+        const clone = element.cloneNode(true);
+        clone.querySelectorAll('[data-chef-editor-root="true"]').forEach((node) => node.remove());
+        [clone, ...Array.from(clone.querySelectorAll('*'))].forEach((node) => {
+            node.removeAttribute('data-chef-selected');
+            node.removeAttribute('data-chef-hovered');
+            node.removeAttribute('data-froam-multi-selected');
+            node.removeAttribute('data-froam-boundary-label');
+            node.removeAttribute('data-froam-static-boundary');
+            node.removeAttribute('data-froam-runtime-injected');
+            node.removeAttribute('data-froam-switching');
+            node.removeAttribute('data-froam-moving');
+        });
+        return clone.outerHTML;
+    }
     function collectVersionRouteDrafts() {
         const root = getRoot();
         const latestRouteDrafts = storeRef.current[viewportStoreKeyRef.current] ?? {};
@@ -3355,10 +3621,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 delete nextRouteDrafts[path];
                 return;
             }
-            if (path === CANVAS_KEY || isFroamPersonaPath(path))
+            if (path === CANVAS_KEY || isSectionStructurePath(path) || isFroamPersonaPath(path))
                 return;
             const element = findElementByPath(root, path);
-            if (element?.closest('[data-froam-injected="true"][data-froam-block="true"]')) {
+            if (element?.closest(INJECTED_BLOCK_SELECTOR)) {
                 delete nextRouteDrafts[path];
                 return;
             }
@@ -3369,15 +3635,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         const activeElement = currentSelectionRef.current;
         if (activeElement
             && !shouldSkipElement(activeElement)
-            && !activeElement.closest('[data-froam-injected="true"][data-froam-block="true"]')) {
+            && !activeElement.closest(INJECTED_BLOCK_SELECTOR)) {
             const activePath = getElementPath(activeElement, root);
             if (activePath && !isInjectionPath(activePath)) {
                 nextRouteDrafts[activePath] = readLiveElementDraft(activeElement, nextRouteDrafts[activePath] ?? {});
             }
         }
-        const injectedBlocks = Array.from(root.querySelectorAll('[data-froam-injected="true"][data-froam-block="true"]'))
-            .filter((element) => !element.parentElement?.closest('[data-froam-injected="true"][data-froam-block="true"]'));
-        injectedBlocks.forEach((element, order) => {
+        const injectedBlocks = Array.from(root.querySelectorAll(INJECTED_BLOCK_SELECTOR))
+            .filter((element) => !element.parentElement?.closest(INJECTED_BLOCK_SELECTOR));
+        injectedBlocks.forEach((element) => {
             const parent = element.parentElement;
             if (!parent)
                 return;
@@ -3385,11 +3651,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             if (parentPath !== ROOT_PARENT_KEY && !parentPath)
                 return;
             const id = ensureFroamNodeId(element);
+            const order = Array.from(parent.children).indexOf(element);
             nextRouteDrafts[`${INJECTION_KEY}:${id}`] = {
                 text: JSON.stringify({
                     parentPath,
+                    parentId: parent === root ? undefined : parent.dataset.froamId,
                     order,
-                    html: element.outerHTML,
+                    html: serializableElementHtml(element),
                 }),
             };
         });
@@ -3407,11 +3675,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         const root = getRoot();
         if (!root)
             return;
-        const injectedBlocks = Array.from(root.querySelectorAll('[data-froam-injected="true"][data-froam-block="true"]'))
-            .filter((element) => !element.parentElement?.closest('[data-froam-injected="true"][data-froam-block="true"]'));
+        const injectedBlocks = Array.from(root.querySelectorAll(INJECTED_BLOCK_SELECTOR))
+            .filter((element) => !element.parentElement?.closest(INJECTED_BLOCK_SELECTOR));
         injectedBlocks.forEach((element) => element.remove());
+        restoreSectionStructure();
         Object.entries(drafts).forEach(([path]) => {
-            if (path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path))
+            if (path === CANVAS_KEY || isInjectionPath(path) || isSectionStructurePath(path) || isFroamPersonaPath(path))
                 return;
             const target = findElementByPath(root, path);
             if (!target)
@@ -3435,9 +3704,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             .filter((draft) => draft !== null)
             .sort((a, b) => a.order - b.order)
             .forEach((injection) => {
-            const parent = injection.parentPath === ROOT_PARENT_KEY
-                ? root
-                : findElementByPath(root, injection.parentPath);
+            const parent = injection.parentId
+                ? root.querySelector(`[data-froam-id="${CSS.escape(injection.parentId)}"]`)
+                : injection.parentPath === ROOT_PARENT_KEY
+                    ? root
+                    : findElementByPath(root, injection.parentPath);
             if (!parent)
                 return;
             const template = document.createElement('template');
@@ -3451,7 +3722,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             }
             node.removeAttribute('data-chef-selected');
             node.removeAttribute('data-chef-hovered');
-            parent.appendChild(node);
+            parent.insertBefore(node, parent.children.item(injection.order));
         });
     }
     function applyStoreToDOM(targetStore, options = {}) {
@@ -3488,12 +3759,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     applyDraft(el, restore);
             });
         }
+        applySectionStructure(routeDraftsToApply);
         restoreInjectedBlocks(routeDraftsToApply);
         Object.entries(routeDraftsToApply).forEach(([path, draft]) => {
-            if (path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path))
+            if (path === CANVAS_KEY || isInjectionPath(path) || isSectionStructurePath(path) || isFroamPersonaPath(path))
                 return;
             const el = findElementByPath(root, path);
-            if (el?.closest('[data-froam-injected="true"][data-froam-block="true"]'))
+            if (el?.closest(INJECTED_BLOCK_SELECTOR))
                 return;
             if (el)
                 applyDraft(el, draft);
@@ -3782,8 +4054,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         };
         setStore(nextStore);
         currentSelectionRef.current?.removeAttribute('data-chef-selected');
+        currentSelectionRef.current?.removeAttribute('data-froam-boundary-label');
         currentSelectionRef.current = target;
         target.setAttribute('data-chef-selected', 'true');
+        syncStructureBoundaryLabel(target);
         setSelection({ ...buildSelection(target, path), ...nextSelection });
     }
     function clearSelectionDraft() {
@@ -3828,8 +4102,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             return next;
         });
         clearCanvasDraftStyles();
-        root?.querySelectorAll('[data-froam-injected="true"][data-froam-block="true"]').forEach((element) => {
-            if (!element.parentElement?.closest('[data-froam-injected="true"][data-froam-block="true"]')) {
+        root?.querySelectorAll(INJECTED_BLOCK_SELECTOR).forEach((element) => {
+            if (!element.parentElement?.closest(INJECTED_BLOCK_SELECTOR)) {
                 element.remove();
             }
         });
@@ -3976,7 +4250,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         };
         setStore(nextStore);
         saveStore(nextStore);
-        window.localStorage.setItem(SAVE_META_KEY, JSON.stringify(payload));
+        window.localStorage.setItem(froamStorageKey(SAVE_META_KEY, projectKey), JSON.stringify(payload));
         try {
             await apiPost('/api/froam/published', {
                 routeKey,
@@ -4040,6 +4314,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 root.querySelectorAll('[data-chef-selected="true"]').forEach((el) => {
                     el.removeAttribute('data-chef-selected');
                     el.removeAttribute('data-froam-multi-selected');
+                    el.removeAttribute('data-froam-boundary-label');
+                    el.removeAttribute('data-froam-static-boundary');
                 });
             }
             let registry = nodeRegistryRef.current;
@@ -4049,6 +4325,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     const captured = captureNodeRef(el, root, registry, { routeKey, viewport: viewportMode });
                     registry = captured.registry;
                     el.setAttribute('data-chef-selected', 'true');
+                    syncStructureBoundaryLabel(el);
                     if (nextSelections.length > 1)
                         el.setAttribute('data-froam-multi-selected', 'true');
                     return { ...sel, nodeId: captured.ref.nodeId };
@@ -4835,6 +5112,137 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         // Refresh layers
         setLayers(collectLayers(root));
     }
+    function selectedSectionElement(node) {
+        const root = getRoot();
+        if (!root || !isStructuralLayerElement(node.element))
+            return null;
+        return findElementByPath(root, node.path) ?? node.element;
+    }
+    function getHostStructurePath(element, root) {
+        const segments = [];
+        let current = element;
+        while (current && current !== root) {
+            const parent = current.parentElement;
+            if (!parent)
+                break;
+            const siblings = Array.from(parent.children).filter((child) => (child instanceof HTMLElement
+                && child.tagName === current?.tagName
+                && !child.matches(INJECTED_BLOCK_SELECTOR)));
+            segments.unshift(`${current.tagName.toLowerCase()}:${Math.max(1, siblings.indexOf(current) + 1)}`);
+            current = parent;
+        }
+        return segments.join('/');
+    }
+    function writeHostSectionEntry(routeDrafts, target, patch) {
+        const root = getRoot();
+        if (!root || !target.parentElement)
+            return null;
+        const manifest = readSectionStructureDraft(routeDrafts[SECTION_STRUCTURE_KEY]);
+        const sourcePath = target.dataset.froamStructureSource || getHostStructurePath(target, root);
+        const nodeId = ensureFroamNodeId(target);
+        rememberSectionBaseline(target, sourcePath);
+        const previous = manifest.sections.find((entry) => entry.nodeId === nodeId || entry.sourcePath === sourcePath);
+        const parentPath = target.parentElement === root ? ROOT_PARENT_KEY : getHostStructurePath(target.parentElement, root);
+        const nextEntry = {
+            nodeId,
+            sourcePath,
+            parentPath,
+            order: Array.from(target.parentElement.children).indexOf(target),
+            ...previous,
+            ...patch,
+        };
+        const sections = manifest.sections.filter((entry) => entry.nodeId !== nodeId && entry.sourcePath !== sourcePath);
+        sections.push(nextEntry);
+        routeDrafts[SECTION_STRUCTURE_KEY] = writeSectionStructureDraft({ version: 1, sections });
+        return nextEntry;
+    }
+    function addSectionRelative(node, placement) {
+        const target = selectedSectionElement(node);
+        const root = getRoot();
+        if (!target || !target.parentElement || !root)
+            return;
+        const remapped = remapLiveDraftPaths(storeRef.current[viewportStoreKeyRef.current] ?? {}, root);
+        const block = createInjectedBlock('section');
+        block.dataset.froamFrameLabel = 'New section';
+        target.parentElement.insertBefore(block, placement === 'before' ? target : target.nextSibling);
+        finishSectionMutation(placement === 'before' ? 'Added section above' : 'Added section below', remapped, block);
+        showToast(placement === 'before' ? 'Section added above' : 'Section added below');
+    }
+    function duplicateSection(node) {
+        const target = selectedSectionElement(node);
+        const root = getRoot();
+        if (!target || !target.parentElement || !root)
+            return;
+        const remapped = remapLiveDraftPaths(storeRef.current[viewportStoreKeyRef.current] ?? {}, root);
+        const clone = target.cloneNode(true);
+        clone.dataset.froamInjected = 'true';
+        clone.dataset.froamBlock = 'true';
+        clone.removeAttribute('data-froam-structure-source');
+        clone.removeAttribute('data-froam-structure-deleted');
+        assignFreshFroamNodeIds(clone);
+        target.parentElement.insertBefore(clone, target.nextSibling);
+        finishSectionMutation('Duplicated section', remapped, clone);
+        showToast('Section duplicated with independent identities');
+    }
+    function canMoveSection(node, direction) {
+        const target = selectedSectionElement(node);
+        return direction === 'up' ? Boolean(target?.previousElementSibling) : Boolean(target?.nextElementSibling);
+    }
+    function moveSection(node, direction) {
+        const target = selectedSectionElement(node);
+        const root = getRoot();
+        const parent = target?.parentElement;
+        const sibling = direction === 'up' ? target?.previousElementSibling : target?.nextElementSibling;
+        if (!target || !root || !parent || !(sibling instanceof HTMLElement))
+            return;
+        const remapped = remapLiveDraftPaths(storeRef.current[viewportStoreKeyRef.current] ?? {}, root);
+        const isInjected = target.dataset.froamInjected === 'true' && target.dataset.froamBlock === 'true';
+        if (!isInjected)
+            writeHostSectionEntry(remapped.next, target, {});
+        if (direction === 'up')
+            parent.insertBefore(target, sibling);
+        else
+            parent.insertBefore(sibling, target);
+        if (!isInjected) {
+            writeHostSectionEntry(remapped.next, target, { order: Array.from(parent.children).indexOf(target) });
+        }
+        finishSectionMutation(direction === 'up' ? 'Moved section up' : 'Moved section down', remapped, target);
+        showToast(direction === 'up' ? 'Section moved up' : 'Section moved down');
+    }
+    function setSectionVisibility(node, scope) {
+        const target = selectedSectionElement(node);
+        const root = getRoot();
+        if (!target || !root)
+            return;
+        const remapped = remapLiveDraftPaths(storeRef.current[viewportStoreKeyRef.current] ?? {}, root);
+        const attribute = scope === 'editor' ? 'data-froam-editor-hidden' : 'data-froam-export-hidden';
+        const nextHidden = target.getAttribute(attribute) !== 'true';
+        if (nextHidden)
+            target.setAttribute(attribute, 'true');
+        else
+            target.removeAttribute(attribute);
+        if (target.dataset.froamInjected !== 'true') {
+            writeHostSectionEntry(remapped.next, target, scope === 'editor' ? { editorHidden: nextHidden } : { exportHidden: nextHidden });
+        }
+        finishSectionMutation(`${nextHidden ? 'Hid' : 'Showed'} section in ${scope}`, remapped, nextHidden && scope === 'editor' ? null : target);
+        showToast(scope === 'editor'
+            ? nextHidden ? 'Hidden in editor only; it will still export' : 'Section visible in editor'
+            : nextHidden ? 'Hidden in export; kept visible here for editing' : 'Section restored to export');
+    }
+    function deleteSection(node) {
+        const target = selectedSectionElement(node);
+        const root = getRoot();
+        if (!target || !root || !target.parentElement)
+            return;
+        const remapped = remapLiveDraftPaths(storeRef.current[viewportStoreKeyRef.current] ?? {}, root);
+        const fallback = (target.nextElementSibling ?? target.previousElementSibling);
+        if (target.dataset.froamInjected !== 'true') {
+            writeHostSectionEntry(remapped.next, target, { deleted: true });
+        }
+        target.remove();
+        finishSectionMutation('Deleted section', remapped, fallback && root.contains(fallback) ? fallback : null);
+        showToast('Section deleted; Undo restores it');
+    }
     /* ─── Image upload ─── */
     function handleImageUpload(event) {
         const file = event.target.files?.[0];
@@ -5188,7 +5596,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         const token = { id: `${Date.now()}`, name: newTokenName.trim(), value: newTokenValue.trim(), category: newTokenCategory };
         const next = [...tokens, token];
         setTokens(next);
-        window.localStorage.setItem('froam-tokens-v1', JSON.stringify(next));
+        window.localStorage.setItem(froamStorageKey('froam-tokens-v1', projectKey), JSON.stringify(next));
         document.documentElement.style.setProperty(`--${token.name.replace(/\s+/g, '-').toLowerCase()}`, token.value);
         setNewTokenName('');
         setNewTokenValue('');
@@ -5200,7 +5608,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             document.documentElement.style.removeProperty(`--${token.name.replace(/\s+/g, '-').toLowerCase()}`);
         const next = tokens.filter((t) => t.id !== id);
         setTokens(next);
-        window.localStorage.setItem('froam-tokens-v1', JSON.stringify(next));
+        window.localStorage.setItem(froamStorageKey('froam-tokens-v1', projectKey), JSON.stringify(next));
     }
     function applyTokenToSelection(token) {
         if (!selection) {
@@ -5308,12 +5716,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         const entry = { id: `${Date.now()}`, name, url, addedAt: Date.now() };
         const next = [entry, ...assets];
         setAssets(next);
-        window.localStorage.setItem('froam-assets-v1', JSON.stringify(next));
+        window.localStorage.setItem(froamStorageKey('froam-assets-v1', projectKey), JSON.stringify(next));
     }
     function removeAsset(id) {
         const next = assets.filter((a) => a.id !== id);
         setAssets(next);
-        window.localStorage.setItem('froam-assets-v1', JSON.stringify(next));
+        window.localStorage.setItem(froamStorageKey('froam-assets-v1', projectKey), JSON.stringify(next));
     }
     function applyAssetToSelection(url) {
         if (!selection) {
@@ -5499,7 +5907,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     catch (error) {
         showToast(error instanceof Error ? error.message : 'Could not switch prototype');
     } }
-    const paletteCommands = [
+    const corePaletteCommands = [
         { id: 'save', label: 'Save draft', shortcut: 'Ctrl+S', icon: _jsx(Save, { size: 15 }), action: saveToRunam },
         { id: 'save-repo', label: 'Save to Repo (git-ready)', shortcut: 'Ctrl+Shift+S', icon: _jsx(GitCommit, { size: 15 }), action: () => { void saveToRepo(); } },
         // Sharing is the start of a review, so it belongs where people look for a
@@ -5559,6 +5967,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 applySizePreset('auto'); } },
     ];
     const commandSearchTerm = commandSearch.trim().toLowerCase();
+    const quickEditCommands = selection && commandSearchTerm
+        ? searchFroamQuickEdits(commandSearchTerm).map((action) => ({
+            id: action.id,
+            label: action.label,
+            searchText: `${action.intent} ${action.category} ${action.keywords}`,
+            hint: action.category,
+            icon: _jsx(Sparkles, { size: 15 }),
+            action: () => { void froamIntent.submit({ origin: 'command-palette', intent: action.intent }); },
+        }))
+        : [];
+    const paletteCommands = [...corePaletteCommands, ...quickEditCommands];
     const filteredCommands = commandSearchTerm
         ? paletteCommands.filter((c) => `${c.label} ${c.searchText ?? ''}`.toLowerCase().includes(commandSearchTerm) || FROAM_WORKSPACE_SECTIONS.some((section) => c.id === `workspace:${section.mode}:${section.id}` && workspaceCommandMatches(section, commandSearchTerm)))
         : paletteCommands;
@@ -5687,6 +6106,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     return;
                 }
                 currentSelectionRef.current?.removeAttribute('data-chef-selected');
+                currentSelectionRef.current?.removeAttribute('data-froam-boundary-label');
+                currentSelectionRef.current?.removeAttribute('data-froam-static-boundary');
                 currentSelectionRef.current = null;
                 setSelection(null);
                 return;
@@ -5754,6 +6175,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 const target = findElementByPath(root, selection.path);
                 if (!target || !target.parentElement)
                     return;
+                if (isStructuralLayerElement(target)) {
+                    duplicateSection(buildLayerNode(target, root));
+                    return;
+                }
                 const clone = target.cloneNode(true);
                 clone.removeAttribute('data-chef-selected');
                 clone.removeAttribute('data-chef-hovered');
@@ -5874,7 +6299,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                     setCommandPaletteOpen(false);
                                     setCommandSearch('');
                                 }
-                            } }), _jsxs("ul", { className: "fs-command-palette__list", id: "froam-command-results", role: "listbox", children: [filteredCommands.map((cmd, idx) => (_jsx("li", { id: `froam-command-${cmd.id}`, role: "option", "aria-selected": idx === commandFocusIndex, className: `fs-command-palette__item ${idx === commandFocusIndex ? 'is-focused' : ''}`, onMouseEnter: () => setCommandFocusIndex(idx), children: _jsxs("button", { type: "button", tabIndex: -1, onClick: () => executePaletteCommand(cmd), children: [cmd.icon, _jsx("span", { className: "fs-command-palette__item-label", children: cmd.label }), cmd.shortcut && _jsx("span", { className: "fs-command-palette__item-shortcut", children: cmd.shortcut })] }) }, cmd.id))), askFroamVisible && (_jsx("li", { id: "froam-command-ask", role: "option", "aria-selected": commandFocusIndex === 0, className: `fs-command-palette__item fs-command-palette__ask ${commandFocusIndex === 0 ? 'is-focused' : ''}`, children: _jsxs("button", { type: "button", tabIndex: -1, "aria-label": `Quick Edit: ${commandSearch.trim()}`, onClick: executeAskFroam, children: [_jsx(Sparkles, { size: 15 }), _jsxs("span", { className: "fs-command-palette__item-label", children: [_jsx("strong", { children: "Quick Edit" }), _jsx("small", { children: commandSearch.trim() })] }), _jsx("span", { className: "fs-command-palette__item-shortcut", children: "Enter" })] }) })), filteredCommands.length === 0 && !askFroamVisible && (_jsx("li", { role: "status", className: "fs-command-palette__empty", children: "No commands found" }))] })] }) })), _jsx(FroamIntentResult, { state: froamIntent.state, onAllow: froamIntent.allow, onNotNow: froamIntent.notNow, onKeep: froamIntent.keep, onRetry: froamIntent.retry, onCancel: froamIntent.cancel, onDismiss: froamIntent.dismiss }), showPanel && !inlineEditing && (_jsx(FroamQuickChat, { open: quickChatOpen, selectionLabel: selection?.label, busy: ['preparing', 'awaiting-consent', 'requesting', 'plan-ready', 'creating-prototype', 'retrying', 'adopting'].includes(froamIntent.state.phase), onSubmit: (intent) => { setQuickChatOpen(false); void froamIntent.submit({ origin: 'contextual', intent }); }, onClose: () => setQuickChatOpen(false) })), showPanel && !studioMinimized && (_jsxs("div", { className: [
+                            } }), _jsxs("ul", { className: "fs-command-palette__list", id: "froam-command-results", role: "listbox", children: [filteredCommands.map((cmd, idx) => (_jsx("li", { id: `froam-command-${cmd.id}`, role: "option", "aria-selected": idx === commandFocusIndex, className: `fs-command-palette__item ${idx === commandFocusIndex ? 'is-focused' : ''}`, onMouseEnter: () => setCommandFocusIndex(idx), children: _jsxs("button", { type: "button", tabIndex: -1, onClick: () => executePaletteCommand(cmd), children: [cmd.icon, _jsx("span", { className: "fs-command-palette__item-label", children: cmd.label }), (cmd.shortcut || cmd.hint) && _jsx("span", { className: "fs-command-palette__item-shortcut", children: cmd.shortcut ?? cmd.hint })] }) }, cmd.id))), askFroamVisible && (_jsx("li", { id: "froam-command-ask", role: "option", "aria-selected": commandFocusIndex === 0, className: `fs-command-palette__item fs-command-palette__ask ${commandFocusIndex === 0 ? 'is-focused' : ''}`, children: _jsxs("button", { type: "button", tabIndex: -1, "aria-label": `Quick Edit: ${commandSearch.trim()}`, onClick: executeAskFroam, children: [_jsx(Sparkles, { size: 15 }), _jsxs("span", { className: "fs-command-palette__item-label", children: [_jsx("strong", { children: "Quick Edit" }), _jsx("small", { children: commandSearch.trim() })] }), _jsx("span", { className: "fs-command-palette__item-shortcut", children: "Enter" })] }) })), filteredCommands.length === 0 && !askFroamVisible && (_jsx("li", { role: "status", className: "fs-command-palette__empty", children: "No commands found" }))] })] }) })), _jsx(FroamIntentResult, { state: froamIntent.state, onAllow: froamIntent.allow, onNotNow: froamIntent.notNow, onKeep: froamIntent.keep, onRetry: froamIntent.retry, onCancel: froamIntent.cancel, onDismiss: froamIntent.dismiss }), showPanel && !inlineEditing && (_jsx(FroamQuickChat, { open: quickChatOpen, selectionLabel: selection?.label, busy: ['preparing', 'awaiting-consent', 'requesting', 'plan-ready', 'creating-prototype', 'retrying', 'adopting'].includes(froamIntent.state.phase), onSubmit: (intent) => { setQuickChatOpen(false); void froamIntent.submit({ origin: 'contextual', intent }); }, onClose: () => setQuickChatOpen(false) })), showPanel && !studioMinimized && (_jsxs("div", { className: [
                     'froam-figma-layout',
                     isMobileUI ? 'is-mobile' : '',
                     leftWorkspaceMode === 'plan' || leftWorkspaceMode === 'reference' ? 'is-planning' : '',
@@ -5950,14 +6375,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 setPanelOpen(false);
                                 setActive(false);
                                 setStudioMinimized(false);
-                            } }) }), _jsxs("div", { className: "froam-figma-left", "data-chef-editor-root": "true", hidden: !leftPanelOpen, children: [_jsxs("div", { className: "froam-figma-left__tabs", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: leftWorkspaceMode === 'plan' && activeWorkspaceSection !== 'library' ? 'is-active' : '', onClick: () => openWorkspaceSection('plan', 'create'), children: [_jsx(ListTree, { size: 13 }), " Pages"] }), _jsxs("button", { type: "button", className: leftWorkspaceMode === 'plan' && activeWorkspaceSection === 'library' ? 'is-active' : '', onClick: () => openWorkspaceSection('library', 'create'), children: [_jsx(Grid2X2, { size: 13 }), " Library"] }), _jsxs("button", { type: "button", className: leftWorkspaceMode === 'reference' ? 'is-active' : '', onClick: () => openWorkspaceSection('reference', 'understand'), children: [_jsx(FileImage, { size: 13 }), " Reference"] })] }), _jsxs("div", { className: "froam-figma-left__body", "data-chef-editor-root": "true", children: [leftWorkspaceMode === 'plan' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "SitePlanner", children: _jsx(FroamSitePlanner, { routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, requestedTab: plannerRequestedTab, selection: selection ? { nodeId: selection.nodeId, label: selection.label } : null, archiveItems: plannerArchiveItems, assets: assets, onRenameProject: renameProject, onAddAsset: addAssetEntry, onApplyAsset: applyAssetToSelection, onRemoveAsset: removeAsset, onTabChange: (nextTab) => {
+                            } }) }), _jsxs("div", { className: "froam-figma-left", "data-chef-editor-root": "true", hidden: !leftPanelOpen, children: [_jsxs("div", { className: "froam-figma-left__tabs", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: leftWorkspaceMode === 'plan' && activeWorkspaceSection !== 'library' ? 'is-active' : '', onClick: () => openWorkspaceSection('plan', 'create'), children: [_jsx(ListTree, { size: 13 }), " Pages"] }), _jsxs("button", { type: "button", className: leftWorkspaceMode === 'plan' && activeWorkspaceSection === 'library' ? 'is-active' : '', onClick: () => openWorkspaceSection('library', 'create'), children: [_jsx(Grid2X2, { size: 13 }), " Library"] }), _jsxs("button", { type: "button", className: leftWorkspaceMode === 'reference' ? 'is-active' : '', onClick: () => openWorkspaceSection('reference', 'understand'), children: [_jsx(FileImage, { size: 13 }), " Reference"] })] }), _jsxs("div", { className: "froam-figma-left__body", "data-chef-editor-root": "true", children: [leftWorkspaceMode === 'plan' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "SitePlanner", children: _jsx(FroamSitePlanner, { projectKey: projectKey, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, requestedTab: plannerRequestedTab, selection: selection ? { nodeId: selection.nodeId, label: selection.label } : null, archiveItems: plannerArchiveItems, assets: assets, onRenameProject: renameProject, onAddAsset: addAssetEntry, onApplyAsset: applyAssetToSelection, onRemoveAsset: removeAsset, onTabChange: (nextTab) => {
                                                     setPlannerRequestedTab(nextTab);
                                                     const section = nextTab === 'library' ? 'library' : 'plan';
                                                     setWorkspacePreference((current) => ({ ...current, mode: 'create', sections: { ...current.sections, create: section } }));
                                                 }, onInsertComponent: insertLibraryComponent, onInsertBlankFrame: insertBlankFrame, onInsertBlock: addStructureBlock, onInsertArchived: insertArchivedHtml, onBuildPage: buildLibraryPage, onPlanChange: syncSitePlanGraph, onToast: showToast }) }) })) : null, _jsx("div", { className: "froam-figma-left__view", hidden: leftWorkspaceMode !== 'reference', children: _jsx(FroamSectionBoundary, { name: "ReferenceWorkspace", children: _jsx(FroamReferenceWorkspace, { project: projectSession.project, routeKey: routeKey, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, reconstructing: ['preparing', 'requesting', 'plan-ready', 'creating-prototype', 'retrying'].includes(froamIntent.state.phase), onReconstruct: (understanding, target) => { void froamIntent.submitReference({ understanding, target }); }, onReferencesChanged: () => { if (froamIntent.state.session?.origin === 'reference')
-                                                    froamIntent.cancel(); }, onToast: showToast, onActivityChange: setWorkspaceActivity }) }) }), leftWorkspaceMode === 'layers' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "LayersPanel", children: _jsx(FroamLayersPanel, { layers: layers, selectedPath: selection?.path ?? null, selections: selections, onSelectLayer: selectLayerNode, onToggleVisibility: toggleLayerVisibility, onRefresh: () => { const root = getRoot(); if (root)
+                                                    froamIntent.cancel(); }, onToast: showToast, onActivityChange: setWorkspaceActivity }) }) }), leftWorkspaceMode === 'layers' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "LayersPanel", children: _jsx(FroamLayersPanel, { layers: layers, selectedPath: selection?.path ?? null, selections: selections, selectionCandidates: selectionCandidates, onSelectLayer: selectLayerNode, onToggleVisibility: toggleLayerVisibility, onAddSection: addSectionRelative, onDuplicateSection: duplicateSection, onMoveSection: moveSection, canMoveSection: canMoveSection, onSetSectionVisibility: setSectionVisibility, onDeleteSection: deleteSection, onRefresh: () => { const root = getRoot(); if (root)
                                                     setLayers(collectLayers(root)); }, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, knowledgeByNodeId: layerKnowledge, onOpenKnowledge: (node, section) => { selectLayerNode(node); openWorkspaceSection(section); } }) }) })) : null] })] }), _jsx("div", { className: "froam-figma-layout__canvas", "data-chef-editor-root": "true" }), rightPanelOpen && workspaceMode === 'create' && (() => {
-                        const designPanel = (_jsx(FroamSectionBoundary, { name: "DesignPanel", children: _jsx(FroamDesignPanel, { selection: selection, selectionRect: selectionRect, onApplyStyle: applyStyle, onUpdateDraft: updateDraft, onOpenImageUpload: openSelectedImageUpload, onClearImage: clearAppliedImage, onClearSelectionDraft: actionsRef.current.clearSelectionDraft, marginLinked: marginLinked, paddingLinked: paddingLinked, radiusLinked: radiusLinked, onToggleMarginLinked: () => setMarginLinked((value) => !value), onTogglePaddingLinked: () => setPaddingLinked((value) => !value), onToggleRadiusLinked: () => setRadiusLinked((value) => !value), onApplySizePreset: applySizePreset, onBuildTransformString: buildTransformString, fontOptions: fontOptions, onAddBrandFont: addBrandFont, getRootEl: getRoot, onOpenBlueprint: () => setBlueprintOpen(true) }) }));
+                        const designPanel = (_jsx(FroamSectionBoundary, { name: "DesignPanel", children: _jsx(FroamDesignPanel, { projectKey: projectKey, selection: selection, selectionRect: selectionRect, onApplyStyle: applyStyle, onUpdateDraft: updateDraft, onOpenImageUpload: openSelectedImageUpload, onClearImage: clearAppliedImage, onClearSelectionDraft: actionsRef.current.clearSelectionDraft, marginLinked: marginLinked, paddingLinked: paddingLinked, radiusLinked: radiusLinked, onToggleMarginLinked: () => setMarginLinked((value) => !value), onTogglePaddingLinked: () => setPaddingLinked((value) => !value), onToggleRadiusLinked: () => setRadiusLinked((value) => !value), onApplySizePreset: applySizePreset, onBuildTransformString: buildTransformString, fontOptions: fontOptions, onAddBrandFont: addBrandFont, getRootEl: getRoot, onOpenBlueprint: () => setBlueprintOpen(true) }) }));
                         if (!isMobileUI)
                             return designPanel;
                         return (_jsx(FroamBottomSheet, { detent: sheetDetent, onDetentChange: setSheetDetent, title: selection?.label ?? 'Design', subtitle: selection ? 'Tap for style controls' : 'Tap any element to start', children: designPanel }));
@@ -6072,7 +6497,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                                         next[i] = { ...next[i], position: Number(e.target.value) };
                                                         setGradStops(next);
                                                     } }), _jsx("span", { className: "fs-range-value", children: "%" }), gradStops.length > 2 && (_jsx("button", { type: "button", className: "fs-gradient-stop__remove", onClick: () => setGradStops(gradStops.filter((_, j) => j !== i)), children: _jsx(X, { size: 12 }) }))] }, i))) }), _jsxs("div", { className: "fs-pill-group", children: [_jsxs("button", { type: "button", className: "fs-pill", onClick: () => setGradStops([...gradStops, { color: '#ffffff', position: 50 }]), children: [_jsx(Plus, { size: 12 }), " Add stop"] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: applyGradient, disabled: !selection, children: [_jsx(Paintbrush, { size: 12 }), " Apply gradient"] })] })] }) }), _jsxs(AccordionSection, { id: "layers", icon: _jsx(Layers, { size: 14 }), title: "Layers", isOpen: openSections.layers, onToggle: () => toggleSection('layers'), children: [_jsx("div", { className: "fs-layers", "data-chef-editor-root": "true", children: layers.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "No layers detected" })) : (layers.map((node) => (_jsxs("div", { className: `fs-layers__node ${selection?.path === node.path ? 'is-selected' : ''}`, style: { paddingLeft: `${8 + node.depth * 14}px` }, onClick: () => selectLayerNode(node), children: [_jsx(Code, { size: 11, style: { opacity: 0.5, flexShrink: 0 } }), _jsx("span", { className: "fs-layers__node-tag", children: node.tag }), node.className && _jsxs("span", { className: "fs-layers__node-class", children: [".", node.className.replace(/ /g, '.')] }), _jsx("button", { type: "button", className: `fs-layers__eye ${node.hidden ? 'is-hidden' : ''}`, onClick: (e) => { e.stopPropagation(); toggleLayerVisibility(node); }, title: node.hidden ? 'Show' : 'Hide', children: node.hidden ? _jsx(EyeOff, { size: 12 }) : _jsx(Eye, { size: 12 }) })] }, node.path)))) }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => { const root = getRoot(); if (root)
-                                        setLayers(collectLayers(root)); }, children: [_jsx(Search, { size: 12 }), " Refresh layers"] })] }), _jsx(AccordionSection, { id: "cssVars", icon: _jsx(Variable, { size: 14 }), title: "CSS Variables", isOpen: openSections.cssVars, onToggle: () => toggleSection('cssVars'), children: _jsxs("div", { className: "fs-stack", children: [cssVars.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "No custom properties found on :root" })) : (cssVars.map((v) => (_jsxs("div", { className: "fs-css-var", "data-chef-editor-root": "true", children: [_jsx("span", { className: "fs-css-var__name", title: v.name, children: v.name }), _jsx("input", { type: "text", className: "fs-input fs-css-var__value", value: v.value, onChange: (e) => updateCSSVar(v.name, e.target.value) }), _jsx("button", { type: "button", className: "fs-gradient-stop__remove", onClick: () => removeCSSVar(v.name), title: "Remove", children: _jsx(X, { size: 12 }) })] }, v.name)))), _jsxs("div", { className: "fs-row", style: { gap: 6 }, children: [_jsx("input", { type: "text", className: "fs-input", value: newVarName, onChange: (e) => setNewVarName(e.target.value), placeholder: "--my-color", style: { flex: 1 } }), _jsx("input", { type: "text", className: "fs-input", value: newVarValue, onChange: (e) => setNewVarValue(e.target.value), placeholder: "#ff0000", style: { flex: 1 } }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: addCSSVar, children: [_jsx(Plus, { size: 12 }), " Add"] })] })] }) }), _jsx(AccordionSection, { id: "versions", icon: _jsx(GitCommit, { size: 14 }), title: "Versions", isOpen: openSections.versions, onToggle: () => toggleSection('versions'), children: _jsx(FroamVersionPanel, { routeKey: routeKey, viewportMode: viewportMode, currentStore: routeDrafts, getCurrentStore: () => collectVersionRouteDrafts(), captureThumb: capturePageThumb, onLoadVersion: (versionStore, versionName) => {
+                                        setLayers(collectLayers(root)); }, children: [_jsx(Search, { size: 12 }), " Refresh layers"] })] }), _jsx(AccordionSection, { id: "cssVars", icon: _jsx(Variable, { size: 14 }), title: "CSS Variables", isOpen: openSections.cssVars, onToggle: () => toggleSection('cssVars'), children: _jsxs("div", { className: "fs-stack", children: [cssVars.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "No custom properties found on :root" })) : (cssVars.map((v) => (_jsxs("div", { className: "fs-css-var", "data-chef-editor-root": "true", children: [_jsx("span", { className: "fs-css-var__name", title: v.name, children: v.name }), _jsx("input", { type: "text", className: "fs-input fs-css-var__value", value: v.value, onChange: (e) => updateCSSVar(v.name, e.target.value) }), _jsx("button", { type: "button", className: "fs-gradient-stop__remove", onClick: () => removeCSSVar(v.name), title: "Remove", children: _jsx(X, { size: 12 }) })] }, v.name)))), _jsxs("div", { className: "fs-row", style: { gap: 6 }, children: [_jsx("input", { type: "text", className: "fs-input", value: newVarName, onChange: (e) => setNewVarName(e.target.value), placeholder: "--my-color", style: { flex: 1 } }), _jsx("input", { type: "text", className: "fs-input", value: newVarValue, onChange: (e) => setNewVarValue(e.target.value), placeholder: "#ff0000", style: { flex: 1 } }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: addCSSVar, children: [_jsx(Plus, { size: 12 }), " Add"] })] })] }) }), _jsx(AccordionSection, { id: "versions", icon: _jsx(GitCommit, { size: 14 }), title: "Versions", isOpen: openSections.versions, onToggle: () => toggleSection('versions'), children: _jsx(FroamVersionPanel, { projectKey: projectKey, routeKey: routeKey, viewportMode: viewportMode, currentStore: routeDrafts, getCurrentStore: () => collectVersionRouteDrafts(), captureThumb: capturePageThumb, onLoadVersion: (versionStore, versionName) => {
                                     // No snapshot needed: the reconcile effect turns this store
                                     // swap into ops, so loading a version is undoable by itself.
                                     opPendingLabelRef.current = `Loaded “${versionName}”`;
@@ -6104,7 +6529,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                             ? resolveAnchor(note.anchor, root).status === 'orphaned'
                                             : false;
                                         return (_jsxs("div", { className: `froam-note${note.resolved ? ' is-resolved' : ''}${orphaned ? ' is-orphaned' : ''}`, "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-note__head", children: [_jsx("span", { className: "froam-note__num", children: i + 1 }), _jsx("span", { className: "froam-note__who", children: note.name }), _jsx("span", { className: "froam-note__when", children: note.viewport === viewportMode ? relativeTime(note.createdAt) : `on ${note.viewport} · ${relativeTime(note.createdAt)}` })] }), note.quoted && _jsxs("div", { className: "froam-note__quote", children: ["\u201C", note.quoted, "\u201D"] }), _jsx("div", { className: "froam-note__body", children: note.body }), orphaned && (_jsx("div", { className: "froam-note__flag", children: "The element this was about is gone \u2014 kept, not deleted" })), _jsxs("div", { className: "froam-note__row", children: [!orphaned && (_jsx("button", { type: "button", className: "fs-pill", onClick: () => goToNote(note), children: "Show me" })), _jsx("button", { type: "button", className: note.resolved ? 'fs-pill' : 'fs-pill is-accent', onClick: () => void resolveNote(note), children: note.resolved ? 'Reopen' : 'Resolve' })] })] }, note.id));
-                                    }) }))] })), room.inRoom && (_jsx(AccordionSection, { id: "roomChat", icon: _jsx(MessageSquare, { size: 14 }), title: roomPresence.length ? `Room chat · ${roomPresence.length + 1} here` : 'Room chat', isOpen: openSections.roomChat, onToggle: () => toggleSection('roomChat'), children: _jsx(FroamRoomChat, { client: room.client, events: room.events, role: room.role }) })), _jsx(AccordionSection, { id: "inspiration", icon: _jsx(ImagePlus, { size: 14 }), title: "Inspiration Board", isOpen: openSections.inspiration, onToggle: () => toggleSection('inspiration'), children: _jsx(FroamInspirationPanel, { onToast: showToast }) }), _jsx(AccordionSection, { id: "tokens", icon: _jsx(Coins, { size: 14 }), title: "Design Tokens", isOpen: openSections.tokens, onToggle: () => toggleSection('tokens'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Named values you can apply instantly to any element. Also injected as CSS variables." }), tokens.length > 0 && (_jsx("div", { className: "fs-tokens-grid", children: tokens.map((token) => (_jsxs("div", { className: "fs-token", "data-chef-editor-root": "true", children: [token.category === 'color' && (_jsx("span", { className: "fs-token__swatch", style: { background: token.value } })), _jsx("span", { className: "fs-token__name", title: `--${token.name.replace(/\s+/g, '-').toLowerCase()}`, children: token.name }), _jsx("span", { className: "fs-token__value", children: token.value }), _jsx("button", { type: "button", className: "fs-pill fs-token__apply", onClick: () => applyTokenToSelection(token), children: "Apply" }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", onClick: () => removeToken(token.id), children: _jsx(X, { size: 10 }) })] }, token.id))) })), _jsxs("div", { className: "fs-grid-2", style: { gap: 6 }, children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Category" }), _jsxs("select", { className: "fs-select", value: newTokenCategory, onChange: (e) => setNewTokenCategory(e.target.value), children: [_jsx("option", { value: "color", children: "Color" }), _jsx("option", { value: "spacing", children: "Spacing" }), _jsx("option", { value: "font-size", children: "Font size" }), _jsx("option", { value: "radius", children: "Radius" }), _jsx("option", { value: "shadow", children: "Shadow" }), _jsx("option", { value: "other", children: "Other" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Name" }), _jsx("input", { type: "text", className: "fs-input", value: newTokenName, onChange: (e) => setNewTokenName(e.target.value), placeholder: "brand-primary" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Value" }), _jsxs("div", { style: { display: 'flex', gap: 6 }, children: [newTokenCategory === 'color' && _jsx("input", { type: "color", className: "fs-color-input", value: newTokenValue || '#000000', onChange: (e) => setNewTokenValue(e.target.value), style: { width: 36 } }), _jsx("input", { type: "text", className: "fs-input", value: newTokenValue, onChange: (e) => setNewTokenValue(e.target.value), placeholder: newTokenCategory === 'color' ? '#5eead4' : newTokenCategory === 'spacing' ? '16px' : newTokenCategory === 'radius' ? '8px' : 'value', style: { flex: 1 } })] })] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: addToken, children: [_jsx(Plus, { size: 12 }), " Add token"] })] }) }), _jsx(AccordionSection, { id: "designSystem", icon: _jsx(Variable, { size: 14 }), title: "Design System", isOpen: openSections.designSystem, onToggle: () => toggleSection('designSystem'), children: _jsx(FroamDesignSystemPanel, { system: activeProjectState.designSystem, onChange: replaceDesignSystem, onToast: showToast, onApplyStyle: (states, name) => {
+                                    }) }))] })), room.inRoom && (_jsx(AccordionSection, { id: "roomChat", icon: _jsx(MessageSquare, { size: 14 }), title: roomPresence.length ? `Room chat · ${roomPresence.length + 1} here` : 'Room chat', isOpen: openSections.roomChat, onToggle: () => toggleSection('roomChat'), children: _jsx(FroamRoomChat, { client: room.client, events: room.events, role: room.role }) })), _jsx(AccordionSection, { id: "inspiration", icon: _jsx(ImagePlus, { size: 14 }), title: "Inspiration Board", isOpen: openSections.inspiration, onToggle: () => toggleSection('inspiration'), children: _jsx(FroamInspirationPanel, { projectKey: projectKey, onToast: showToast }) }), _jsx(AccordionSection, { id: "tokens", icon: _jsx(Coins, { size: 14 }), title: "Design Tokens", isOpen: openSections.tokens, onToggle: () => toggleSection('tokens'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Named values you can apply instantly to any element. Also injected as CSS variables." }), tokens.length > 0 && (_jsx("div", { className: "fs-tokens-grid", children: tokens.map((token) => (_jsxs("div", { className: "fs-token", "data-chef-editor-root": "true", children: [token.category === 'color' && (_jsx("span", { className: "fs-token__swatch", style: { background: token.value } })), _jsx("span", { className: "fs-token__name", title: `--${token.name.replace(/\s+/g, '-').toLowerCase()}`, children: token.name }), _jsx("span", { className: "fs-token__value", children: token.value }), _jsx("button", { type: "button", className: "fs-pill fs-token__apply", onClick: () => applyTokenToSelection(token), children: "Apply" }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", onClick: () => removeToken(token.id), children: _jsx(X, { size: 10 }) })] }, token.id))) })), _jsxs("div", { className: "fs-grid-2", style: { gap: 6 }, children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Category" }), _jsxs("select", { className: "fs-select", value: newTokenCategory, onChange: (e) => setNewTokenCategory(e.target.value), children: [_jsx("option", { value: "color", children: "Color" }), _jsx("option", { value: "spacing", children: "Spacing" }), _jsx("option", { value: "font-size", children: "Font size" }), _jsx("option", { value: "radius", children: "Radius" }), _jsx("option", { value: "shadow", children: "Shadow" }), _jsx("option", { value: "other", children: "Other" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Name" }), _jsx("input", { type: "text", className: "fs-input", value: newTokenName, onChange: (e) => setNewTokenName(e.target.value), placeholder: "brand-primary" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Value" }), _jsxs("div", { style: { display: 'flex', gap: 6 }, children: [newTokenCategory === 'color' && _jsx("input", { type: "color", className: "fs-color-input", value: newTokenValue || '#000000', onChange: (e) => setNewTokenValue(e.target.value), style: { width: 36 } }), _jsx("input", { type: "text", className: "fs-input", value: newTokenValue, onChange: (e) => setNewTokenValue(e.target.value), placeholder: newTokenCategory === 'color' ? '#5eead4' : newTokenCategory === 'spacing' ? '16px' : newTokenCategory === 'radius' ? '8px' : 'value', style: { flex: 1 } })] })] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: addToken, children: [_jsx(Plus, { size: 12 }), " Add token"] })] }) }), _jsx(AccordionSection, { id: "designSystem", icon: _jsx(Variable, { size: 14 }), title: "Design System", isOpen: openSections.designSystem, onToggle: () => toggleSection('designSystem'), children: _jsx(FroamDesignSystemPanel, { system: activeProjectState.designSystem, onChange: replaceDesignSystem, onToast: showToast, onApplyStyle: (states, name) => {
                                     const combined = { ...(states.base ?? {}) };
                                     for (const state of ['hover', 'focus', 'active'])
                                         for (const [property, value] of Object.entries(states[state] ?? {}))
@@ -6370,6 +6795,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                             const target = findElementByPath(root, selection.path);
                             if (!target || !target.parentElement)
                                 break;
+                            if (isStructuralLayerElement(target)) {
+                                duplicateSection(buildLayerNode(target, root));
+                                break;
+                            }
                             const clone = target.cloneNode(true);
                             clone.removeAttribute('data-chef-selected');
                             clone.removeAttribute('data-chef-hovered');
@@ -6430,6 +6859,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                             const target = findElementByPath(root, selection.path);
                             if (!target || !target.parentElement)
                                 break;
+                            if (isStructuralLayerElement(target)) {
+                                duplicateSection(buildLayerNode(target, root));
+                                break;
+                            }
                             const clone = target.cloneNode(true);
                             clone.removeAttribute('data-chef-selected');
                             clone.removeAttribute('data-chef-hovered');
@@ -6450,6 +6883,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                             if (!root)
                                 break;
                             const target = findElementByPath(root, selection.path);
+                            if (target && isStructuralLayerElement(target)) {
+                                deleteSection(buildLayerNode(target, root));
+                                break;
+                            }
                             if (target?.dataset.froamInjected === 'true' && target.parentElement) {
                                 target.remove();
                                 currentSelectionRef.current = null;

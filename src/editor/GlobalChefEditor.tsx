@@ -121,12 +121,21 @@ import FroamIntentResult from './FroamIntentResult'
 import FroamQuickChat from './FroamQuickChat'
 import { useFroamIntent } from './useFroamIntent'
 import { shouldOfferAskFroam } from './froam-intent-model'
+import { searchFroamQuickEdits } from './quick-edit-catalog'
 import FroamLabs, { type FroamLab } from './FroamLabs'
 import FroamWorkspaceShell from './FroamWorkspaceShell'
 import FroamUICustomizer from './FroamUICustomizer'
 import { froamUIPanelWidth, readFroamUIPreference, writeFroamUIPreference } from './froamUIPreferences'
 import { FROAM_WORKSPACE_SECTIONS, readWorkspacePreference, workspaceCommandMatches, writeWorkspacePreference, type FroamTemporalOwner, type FroamWorkspaceMode, type FroamWorkspaceSection } from './workspace-shell-model'
 import { projectTextLayerStyles } from './text-style-projection'
+import {
+  SECTION_STRUCTURE_KEY,
+  assignFreshFroamNodeIds,
+  readSectionStructureDraft,
+  writeSectionStructureDraft,
+  type SectionStructureEntry,
+  type SectionStructureManifest,
+} from './section-structure'
 import { readFroamLabsFlags, writeFroamLabsFlags } from '../project/experiments'
 import { appendProjectEvents, createProjectEvent, deriveBranchState, switchProjectBranch } from '../project/event-log'
 import { validateReferenceBuildCandidate, type FroamReferenceBuildPlan, type FroamReferenceCandidateObservation } from '../project/reference-build'
@@ -145,6 +154,7 @@ import { upsertAnimationCss } from '../project/animator-adapter'
 import { createReusableStyle, saveReusableStyle, upsertComponentFamily } from '../project/design-system'
 import type { FroamDesignSystem, FroamStyleState } from '../project/types'
 import { createFrameworkIdentityObserver, type FroamFrameworkFinding } from '../project/framework-identity'
+import { froamProjectId as createFroamProjectId, froamStorageKey, resolveFroamProjectKey } from '../project/storage-scope'
 import {
   type BrandFont,
   collectStoreFontFamilies,
@@ -277,6 +287,8 @@ type LayerNode = {
   className: string
   depth: number
   hidden: boolean
+  editorHidden: boolean
+  exportHidden: boolean
   hasChildren: boolean
   childCount: number
   nodeId?: string
@@ -352,6 +364,7 @@ const CHEF_BUTTON_START = { x: 20, y: 480 }
 const CANVAS_KEY = '__froam_canvas__'
 const INJECTION_KEY = '__froam_injection__'
 const ROOT_PARENT_KEY = '__froam_root__'
+const INJECTED_BLOCK_SELECTOR = '[data-froam-injected="true"][data-froam-block="true"], [data-froam-runtime-injected="true"]'
 
 const VIEWPORT_MODES = [
   { id: 'desktop', label: 'Desktop', width: null, height: null },
@@ -383,20 +396,20 @@ const BRAND_FONTS_KEY = 'froam-brand-fonts-v1'
 /** A woff2 is usually well under 100KB; this is generous but still loadable. */
 const BRAND_FONT_MAX_BYTES = 1_000_000
 
-function loadBrandFonts(): BrandFont[] {
+function loadBrandFonts(projectKey: string): BrandFont[] {
   if (typeof window === 'undefined') return []
   try {
-    const raw = window.localStorage.getItem(BRAND_FONTS_KEY)
+    const raw = window.localStorage.getItem(froamStorageKey(BRAND_FONTS_KEY, projectKey))
     return raw ? sanitizeBrandFonts(JSON.parse(raw)) : []
   } catch {
     return []
   }
 }
 
-function saveBrandFonts(fonts: BrandFont[]) {
+function saveBrandFontsForProject(fonts: BrandFont[], projectKey: string) {
   if (typeof window === 'undefined') return
   try {
-    window.localStorage.setItem(BRAND_FONTS_KEY, JSON.stringify(fonts))
+    window.localStorage.setItem(froamStorageKey(BRAND_FONTS_KEY, projectKey), JSON.stringify(fonts))
   } catch {
     // An uploaded face can be large enough to blow the quota. The design
     // matters more than the convenience copy, so fail quietly — the font
@@ -429,10 +442,10 @@ const persistedStyleKeys = [
 /* ═══════════════════════════════════════════════════════════════
    Utility functions
    ═══════════════════════════════════════════════════════════════ */
-function loadStore(): EditorStore {
+function loadStore(projectKey: string): EditorStore {
   if (typeof window === 'undefined') return {}
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
+    const raw = window.localStorage.getItem(froamStorageKey(STORAGE_KEY, projectKey))
     if (!raw) return {}
     return sanitizeStore(JSON.parse(raw) as EditorStore)
   } catch {
@@ -440,39 +453,39 @@ function loadStore(): EditorStore {
   }
 }
 
-function saveStore(store: EditorStore) {
+function saveStoreForProject(store: EditorStore, projectKey: string) {
   if (typeof window === 'undefined') return
   const serialized = JSON.stringify(sanitizeStore(store))
   try {
-    window.localStorage.setItem(STORAGE_KEY, serialized)
+    window.localStorage.setItem(froamStorageKey(STORAGE_KEY, projectKey), serialized)
   } catch {
     // History is disposable and the design is not. Clear both records of how
     // the design got here before risking the design itself.
     try { window.localStorage.removeItem(LEGACY_HISTORY_KEY) } catch { /* ignore */ }
-    clearOpLog()
+    clearOpLog(projectKey)
     try {
-      window.localStorage.setItem(STORAGE_KEY, serialized)
+      window.localStorage.setItem(froamStorageKey(STORAGE_KEY, projectKey), serialized)
     } catch {
       // Keep the in-memory editor usable even when persistence is unavailable.
     }
   }
 }
 
-function loadNodeRegistry(): FroamNodeRegistry {
+function loadNodeRegistry(projectKey: string): FroamNodeRegistry {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(NODE_REGISTRY_KEY) ?? '{}')
+    const parsed = JSON.parse(window.localStorage.getItem(froamStorageKey(NODE_REGISTRY_KEY, projectKey)) ?? '{}')
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as FroamNodeRegistry : {}
   } catch {
     return {}
   }
 }
 
-function saveNodeRegistry(registry: FroamNodeRegistry) {
+function saveNodeRegistryForProject(registry: FroamNodeRegistry, projectKey: string) {
   try {
     const entries = Object.entries(registry)
       .sort(([, left], [, right]) => right.updatedAt - left.updatedAt)
       .slice(0, 5_000)
-    window.localStorage.setItem(NODE_REGISTRY_KEY, JSON.stringify(Object.fromEntries(entries)))
+    window.localStorage.setItem(froamStorageKey(NODE_REGISTRY_KEY, projectKey), JSON.stringify(Object.fromEntries(entries)))
   } catch { /* private mode or quota pressure */ }
 }
 
@@ -1038,6 +1051,10 @@ function isInjectionPath(path: string) {
   return path.startsWith(`${INJECTION_KEY}:`)
 }
 
+function isSectionStructurePath(path: string) {
+  return path === SECTION_STRUCTURE_KEY
+}
+
 function ensureFroamNodeId(element: HTMLElement) {
   const existing = element.dataset.froamId
   if (existing) return existing
@@ -1046,13 +1063,55 @@ function ensureFroamNodeId(element: HTMLElement) {
   return id
 }
 
-function assignFreshFroamNodeIds(element: HTMLElement) {
-  if (element.dataset.froamInjected === 'true') {
-    element.dataset.froamId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+function layerDepthFromPath(path: string) {
+  return Math.max(0, path.split('/').filter(Boolean).length - 1)
+}
+
+function labelLayerElement(element: HTMLElement) {
+  return element.dataset.froamMerged === 'true'
+    ? 'Stamp group'
+    : element.dataset.froamShape === 'true'
+      ? 'Shape'
+      : element.dataset.froamFrameLabel
+        || element.getAttribute('aria-label')
+        || element.dataset.froamComponentCategory
+        || element.tagName.toLowerCase()
+}
+
+function isStructuralLayerElement(element: HTMLElement) {
+  return ['section', 'header', 'footer', 'main', 'article', 'nav', 'aside'].includes(element.tagName.toLowerCase())
+}
+
+function syncStructureBoundaryLabel(element: HTMLElement) {
+  if (isStructuralLayerElement(element)) {
+    element.dataset.froamBoundaryLabel = labelLayerElement(element)
+    if (window.getComputedStyle(element).position === 'static') element.dataset.froamStaticBoundary = 'true'
+    else element.removeAttribute('data-froam-static-boundary')
+  } else {
+    element.removeAttribute('data-froam-boundary-label')
+    element.removeAttribute('data-froam-static-boundary')
   }
-  element.querySelectorAll<HTMLElement>('[data-froam-injected="true"]').forEach((child) => {
-    child.dataset.froamId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-  })
+}
+
+function buildLayerNode(element: HTMLElement, root: HTMLElement): LayerNode {
+  const path = getElementPath(element, root)
+  const computed = window.getComputedStyle(element)
+  const elementChildren = Array.from(element.children).filter((child): child is HTMLElement => child instanceof HTMLElement && !shouldSkipElement(child))
+  return {
+    element,
+    path,
+    tag: element.tagName.toLowerCase(),
+    label: labelLayerElement(element),
+    kind: element.dataset.froamMerged === 'true' ? 'stamp' : element.dataset.froamShape === 'true' ? 'shape' : 'element',
+    className: typeof element.className === 'string' ? element.className.split(' ').filter(Boolean).slice(0, 2).join(' ') : '',
+    depth: layerDepthFromPath(path),
+    hidden: computed.display === 'none',
+    editorHidden: element.dataset.froamEditorHidden === 'true',
+    exportHidden: element.dataset.froamExportHidden === 'true',
+    hasChildren: elementChildren.length > 0,
+    childCount: elementChildren.length,
+    nodeId: element.dataset.froamId || undefined,
+  }
 }
 
 function readInjectionDraft(draft: ElementDraft) {
@@ -1061,6 +1120,7 @@ function readInjectionDraft(draft: ElementDraft) {
     const parsed = JSON.parse(draft.text) as {
       html?: unknown
       parentPath?: unknown
+      parentId?: unknown
       order?: unknown
     }
     if (typeof parsed.html !== 'string') return null
@@ -1068,6 +1128,7 @@ function readInjectionDraft(draft: ElementDraft) {
     return {
       html: parsed.html,
       parentPath: parsed.parentPath,
+      parentId: typeof parsed.parentId === 'string' ? parsed.parentId : undefined,
       order: typeof parsed.order === 'number' ? parsed.order : 0,
     }
   } catch {
@@ -1277,26 +1338,8 @@ function collectLayers(root: HTMLElement, maxDepth = 8): LayerNode[] {
   function walk(el: HTMLElement, depth: number) {
     if (depth > maxDepth) return
     if (shouldSkipElement(el)) return
-    const path = getElementPath(el, root)
-    const computed = window.getComputedStyle(el)
     const elementChildren = Array.from(el.children).filter((child): child is HTMLElement => child instanceof HTMLElement && !shouldSkipElement(child))
-    nodes.push({
-      element: el,
-      path,
-      tag: el.tagName.toLowerCase(),
-      label: el.dataset.froamMerged === 'true'
-        ? 'Stamp group'
-        : el.dataset.froamShape === 'true'
-          ? 'Shape'
-          : el.dataset.froamFrameLabel || el.getAttribute('aria-label') || el.dataset.froamComponentCategory || el.tagName.toLowerCase(),
-      kind: el.dataset.froamMerged === 'true' ? 'stamp' : el.dataset.froamShape === 'true' ? 'shape' : 'element',
-      className: typeof el.className === 'string' ? el.className.split(' ').filter(Boolean).slice(0, 2).join(' ') : '',
-      depth,
-      hidden: computed.display === 'none',
-      hasChildren: elementChildren.length > 0,
-      childCount: elementChildren.length,
-      nodeId: el.dataset.froamId || undefined,
-    })
+    nodes.push(buildLayerNode(el, root))
     elementChildren.forEach((child) => walk(child, depth + 1))
   }
   for (const child of Array.from(root.children)) {
@@ -1659,6 +1702,7 @@ type PaletteCommand = {
   label: string
   searchText?: string
   shortcut?: string
+  hint?: string
   icon: ReactNode
   action: () => void
 }
@@ -1669,10 +1713,15 @@ type PaletteCommand = {
 export type GlobalChefEditorProps = {
   initialOpen?: boolean
   routeKey?: string
+  projectKey?: string
 }
 
-export default function GlobalChefEditor({ initialOpen = false, routeKey: explicitRouteKey }: GlobalChefEditorProps) {
+export default function GlobalChefEditor({ initialOpen = false, routeKey: explicitRouteKey, projectKey: explicitProjectKey }: GlobalChefEditorProps) {
   const routeKey = useFroamRouteKey(explicitRouteKey)
+  const projectKey = useMemo(() => resolveFroamProjectKey(explicitProjectKey), [explicitProjectKey])
+  const saveStore = useCallback((next: EditorStore) => saveStoreForProject(next, projectKey), [projectKey])
+  const saveBrandFonts = useCallback((next: BrandFont[]) => saveBrandFontsForProject(next, projectKey), [projectKey])
+  const saveNodeRegistry = useCallback((next: FroamNodeRegistry) => saveNodeRegistryForProject(next, projectKey), [projectKey])
 
   const [portalContainer] = useState(() => {
     if (typeof document === 'undefined') return null
@@ -1691,9 +1740,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   }, [portalContainer])
 
   // Core state
-  const [store, setStore] = useState<EditorStore>(() => loadStore())
-  const [brandFonts, setBrandFonts] = useState<BrandFont[]>(() => loadBrandFonts())
-  const nodeRegistryRef = useRef<FroamNodeRegistry>(loadNodeRegistry())
+  const [store, setStore] = useState<EditorStore>(() => loadStore(projectKey))
+  const [brandFonts, setBrandFonts] = useState<BrandFont[]>(() => loadBrandFonts(projectKey))
+  const nodeRegistryRef = useRef<FroamNodeRegistry>(loadNodeRegistry(projectKey))
   const [buttonPosition, setButtonPosition] = useState(CHEF_BUTTON_START)
   const [panelPosition, setPanelPosition] = useState<{ x: number; y: number } | null>(null)
   const panelDragRef = useRef<{ offsetX: number; offsetY: number } | null>(null)
@@ -1701,6 +1750,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [active, setActive] = useState(initialOpen)
   const [selection, setSelection] = useState<SelectionState | null>(null)
   const [selections, setSelections] = useState<SelectionState[]>([])
+  const [selectionCandidates, setSelectionCandidates] = useState<LayerNode[]>([])
   const [canvas, setCanvas] = useState<CanvasState>(() => ({ background: '#050505', text: '#ffffff' }))
   const [zoom, setZoom] = useState(1)
   const [persona, setPersona] = useState<FroamPersona>(() => loadPersonaPreference())
@@ -1769,7 +1819,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [identityDiagnostics, setIdentityDiagnostics] = useState<FroamIdentityDiagnostic[]>([])
   const [frameworkIdentityFinding, setFrameworkIdentityFinding] = useState<FroamFrameworkFinding | null>(null)
   const [tipsReady, setTipsReady] = useState(() => {
-    try { return window.localStorage.getItem(SCAN_DONE_KEY) === '1' } catch { return true }
+    try { return window.localStorage.getItem(froamStorageKey(SCAN_DONE_KEY, projectKey)) === '1' } catch { return true }
   })
   const [commandSearch, setCommandSearch] = useState('')
   const [commandFocusIndex, setCommandFocusIndex] = useState(0)
@@ -1846,7 +1896,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     // no-op and yesterday's undo history survives intact. When they disagree,
     // because the design was changed by something other than this editor, the
     // difference lands as baseline and the log tells the truth again.
-    const session = createOpLogSession({ ops: loadOpLog() })
+    const session = createOpLogSession({ ops: loadOpLog(projectKey) })
     session.seed(store)
     opLogRef.current = session
   }
@@ -1901,7 +1951,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   // Design Tokens (named colors, spacing, type scales)
   const [tokens, setTokens] = useState<DesignToken[]>(() => {
     if (typeof window === 'undefined') return []
-    try { return JSON.parse(window.localStorage.getItem('froam-tokens-v1') || '[]') } catch { return [] }
+    try { return JSON.parse(window.localStorage.getItem(froamStorageKey('froam-tokens-v1', projectKey)) || '[]') } catch { return [] }
   })
   const [newTokenName, setNewTokenName] = useState('')
   const [newTokenValue, setNewTokenValue] = useState('')
@@ -1916,7 +1966,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   // Asset manager
   const [assets, setAssets] = useState<AssetEntry[]>(() => {
     if (typeof window === 'undefined') return []
-    try { return JSON.parse(window.localStorage.getItem('froam-assets-v1') || '[]') } catch { return [] }
+    try { return JSON.parse(window.localStorage.getItem(froamStorageKey('froam-assets-v1', projectKey)) || '[]') } catch { return [] }
   })
   const [assetSearch, setAssetSearch] = useState('')
 
@@ -1932,6 +1982,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const selectionSwitchTimerRef = useRef<number>(0)
   const currentHoverRef = useRef<HTMLElement | null>(null)
   const originalsRef = useRef<EditorStore>({})
+  const sectionBaselineRef = useRef(new Map<string, {
+    element: HTMLElement
+    parent: HTMLElement
+    order: number
+    hidden: boolean
+    editorHidden: string | null
+    exportHidden: string | null
+  }>())
   const toastTimerRef = useRef<number>(0)
   const suspendDraftPaintingRef = useRef(false)
   const pendingDraftPaintResumeRef = useRef(false)
@@ -1975,7 +2033,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     autoJoinProfile: { avatarUrl: persona.imageUrl || null },
   })
   const roomPresence = room.present
-  const froamProjectId = `project:${typeof window !== 'undefined' ? window.location.host : 'froam'}`
+  const froamProjectId = createFroamProjectId(projectKey)
   const projectSession = useFroamProjectDocument({ projectId: froamProjectId, actorId: room.identity?.actor ?? LOCAL_ACTOR, ops: opLog.all(), store, revision: logVersion })
   const activeProjectState = useMemo(
     () => deriveBranchState(projectSession.project),
@@ -2347,7 +2405,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const session = opLog
     const timer = window.setTimeout(() => {
       try {
-        const stored = saveOpLog(session.all())
+        const stored = saveOpLog(session.all(), projectKey)
         if (stored.length !== session.size()) session.load(stored)
       } catch {
         /* Persistence is a nicety; editing is not. */
@@ -2895,9 +2953,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     function paintDrafts() {
       try {
         if (suspendDraftPaintingRef.current) return
+        applySectionStructure(routeDrafts)
         restoreInjectedBlocks(routeDrafts)
         Object.entries(routeDrafts).forEach(([path, draft]) => {
-          if (path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path)) return
+          if (path === CANVAS_KEY || isInjectionPath(path) || isSectionStructurePath(path) || isFroamPersonaPath(path)) return
           const target = findElementByPath(rootElement, path)
           if (target) applyDraft(target, draft)
         })
@@ -2955,6 +3014,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
     function clearHover() {
       currentHoverRef.current?.removeAttribute('data-chef-hovered')
+      currentHoverRef.current?.removeAttribute('data-froam-boundary-label')
+      currentHoverRef.current?.removeAttribute('data-froam-static-boundary')
       currentHoverRef.current = null
     }
 
@@ -2983,6 +3044,45 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       return fallback
     }
 
+    function pushSelectionCandidate(candidates: HTMLElement[], element: HTMLElement | null) {
+      if (!element || !rootElement.contains(element)) return
+      if (element.closest('[data-chef-editor-root="true"]')) return
+      if (shouldSkipElement(element)) return
+      if (!candidates.includes(element)) candidates.push(element)
+    }
+
+    function selectableAncestors(element: HTMLElement) {
+      const ancestors: HTMLElement[] = []
+      let current: HTMLElement | null = element
+      while (current && current !== rootElement && rootElement.contains(current)) {
+        pushSelectionCandidate(ancestors, current)
+        current = current.parentElement
+      }
+      return ancestors
+    }
+
+    function selectionStackAtPoint(event: MouseEvent, primary: HTMLElement) {
+      const elements = typeof document.elementsFromPoint === 'function'
+        ? document.elementsFromPoint(event.clientX, event.clientY)
+        : []
+      const stack: HTMLElement[] = []
+      pushSelectionCandidate(stack, primary)
+      for (const element of elements) {
+        if (element instanceof HTMLElement) pushSelectionCandidate(stack, resolveTarget(element))
+      }
+      for (const ancestor of selectableAncestors(primary)) pushSelectionCandidate(stack, ancestor)
+      return stack
+    }
+
+    function chooseSelectionTarget(event: MouseEvent, stack: HTMLElement[]) {
+      if (!event.altKey || stack.length < 2) return stack[0] ?? null
+      const selectedPath = selectionRef.current?.path
+      const selectedIndex = selectedPath
+        ? stack.findIndex((candidate) => getElementPath(candidate, rootElement) === selectedPath)
+        : -1
+      return stack[(selectedIndex + 1 + stack.length) % stack.length] ?? stack[0] ?? null
+    }
+
     let hoverFrame = 0
 
     function handlePointerOver(event: Event) {
@@ -2994,6 +3094,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         clearHover()
         currentHoverRef.current = target
         target.setAttribute('data-chef-hovered', 'true')
+        syncStructureBoundaryLabel(target)
       })
     }
 
@@ -3004,7 +3105,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
     function handleClick(event: MouseEvent) {
       const resolvedTarget = resolveTarget(event.target)
-      const target = resolvedTarget ? resolveTextTargetAtPoint(event, resolvedTarget) : null
+      const primaryTarget = resolvedTarget ? resolveTextTargetAtPoint(event, resolvedTarget) : null
+      const stack = primaryTarget ? selectionStackAtPoint(event, primaryTarget) : []
+      const target = chooseSelectionTarget(event, stack)
       if (!target) {
         if (!(event.target instanceof HTMLElement) || event.target.closest('[data-chef-editor-root="true"]')) return
         if (panelOpenRef.current) {
@@ -3034,6 +3137,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       }
 
       const path = getElementPath(target, rootElement)
+      setSelectionCandidates(stack.map((element) => buildLayerNode(element, rootElement)))
       if (event.shiftKey) {
         const currentSels = selectionsRef.current
         const isAlreadySelected = currentSels.some((sel) => sel.path === path)
@@ -3514,6 +3618,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       const refreshed = { ...buildSelection(target, path), nodeId: selection.nodeId }
       currentSelectionRef.current = target
       target.setAttribute('data-chef-selected', 'true')
+      syncStructureBoundaryLabel(target)
       setSelection(refreshed)
       setSelections((current) => current.map((item) => item.path === selection.path ? refreshed : item))
       setSelectionRect(target.getBoundingClientRect())
@@ -3710,6 +3815,177 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     applyLogToStore(`Undid ${describeChange(change)}`)
   }
 
+  function structureBaselineKey(sourcePath: string) {
+    return `${viewportStoreKeyRef.current}\u0000${sourcePath}`
+  }
+
+  function rememberSectionBaseline(element: HTMLElement, sourcePath: string) {
+    const key = structureBaselineKey(sourcePath)
+    const existing = sectionBaselineRef.current.get(key)
+    if (existing) return existing
+    const parent = element.parentElement
+    if (!parent) return null
+    const baseline = {
+      element,
+      parent,
+      order: Array.from(parent.children).indexOf(element),
+      hidden: element.hidden,
+      editorHidden: element.getAttribute('data-froam-editor-hidden'),
+      exportHidden: element.getAttribute('data-froam-export-hidden'),
+    }
+    sectionBaselineRef.current.set(key, baseline)
+    element.dataset.froamStructureSource = sourcePath
+    return baseline
+  }
+
+  function restoreSectionStructure() {
+    const prefix = `${viewportStoreKeyRef.current}\u0000`
+    const entries = Array.from(sectionBaselineRef.current.entries())
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([, value]) => value)
+      .sort((left, right) => left.order - right.order)
+
+    entries.forEach((baseline) => {
+      const { element, parent, order } = baseline
+      const currentOrder = element.parentElement === parent ? Array.from(parent.children).indexOf(element) : -1
+      if (currentOrder !== order) {
+        element.remove()
+        parent.insertBefore(element, parent.children.item(order))
+      }
+      element.hidden = baseline.hidden
+      if (baseline.editorHidden === null) element.removeAttribute('data-froam-editor-hidden')
+      else element.setAttribute('data-froam-editor-hidden', baseline.editorHidden)
+      if (baseline.exportHidden === null) element.removeAttribute('data-froam-export-hidden')
+      else element.setAttribute('data-froam-export-hidden', baseline.exportHidden)
+      element.removeAttribute('data-froam-structure-deleted')
+    })
+  }
+
+  function findSectionStructureSource(root: HTMLElement, entry: SectionStructureEntry) {
+    const remembered = sectionBaselineRef.current.get(structureBaselineKey(entry.sourcePath))
+    if (remembered) return remembered.element
+    const byIdentity = root.querySelector<HTMLElement>(`[data-froam-id="${CSS.escape(entry.nodeId)}"]`)
+    if (byIdentity && byIdentity.dataset.froamInjected !== 'true') return byIdentity
+    const byPath = findElementByPath(root, entry.sourcePath)
+    return byPath && byPath.dataset.froamInjected !== 'true' ? byPath : null
+  }
+
+  function applySectionStructure(routeDraftsToApply: Record<string, ElementDraft>) {
+    const root = getRoot()
+    if (!root) return
+    const manifest = readSectionStructureDraft(routeDraftsToApply[SECTION_STRUCTURE_KEY])
+    if (!manifest.sections.length) return
+
+    const resolved = manifest.sections.map((entry) => {
+      const element = findSectionStructureSource(root, entry)
+      if (!element) return null
+      rememberSectionBaseline(element, entry.sourcePath)
+      element.dataset.froamId = entry.nodeId
+      element.dataset.froamStructureSource = entry.sourcePath
+      return { entry, element }
+    }).filter((item): item is { entry: SectionStructureEntry; element: HTMLElement } => item !== null)
+
+    resolved.filter(({ entry }) => !entry.deleted).sort((left, right) => left.entry.order - right.entry.order).forEach(({ entry, element }) => {
+      const parent = entry.parentPath === ROOT_PARENT_KEY ? root : findElementByPath(root, entry.parentPath)
+      if (parent) {
+        const currentOrder = element.parentElement === parent ? Array.from(parent.children).indexOf(element) : -1
+        if (currentOrder !== entry.order) {
+          element.remove()
+          parent.insertBefore(element, parent.children.item(entry.order))
+        }
+      }
+      if (entry.editorHidden) element.dataset.froamEditorHidden = 'true'
+      else element.removeAttribute('data-froam-editor-hidden')
+      if (entry.exportHidden) element.dataset.froamExportHidden = 'true'
+      else element.removeAttribute('data-froam-export-hidden')
+      element.hidden = false
+      element.removeAttribute('data-froam-structure-deleted')
+    })
+
+    resolved.filter(({ entry }) => entry.deleted).forEach(({ element }) => {
+      element.dataset.froamStructureDeleted = 'true'
+      element.remove()
+    })
+  }
+
+  function remapLiveDraftPaths(routeDraftsToRemap: Record<string, ElementDraft>, root: HTMLElement) {
+    const collect = (drafts: Record<string, ElementDraft>) => {
+      const tracked: Array<{ element: HTMLElement; draft: ElementDraft; path: string }> = []
+      const next: Record<string, ElementDraft> = {}
+      Object.entries(drafts).forEach(([path, draft]) => {
+        if (path === CANVAS_KEY || isInjectionPath(path) || isSectionStructurePath(path) || isFroamPersonaPath(path)) {
+          next[path] = draft
+          return
+        }
+        const element = findElementByPath(root, path)
+        if (element) tracked.push({ element, draft, path })
+        else next[path] = draft
+      })
+      return { next, tracked }
+    }
+    const live = collect(routeDraftsToRemap)
+    const originals = collect(originalsRef.current[viewportStoreKeyRef.current] ?? {})
+    return { ...live, originalNext: originals.next, originalTracked: originals.tracked }
+  }
+
+  function finishSectionMutation(
+    label: string,
+    remapped: ReturnType<typeof remapLiveDraftPaths>,
+    selectedElement: HTMLElement | null,
+  ) {
+    const root = getRoot()
+    if (!root) return
+    remapped.tracked.forEach(({ element, draft }) => {
+      if (!root.contains(element) || element.closest(INJECTED_BLOCK_SELECTOR)) return
+      const path = getElementPath(element, root)
+      if (path) remapped.next[path] = draft
+    })
+    remapped.originalTracked.forEach(({ element, draft, path: priorPath }) => {
+      if (!root.contains(element)) {
+        remapped.originalNext[priorPath] = draft
+        return
+      }
+      if (element.closest(INJECTED_BLOCK_SELECTOR)) return
+      const path = getElementPath(element, root)
+      if (path) remapped.originalNext[path] = draft
+    })
+    originalsRef.current[viewportStoreKeyRef.current] = remapped.originalNext
+    storeRef.current = {
+      ...storeRef.current,
+      [viewportStoreKeyRef.current]: remapped.next,
+    }
+    const routeSnapshot = collectVersionRouteDrafts()
+    const candidate = {
+      ...storeRef.current,
+      [viewportStoreKeyRef.current]: stripPersonaDrafts(routeSnapshot),
+    }
+    opLog.reconcile(candidate, label)
+    const next = opLog.store()
+    storeRef.current = next
+    setStore(next)
+    saveStore(next)
+    bumpLog()
+    if (selectedElement && root.contains(selectedElement)) selectInsertedElement(selectedElement)
+    else updateSelectionsState([])
+    setLayers(collectLayers(root))
+  }
+
+  function serializableElementHtml(element: HTMLElement) {
+    const clone = element.cloneNode(true) as HTMLElement
+    clone.querySelectorAll<HTMLElement>('[data-chef-editor-root="true"]').forEach((node) => node.remove())
+    ;[clone, ...Array.from(clone.querySelectorAll<HTMLElement>('*'))].forEach((node) => {
+      node.removeAttribute('data-chef-selected')
+      node.removeAttribute('data-chef-hovered')
+      node.removeAttribute('data-froam-multi-selected')
+      node.removeAttribute('data-froam-boundary-label')
+      node.removeAttribute('data-froam-static-boundary')
+      node.removeAttribute('data-froam-runtime-injected')
+      node.removeAttribute('data-froam-switching')
+      node.removeAttribute('data-froam-moving')
+    })
+    return clone.outerHTML
+  }
+
   function collectVersionRouteDrafts() {
     const root = getRoot()
     const latestRouteDrafts = storeRef.current[viewportStoreKeyRef.current] ?? {}
@@ -3721,9 +3997,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         delete nextRouteDrafts[path]
         return
       }
-      if (path === CANVAS_KEY || isFroamPersonaPath(path)) return
+      if (path === CANVAS_KEY || isSectionStructurePath(path) || isFroamPersonaPath(path)) return
       const element = findElementByPath(root, path)
-      if (element?.closest('[data-froam-injected="true"][data-froam-block="true"]')) {
+      if (element?.closest(INJECTED_BLOCK_SELECTOR)) {
         delete nextRouteDrafts[path]
         return
       }
@@ -3736,7 +4012,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     if (
       activeElement
       && !shouldSkipElement(activeElement)
-      && !activeElement.closest('[data-froam-injected="true"][data-froam-block="true"]')
+      && !activeElement.closest(INJECTED_BLOCK_SELECTOR)
     ) {
       const activePath = getElementPath(activeElement, root)
       if (activePath && !isInjectionPath(activePath)) {
@@ -3744,20 +4020,22 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       }
     }
 
-    const injectedBlocks = Array.from(root.querySelectorAll<HTMLElement>('[data-froam-injected="true"][data-froam-block="true"]'))
-      .filter((element) => !element.parentElement?.closest('[data-froam-injected="true"][data-froam-block="true"]'))
+    const injectedBlocks = Array.from(root.querySelectorAll<HTMLElement>(INJECTED_BLOCK_SELECTOR))
+      .filter((element) => !element.parentElement?.closest(INJECTED_BLOCK_SELECTOR))
 
-    injectedBlocks.forEach((element, order) => {
+    injectedBlocks.forEach((element) => {
       const parent = element.parentElement
       if (!parent) return
       const parentPath = parent === root ? ROOT_PARENT_KEY : getElementPath(parent, root)
       if (parentPath !== ROOT_PARENT_KEY && !parentPath) return
       const id = ensureFroamNodeId(element)
+      const order = Array.from(parent.children).indexOf(element)
       nextRouteDrafts[`${INJECTION_KEY}:${id}`] = {
         text: JSON.stringify({
           parentPath,
+          parentId: parent === root ? undefined : parent.dataset.froamId,
           order,
-          html: element.outerHTML,
+          html: serializableElementHtml(element),
         }),
       }
     })
@@ -3778,12 +4056,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const root = getRoot()
     if (!root) return
 
-    const injectedBlocks = Array.from(root.querySelectorAll<HTMLElement>('[data-froam-injected="true"][data-froam-block="true"]'))
-      .filter((element) => !element.parentElement?.closest('[data-froam-injected="true"][data-froam-block="true"]'))
+    const injectedBlocks = Array.from(root.querySelectorAll<HTMLElement>(INJECTED_BLOCK_SELECTOR))
+      .filter((element) => !element.parentElement?.closest(INJECTED_BLOCK_SELECTOR))
     injectedBlocks.forEach((element) => element.remove())
+    restoreSectionStructure()
 
     Object.entries(drafts).forEach(([path]) => {
-      if (path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path)) return
+      if (path === CANVAS_KEY || isInjectionPath(path) || isSectionStructurePath(path) || isFroamPersonaPath(path)) return
       const target = findElementByPath(root, path)
       if (!target) return
       const original = originalsRef.current[viewportStoreKey]?.[path]
@@ -3804,7 +4083,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       .filter((draft): draft is NonNullable<ReturnType<typeof readInjectionDraft>> => draft !== null)
       .sort((a, b) => a.order - b.order)
       .forEach((injection) => {
-        const parent = injection.parentPath === ROOT_PARENT_KEY
+        const parent = injection.parentId
+          ? root.querySelector<HTMLElement>(`[data-froam-id="${CSS.escape(injection.parentId)}"]`)
+          : injection.parentPath === ROOT_PARENT_KEY
           ? root
           : findElementByPath(root, injection.parentPath)
         if (!parent) return
@@ -3819,7 +4100,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         }
         node.removeAttribute('data-chef-selected')
         node.removeAttribute('data-chef-hovered')
-        parent.appendChild(node)
+        parent.insertBefore(node, parent.children.item(injection.order))
       })
   }
 
@@ -3852,11 +4133,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         if (el) applyDraft(el, restore)
       })
     }
+    applySectionStructure(routeDraftsToApply)
     restoreInjectedBlocks(routeDraftsToApply)
     Object.entries(routeDraftsToApply).forEach(([path, draft]) => {
-      if (path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path)) return
+      if (path === CANVAS_KEY || isInjectionPath(path) || isSectionStructurePath(path) || isFroamPersonaPath(path)) return
       const el = findElementByPath(root, path)
-      if (el?.closest('[data-froam-injected="true"][data-froam-block="true"]')) return
+      if (el?.closest(INJECTED_BLOCK_SELECTOR)) return
       if (el) applyDraft(el, draft)
     })
     const canvasDraft = routeDraftsToApply[CANVAS_KEY]
@@ -4173,8 +4455,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
     setStore(nextStore)
     currentSelectionRef.current?.removeAttribute('data-chef-selected')
+    currentSelectionRef.current?.removeAttribute('data-froam-boundary-label')
     currentSelectionRef.current = target
     target.setAttribute('data-chef-selected', 'true')
+    syncStructureBoundaryLabel(target)
     setSelection({ ...buildSelection(target, path), ...nextSelection })
   }
 
@@ -4215,8 +4499,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       return next
     })
     clearCanvasDraftStyles()
-    root?.querySelectorAll<HTMLElement>('[data-froam-injected="true"][data-froam-block="true"]').forEach((element) => {
-      if (!element.parentElement?.closest('[data-froam-injected="true"][data-froam-block="true"]')) {
+    root?.querySelectorAll<HTMLElement>(INJECTED_BLOCK_SELECTOR).forEach((element) => {
+      if (!element.parentElement?.closest(INJECTED_BLOCK_SELECTOR)) {
         element.remove()
       }
     })
@@ -4369,7 +4653,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
     setStore(nextStore)
     saveStore(nextStore)
-    window.localStorage.setItem(SAVE_META_KEY, JSON.stringify(payload))
+    window.localStorage.setItem(froamStorageKey(SAVE_META_KEY, projectKey), JSON.stringify(payload))
 
     try {
       await apiPost('/api/froam/published', {
@@ -4435,6 +4719,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         root.querySelectorAll('[data-chef-selected="true"]').forEach((el) => {
           el.removeAttribute('data-chef-selected')
           el.removeAttribute('data-froam-multi-selected')
+          el.removeAttribute('data-froam-boundary-label')
+          el.removeAttribute('data-froam-static-boundary')
         })
       }
 
@@ -4445,6 +4731,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           const captured = captureNodeRef(el, root as HTMLElement, registry, { routeKey, viewport: viewportMode })
           registry = captured.registry
           el.setAttribute('data-chef-selected', 'true')
+          syncStructureBoundaryLabel(el)
           if (nextSelections.length > 1) el.setAttribute('data-froam-multi-selected', 'true')
           return { ...sel, nodeId: captured.ref.nodeId }
         }
@@ -5262,6 +5549,139 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     setLayers(collectLayers(root))
   }
 
+  function selectedSectionElement(node: LayerNode) {
+    const root = getRoot()
+    if (!root || !isStructuralLayerElement(node.element)) return null
+    return findElementByPath(root, node.path) ?? node.element
+  }
+
+  function getHostStructurePath(element: HTMLElement, root: HTMLElement) {
+    const segments: string[] = []
+    let current: HTMLElement | null = element
+    while (current && current !== root) {
+      const parent: HTMLElement | null = current.parentElement
+      if (!parent) break
+      const siblings = Array.from(parent.children).filter((child): child is HTMLElement => (
+        child instanceof HTMLElement
+        && child.tagName === current?.tagName
+        && !child.matches(INJECTED_BLOCK_SELECTOR)
+      ))
+      segments.unshift(`${current.tagName.toLowerCase()}:${Math.max(1, siblings.indexOf(current) + 1)}`)
+      current = parent
+    }
+    return segments.join('/')
+  }
+
+  function writeHostSectionEntry(
+    routeDrafts: Record<string, ElementDraft>,
+    target: HTMLElement,
+    patch: Partial<SectionStructureEntry>,
+  ) {
+    const root = getRoot()
+    if (!root || !target.parentElement) return null
+    const manifest = readSectionStructureDraft(routeDrafts[SECTION_STRUCTURE_KEY])
+    const sourcePath = target.dataset.froamStructureSource || getHostStructurePath(target, root)
+    const nodeId = ensureFroamNodeId(target)
+    rememberSectionBaseline(target, sourcePath)
+    const previous = manifest.sections.find((entry) => entry.nodeId === nodeId || entry.sourcePath === sourcePath)
+    const parentPath = target.parentElement === root ? ROOT_PARENT_KEY : getHostStructurePath(target.parentElement, root)
+    const nextEntry: SectionStructureEntry = {
+      nodeId,
+      sourcePath,
+      parentPath,
+      order: Array.from(target.parentElement.children).indexOf(target),
+      ...previous,
+      ...patch,
+    }
+    const sections = manifest.sections.filter((entry) => entry.nodeId !== nodeId && entry.sourcePath !== sourcePath)
+    sections.push(nextEntry)
+    routeDrafts[SECTION_STRUCTURE_KEY] = writeSectionStructureDraft({ version: 1, sections } satisfies SectionStructureManifest)
+    return nextEntry
+  }
+
+  function addSectionRelative(node: LayerNode, placement: 'before' | 'after') {
+    const target = selectedSectionElement(node)
+    const root = getRoot()
+    if (!target || !target.parentElement || !root) return
+    const remapped = remapLiveDraftPaths(storeRef.current[viewportStoreKeyRef.current] ?? {}, root)
+    const block = createInjectedBlock('section')
+    block.dataset.froamFrameLabel = 'New section'
+    target.parentElement.insertBefore(block, placement === 'before' ? target : target.nextSibling)
+    finishSectionMutation(placement === 'before' ? 'Added section above' : 'Added section below', remapped, block)
+    showToast(placement === 'before' ? 'Section added above' : 'Section added below')
+  }
+
+  function duplicateSection(node: LayerNode) {
+    const target = selectedSectionElement(node)
+    const root = getRoot()
+    if (!target || !target.parentElement || !root) return
+    const remapped = remapLiveDraftPaths(storeRef.current[viewportStoreKeyRef.current] ?? {}, root)
+    const clone = target.cloneNode(true) as HTMLElement
+    clone.dataset.froamInjected = 'true'
+    clone.dataset.froamBlock = 'true'
+    clone.removeAttribute('data-froam-structure-source')
+    clone.removeAttribute('data-froam-structure-deleted')
+    assignFreshFroamNodeIds(clone)
+    target.parentElement.insertBefore(clone, target.nextSibling)
+    finishSectionMutation('Duplicated section', remapped, clone)
+    showToast('Section duplicated with independent identities')
+  }
+
+  function canMoveSection(node: LayerNode, direction: 'up' | 'down') {
+    const target = selectedSectionElement(node)
+    return direction === 'up' ? Boolean(target?.previousElementSibling) : Boolean(target?.nextElementSibling)
+  }
+
+  function moveSection(node: LayerNode, direction: 'up' | 'down') {
+    const target = selectedSectionElement(node)
+    const root = getRoot()
+    const parent = target?.parentElement
+    const sibling = direction === 'up' ? target?.previousElementSibling : target?.nextElementSibling
+    if (!target || !root || !parent || !(sibling instanceof HTMLElement)) return
+    const remapped = remapLiveDraftPaths(storeRef.current[viewportStoreKeyRef.current] ?? {}, root)
+    const isInjected = target.dataset.froamInjected === 'true' && target.dataset.froamBlock === 'true'
+    if (!isInjected) writeHostSectionEntry(remapped.next, target, {})
+    if (direction === 'up') parent.insertBefore(target, sibling)
+    else parent.insertBefore(sibling, target)
+    if (!isInjected) {
+      writeHostSectionEntry(remapped.next, target, { order: Array.from(parent.children).indexOf(target) })
+    }
+    finishSectionMutation(direction === 'up' ? 'Moved section up' : 'Moved section down', remapped, target)
+    showToast(direction === 'up' ? 'Section moved up' : 'Section moved down')
+  }
+
+  function setSectionVisibility(node: LayerNode, scope: 'editor' | 'export') {
+    const target = selectedSectionElement(node)
+    const root = getRoot()
+    if (!target || !root) return
+    const remapped = remapLiveDraftPaths(storeRef.current[viewportStoreKeyRef.current] ?? {}, root)
+    const attribute = scope === 'editor' ? 'data-froam-editor-hidden' : 'data-froam-export-hidden'
+    const nextHidden = target.getAttribute(attribute) !== 'true'
+    if (nextHidden) target.setAttribute(attribute, 'true')
+    else target.removeAttribute(attribute)
+    if (target.dataset.froamInjected !== 'true') {
+      writeHostSectionEntry(remapped.next, target, scope === 'editor' ? { editorHidden: nextHidden } : { exportHidden: nextHidden })
+    }
+    finishSectionMutation(`${nextHidden ? 'Hid' : 'Showed'} section in ${scope}`, remapped, nextHidden && scope === 'editor' ? null : target)
+    showToast(scope === 'editor'
+      ? nextHidden ? 'Hidden in editor only; it will still export' : 'Section visible in editor'
+      : nextHidden ? 'Hidden in export; kept visible here for editing' : 'Section restored to export')
+  }
+
+  function deleteSection(node: LayerNode) {
+    const target = selectedSectionElement(node)
+    const root = getRoot()
+    if (!target || !root || !target.parentElement) return
+    const remapped = remapLiveDraftPaths(storeRef.current[viewportStoreKeyRef.current] ?? {}, root)
+    const fallback = (target.nextElementSibling ?? target.previousElementSibling) as HTMLElement | null
+    if (target.dataset.froamInjected !== 'true') {
+      writeHostSectionEntry(remapped.next, target, { deleted: true })
+    }
+    target.remove()
+    finishSectionMutation('Deleted section', remapped, fallback && root.contains(fallback) ? fallback : null)
+    showToast('Section deleted; Undo restores it')
+  }
+
   /* ─── Image upload ─── */
   function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -5604,7 +6024,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const token: DesignToken = { id: `${Date.now()}`, name: newTokenName.trim(), value: newTokenValue.trim(), category: newTokenCategory }
     const next = [...tokens, token]
     setTokens(next)
-    window.localStorage.setItem('froam-tokens-v1', JSON.stringify(next))
+    window.localStorage.setItem(froamStorageKey('froam-tokens-v1', projectKey), JSON.stringify(next))
     document.documentElement.style.setProperty(`--${token.name.replace(/\s+/g, '-').toLowerCase()}`, token.value)
     setNewTokenName('')
     setNewTokenValue('')
@@ -5616,7 +6036,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     if (token) document.documentElement.style.removeProperty(`--${token.name.replace(/\s+/g, '-').toLowerCase()}`)
     const next = tokens.filter((t) => t.id !== id)
     setTokens(next)
-    window.localStorage.setItem('froam-tokens-v1', JSON.stringify(next))
+    window.localStorage.setItem(froamStorageKey('froam-tokens-v1', projectKey), JSON.stringify(next))
   }
 
   function applyTokenToSelection(token: DesignToken) {
@@ -5700,13 +6120,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const entry: AssetEntry = { id: `${Date.now()}`, name, url, addedAt: Date.now() }
     const next = [entry, ...assets]
     setAssets(next)
-    window.localStorage.setItem('froam-assets-v1', JSON.stringify(next))
+    window.localStorage.setItem(froamStorageKey('froam-assets-v1', projectKey), JSON.stringify(next))
   }
 
   function removeAsset(id: string) {
     const next = assets.filter((a) => a.id !== id)
     setAssets(next)
-    window.localStorage.setItem('froam-assets-v1', JSON.stringify(next))
+    window.localStorage.setItem(froamStorageKey('froam-assets-v1', projectKey), JSON.stringify(next))
   }
 
   function applyAssetToSelection(url: string) {
@@ -5821,7 +6241,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   function openConnectedWorkspace(tab: FroamConnectedCanvasTab) { setIntelligenceOpen(false); setLabsOpen(false); setRightPanelOpen(false); setRequestedConnectedTab(tab); setConnectedCanvasOpen(true); setTemporalOwner(tab === 'replay' ? 'replay' : tab === 'interaction' ? 'animator' : null) }
   function switchWorkspaceBranch(branchId: string) { try { const next = switchProjectBranch(projectSession.project, branchId); projectSession.setProject(next); materializeConnectedBranch(deriveBranchState(next, branchId).legacyStore); showToast(`Switched to ${next.branches[branchId].name}`) } catch (error) { showToast(error instanceof Error ? error.message : 'Could not switch prototype') } }
 
-  const paletteCommands: PaletteCommand[] = [
+  const corePaletteCommands: PaletteCommand[] = [
     { id: 'save', label: 'Save draft', shortcut: 'Ctrl+S', icon: <Save size={15} />, action: saveToRunam },
     { id: 'save-repo', label: 'Save to Repo (git-ready)', shortcut: 'Ctrl+Shift+S', icon: <GitCommit size={15} />, action: () => { void saveToRepo() } },
     // Sharing is the start of a review, so it belongs where people look for a
@@ -5871,6 +6291,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   ]
 
   const commandSearchTerm = commandSearch.trim().toLowerCase()
+  const quickEditCommands: PaletteCommand[] = selection && commandSearchTerm
+    ? searchFroamQuickEdits(commandSearchTerm).map((action) => ({
+      id: action.id,
+      label: action.label,
+      searchText: `${action.intent} ${action.category} ${action.keywords}`,
+      hint: action.category,
+      icon: <Sparkles size={15} />,
+      action: () => { void froamIntent.submit({ origin: 'command-palette', intent: action.intent }) },
+    }))
+    : []
+  const paletteCommands = [...corePaletteCommands, ...quickEditCommands]
   const filteredCommands = commandSearchTerm
     ? paletteCommands.filter((c) => `${c.label} ${c.searchText ?? ''}`.toLowerCase().includes(commandSearchTerm) || FROAM_WORKSPACE_SECTIONS.some((section) => c.id === `workspace:${section.mode}:${section.id}` && workspaceCommandMatches(section, commandSearchTerm)))
     : paletteCommands
@@ -5996,7 +6427,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           setWorkspacePreference((current) => ({ ...current, advancedOpen: false }))
           return
         }
-        currentSelectionRef.current?.removeAttribute('data-chef-selected')
+    currentSelectionRef.current?.removeAttribute('data-chef-selected')
+    currentSelectionRef.current?.removeAttribute('data-froam-boundary-label')
+    currentSelectionRef.current?.removeAttribute('data-froam-static-boundary')
         currentSelectionRef.current = null
         setSelection(null)
         return
@@ -6062,6 +6495,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         if (!root) return
         const target = findElementByPath(root, selection.path)
         if (!target || !target.parentElement) return
+        if (isStructuralLayerElement(target)) {
+          duplicateSection(buildLayerNode(target, root))
+          return
+        }
         const clone = target.cloneNode(true) as HTMLElement
         clone.removeAttribute('data-chef-selected')
         clone.removeAttribute('data-chef-hovered')
@@ -6271,7 +6708,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   <button type="button" tabIndex={-1} onClick={() => executePaletteCommand(cmd)}>
                     {cmd.icon}
                     <span className="fs-command-palette__item-label">{cmd.label}</span>
-                    {cmd.shortcut && <span className="fs-command-palette__item-shortcut">{cmd.shortcut}</span>}
+                    {(cmd.shortcut || cmd.hint) && <span className="fs-command-palette__item-shortcut">{cmd.shortcut ?? cmd.hint}</span>}
                   </button>
                 </li>
               ))}
@@ -6480,6 +6917,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 <div className="froam-figma-left__view">
                   <FroamSectionBoundary name="SitePlanner">
                     <FroamSitePlanner
+                      projectKey={projectKey}
                       routeKey={routeKey}
                       projectName={projectSession.project.name}
                       branchName={projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId}
@@ -6528,8 +6966,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     layers={layers}
                     selectedPath={selection?.path ?? null}
                     selections={selections}
+                    selectionCandidates={selectionCandidates}
                     onSelectLayer={selectLayerNode}
                     onToggleVisibility={toggleLayerVisibility}
+                    onAddSection={addSectionRelative}
+                    onDuplicateSection={duplicateSection}
+                    onMoveSection={moveSection}
+                    canMoveSection={canMoveSection}
+                    onSetSectionVisibility={setSectionVisibility}
+                    onDeleteSection={deleteSection}
                     onRefresh={() => { const root = getRoot(); if (root) setLayers(collectLayers(root)) }}
                     routeKey={routeKey}
                     projectName={projectSession.project.name}
@@ -6547,6 +6992,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             const designPanel = (
               <FroamSectionBoundary name="DesignPanel">
                 <FroamDesignPanel
+                  projectKey={projectKey}
                   selection={selection}
                   selectionRect={selectionRect}
                   onApplyStyle={applyStyle}
@@ -7675,6 +8121,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               onToggle={() => toggleSection('versions')}
             >
               <FroamVersionPanel
+                projectKey={projectKey}
                 routeKey={routeKey}
                 viewportMode={viewportMode}
                 currentStore={routeDrafts as Record<string, unknown>}
@@ -7876,7 +8323,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               isOpen={openSections.inspiration}
               onToggle={() => toggleSection('inspiration')}
             >
-              <FroamInspirationPanel onToast={showToast} />
+              <FroamInspirationPanel projectKey={projectKey} onToast={showToast} />
             </AccordionSection>
 
             {/* ─── Design Tokens ─── */}
@@ -8461,6 +8908,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 if (!root) break
                 const target = findElementByPath(root, selection.path)
                 if (!target || !target.parentElement) break
+                if (isStructuralLayerElement(target)) {
+                  duplicateSection(buildLayerNode(target, root))
+                  break
+                }
                 const clone = target.cloneNode(true) as HTMLElement
                 clone.removeAttribute('data-chef-selected')
                 clone.removeAttribute('data-chef-hovered')
@@ -8524,6 +8975,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               if (!root) break
               const target = findElementByPath(root, selection.path)
               if (!target || !target.parentElement) break
+              if (isStructuralLayerElement(target)) {
+                duplicateSection(buildLayerNode(target, root))
+                break
+              }
               const clone = target.cloneNode(true) as HTMLElement
               clone.removeAttribute('data-chef-selected')
               clone.removeAttribute('data-chef-hovered')
@@ -8540,6 +8995,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               const root = getRoot()
               if (!root) break
               const target = findElementByPath(root, selection.path)
+              if (target && isStructuralLayerElement(target)) {
+                deleteSection(buildLayerNode(target, root))
+                break
+              }
               if (target?.dataset.froamInjected === 'true' && target.parentElement) {
                 target.remove()
                 currentSelectionRef.current = null

@@ -1,9 +1,10 @@
 # Froam Studio
 
-> **8.1.1 — Focused editing:** Click any section to open a small command chat.
-> Common visual edits now run locally, the default shell is calmer, and idle
-> scanning and production polling no longer compete with the host application.
-> Project schema remains v2; Repo Mode and path-based output are unchanged.
+> **Current package version: 8.2.0.** The npm package and license report 8.2.0;
+> the README embedded in the published tarball still shows 8.1.1. This README
+> corrects that documentation mismatch. See
+> [Verified capabilities](docs/VERIFIED_CAPABILITIES.md) for the evidence and
+> release boundaries.
 
 [![CI](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml)
 [![License: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-14b8a0.svg)](LICENSE)
@@ -13,485 +14,204 @@
   <img src="docs/froam-mark.svg" alt="Froam" width="460">
 </p>
 
-**The visual editor for the site you already have.**
+**A visual editor for the site you already have.** Froam overlays controls on a
+rendered page. Supported revisions can be saved as a versioned Froam design,
+generated override CSS, and a small runtime for content changes.
+
+Froam does **not** rewrite original React components, templates, application
+logic, or source stylesheets.
+
+## Try it
+
+Run Froam from a writable project or test directory, not from `C:\Windows\System32`:
 
 ```bash
 npx @ahmadastic/froam http://localhost:3000
 ```
 
-That's the whole setup. Froam opens a Figma-style editor on top of the real,
-running page — and with **Repo Mode**, every visual edit compiles to real files
-in your git repo, so `git push` ships your design to production. No database,
-no runtime API dependency, no drift.
-
-![Froam Studio — toolbar, site planner, design panel and first-open quick tips over a live page](docs/froam-editor.png)
-
-**Froam reaches stacks other visual editors can't.** It edits the live DOM
-through a proxy instead of parsing your source, so Vite, Next.js, Nuxt,
-SvelteKit, Astro, Rails, Django, PHP, WordPress themes and plain HTML all work
-the same way — including sites Froam didn't build and whose code it never sees.
-Nothing is added to your project to try it.
-
-## Why Froam instead of a design-file editor?
-
-Froam is not trying to be a better blank canvas. It is built for the moment
-after a real site already exists, when the expensive question is not "can we
-mock this up?" but "can we make the thing people are actually visiting feel
-better and ship that change safely?"
-
-What Froam can do that a traditional design-file workflow cannot do on its own:
-
-- **Edit the running site.** The DOM, routes, fonts, content, responsive layout
-  and weird production realities are the canvas.
-- **Ship the edit as code.** Repo Mode compiles visual changes into ordinary
-  files that can be committed, reviewed and deployed.
-- **Avoid design drift.** There is no separate mockup that has to be translated
-  back into implementation later.
-- **Work across stacks.** The universal bridge can sit in front of any project
-  that serves a page, while deeper integrations remain available for React/Vite.
-- **Review the real thing.** Rooms, comments and approvals happen on the live
-  page instead of screenshots floating around a chat thread.
-- **Stay honest about intelligence.** Local editing works without remote AI,
-  remote interpretation is opt-in, and inferred results are labelled as
-  inferred instead of pretending to recover hidden source.
-
-The wedge is simple: **Froam turns live-site taste into shippable code.**
-
-## The mark
-
-Colour is a frequency. Sound is a frequency. Interaction is a frequency.
-
-<p align="center">
-  <img src="docs/froam-hero.jpeg" alt="Froam — designed for feel, built for flow, made to connect" width="420">
-</p>
-
-[A short piece on the identity](https://github.com/Ahmadastics/froam-studio/blob/main/docs/froam-demo.mp4)
-— GitHub plays it in the file view. The mark at the top of this page is the
-animated version, hand-built as SVG so it moves inline: GitHub strips scripts
-from READMEs, so canvas and WebGL are off the table there.
-
-## ✨ What's new
-
-**Weekend focus pass — dependable before clever.** The shipping editor now
-presents natural-language editing as **Quick Edit**: common page and
-selected-element commands run locally, suggested commands execute in one tap,
-and remote model-backed intent is disabled by default. Look Studio now includes
-**105** recipes, with a new outcome-focused kit for pricing, trust, calls to
-action, testimonials, product chrome, status messages and conversion sections.
-
-**Unified Froam workflow.** Build organizes pages, composition and reusable
-components. Reference accepts up to 20 PNG, JPEG or WebP screenshots, compares
-observable layout evidence across viewports, and can reconstruct a protected
-responsive candidate on an explicitly selected element or page. Screenshots do
-not expose original source code, assets, component boundaries or exact
-breakpoints, so Froam labels results as Observed or Inferred rather than claiming
-an exact clone.
-
-**Quick Edit.** Natural-language commands are available from the toolbar,
-context menu and command palette. Common visual, type, spacing, layout, movement,
-copy and page-building requests run locally through validated Froam operations.
-The user chooses **Keep**, **Try again**, or **Cancel**; Froam never keeps or
-publishes automatically. Suggested commands execute in one tap and do not upload
-the page or wait for a model.
-
-The remote interpretation path remains in the codebase for controlled future
-testing, but is disabled in the shipping editor until it is at least as reliable
-as local Quick Edit. Deterministic editing, Build, Reference analysis, Save and
-Repo Mode do not depend on remote intelligence.
-
-All adopted results remain framework-independent Froam project state and compile
-through the same Save to Repo path used by ordinary editing.
-
-**7.1.0 — Intelligence Hardening.** Screenshot → Live UI now supports
-multi-reference metadata, injectable local OCR, stable reconstruction IDs,
-render/capture validation with a disclosed RGB-error metric, and a bounded
-geometry-correction primitive. Identity health, safe observable-DOM framework
-maintenance, checkpoint ancestry, incremental Scan, large-page profiling and
-a limited branch-aware hosted project-sync contract harden the v7 substrate.
-Screenshot and Predicted Attention remain Experimental.
-
-**7.0.0 — Froam Understands.** The new Froam Intelligence surface turns the
-live page into shared, provenance-aware Scan records and Component DNA. It adds
-Component Archive, Design Archaeology, graph-backed Product Flow, Priority
-Responsive and Breakpoint Cinema, plus clearly labelled local experiments for
-Predicted Attention, Visual Rhythm and Screenshot → Live UI. Project schema v2
-migrates v1 envelopes automatically; legacy designs and path-based generated
-output remain unchanged.
-
-**6.3.0 — Connected Canvas.** Open one focused surface for avatar presence,
-deterministic Replay, isolated Prototypes, stable-node diagnostics, an
-experimental project graph and the shared Interaction inspector. The v6.2
-foundation is now visible and usable without changing path-based output.
-
-**6.2.0 — Connected Canvas foundation.** Stable identities survive DOM movement,
-the v3 design can live inside a versioned project envelope, and deterministic
-history, checkpoint and branch primitives share one graph-ready substrate.
-Existing designs and path-based output continue unchanged.
-
-**6.1.0 — Froam Rooms.** Review a live site with a client or invite a second
-designer into the same room: ordered co-editing, presence, cursors, soft locks,
-chat, approvals, reconnect replay and per-actor undo share one small protocol.
-
-**4.9.3 — a save reaches everywhere.** Publish from a phone and it lands on
-every device *and*, with `createGitHubCommitter`, straight in your repo — no
-`froam dev` bridge on the other end. See
-[Publish straight to GitHub](#-publish-straight-to-github--no-laptop-required).
-
-**4.9.2 — undo stops forgetting.** History is an append-only log of individual
-edits instead of twenty whole-design snapshots, so undo goes back as far as the
-work does and survives a reload.
-
-**4.9 — Quick Looks becomes a gallery.** The `✦` one-tap style recipes went
-from 6 to **71**, in ten browsable groups: Depth, Surface, Texture, Effect,
-Shape, Line, Accent, Type, Bold, Reset.
-
-**4.8 — publish everywhere.** The bridge is also a publish backend, and
-`froam/server` mounts the same contract on any stack.
-
-**4.7 — perfect fidelity.** Fonts ship with the design, and a trailing slash
-can no longer hide one.
-
-**4.6 — the Blueprint goes 3D.** Every scanned element becomes a plane lifted
-by its DOM depth: an exploded x-ray you can orbit, zoom, and tap to jump
-straight to the element.
-
-## 📐 the Blueprint
-
-The first time Froam opens on a project, the page scan doesn't just count
-what it finds — it **drafts it**. The scan resolves into a full engineering
-blueprint of the site: drafting-blue grid paper, a wireframe recreation of
-every element at true document scale, strokes that draw themselves in,
-part labels with dimensions, callout leader lines to the key parts
-(headline, nav, hero media, primary action, footer), a spec card with the
-site's own palette and fonts, and a title block. **Tap any part to jump
-straight to that element in the editor** — it's a navigable x-ray of your
-site. Summon it anytime from the command palette ("Blueprint"), or flip it into
-3D and orbit the page as stacked planes.
-
-## 🫥 See-Through — visibility, opacity & depth
-
-- **Opacity** — drag the `◐ %` chip on the contextual bar to fade any
-  element: text, box, container, image.
-- **Show / hide** — one-tap eye toggle; hidden elements stay in the Layers
-  panel to bring back, and it's fully undoable.
-- **Blend modes** — multiply, screen, overlay, and the rest.
-- **Depth** — z-index control plus Bring-to-front / Send-to-back.
-
-## 📱 Edit from your phone
-
-Froam is phone-first. Open your dev site on your phone
-(`froam dev --host` + the LAN URL) and edit the mobile layout **on the
-device where mobile bugs actually live** — every change still compiles to
-committable files on your machine.
-
-- **Touch canvas** — tap to select, long-press for the context menu (with
-  haptics), drag to move with the Move tool, finger-sized resize handles.
-  The page itself is the canvas; nothing is hidden on small screens.
-- **Bottom sheet** — the design panel lives in a swipeable sheet with
-  peek / half / full detents, so the page stays visible while you tune it.
-- **Thumb dock** — the contextual bar docks above the sheet, in reach.
-- **Selection walker** — parent / sibling / child steppers: tap *near* the
-  thing you want, then walk to it. No more fat-finger misses.
-- **Scrub to adjust** — press any number (font size, padding, radius,
-  gap…) and drag sideways to change it, with haptic ticks. No phone
-  keyboard round-trips.
-- **Page palette** — Froam reads the colors your site already uses and
-  offers them as one-tap chips (with a contrast check for text).
-- **Look Studio** — 105 searchable style recipes behind the `✦` button, grouped
-  into Depth, Surface, Texture, Effect, Shape, Line, Accent, Type, Bold and
-  Reset. Pick a recipe, then tune its accent, optional fill/text overrides,
-  and corner radius before applying it. Accent-aware gradients and effects
-  derive their shades from your page palette.
-- **Design System** — project-persisted Light, Dark, Mobile and Brand modes;
-  bound primitive/semantic variables; reusable multi-state styles; component
-  families with props, slots and variants; coordinated site kits; and
-  versioned libraries with explicit publish, accept and postpone workflows.
-- **State styling** — Look Studio can target Base, Hover, Focus and Active.
-  Saved state packs compile to real pseudo-class CSS instead of editor-only
-  effects.
-- **Aa** — one tap to edit copy inline; the bar gets out of the keyboard's
-  way.
-
-- **Motion Studio** — 107 searchable motions across Entrance, Reveal,
-  Emphasis, Hover, Motion, Scroll, Loading, Text, Navigation and Exit. A card
-  previews immediately; **Apply & save** persists both the interaction and its
-  keyframes, while **Save reusable** adds the exact motion to Archive.
-
-## Quick start
-
-Nothing to install into your project, no config, no build step:
+For a static HTML folder:
 
 ```bash
-npx @ahmadastic/froam http://localhost:3000    # edit a running site — any stack
-npx @ahmadastic/froam ./public                 # edit a folder of static HTML
+npx @ahmadastic/froam ./public
 ```
 
-Froam proxies the site on `:4600` with the editor injected, and opens it. Your
-project is untouched — no dependency added, no code changed. Node 18+.
+The shorthand command starts a local bridge on port 4600, injects the editor,
+opens the browser, and creates a `froam/` workspace in the current directory.
+It does not modify the proxied server or remote website.
 
-Edit visually, then **Save to Repo** (`Ctrl+Shift+S`). Froam writes committable
-files — commit and push, done.
+Use a different port or allow testing from another device on the same trusted
+private network:
 
-## Install (optional)
+```bash
+npx @ahmadastic/froam ./public --port 6190
+npx @ahmadastic/froam ./public --port 6190 --host
+```
 
-You only need this for Repo Mode's React components and the Vite plugin:
+Keep the terminal running. `--host` exposes the development bridge to the local
+network; do not expose it directly to the public internet.
+
+## Verified static workflow
+
+From a static site's root:
+
+```bash
+npx @ahmadastic/froam init
+npx @ahmadastic/froam dev --serve . --port 4600
+```
+
+`froam init`:
+
+- creates `froam.config.json`;
+- creates `froam/froam.design.json`, `froam/froam.generated.css`, and
+  `froam/froam.runtime.js`;
+- adds the generated stylesheet and runtime tags to `index.html`; and
+- writes the original page to `index.html.bak` before changing it.
+
+Open the printed local URL, make revisions, and choose **Save to Repo**
+(`Ctrl+Shift+S`). Serve the initialized folder normally and reload it without
+the editor to verify the result.
+
+## What happens to an edit
+
+| Edit stage or type | Result |
+| --- | --- |
+| Unsaved editor preview | Browser DOM and local browser state only; it is not a source-code rewrite |
+| Color, typography, spacing, border, radius, shadow, layout, or supported state style | A rule in `froam.generated.css`, scoped by route and viewport |
+| Text replacement | Data in `froam.design.json`, applied in production by `froam.runtime.js` |
+| Image replacement | Data in `froam.design.json`, applied in production by `froam.runtime.js` |
+| Inserted block | Serialized block data applied by `froam.runtime.js` |
+| Save to Repo | Updates the design, generated CSS, and runtime; the editor may also save `froam.project.json` |
+
+Generated CSS is an override layer and uses `!important`. The runtime is
+dependency-free and embeds the content changes; it does not call a runtime API.
+`froam.project.json` contains editor project state, can be much larger than the
+production artifacts, and is not required by a plain static production page.
+
+## What modifies source files
+
+| Command | Source effect |
+| --- | --- |
+| `froam dev` or shorthand `froam <url-or-dir>` | Creates the Froam workspace; does not rewrite the host application's existing components or stylesheets |
+| `froam init` on static HTML | Changes `index.html` only to add the generated CSS/runtime tags and creates `index.html.bak` |
+| `froam init` on Vite | Creates Froam files and may edit `vite.config.*`, with a `.bak` file |
+| Visual editing and Save to Repo | Writes Froam-owned design/output files; does not translate edits back into original component source |
+
+Review every `init` diff before committing it.
+
+## Proxy scope is not framework support
+
+The proxy can inject Froam into many conventional HTML responses. That proves
+the page can be previewed; it does not prove that every route, asset, dev-server
+protocol, framework lifecycle, CSP, or production build is compatible.
+
+Current evidence:
+
+| Workflow | Status |
+| --- | --- |
+| Static HTML `init -> edit -> Save to Repo -> plain-server reload -> recovery` | Verified end to end |
+| Local HTTP proxy injection and cache handling | Covered by automated integration tests |
+| React/Vite package imports | Package exports load; full application workflow not verified in this audit |
+| External HTTPS sites | Local mock-up only; not a deploy path and not verified as general framework support |
+| Mobile browser editing | UI and `--host` path are implemented; physical-device workflow not verified in this audit |
+
+## React and Vite integration
+
+Install the package when importing its APIs:
 
 ```bash
 npm install --save-dev @ahmadastic/froam
 ```
 
-The npm package ships prebuilt, so installation needs no compile step. The
-GitHub repository also keeps `dist/` committed for direct-source installs.
+Use the default Vite plugin export:
 
-```bash
-npx froam init     # detects your stack, scaffolds froam/, wires what it can
+```ts
+import froamStudio from '@ahmadastic/froam/vite'
+
+export default {
+  plugins: [froamStudio({ dir: 'src/froam' })],
+}
 ```
 
-`froam dev` is the long form, with three modes — pick whichever fits:
-
-| Mode | Command | What happens |
-| --- | --- | --- |
-| **Proxy** (recommended) | `froam dev --app http://localhost:3000` | Your running dev server is proxied on `:4600` with the editor injected into every page. Zero code changes. HMR websockets pass through. |
-| **Static** | `froam dev --serve .` | Serves a folder of plain HTML with the editor injected into every `.html`. |
-| **Script tag** | `froam dev` | Bridge only. Add `<script src="http://localhost:4600/froam.js" defer></script>` to your own dev page. |
-
-Edit visually, then **Save to Repo** (`Ctrl+Shift+S`). Froam writes committable
-files — commit and push, done.
-
-## How Repo Mode works
-
-```
-Froam editor (browser)
-        │  "Save to Repo"  (Ctrl+Shift+S)
-        ▼
-froam bridge  (vite plugin middleware OR `froam dev` server)
-        │  writes committable files
-        ▼
-froam/froam.design.json      ← canonical design store (v3)
-froam/froam.generated.css    ← styles compiled to static CSS
-froam/froam.runtime.js       ← zero-dependency vanilla runtime
-        │  git add · commit · push
-        ▼
-Production ships the design — applied instantly, offline-safe
-```
-
-## Shipping to production
-
-**Non-React sites** (static, Rails, PHP, anything): serve the two generated
-files and add two tags — `froam init` does this automatically for static sites:
-
-```html
-<link rel="stylesheet" href="/froam/froam.generated.css">
-<script src="/froam/froam.runtime.js" defer></script>
-```
-
-`froam.runtime.js` is a ~2 kB gzipped, dependency-free script that applies
-text edits, image swaps and injected blocks; the CSS carries all styling.
-
-**Vite + React apps** get the deepest integration (as in v2):
+Mount the runtime and gate once near the React root:
 
 ```tsx
-import { FroamGate, FroamRuntime, type FroamLocalDesign } from 'froam'
-import 'froam/css'
-import 'froam/gate-css'
+import { FroamGate, FroamRuntime, type FroamLocalDesign } from '@ahmadastic/froam'
+import '@ahmadastic/froam/css'
+import '@ahmadastic/froam/gate-css'
 import froamDesign from './froam'
 
 <FroamRuntime design={froamDesign as FroamLocalDesign} routes="*" />
 <FroamGate enabled initialOpen={false} localRoutes="*" />
 ```
 
-Mount `FroamRuntime` exactly once and unconditionally. Gate the editor
-(`FroamGate`) behind an env flag and/or `ownerEmails`. `froam init` wires
-`froamStudio()` into your vite.config automatically.
+The published 8.2.0 `froam init` text can emit legacy unscoped import examples.
+Until a corrected package is released, verify generated Vite imports against
+the scoped examples above.
 
-## Publish — live designs across devices, no deploy
+## Package exports
 
-Froam has two ways to ship a design. **Save to Repo** bakes it into your
-build (git-ready, versioned, permanent). **Publish** pushes it to a tiny
-API so every device sees it on the next refresh — edit on your laptop,
-refresh on your phone, no commit, no build.
+| Export | Purpose | Verification |
+| --- | --- | --- |
+| `@ahmadastic/froam` | React gate, runtime, and project APIs | Imports successfully |
+| `@ahmadastic/froam/css` | Editor stylesheet | Export target exists |
+| `@ahmadastic/froam/gate-css` | Gate stylesheet | Export target exists |
+| `@ahmadastic/froam/vite` | Default Vite development plugin | Default export imports successfully |
+| `@ahmadastic/froam/server` | Publish/room/server helpers | Imports successfully; production hosting not verified here |
 
-Through `froam dev` this works out of the box: publishes land in
-`froam/froam.published.json` next to your design, and any device that
-loads the page through the bridge (`--host` for your phone on the same
-Wi-Fi) picks them up.
+## Implemented editor surface
 
-For production, mount the same two-endpoint contract on your backend:
+The current source includes selection, inline text editing, typography and
+spacing controls, responsive viewport stores, state styling, Look Studio,
+Motion Studio, layers, page planning, reference analysis, versions, local Quick
+Edit, publishing primitives, rooms, and project intelligence surfaces.
 
-```js
-import { createFroamPublishApi } from 'froam/server'
+Implementation or unit coverage is not the same as a completed customer
+workflow. The exact classification (implemented, tested, unverified, and
+unsupported) is maintained in
+[docs/VERIFIED_CAPABILITIES.md](docs/VERIFIED_CAPABILITIES.md).
 
-const froamApi = createFroamPublishApi({
-  file: 'froam/froam.published.json',
-  authorize: async (req) => isAdmin(req),   // gate who can publish
-})
-app.use('/api/froam', (req, res, next) => {
-  froamApi(req, res).then((handled) => { if (!handled) next() })
-})
-```
+Remote model interpretation is disabled in the shipping editor by default.
+Local deterministic Quick Edit does not require remote AI.
 
-Then point the editor + runtime at it (`apiBaseUrl`). The contract, if
-you'd rather implement it against your own database:
+## Known limitations
 
-```
-GET  /api/froam/published?routeKey=/&viewportMode=desktop
-  -> { success: true, design: { routeKey, viewportMode, store, publishedAt } | null }
-POST /api/froam/published        { routeKey, viewportMode, store }
-  -> { success: true, design: { routeKey, viewportMode, publishedAt } }
-```
-
-By default committed repo designs win over published ones for the same route,
-so the workflow is: publish to see it everywhere now → Save to Repo when it's
-final. If you publish from devices that can't reach a repo, pass
-`prefer="newest"` to `FroamRuntime` and whichever is more recent wins instead —
-otherwise publishing to an already-committed route does nothing, with no
-feedback.
-
-## Froam Rooms — review and co-editing
-
-One room serves two products. Send the commenter link for a guided client
-review; send the editor link to open Studio mode with another designer. Roles,
-ordered ops, comments, revisions, presence, chat and reconnect replay all use
-the same contract.
-
-`froam dev` mounts a file-backed room store automatically. A hosted app mounts
-the identical rules over its own storage:
-
-```js
-import { createFroamRoomApi } from 'froam/server'
-
-const rooms = createFroamRoomApi({
-  storage: {
-    get: (roomId) => database.rooms.get(roomId),
-    put: (room) => database.rooms.put(room.id, room),
-  },
-  authorize: async (req) => isDesigner(req),
-})
-```
-
-The live stream is only a wake-up signal. Every durable change is read from the
-server-ordered event log by cursor, so reconnects, duplicate submissions and a
-serverless stream timeout are safe. Hosts should make `put` concurrency-safe;
-the Run'Am adapter uses an optimistic database revision for this.
-
-Invite links grant a role, while joining mints a separate per-member session.
-Never treat the public actor id as authentication. Comments persist against
-fingerprinted DOM anchors; room chat and cursor presence are session chrome and
-never enter `froam.design.json`.
-
-v7.1 also exports a limited-beta project-document delta endpoint for hosts that
-need branch/checkpoint intelligence records across devices. It is intentionally
-separate from—and subordinate to—the Room operation log:
-
-```js
-import { createFroamProjectSyncApi } from 'froam/server'
-
-const projectSync = createFroamProjectSyncApi({
-  storage: projectStorage,
-  authorize: async (req, { projectId, actor }) => mayEditProject(req, projectId, actor),
-})
-```
-
-Design-operation events are refused unless they carry their canonical Room
-sequence. Deltas are cursor-based, idempotent and branch-scoped; hosted storage
-must still provide concurrency-safe `put` behavior.
-
-## 🚀 Publish straight to GitHub — no laptop required
-
-**Save to Repo** goes through the local `froam dev` bridge, so it only works on
-the machine running it. Edit from your phone and there is no bridge: the design
-reaches the publish API but never reaches the repo, and a design that isn't in
-the repo isn't in the build.
-
-Give the publish API a committer and one save does both legs. The design is
-written through the GitHub Contents API, and whatever deploys from that repo —
-Vercel, Netlify, Pages — picks it up on its own. No CI, no runner, no bridge.
-
-```js
-import { createFroamPublishApi, createGitHubCommitter } from 'froam/server'
-
-const froamApi = createFroamPublishApi({
-  file: 'froam/froam.published.json',
-  authorize: async (req) => isAdmin(req),
-  commit: createGitHubCommitter({
-    token: process.env.GITHUB_TOKEN,   // contents:write on the repo
-    repo: 'you/your-site',
-    branch: 'main',
-    dir: 'src/froam',
-  }),
-})
-```
-
-The commit runs *after* the publish is safely stored and can never fail the
-request, so a GitHub outage costs you a redeploy, never a design. Writes carry
-the file's current sha, so two devices can't silently overwrite each other, and
-the committed files are byte-identical to the ones the local bridge writes.
+- Generated selectors are structural paths such as
+  `section:nth-of-type(1) > h1:nth-of-type(1)`. Inserting, deleting, or
+  reordering same-tag siblings can silently retarget an edit. Reopen and verify
+  Froam after structural changes.
+- Previewing a production URL cannot change or deploy that website. Shipping
+  requires a project or integration you control.
+- Generated CSS is an override layer, not a source-level refactor.
+- Immediate undo works in the active editor session. In this audit, undo was
+  unavailable after Save to Repo followed by a full editor reload. Use version
+  control and `index.html.bak` as the reliable recovery path.
+- The development proxy removes CSP headers from proxied HTML so the editor can
+  load. It does not establish compatibility with the site's production CSP.
+- A page that cannot load the generated stylesheet/runtime cannot ship Froam
+  output.
 
 ## CLI
 
+```text
+froam init                scaffold and wire a detected project
+froam dev                 start the universal development bridge
+    --app <url|port>      proxy a served HTML page
+    --serve [dir]         serve a static HTML folder
+    --port <n>            bridge port (default 4600)
+    --open                open the browser
+    --host [addr]         expose on a trusted local network
+froam build               rebuild CSS/runtime from the design file
+froam status              summarize the design and generated files
+froam doctor              check setup health
+froam migrate             migrate the design format to v3
+froam version             print the installed package version
 ```
-froam init             detect project type, scaffold froam files, wire everything
-froam dev              universal editor bridge
-    --app <url|port>     overlay the editor on any running dev server
-    --serve [dir]        serve a static folder with the editor injected
-    --port <n>           bridge port (default 4600)
-    --open               open the browser once the bridge is up
-    --host [addr]        expose on your local network (open the site on your phone)
-froam build            recompile design.json → generated.css + runtime.js (CI-friendly)
-froam status           design summary, artifact freshness, git state
-froam doctor           health-check the whole setup
-froam migrate          upgrade froam.design.json to v3
-froam version          print the installed froam version
-```
 
-All commands accept `--dir <path>` for a custom froam directory.
-Project settings live in `froam.config.json` (written by `froam init`).
-
-## Editor
-
-- `Ctrl+K` command palette
-- `Ctrl+S` **Publish** — every device sees it on the next refresh
-- `Ctrl+Shift+S` **Save to Repo** — writes committable files, needs the local bridge
-- `Ctrl+Z` / `Ctrl+Y` undo & redo — unlimited, and survives a reload
-- Layers, smart guides, resize handles, shape library, animator, versions panel,
-  site planner, PNG/SVG/JPEG export, per-viewport editing (desktop/tablet/mobile)
-- Dark & light editor themes, draggable panels, mobile bottom-sheet layout
-- **Page scan** on first open — a laser sweep that maps every element on the
-  page (real DOM counts, colour-coded), skippable and replayable from the
-  palette (**Scan page**)
-
-## Config
-
-Use `apiBaseUrl`, `rootSelector`, `routeKey`, `enabled`, and `ownerEmails` props
-when a host app needs explicit wiring. The vite plugin accepts
-`froamStudio({ dir: 'src/froam' })`.
-
-## Upgrading from v2
-
-Designs migrate automatically on load; run `froam migrate` to rewrite the file
-(v2 → v3 adds `meta` and the generated `froam.runtime.js`). The v2 React API
-(`FroamGate`, `FroamRuntime`, `froam/vite`) is unchanged.
+All commands accept `--dir <path>` for a custom Froam directory. Node 18 or
+newer is required.
 
 ## License
 
-[FSL-1.1-MIT](LICENSE) — the Functional Source License, with an MIT future
-license. In plain terms:
-
-**You can** use Froam at work, on client projects, inside your company, in
-commercial products you build with it, for teaching and for research. You can
-fork it, modify it and redistribute it. You do not owe anything for any of that.
-
-**You cannot** take Froam and offer it to other people as a competing visual
-editor — a hosted Froam, or a product that is substantially the same thing.
-That is the only restriction.
-
-**It becomes MIT anyway.** Every release converts to the full MIT license two
-years after it ships, automatically and irrevocably. Nothing here can be
-withdrawn later.
-
-One honest caveat: this is *source-available*, not OSI-approved open source.
-If your organisation only permits OSI licenses, use a release that has already
-passed its two-year mark, or get in touch.
-
-Code Froam generates into your repo is yours — the license covers Froam itself,
-not the CSS and design files it writes for you.
+[FSL-1.1-MIT](LICENSE). Froam is source-available, not OSI-approved open source.
+Each release converts to MIT two years after the date that version is made
+available. Read the license itself for the authoritative terms.

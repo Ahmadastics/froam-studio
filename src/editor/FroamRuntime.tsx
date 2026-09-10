@@ -11,6 +11,7 @@ import { readRoomFromLocation } from '../collab/room'
 import { type BrandFont, collectStoreFontFamilies, ensureBrandFontStyle, ensureFontLinks } from './fontSources'
 import { normalizeFroamRouteKey, useFroamRouteKey } from '../routing'
 import { isFroamPersonaPath } from './froamPersona'
+import { SECTION_STRUCTURE_KEY } from './section-structure'
 
 type ElementDraft = {
   text?: string
@@ -27,6 +28,15 @@ type RuntimeSnapshot = {
   styles: Record<string, string>
 }
 
+type SectionRuntimeSnapshot = {
+  element: HTMLElement
+  parent: HTMLElement
+  order: number
+  hidden: boolean
+  exportHidden: string | null
+  deleted: string | null
+}
+
 type FroamPublishedResponse = {
   success: boolean
   design?: {
@@ -41,6 +51,7 @@ type FroamPublishedResponse = {
 const CANVAS_KEY = '__froam_canvas__'
 const INJECTION_KEY = '__froam_injection__'
 const ROOT_PARENT_KEY = '__froam_root__'
+const RUNTIME_VISIBILITY_STYLE_ID = 'froam-runtime-visibility'
 const DEFAULT_RUNTIME_ROUTES: readonly string[] | '*' = '*'
 /**
  * How often a follower re-asks for the design during a session.
@@ -250,6 +261,7 @@ function readInjectionDraft(draft: ElementDraft) {
     const parsed = JSON.parse(draft.text) as {
       html?: unknown
       parentPath?: unknown
+      parentId?: unknown
       order?: unknown
     }
     if (typeof parsed.html !== 'string') return null
@@ -257,11 +269,86 @@ function readInjectionDraft(draft: ElementDraft) {
     return {
       html: parsed.html,
       parentPath: parsed.parentPath,
+      parentId: typeof parsed.parentId === 'string' ? parsed.parentId : undefined,
       order: typeof parsed.order === 'number' ? parsed.order : 0,
     }
   } catch {
     return null
   }
+}
+
+function restoreSectionRuntimeSnapshots(snapshots: SectionRuntimeSnapshot[]) {
+  snapshots.slice().sort((left, right) => left.order - right.order).forEach((snapshot) => {
+    const currentOrder = snapshot.element.parentElement === snapshot.parent
+      ? Array.from(snapshot.parent.children).indexOf(snapshot.element)
+      : -1
+    if (currentOrder !== snapshot.order) {
+      snapshot.element.remove()
+      snapshot.parent.insertBefore(snapshot.element, snapshot.parent.children.item(snapshot.order))
+    }
+    snapshot.element.hidden = snapshot.hidden
+    if (snapshot.exportHidden === null) snapshot.element.removeAttribute('data-froam-export-hidden')
+    else snapshot.element.setAttribute('data-froam-export-hidden', snapshot.exportHidden)
+    if (snapshot.deleted === null) snapshot.element.removeAttribute('data-froam-structure-deleted')
+    else snapshot.element.setAttribute('data-froam-structure-deleted', snapshot.deleted)
+  })
+}
+
+function applySectionStructure(store: Record<string, ElementDraft>, snapshots: SectionRuntimeSnapshot[]) {
+  const root = getRoot()
+  const draft = store[SECTION_STRUCTURE_KEY]
+  if (!root || !draft?.text) return
+  try {
+    const manifest = JSON.parse(draft.text) as { version?: unknown; sections?: unknown }
+    if (manifest.version !== 1 || !Array.isArray(manifest.sections)) return
+    const resolved = manifest.sections.map((value) => {
+      const entry = value as Partial<{ nodeId: string; sourcePath: string; parentPath: string; order: number; exportHidden: boolean; deleted: boolean }>
+      if (typeof entry.nodeId !== 'string' || typeof entry.sourcePath !== 'string' || typeof entry.parentPath !== 'string' || typeof entry.order !== 'number') return null
+      const element = root.querySelector<HTMLElement>(`[data-froam-id="${CSS.escape(entry.nodeId)}"]`) ?? findElementByPath(root, entry.sourcePath)
+      if (!element || element.dataset.froamRuntimeInjected === 'true' || !element.parentElement) return null
+      snapshots.push({
+        element,
+        parent: element.parentElement,
+        order: Array.from(element.parentElement.children).indexOf(element),
+        hidden: element.hidden,
+        exportHidden: element.getAttribute('data-froam-export-hidden'),
+        deleted: element.getAttribute('data-froam-structure-deleted'),
+      })
+      element.dataset.froamId = entry.nodeId
+      return { entry, element }
+    }).filter((item): item is { entry: { nodeId: string; sourcePath: string; parentPath: string; order: number; exportHidden?: boolean; deleted?: boolean }; element: HTMLElement } => item !== null)
+
+    resolved.filter(({ entry }) => !entry.deleted).sort((left, right) => left.entry.order - right.entry.order).forEach(({ entry, element }) => {
+      const parent = entry.parentPath === ROOT_PARENT_KEY ? root : findElementByPath(root, entry.parentPath)
+      if (parent) {
+        const currentOrder = element.parentElement === parent ? Array.from(parent.children).indexOf(element) : -1
+        if (currentOrder !== entry.order) {
+          element.remove()
+          parent.insertBefore(element, parent.children.item(entry.order))
+        }
+      }
+      element.hidden = Boolean(entry.exportHidden)
+      if (entry.exportHidden) element.dataset.froamExportHidden = 'true'
+      else element.removeAttribute('data-froam-export-hidden')
+      element.removeAttribute('data-froam-structure-deleted')
+    })
+    resolved.filter(({ entry }) => entry.deleted).forEach(({ element }) => {
+      element.hidden = true
+      element.dataset.froamStructureDeleted = 'true'
+    })
+  } catch {
+    // Ignore a malformed structure draft without blocking ordinary styling.
+  }
+}
+
+function ensureRuntimeVisibilityStyle() {
+  let style = document.getElementById(RUNTIME_VISIBILITY_STYLE_ID) as HTMLStyleElement | null
+  if (!style) {
+    style = document.createElement('style')
+    style.id = RUNTIME_VISIBILITY_STYLE_ID
+    document.head.appendChild(style)
+  }
+  style.textContent = 'html:not([data-chef-editing]) [data-froam-export-hidden="true"],html:not([data-chef-editing]) [data-froam-structure-deleted="true"]{display:none!important}'
 }
 
 function removeRuntimeInjectedBlocks() {
@@ -282,7 +369,9 @@ function restoreInjectedBlocks(store: Record<string, ElementDraft>) {
     .filter((draft): draft is NonNullable<ReturnType<typeof readInjectionDraft>> => draft !== null)
     .sort((a, b) => a.order - b.order)
     .forEach((injection) => {
-      const parent = injection.parentPath === ROOT_PARENT_KEY
+      const parent = injection.parentId
+        ? root.querySelector<HTMLElement>(`[data-froam-id="${CSS.escape(injection.parentId)}"]`)
+        : injection.parentPath === ROOT_PARENT_KEY
         ? root
         : findElementByPath(root, injection.parentPath)
       if (!parent) return
@@ -294,20 +383,22 @@ function restoreInjectedBlocks(store: Record<string, ElementDraft>) {
       node.setAttribute('data-froam-runtime-injected', 'true')
       node.removeAttribute('data-chef-selected')
       node.removeAttribute('data-chef-hovered')
-      parent.appendChild(node)
+      parent.insertBefore(node, parent.children.item(injection.order))
     })
 }
 
-function applyFroamStore(store: Record<string, ElementDraft>, snapshots: RuntimeSnapshot[]) {
+function applyFroamStore(store: Record<string, ElementDraft>, snapshots: RuntimeSnapshot[], sectionSnapshots: SectionRuntimeSnapshot[]) {
+  ensureRuntimeVisibilityStyle()
   if (document.documentElement.hasAttribute('data-chef-editing')) return
   const root = getRoot()
   if (!root) return
 
   removeRuntimeInjectedBlocks()
+  applySectionStructure(store, sectionSnapshots)
   restoreInjectedBlocks(store)
 
   for (const [path, draft] of Object.entries(store)) {
-    if (path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path)) continue
+    if (path === CANVAS_KEY || path === SECTION_STRUCTURE_KEY || isInjectionPath(path) || isFroamPersonaPath(path)) continue
     const target = findElementByPath(root, path)
     if (target) snapshotDraftTarget(target, draft, snapshots)
   }
@@ -334,6 +425,7 @@ export default function FroamRuntime({
   // session, and nothing else should start a poll loop.
   const inSession = useMemo(() => readRoomFromLocation() !== null, [])
   const appliedSnapshotsRef = useRef<RuntimeSnapshot[]>([])
+  const appliedSectionSnapshotsRef = useRef<SectionRuntimeSnapshot[]>([])
 
   const endpoint = useMemo(() => {
     const params = new URLSearchParams({ routeKey, viewportMode })
@@ -377,7 +469,9 @@ export default function FroamRuntime({
     if (!isRuntimeRoute) {
       setPublishedStore(null)
       restoreRuntimeSnapshots(appliedSnapshotsRef.current)
+      restoreSectionRuntimeSnapshots(appliedSectionSnapshotsRef.current)
       appliedSnapshotsRef.current = []
+      appliedSectionSnapshotsRef.current = []
       removeRuntimeInjectedBlocks()
       return
     }
@@ -471,7 +565,9 @@ export default function FroamRuntime({
   useEffect(() => {
     const root = getRoot()
     restoreRuntimeSnapshots(appliedSnapshotsRef.current)
+    restoreSectionRuntimeSnapshots(appliedSectionSnapshotsRef.current)
     appliedSnapshotsRef.current = []
+    appliedSectionSnapshotsRef.current = []
     removeRuntimeInjectedBlocks()
     if (!isRuntimeRoute || !publishedStore || !root) return
     const storeToPaint = publishedStore
@@ -479,10 +575,13 @@ export default function FroamRuntime({
     function paint() {
       try {
         restoreRuntimeSnapshots(appliedSnapshotsRef.current)
+        restoreSectionRuntimeSnapshots(appliedSectionSnapshotsRef.current)
         removeRuntimeInjectedBlocks()
         const snapshots: RuntimeSnapshot[] = []
-        applyFroamStore(storeToPaint, snapshots)
+        const sectionSnapshots: SectionRuntimeSnapshot[] = []
+        applyFroamStore(storeToPaint, snapshots, sectionSnapshots)
         appliedSnapshotsRef.current = snapshots
+        appliedSectionSnapshotsRef.current = sectionSnapshots
       } catch {
         // DOM may be mid-render — safe to skip this paint frame
       }
@@ -501,8 +600,10 @@ export default function FroamRuntime({
       cancelAnimationFrame(paintFrame)
       observer.disconnect()
       restoreRuntimeSnapshots(appliedSnapshotsRef.current)
+      restoreSectionRuntimeSnapshots(appliedSectionSnapshotsRef.current)
       removeRuntimeInjectedBlocks()
       appliedSnapshotsRef.current = []
+      appliedSectionSnapshotsRef.current = []
     }
   }, [publishedStore, isRuntimeRoute])
 

@@ -11,7 +11,11 @@
  */
 import { compactLog } from './oplog.js';
 import { FROAM_VIEWPORTS } from './types.js';
+import { froamStorageKey } from '../project/storage-scope.js';
 export const FROAM_OPLOG_KEY = 'froam-oplog-v1';
+export function froamOpLogStorageKey(projectKey) {
+    return projectKey ? froamStorageKey(FROAM_OPLOG_KEY, projectKey) : FROAM_OPLOG_KEY;
+}
 /** Comfortably under a 5 MB origin quota, and the design store comes first. */
 const MAX_OPLOG_BYTES = 900_000;
 /** How much recent history to try to keep, most generous first. */
@@ -50,12 +54,12 @@ function isOp(value) {
         && (op.before === undefined || typeof op.before === 'string')
         && (op.after === undefined || typeof op.after === 'string'));
 }
-export function loadOpLog() {
+export function loadOpLog(projectKey) {
     const store = storage();
     if (!store)
         return [];
     try {
-        const raw = store.getItem(FROAM_OPLOG_KEY);
+        const raw = store.getItem(froamOpLogStorageKey(projectKey));
         if (!raw)
             return [];
         const parsed = JSON.parse(raw);
@@ -67,9 +71,9 @@ export function loadOpLog() {
         return [];
     }
 }
-export function clearOpLog() {
+export function clearOpLog(projectKey) {
     try {
-        storage()?.removeItem(FROAM_OPLOG_KEY);
+        storage()?.removeItem(froamOpLogStorageKey(projectKey));
     }
     catch {
         /* nothing to do */
@@ -82,7 +86,7 @@ export function clearOpLog() {
  * that list, so the in-memory log gets the same compaction and doesn't grow
  * forever in a long editing session.
  */
-export function saveOpLog(ops) {
+export function saveOpLog(ops, projectKey) {
     const store = storage();
     if (!store)
         return [...ops];
@@ -92,7 +96,7 @@ export function saveOpLog(ops) {
         if (serialized.length > MAX_OPLOG_BYTES)
             continue;
         try {
-            store.setItem(FROAM_OPLOG_KEY, serialized);
+            store.setItem(froamOpLogStorageKey(projectKey), serialized);
             return candidate;
         }
         catch {
@@ -101,7 +105,7 @@ export function saveOpLog(ops) {
     }
     // Even the baseline won't fit. Drop the log rather than leave a stale one
     // that would contradict the design on the next boot.
-    clearOpLog();
+    clearOpLog(projectKey);
     return [...ops];
 }
 //# sourceMappingURL=persist.js.map

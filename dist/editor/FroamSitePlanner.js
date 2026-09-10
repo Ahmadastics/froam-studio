@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Check, ChevronRight, Copy, FilePlus2, Frame, Grid2X2, Heart, ImagePlus, LayoutTemplate, ListTree, Network, Plus, RefreshCw, Search, Sparkles, Trash2, } from 'lucide-react';
 import { FROAM_CATEGORIES, FROAM_COMPONENTS, } from './FroamComponentCatalog.js';
 import { FROAM_FRAME_PRESETS, createFroamSection, } from './FroamPlannerTypes.js';
+import { froamStorageKey } from '../project/storage-scope.js';
 const DEFAULT_HOME_SECTIONS = [
     'navigation-01',
     'hero-02',
@@ -255,17 +256,17 @@ function createDefaultPlan() {
         ],
     };
 }
-function storageKey(routeKey) {
-    return `froam-site-plan-v1:${routeKey}`;
+function storageKey(projectKey, routeKey) {
+    return froamStorageKey(`froam-site-plan-v1:${routeKey}`, projectKey);
 }
-function blueprintStorageKey(routeKey) {
-    return `froam-blueprint-v1:${routeKey}`;
+function blueprintStorageKey(projectKey, routeKey) {
+    return froamStorageKey(`froam-blueprint-v1:${routeKey}`, projectKey);
 }
-function loadPlan(routeKey) {
+function loadPlan(projectKey, routeKey) {
     if (typeof window === 'undefined')
         return createDefaultPlan();
     try {
-        const raw = window.localStorage.getItem(storageKey(routeKey));
+        const raw = window.localStorage.getItem(storageKey(projectKey, routeKey));
         if (!raw)
             return createDefaultPlan();
         const parsed = JSON.parse(raw);
@@ -301,12 +302,12 @@ function loadPlan(routeKey) {
         return createDefaultPlan();
     }
 }
-function loadBlueprintDraft(routeKey) {
+function loadBlueprintDraft(projectKey, routeKey) {
     const fallback = createDefaultBlueprintDraft();
     if (typeof window === 'undefined')
         return fallback;
     try {
-        const raw = window.localStorage.getItem(blueprintStorageKey(routeKey));
+        const raw = window.localStorage.getItem(blueprintStorageKey(projectKey, routeKey));
         if (!raw)
             return fallback;
         const parsed = JSON.parse(raw);
@@ -346,9 +347,9 @@ function ComponentPreview({ componentId }) {
     const rows = definition?.anatomy ?? ['component'];
     return (_jsx("div", { className: `fsp-preview fsp-preview--${definition?.category.toLowerCase().replace(/\s+/g, '-') ?? 'component'}`, children: rows.map((row, index) => (_jsx("span", { className: index === 0 ? 'is-strong' : index === rows.length - 1 ? 'is-short' : '', style: { width: `${Math.max(34, 94 - index * 12)}%` } }, `${row}-${index}`))) }));
 }
-export default function FroamSitePlanner({ routeKey, projectName, branchName, requestedTab, selection, archiveItems, assets = [], onRenameProject, onAddAsset, onApplyAsset, onRemoveAsset, onTabChange, onInsertComponent, onInsertBlankFrame, onInsertBlock, onInsertArchived, onBuildPage, onPlanChange, onToast }) {
-    const [plan, setPlan] = useState(() => loadPlan(routeKey));
-    const [blueprintDraft, setBlueprintDraft] = useState(() => loadBlueprintDraft(routeKey));
+export default function FroamSitePlanner({ projectKey, routeKey, projectName, branchName, requestedTab, selection, archiveItems, assets = [], onRenameProject, onAddAsset, onApplyAsset, onRemoveAsset, onTabChange, onInsertComponent, onInsertBlankFrame, onInsertBlock, onInsertArchived, onBuildPage, onPlanChange, onToast }) {
+    const [plan, setPlan] = useState(() => loadPlan(projectKey, routeKey));
+    const [blueprintDraft, setBlueprintDraft] = useState(() => loadBlueprintDraft(projectKey, routeKey));
     const [planningPrompt, setPlanningPrompt] = useState('');
     const [tab, setTab] = useState('blueprint');
     const [projectNameDraft, setProjectNameDraft] = useState(projectName);
@@ -360,24 +361,24 @@ export default function FroamSitePlanner({ routeKey, projectName, branchName, re
     const [placement, setPlacement] = useState('new-frame');
     const [insertFrame, setInsertFrame] = useState({ ...FROAM_FRAME_PRESETS.responsive });
     useEffect(() => {
-        setPlan(loadPlan(routeKey));
-        setBlueprintDraft(loadBlueprintDraft(routeKey));
-    }, [routeKey]);
+        setPlan(loadPlan(projectKey, routeKey));
+        setBlueprintDraft(loadBlueprintDraft(projectKey, routeKey));
+    }, [projectKey, routeKey]);
     useEffect(() => { if (requestedTab)
         setTab(requestedTab); }, [requestedTab]);
     useEffect(() => { setProjectNameDraft(projectName); }, [projectName]);
     useEffect(() => {
         try {
-            window.localStorage.setItem(storageKey(routeKey), JSON.stringify(plan));
+            window.localStorage.setItem(storageKey(projectKey, routeKey), JSON.stringify(plan));
         }
         catch { /* project graph remains authoritative when browser preferences are full */ }
-    }, [plan, routeKey]);
+    }, [plan, projectKey, routeKey]);
     useEffect(() => {
         try {
-            window.localStorage.setItem(blueprintStorageKey(routeKey), JSON.stringify(blueprintDraft));
+            window.localStorage.setItem(blueprintStorageKey(projectKey, routeKey), JSON.stringify(blueprintDraft));
         }
         catch { /* optional planning draft */ }
-    }, [blueprintDraft, routeKey]);
+    }, [blueprintDraft, projectKey, routeKey]);
     useEffect(() => { onPlanChange(plan.pages); }, [plan.pages, onPlanChange]);
     const selectedPage = plan.pages.find((page) => page.id === plan.selectedPageId) ?? plan.pages[0];
     const rootPages = plan.pages.filter((page) => page.parentId === null);

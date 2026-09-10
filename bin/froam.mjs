@@ -11,12 +11,12 @@
  *   froam status           design summary, artifact freshness, git state
  *   froam doctor           health-check the whole setup
  *   froam migrate          upgrade froam.design.json to v3
- *   froam version          print the installed froam-studio version
+ *   froam version          print the installed Froam package version
  */
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import {
   DESIGN_VERSION,
@@ -28,9 +28,10 @@ import {
   migrateDesign,
   writeArtifacts,
 } from '../lib/codegen.mjs'
-import { createBridgeServer } from '../lib/dev-server.mjs'
+import { createBridgeServer, normalizeAppTarget } from '../lib/dev-server.mjs'
 
 const PACKAGE_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
+const CLI_ENTRY = fileURLToPath(import.meta.url)
 const EDITOR_BUNDLE = path.join(PACKAGE_ROOT, 'dist', 'standalone', 'froam-editor.js')
 const CONFIG_FILE = 'froam.config.json'
 
@@ -182,17 +183,17 @@ function wireViteConfig(froamDirRel) {
   const viteConfig = findViteConfig()
   if (!viteConfig) {
     log(`${WARN} no vite.config found — add manually:`)
-    log(dim("    import froamStudio from 'froam-studio/vite'"))
+    log(dim("    import froamStudio from '@ahmadastic/froam/vite'"))
     log(dim(`    plugins: [react(), froamStudio({ dir: '${froamDirRel}' })]`))
     return
   }
   let src = fs.readFileSync(viteConfig, 'utf8')
-  if (src.includes('froam-studio/vite')) {
+  if (src.includes('@ahmadastic/froam/vite')) {
     log(`${OK} vite config already wired`)
     return
   }
   fs.writeFileSync(viteConfig + '.bak', src)
-  src = "import froamStudio from 'froam-studio/vite'\n" + src
+  src = "import froamStudio from '@ahmadastic/froam/vite'\n" + src
   const pluginArgs = froamDirRel === 'src/froam' ? '' : `{ dir: '${froamDirRel}' }`
   if (/plugins:\s*\[/.test(src)) {
     src = src.replace(/plugins:\s*\[/, (m) => `${m}froamStudio(${pluginArgs}), `)
@@ -226,9 +227,9 @@ function wireStaticHtml(froamDirRel) {
 }
 
 const REACT_MOUNT_SNIPPET = `
-  import { FroamGate, FroamRuntime, type FroamLocalDesign } from 'froam-studio'
-  import 'froam-studio/css'
-  import 'froam-studio/gate-css'
+  import { FroamGate, FroamRuntime, type FroamLocalDesign } from '@ahmadastic/froam'
+  import '@ahmadastic/froam/css'
+  import '@ahmadastic/froam/gate-css'
   import froamDesign from './froam'
 
   // Render once, near the root of your app:
@@ -247,14 +248,14 @@ function printNextSteps(framework, froamDirRel, port = 4600) {
       log(`  then ${teal('Save to Repo')} (Ctrl+Shift+S). Commit ${froamDirRel} and push — done.`)
       break
     case 'static':
-      log(`  1. ${teal('npx froam dev --serve .')}`)
+      log(`  1. ${teal('npx @ahmadastic/froam dev --serve .')}`)
       log(`  2. Open ${teal(`http://localhost:${port}`)} — your site with the editor on top.`)
       log(`  3. Edit visually, hit ${teal('Save to Repo')} (Ctrl+Shift+S), commit ${froamDirRel}/.`)
       log(`  Production needs nothing extra — the tags in index.html ship your design.`)
       break
     default:
       log(`  1. Start your app's dev server as usual.`)
-      log(`  2. ${teal('npx froam dev --app http://localhost:3000')} ${dim('(use your app\'s port)')}`)
+      log(`  2. ${teal('npx @ahmadastic/froam dev --app http://localhost:3000')} ${dim('(use your app\'s port)')}`)
       log(`  3. Open ${teal(`http://localhost:${port}`)} — your app with the editor on top.`)
       log(`  4. Edit visually, hit ${teal('Save to Repo')} (Ctrl+Shift+S), commit ${froamDirRel}/.`)
       log()
@@ -263,7 +264,7 @@ function printNextSteps(framework, froamDirRel, port = 4600) {
       log(dim(`    <link rel="stylesheet" href="/${froamDirRel}/froam.generated.css">`))
       log(dim(`    <script src="/${froamDirRel}/froam.runtime.js" defer></script>`))
       if (framework === 'next' || framework === 'remix' || framework === 'cra' || framework === 'react') {
-        log(dim(`  (React apps can import 'froam-studio' and mount <FroamRuntime design={...}/> instead.)`))
+        log(dim(`  (React apps can import '@ahmadastic/froam' and mount <FroamRuntime design={...}/> instead.)`))
       }
       break
   }
@@ -295,6 +296,11 @@ function init(flags) {
 function dev(flags) {
   const port = Number(flags.port ?? flags.p ?? 4600)
   const app = flags.app ?? flags.a ?? null
+  try {
+    normalizeAppTarget(app)
+  } catch (error) {
+    fail(error instanceof Error ? error.message : 'invalid app target')
+  }
   const config = loadProjectConfig()
   let serveDir = flags.serve ?? flags.s ?? null
   if (serveDir === true) serveDir = '.'
@@ -307,7 +313,7 @@ function dev(flags) {
   ensureScaffold(froamDir, { glue: false })
 
   if (!fs.existsSync(EDITOR_BUNDLE)) {
-    fail('editor bundle missing (dist/standalone/froam-editor.js) — reinstall froam-studio or run `npm run build` inside it')
+    fail('editor bundle missing (dist/standalone/froam-editor.js) — reinstall @ahmadastic/froam or run `npm run build` inside it')
   }
 
   const { server, appTarget } = createBridgeServer({
@@ -434,12 +440,12 @@ function doctor(flags) {
     }
   }
 
-  check(fs.existsSync(EDITOR_BUNDLE), 'standalone editor bundle present', 'standalone editor bundle missing — reinstall froam-studio (needed for `froam dev`)', framework === 'vite-react')
+  check(fs.existsSync(EDITOR_BUNDLE), 'standalone editor bundle present', 'standalone editor bundle missing — reinstall @ahmadastic/froam (needed for `froam dev`)', framework === 'vite-react')
 
   if (framework === 'vite-react' || framework === 'vite') {
     const viteConfig = findViteConfig()
     check(
-      Boolean(viteConfig && fs.readFileSync(viteConfig, 'utf8').includes('froam-studio/vite')),
+      Boolean(viteConfig && fs.readFileSync(viteConfig, 'utf8').includes('@ahmadastic/froam/vite')),
       'vite config wired with froamStudio()',
       'vite config not wired — run `froam init` or add froamStudio() to plugins',
       true,
@@ -472,16 +478,16 @@ function migrate(flags) {
 
 /* ── help ────────────────────────────────────────────────────── */
 function help() {
-  log(`${teal('◆')} ${bold('froam')} ${dim(`v${packageVersion()}`)} — visual editor that writes git-ready design files, for any project`)
+  log(`${teal('◆')} ${bold('froam')} ${dim(`v${packageVersion()}`)} — visual editor for served HTML and static sites`)
   log()
   log(bold('Quick start'))
   log(`  ${teal('froam <url>')}        edit a running site   ${dim('froam http://localhost:3000')}`)
   log(`  ${teal('froam <dir>')}        edit a static folder  ${dim('froam ./public')}`)
   log()
   log(bold('Commands'))
-  log(`  ${teal('init')}               detect project type, scaffold froam files, wire everything`)
+  log(`  ${teal('init')}               detect a supported project, scaffold Froam files, wire supported entry points`)
   log(`  ${teal('dev')}                universal editor bridge`)
-  log(`      ${dim('--app <url|port>')}   overlay the editor on a running dev server (any stack)`)
+  log(`      ${dim('--app <url|port>')}   overlay the editor on a served HTML page`)
   log(`      ${dim('--serve [dir]')}      serve a static folder with the editor injected`)
   log(`      ${dim('--port <n>')}         bridge port (default 4600)`)
   log(`      ${dim('--open')}             open the browser once the bridge is up`)
@@ -490,7 +496,7 @@ function help() {
   log(`  ${teal('status')}             design summary, artifact freshness, git state`)
   log(`  ${teal('doctor')}             health-check the setup`)
   log(`  ${teal('migrate')}            upgrade froam.design.json to v${DESIGN_VERSION}`)
-  log(`  ${teal('version')}            print the installed froam-studio version`)
+  log(`  ${teal('version')}            print the installed Froam package version`)
   log()
   log(dim('  All commands accept --dir <path> to point at a custom froam directory.'))
 }
@@ -528,6 +534,30 @@ function resolveShorthand(command, args) {
 /* ── dispatch ────────────────────────────────────────────────── */
 const { command: resolvedCommand, args: resolvedArgs } = resolveShorthand(cmd, rest)
 const { flags } = parseFlags(resolvedArgs)
+
+function useWindowsSystemCertificates(command, commandFlags) {
+  const app = commandFlags.app ?? commandFlags.a
+  if (
+    process.platform !== 'win32'
+    || command !== 'dev'
+    || typeof app !== 'string'
+    || !/^https:\/\//i.test(app)
+    || process.execArgv.includes('--use-system-ca')
+    || process.env.NODE_USE_SYSTEM_CA === '1'
+    || process.env.FROAM_SYSTEM_CA_REEXEC === '1'
+    || !process.allowedNodeEnvironmentFlags?.has('--use-system-ca')
+  ) return
+
+  const result = spawnSync(process.execPath, ['--use-system-ca', CLI_ENTRY, ...process.argv.slice(2)], {
+    cwd,
+    env: { ...process.env, FROAM_SYSTEM_CA_REEXEC: '1' },
+    stdio: 'inherit',
+  })
+  if (result.error) fail(`could not enable Windows system certificates: ${result.error.message}`)
+  process.exit(result.status ?? 1)
+}
+
+useWindowsSystemCertificates(resolvedCommand, flags)
 
 switch (resolvedCommand) {
   case 'init': init(flags); break
