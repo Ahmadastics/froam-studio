@@ -98,6 +98,41 @@ production artifacts, and is not required by a plain static production page.
 
 Review every `init` diff before committing it.
 
+## Checking that a design still fits the page
+
+A Froam edit is keyed by a DOM path. When someone wraps a section in a
+container or inserts a sibling above it, that path can stop meaning what it
+meant — and it fails quietly in both directions. Either the edit disappears, or
+the path still resolves and the edit lands on whatever moved into that slot.
+
+`froam check` answers that before a merge instead of after a deploy:
+
+```bash
+froam check --app http://localhost:3000    # against a running app
+froam check --serve dist                   # against a build
+```
+
+```text
+◆ froam check · static → dist/
+
+  ✖ /  12 anchored · 1 moved · 1 orphaned
+      h2 "Pricing" · desktop
+        was  main:1/section:2/h2:1
+        now  main:1/section:3/h2:1  81% match
+      p "Send anything, anywhere" · desktop
+        main:1/section:1/p:1  not on the page any more
+```
+
+Each edit resolves to one of five states: `anchored` (found where it was made),
+`moved` (found elsewhere — `froam check --fix` re-keys it), `orphaned` (gone),
+`unverified` (saved before fingerprints existed, so there is nothing to check it
+against), and
+`missing` (an unverified edit whose path no longer resolves).
+
+The command exits non-zero on drift and on a run where no route could be
+loaded, so it works as a CI gate. A route it could not fetch is reported as
+unchecked rather than counted as healthy.
+
 ## Proxy scope is not framework support
 
 The proxy can inject Froam into many conventional HTML responses. That proves
@@ -177,8 +212,15 @@ Local deterministic Quick Edit does not require remote AI.
 
 - Generated selectors are structural paths such as
   `section:nth-of-type(1) > h1:nth-of-type(1)`. Inserting, deleting, or
-  reordering same-tag siblings can silently retarget an edit. Reopen and verify
-  Froam after structural changes.
+  reordering same-tag siblings retargets an edit. Edits saved since fingerprints
+  were introduced carry one, so `froam check` reports this and the runtime
+  declines to restyle an element it cannot recognise; edits saved by earlier
+  versions have nothing to check against and are reported as `unverified` until
+  the route is re-saved.
+- `froam check` parses HTML structurally rather than with a browser engine.
+  Well-formed markup indexes identically to a browser — including implied end
+  tags, synthesized `<tbody>`, raw-text elements and character references — but
+  table foster-parenting and other HTML5 recovery rules are not implemented.
 - Previewing a production URL cannot change or deploy that website. Shipping
   requires a project or integration you control.
 - Generated CSS is an override layer, not a source-level refactor.
@@ -202,6 +244,10 @@ froam dev                 start the universal development bridge
     --host [addr]         expose on a trusted local network
 froam build               rebuild CSS/runtime from the design file
 froam status              summarize the design and generated files
+froam check               report edits that no longer match the page
+    --app <url>           check against a running app
+    --serve [dir]         check against a built or static folder
+    --fix                 re-anchor the edits that only moved
 froam doctor              check setup health
 froam migrate             migrate the design format to v3
 froam version             print the installed package version

@@ -146,7 +146,8 @@ import { diffStores, type FroamChange } from '../collab/oplog'
 import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist'
 import { findElementByPath, getElementPath, isSafeDraftPath, tagOfPath } from '../collab/paths'
 import { createAnchor, resolveAnchor } from '../collab/anchor'
-import { LOCAL_ACTOR, scopeKey, type FroamAnchor, type FroamOp, type FroamViewport } from '../collab/types'
+import { fingerprintForDraft } from './draft-fingerprint'
+import { LOCAL_ACTOR, scopeKey, type FroamAnchor, type FroamAnchorFingerprint, type FroamOp, type FroamViewport } from '../collab/types'
 import { captureNodeRef, resolveNodeRef, type FroamIdentityDiagnostic, type FroamNodeRegistry } from '../project/node-registry'
 import { archiveItemKind, createArchiveItem, minimalArchiveDna } from '../project/archive'
 import { componentCatalogFamilies } from '../project/component-adapter'
@@ -184,6 +185,8 @@ type ElementDraft = {
   text?: string
   imageUrl?: string
   styles?: Record<string, string>
+  /** See `ElementDraft` in src/collab/types.ts — how this edit re-finds its element. */
+  fingerprint?: FroamAnchorFingerprint
 }
 
 type EditorStore = Record<string, Record<string, ElementDraft>>
@@ -3992,6 +3995,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const nextRouteDrafts: Record<string, ElementDraft> = stripPersonaDrafts(latestRouteDrafts)
     if (!root) return withPersonaDraft(nextRouteDrafts, persona)
 
+    // Every outbound path — Save to Repo, publish, the session beat, the local
+    // snapshot — is built from this one walk, so fingerprinting here is what
+    // makes an edit findable again after someone restructures the page. Doing
+    // it at the call sites would be four chances to forget.
+    const originalRouteDrafts = originalsRef.current[viewportStoreKeyRef.current] ?? {}
+
     Object.entries(nextRouteDrafts).forEach(([path, draft]) => {
       if (isInjectionPath(path)) {
         delete nextRouteDrafts[path]
@@ -4004,7 +4013,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         return
       }
       if (element) {
-        nextRouteDrafts[path] = readLiveElementDraft(element, draft)
+        nextRouteDrafts[path] = {
+          ...readLiveElementDraft(element, draft),
+          fingerprint: fingerprintForDraft(element, root, originalRouteDrafts[path]?.text),
+        }
       }
     })
 

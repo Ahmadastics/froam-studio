@@ -56,6 +56,7 @@ import { diffStores } from '../collab/oplog.js';
 import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist.js';
 import { findElementByPath, getElementPath, isSafeDraftPath, tagOfPath } from '../collab/paths.js';
 import { createAnchor, resolveAnchor } from '../collab/anchor.js';
+import { fingerprintForDraft } from './draft-fingerprint.js';
 import { LOCAL_ACTOR, scopeKey } from '../collab/types.js';
 import { captureNodeRef, resolveNodeRef } from '../project/node-registry.js';
 import { archiveItemKind, createArchiveItem, minimalArchiveDna } from '../project/archive.js';
@@ -3616,6 +3617,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         const nextRouteDrafts = stripPersonaDrafts(latestRouteDrafts);
         if (!root)
             return withPersonaDraft(nextRouteDrafts, persona);
+        // Every outbound path — Save to Repo, publish, the session beat, the local
+        // snapshot — is built from this one walk, so fingerprinting here is what
+        // makes an edit findable again after someone restructures the page. Doing
+        // it at the call sites would be four chances to forget.
+        const originalRouteDrafts = originalsRef.current[viewportStoreKeyRef.current] ?? {};
         Object.entries(nextRouteDrafts).forEach(([path, draft]) => {
             if (isInjectionPath(path)) {
                 delete nextRouteDrafts[path];
@@ -3629,7 +3635,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 return;
             }
             if (element) {
-                nextRouteDrafts[path] = readLiveElementDraft(element, draft);
+                nextRouteDrafts[path] = {
+                    ...readLiveElementDraft(element, draft),
+                    fingerprint: fingerprintForDraft(element, root, originalRouteDrafts[path]?.text),
+                };
             }
         });
         const activeElement = currentSelectionRef.current;

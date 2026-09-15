@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased
+
+**Edits now remember what they were made against.** A draft is keyed by a DOM
+path, which goes stale silently the moment the page is restructured — either the
+edit vanishes, or the path still resolves and the edit decorates whatever moved
+into that slot. `src/collab/anchor.ts` already solved this for comment pins, so
+comments survived refactors that designs did not. Drafts now carry the same
+fingerprint, captured in `collectVersionRouteDrafts` so every outbound path —
+Save to Repo, publish, the session beat, the local snapshot — gets it from one
+place. Text edits record the *original* text where the editor still holds it,
+since the repo is what a fingerprint is later compared against.
+
+**`froam check`** resolves every edit in a design against the HTML actually
+served for its route and reports each one as `anchored`, `moved`, `orphaned`,
+`unverified` or `missing`. `--fix` re-keys the edits that only moved and
+refreshes their fingerprints so anchors don't decay across successive
+refactors; it refuses to merge two edits onto one element. Exits non-zero on
+drift, and on a run where no route could be loaded — an unreachable URL must not
+read as a clean bill of health. Works against `--app <url>` or `--serve <dir>`.
+
+**`FroamRuntime` verifies before it paints.** A draft carrying a fingerprint is
+checked at its path, recovered wherever it moved to, or skipped — rather than
+restyling a stranger. Drafts without one keep exactly the previous behaviour.
+
+**New `lib/html-tree.mjs`** — a dependency-free HTML tree so the above can run
+in a terminal and in CI. It indexes the way a browser does, which is the whole
+requirement: implied end tags (`<li>`, `<p>`, `<dt>`, table cells), synthesized
+`<tbody>`, raw vs. escapable raw text, and character references. The last two
+were found by diffing the parser against a real Chrome DOM over a page built
+from the cases parsers get wrong; both would have fabricated drift on pages
+nobody had touched. `scripts/test-drift.mjs` (28 assertions) cross-checks its
+scoring against the compiled `dist/collab/anchor.js`, so the terminal and the
+browser cannot quietly disagree about whether an element is the same element.
+
 ## 8.2.0 - 2026-09-05
 
 **Published as `@ahmadastic/froam`.** The executable remains `froam`, while the

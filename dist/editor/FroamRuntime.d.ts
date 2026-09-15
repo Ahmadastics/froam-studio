@@ -1,9 +1,12 @@
 import { type FroamStudioConfig } from '../config';
 import { type BrandFont } from './fontSources';
+import type { FroamAnchorFingerprint } from '../collab/types';
 type ElementDraft = {
     text?: string;
     imageUrl?: string;
     styles?: Record<string, string>;
+    /** See `ElementDraft` in src/collab/types.ts — how this edit re-finds its element. */
+    fingerprint?: FroamAnchorFingerprint;
 };
 type ViewportMode = 'desktop' | 'tablet' | 'mobile';
 export type FroamLocalDesign = {

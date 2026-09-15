@@ -9,11 +9,14 @@
  *   froam dev              universal editor bridge (proxy / static / script-tag)
  *   froam build            recompile design.json → generated.css + runtime.js
  *   froam status           design summary, artifact freshness, git state
+ *   froam check            find edits the page has drifted out from under
  *   froam doctor           health-check the whole setup
  *   froam migrate          upgrade froam.design.json to v3
  *   froam version          print the installed Froam package version
  */
 import fs from 'node:fs'
+import http from 'node:http'
+import https from 'node:https'
 import os from 'node:os'
 import path from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -405,6 +408,234 @@ function status(flags) {
   }
 }
 
+/* ── check ───────────────────────────────────────────────────── */
+
+/**
+ * Fetch a page over plain node:http/https rather than `fetch`.
+ *
+ * `check` exits non-zero on drift, and on Windows calling `process.exit()`
+ * while undici still holds a keep-alive handle trips a libuv assertion — the
+ * process dies with 127 instead of 1, which would quietly break the CI gate
+ * this command exists to be. `agent: false` keeps no socket open past the
+ * response, so the exit code is the one we chose.
+ */
+function requestHtml(target, redirectsLeft = 5) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(target)
+    const client = url.protocol === 'https:' ? https : http
+    const request = client.get(url, { agent: false, headers: { accept: 'text/html' } }, (response) => {
+      const status = response.statusCode ?? 0
+      const location = response.headers.location
+      if (status >= 300 && status < 400 && location) {
+        response.resume()
+        if (!redirectsLeft) { reject(new Error('too many redirects')); return }
+        requestHtml(new URL(location, url).href, redirectsLeft - 1).then(resolve, reject)
+        return
+      }
+      let body = ''
+      response.setEncoding('utf8')
+      response.on('data', (chunk) => { body += chunk })
+      response.on('end', () => resolve({ status, contentType: response.headers['content-type'] ?? '', body }))
+    })
+    request.on('error', reject)
+    request.setTimeout(10_000, () => request.destroy(new Error('timed out after 10s')))
+  })
+}
+
+/**
+ * Find the HTML actually served for each designed route.
+ *
+ * A route we cannot fetch is reported as unchecked rather than skipped, because
+ * "this route has no drift" and "I never looked at this route" are different
+ * answers and a CI gate has to be able to tell them apart.
+ */
+async function loadRoutePages(routeKeys, { serveDir, appUrl }) {
+  const pages = {}
+  const unreachable = []
+
+  for (const routeKey of routeKeys) {
+    if (appUrl) {
+      const url = new URL(routeKey === '/' ? '/' : routeKey, appUrl).href
+      try {
+        const response = await requestHtml(url)
+        if (response.status < 200 || response.status >= 300) {
+          unreachable.push([routeKey, `${response.status} from ${url}`])
+          continue
+        }
+        if (!response.contentType.includes('html')) {
+          unreachable.push([routeKey, `${url} did not return HTML`])
+          continue
+        }
+        pages[routeKey] = response.body
+      } catch (error) {
+        unreachable.push([routeKey, `could not reach ${url} — ${error instanceof Error ? error.message : 'request failed'}`])
+      }
+      continue
+    }
+
+    const relative = routeKey === '/' ? '' : routeKey.replace(/^\/+/, '')
+    const candidates = relative
+      ? [`${relative}.html`, `${relative}/index.html`]
+      : ['index.html']
+    const found = candidates
+      .map((candidate) => path.join(serveDir, candidate))
+      .find((candidate) => fs.existsSync(candidate))
+    if (found) pages[routeKey] = fs.readFileSync(found, 'utf8')
+    else unreachable.push([routeKey, `no ${candidates.join(' or ')} under ${relDir(serveDir)}/`])
+  }
+
+  return { pages, unreachable }
+}
+
+const STATUS_MARK = {
+  anchored: OK,
+  moved: yellow('→'),
+  orphaned: BAD,
+  unverified: dim('?'),
+  missing: BAD,
+}
+
+function printRouteDetail(entry) {
+  if (entry.status === 'moved') {
+    log(`      ${bold(entry.label)} ${dim(`· ${entry.viewport}`)}`)
+    log(`        ${dim('was')}  ${entry.path}`)
+    log(`        ${dim('now')}  ${teal(entry.newPath)}  ${dim(`${Math.round(entry.score * 100)}% match`)}`)
+  } else if (entry.status === 'orphaned') {
+    log(`      ${bold(entry.label)} ${dim(`· ${entry.viewport}`)}`)
+    log(`        ${dim(entry.path)}  ${red('not on the page any more')}`)
+  } else if (entry.status === 'missing') {
+    log(`      ${bold(entry.label)} ${dim(`· ${entry.viewport}`)}`)
+    log(`        ${dim(entry.path)}  ${red('path no longer resolves')} ${dim('(no fingerprint to recover with)')}`)
+  }
+}
+
+async function check(flags) {
+  const { checkDesign, applyDriftFix } = await import('../lib/drift.mjs')
+
+  const froamDir = resolveFroamDir(flags.dir)
+  const designPath = path.join(froamDir, 'froam.design.json')
+  if (!fs.existsSync(designPath)) fail(`no ${relDir(froamDir)}/froam.design.json — run \`froam init\` first`)
+  const design = loadDesign(designPath)
+
+  const config = loadProjectConfig()
+  const appUrl = flags.app ?? flags.a ?? null
+  let serveDir = flags.serve ?? flags.s ?? null
+  if (serveDir === true) serveDir = '.'
+  if (!appUrl && !serveDir && (config.framework === 'static' || detectFramework(cwd) === 'static')) serveDir = '.'
+  if (!appUrl && !serveDir) {
+    fail('nothing to check against — point at a running app with `--app http://localhost:3000` or a built folder with `--serve dist`')
+  }
+  if (serveDir) serveDir = path.resolve(cwd, String(serveDir))
+
+  let origin = null
+  if (appUrl) {
+    try {
+      origin = normalizeAppTarget(appUrl).origin
+    } catch (error) {
+      fail(error instanceof Error ? error.message : 'invalid app target')
+    }
+  }
+
+  const routeKeys = Object.keys(design.routes ?? {})
+  log(`${teal('◆')} ${bold('froam check')} ${dim(`v${packageVersion()} · ${origin ? `live → ${origin}` : `static → ${relDir(serveDir)}/`}`)}`)
+  log()
+
+  if (!routeKeys.length) {
+    log(dim('  no routes designed yet — nothing to check'))
+    return
+  }
+
+  const { pages, unreachable } = await loadRoutePages(routeKeys, { serveDir, appUrl: origin })
+  const report = checkDesign(design, pages)
+  const unreachableReasons = new Map(unreachable)
+
+  for (const route of report.routes) {
+    if (!route.checked) {
+      log(`  ${dim('·')} ${bold(route.routeKey)}  ${dim(unreachableReasons.get(route.routeKey) ?? route.reason)}`)
+      continue
+    }
+    const summary = Object.entries(route.counts)
+      .filter(([, count]) => count > 0)
+      .map(([status, count]) => `${count} ${status}`)
+      .join(' · ')
+    const worst = route.counts.orphaned || route.counts.missing
+      ? BAD
+      : route.counts.moved ? yellow('→') : OK
+    log(`  ${worst} ${bold(route.routeKey)}  ${dim(summary || 'no edits')}`)
+    for (const entry of route.entries) printRouteDetail(entry)
+  }
+
+  for (const warning of report.warnings) {
+    log()
+    log(`  ${WARN} ${bold(warning.routeKey)} ${warning.message}`)
+  }
+
+  const { anchored, moved, orphaned, unverified, missing } = report.counts
+  log()
+  log(`  ${[
+    anchored ? green(`${anchored} anchored`) : null,
+    moved ? yellow(`${moved} moved`) : null,
+    orphaned ? red(`${orphaned} orphaned`) : null,
+    missing ? red(`${missing} missing`) : null,
+    unverified ? dim(`${unverified} unverified`) : null,
+  ].filter(Boolean).join(dim(' · ')) || dim('no edits to check')}`)
+
+  if (unverified) {
+    log(`  ${dim('unverified edits were saved before Froam recorded fingerprints — re-save those routes to anchor them.')}`)
+  }
+
+  if (flags.fix) {
+    if (!moved) {
+      log()
+      log(dim('  nothing to re-anchor'))
+    } else {
+      const { design: fixed, applied, refused } = applyDriftFix(design, report)
+      fixed.updatedAt = new Date().toISOString()
+      fs.writeFileSync(designPath, JSON.stringify(fixed, null, 2) + '\n')
+      writeArtifacts(froamDir, fixed)
+      log()
+      log(`${OK} re-anchored ${applied.length} edit${applied.length === 1 ? '' : 's'} and rebuilt ${relDir(froamDir)}/`)
+      for (const entry of refused) {
+        log(`${WARN} left ${bold(entry.label)} where it was — ${entry.reason}`)
+      }
+    }
+  }
+
+  log()
+
+  // A route we could not load contributes no findings, which must never read as
+  // a clean bill of health — otherwise a typo'd URL turns this gate into a
+  // no-op that passes.
+  const checkedRoutes = report.routes.filter((route) => route.checked).length
+  if (checkedRoutes === 0) {
+    log(`  ${red(bold('Checked nothing.'))} ${dim(`none of the ${routeKeys.length} designed route${routeKeys.length === 1 ? '' : 's'} could be loaded — see above.`)}`)
+    process.exit(1)
+  }
+
+  if (!report.drift) {
+    const skipped = report.routes.length - checkedRoutes
+    log(`  ${green(bold('Nothing has drifted.'))} ${dim('Every checked edit still points at what it was made against.')}`)
+    if (skipped) log(`  ${WARN} ${dim(`${skipped} route${skipped === 1 ? '' : 's'} could not be loaded and ${skipped === 1 ? 'was' : 'were'} not checked.`)}`)
+    return
+  }
+
+  if (flags.fix && !orphaned && !missing) {
+    log(`  ${green(bold('Drift resolved.'))} ${dim('Commit the rebuilt froam files to ship it.')}`)
+    return
+  }
+
+  // `--fix` has already re-anchored everything that merely moved, so the
+  // closing count is what is still wrong, not what was wrong on arrival.
+  const stranded = orphaned + missing
+  const outstanding = flags.fix ? stranded : moved + stranded
+  log(`  ${red(bold(outstanding === 1
+    ? '1 edit no longer points at what it was made against.'
+    : `${outstanding} edits no longer point at what they were made against.`))}`)
+  if (moved && !flags.fix) log(`     ${teal('froam check --fix')} ${dim(`re-anchors the ${moved} that moved`)}`)
+  if (stranded) log(`     ${dim(`${stranded === 1 ? 'it cannot be' : `${stranded} cannot be`} recovered automatically — reapply or delete ${stranded === 1 ? 'it' : 'them'} in the editor`)}`)
+  process.exit(1)
+}
+
 /* ── doctor ──────────────────────────────────────────────────── */
 function doctor(flags) {
   const froamDir = resolveFroamDir(flags.dir)
@@ -494,6 +725,10 @@ function help() {
   log(`      ${dim('--host [addr]')}      expose on your local network (phone testing)`)
   log(`  ${teal('build')}              recompile design.json → generated.css + runtime.js`)
   log(`  ${teal('status')}             design summary, artifact freshness, git state`)
+  log(`  ${teal('check')}              find edits that no longer point at what they were made against`)
+  log(`      ${dim('--app <url>')}        check against a running app`)
+  log(`      ${dim('--serve [dir]')}      check against a built/static folder`)
+  log(`      ${dim('--fix')}              re-anchor the edits that merely moved`)
   log(`  ${teal('doctor')}             health-check the setup`)
   log(`  ${teal('migrate')}            upgrade froam.design.json to v${DESIGN_VERSION}`)
   log(`  ${teal('version')}            print the installed Froam package version`)
@@ -503,7 +738,7 @@ function help() {
 
 /* ── shorthand ───────────────────────────────────────────────── */
 const KNOWN_COMMANDS = new Set([
-  'init', 'dev', 'build', 'status', 'doctor', 'migrate',
+  'init', 'dev', 'build', 'status', 'check', 'doctor', 'migrate',
   'version', '--version', '-v', 'help', '--help', '-h',
 ])
 
@@ -539,7 +774,7 @@ function useWindowsSystemCertificates(command, commandFlags) {
   const app = commandFlags.app ?? commandFlags.a
   if (
     process.platform !== 'win32'
-    || command !== 'dev'
+    || (command !== 'dev' && command !== 'check')
     || typeof app !== 'string'
     || !/^https:\/\//i.test(app)
     || process.execArgv.includes('--use-system-ca')
@@ -564,6 +799,7 @@ switch (resolvedCommand) {
   case 'dev': dev(flags); break
   case 'build': build(flags); break
   case 'status': status(flags); break
+  case 'check': await check(flags); break
   case 'doctor': doctor(flags); break
   case 'migrate': migrate(flags); break
   case 'version':

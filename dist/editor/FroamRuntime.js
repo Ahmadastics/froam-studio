@@ -8,6 +8,7 @@ import { collectStoreFontFamilies, ensureBrandFontStyle, ensureFontLinks } from 
 import { normalizeFroamRouteKey, useFroamRouteKey } from '../routing.js';
 import { isFroamPersonaPath } from './froamPersona.js';
 import { SECTION_STRUCTURE_KEY } from './section-structure.js';
+import { resolveAnchor } from '../collab/anchor.js';
 const CANVAS_KEY = '__froam_canvas__';
 const INJECTION_KEY = '__froam_injection__';
 const ROOT_PARENT_KEY = '__froam_root__';
@@ -312,6 +313,26 @@ function restoreInjectedBlocks(store) {
         parent.insertBefore(node, parent.children.item(injection.order));
     });
 }
+/**
+ * Find the element a draft is actually for.
+ *
+ * A path alone has two silent failure modes after the page is restructured: it
+ * stops resolving and the edit vanishes, or — the dangerous one — it keeps
+ * resolving and now decorates whatever moved into that slot. A draft carrying a
+ * fingerprint can tell those apart, so it gets the benefit: verified at its
+ * path, recovered wherever it went, or skipped outright rather than painting a
+ * stranger.
+ *
+ * Drafts saved before fingerprints existed keep exactly the old behaviour.
+ * Being wrong the way it has always been wrong is better than changing what a
+ * live site looks like on the strength of a guess we can't make.
+ */
+function resolveDraftTarget(root, path, draft) {
+    if (!draft.fingerprint)
+        return findElementByPath(root, path);
+    const resolution = resolveAnchor({ path, fingerprint: draft.fingerprint }, root);
+    return resolution.status === 'orphaned' ? null : resolution.element;
+}
 function applyFroamStore(store, snapshots, sectionSnapshots) {
     ensureRuntimeVisibilityStyle();
     if (document.documentElement.hasAttribute('data-chef-editing'))
@@ -325,7 +346,7 @@ function applyFroamStore(store, snapshots, sectionSnapshots) {
     for (const [path, draft] of Object.entries(store)) {
         if (path === CANVAS_KEY || path === SECTION_STRUCTURE_KEY || isInjectionPath(path) || isFroamPersonaPath(path))
             continue;
-        const target = findElementByPath(root, path);
+        const target = resolveDraftTarget(root, path, draft);
         if (target)
             snapshotDraftTarget(target, draft, snapshots);
     }

@@ -26,6 +26,16 @@ export type ElementDraft = {
   text?: string
   imageUrl?: string
   styles?: Record<string, string>
+  /**
+   * Enough of what the element was to recognise it again after the page is
+   * restructured. The draft's key is its path, which is exact and goes stale
+   * silently; this is the second opinion that lets the runtime refuse to paint
+   * a stranger and lets `froam check` tell drift apart from deletion.
+   *
+   * Optional because designs written before this existed are still valid —
+   * they are reported as unverified rather than assumed correct.
+   */
+  fingerprint?: FroamAnchorFingerprint
 }
 
 /**
