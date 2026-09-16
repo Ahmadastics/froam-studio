@@ -285,3 +285,12 @@ newer is required.
 [FSL-1.1-MIT](LICENSE). Froam is source-available, not OSI-approved open source.
 Each release converts to MIT two years after the date that version is made
 available. Read the license itself for the authoritative terms.
+
+**Using Froam in your own business is free** — your team, your sites, and client
+work are all Permitted Purposes under FSL, along with modification, education
+and research.
+
+A commercial licence is needed only to ship Froam inside a product you sell (a
+builder, CMS, page editor or design tool), or to replace FSL for an organisation
+whose policy requires an OSI-approved licence. See
+[Commercial licensing](docs/COMMERCIAL_LICENSE.md).
