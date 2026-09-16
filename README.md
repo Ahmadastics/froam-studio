@@ -1,11 +1,5 @@
 # Froam Studio
 
-> **Current package version: 8.2.0.** The npm package and license report 8.2.0;
-> the README embedded in the published tarball still shows 8.1.1. This README
-> corrects that documentation mismatch. See
-> [Verified capabilities](docs/VERIFIED_CAPABILITIES.md) for the evidence and
-> release boundaries.
-
 [![CI](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml)
 [![License: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-14b8a0.svg)](LICENSE)
 [![Node >= 18](https://img.shields.io/badge/node-%3E%3D18-5eead4.svg)](package.json)
@@ -23,32 +17,60 @@ logic, or source stylesheets.
 
 ## Try it
 
-Run Froam from a writable project or test directory, not from `C:\Windows\System32`:
+One command, from any folder:
 
 ```bash
-npx @ahmadastic/froam http://localhost:3000
+npx @ahmadastic/froam
 ```
 
-For a static HTML folder:
+```text
+◆ Froam
+  Paste the website you want to edit.
+
+  Already running on this computer:
+    1  localhost:3000  My Portfolio
+    2  localhost:5173  Vite + React
+
+  Website URL, or a number:
+```
+
+Froam finds the dev servers already running on your machine and names them by
+their page title, so editing your own project is a keystroke. Paste any address
+instead to edit a live site:
+
+```text
+  Website URL, or a number: example.com
+```
+
+Froam picks a free port, starts a local bridge, injects the editor, and opens
+your browser. It does not modify the proxied server or the remote website.
+
+If you already know what you want, skip the prompt:
 
 ```bash
-npx @ahmadastic/froam ./public
+npx @ahmadastic/froam example.com          # a live site
+npx @ahmadastic/froam localhost:3000       # your dev server
+npx @ahmadastic/froam ./public             # a static HTML folder
 ```
 
-The shorthand command starts a local bridge on port 4600, injects the editor,
-opens the browser, and creates a `froam/` workspace in the current directory.
-It does not modify the proxied server or remote website.
+### Where your edits are saved
 
-Use a different port or allow testing from another device on the same trusted
-private network:
+Editing your own project writes a `froam/` workspace into that project, next to
+the code it belongs to. Froam asks where the project lives if your terminal is
+not already sitting in it.
+
+Editing a live site you do not have the source for writes to `~/Froam/<site>/`
+instead, so Froam never drops files into whatever directory your terminal
+happened to open — including a read-only one such as `C:\Windows\System32`.
+
+### Other devices on your network
 
 ```bash
-npx @ahmadastic/froam ./public --port 6190
-npx @ahmadastic/froam ./public --port 6190 --host
+npx @ahmadastic/froam example.com --host
 ```
 
-Keep the terminal running. `--host` exposes the development bridge to the local
-network; do not expose it directly to the public internet.
+Keep the terminal running. `--host` exposes the development bridge to your local
+network for phone testing; do not expose it directly to the public internet.
 
 ## Verified static workflow
 
@@ -146,7 +168,7 @@ Current evidence:
 | Static HTML `init -> edit -> Save to Repo -> plain-server reload -> recovery` | Verified end to end |
 | Local HTTP proxy injection and cache handling | Covered by automated integration tests |
 | React/Vite package imports | Package exports load; full application workflow not verified in this audit |
-| External HTTPS sites | Local mock-up only; not a deploy path and not verified as general framework support |
+| External HTTPS sites | Editor injects into the proxied page; this is a local mock-up, not a deploy path, and is not verified as general framework support |
 | Mobile browser editing | UI and `--host` path are implemented; physical-device workflow not verified in this audit |
 
 ## React and Vite integration
@@ -179,9 +201,8 @@ import froamDesign from './froam'
 <FroamGate enabled initialOpen={false} localRoutes="*" />
 ```
 
-The published 8.2.0 `froam init` text can emit legacy unscoped import examples.
-Until a corrected package is released, verify generated Vite imports against
-the scoped examples above.
+`froam init` has emitted legacy unscoped import examples in past releases.
+Verify generated Vite imports against the scoped examples above.
 
 ## Package exports
 
@@ -235,11 +256,14 @@ Local deterministic Quick Edit does not require remote AI.
 ## CLI
 
 ```text
+froam                     ask what to edit, then open it
+froam <url>               edit a running site or a live URL
+froam <dir>               edit a static HTML folder
 froam init                scaffold and wire a detected project
 froam dev                 start the universal development bridge
     --app <url|port>      proxy a served HTML page
     --serve [dir]         serve a static HTML folder
-    --port <n>            bridge port (default 4600)
+    --port <n>            bridge port (otherwise the first free port from 4600)
     --open                open the browser
     --host [addr]         expose on a trusted local network
 froam build               rebuild CSS/runtime from the design file
