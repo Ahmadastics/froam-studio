@@ -33,9 +33,15 @@ import {
 } from '../lib/codegen.mjs'
 import { createBridgeServer, normalizeAppTarget } from '../lib/dev-server.mjs'
 import {
+  createPrompter,
+  describeTargetFailure,
+  detectLocalProjects,
   findFreePort,
+  isFatalTargetFailure,
+  isLocalhost,
+  looksLikeProjectDir,
   normalizeTargetUrl,
-  promptWebsiteUrl,
+  probeTarget,
   resolveSafeWorkspaceDir,
 } from '../lib/launcher.mjs'
 
@@ -165,20 +171,34 @@ function loadProjectConfig() {
   }
 }
 
-function resolveFroamDir(flagDir, appTarget = null) {
+function resolveFroamDir(flagDir, appTarget = null, projectDir = undefined) {
   if (flagDir) return path.resolve(cwd, flagDir)
   const config = loadProjectConfig()
   if (config.dir) return path.resolve(cwd, config.dir)
-  return resolveSafeWorkspaceDir({ targetUrl: appTarget, cwd })
+  // `null` is an answer, not a missing value: it means "this is not a project
+  // folder", which sends the workspace to ~/Froam instead of littering here.
+  return resolveSafeWorkspaceDir({
+    targetUrl: appTarget,
+    cwd: projectDir === undefined ? cwd : projectDir,
+  })
 }
 
 function relDir(absDir) {
+  const rel = path.relative(cwd, absDir)
+  if (rel !== '' && !rel.startsWith('..')) return rel.split(path.sep).join('/')
+  // Outside the project (a ~/Froam workspace): show a path the tester can open.
+  // `~` means nothing in Explorer, so Windows gets the real thing.
   const home = os.homedir()
-  if (absDir.startsWith(home)) {
+  if (process.platform !== 'win32' && absDir.startsWith(home + path.sep)) {
     return '~' + absDir.slice(home.length).split(path.sep).join('/')
   }
-  const rel = path.relative(cwd, absDir)
-  return rel === '' ? '.' : rel.split(path.sep).join('/')
+  return absDir
+}
+
+/** relDir for a line that shows a folder on its own — trailing slash only where it reads right. */
+function displayDir(absDir) {
+  const shown = relDir(absDir)
+  return path.isAbsolute(shown) ? shown : `${shown}/`
 }
 
 /* ── init ────────────────────────────────────────────────────── */
@@ -303,6 +323,129 @@ function init(flags) {
   printNextSteps(framework, froamDirRel)
 }
 
+/**
+ * Re-run this CLI with Windows' certificate store trusted.
+ *
+ * Antivirus and corporate networks inspect HTTPS with their own root, which Node
+ * does not trust by default — the tester sees "unable to verify the first
+ * certificate". Node can trust the OS store, but only via a startup flag, so the
+ * only way to recover is to start again with it set. Never returns when it acts.
+ *
+ * @param {string[] | null} argvOverride arguments for the child, defaults to ours
+ * @returns {boolean} false when the machine cannot use this fix
+ */
+function reexecWithSystemCertificates(argvOverride = null) {
+  if (
+    process.platform !== 'win32'
+    || process.execArgv.includes('--use-system-ca')
+    || process.env.NODE_USE_SYSTEM_CA === '1'
+    || process.env.FROAM_SYSTEM_CA_REEXEC === '1'
+    || !process.allowedNodeEnvironmentFlags?.has('--use-system-ca')
+  ) return false
+
+  const result = spawnSync(
+    process.execPath,
+    ['--use-system-ca', CLI_ENTRY, ...(argvOverride ?? process.argv.slice(2))],
+    { cwd, env: { ...process.env, FROAM_SYSTEM_CA_REEXEC: '1' }, stdio: 'inherit' },
+  )
+  if (result.error) fail(`could not enable Windows system certificates: ${result.error.message}`)
+  process.exit(result.status ?? 1)
+}
+
+/**
+ * Ask for a website until we have one that is spelled like an address and
+ * actually answers. A first-time tester gets typos wrong; making them re-run
+ * `npx` for each one is the difference between a two-minute start and giving up.
+ *
+ * @returns {Promise<URL>} never returns a target that failed to respond
+ */
+async function askForTarget(maxAttempts = 3) {
+  const projects = await detectLocalProjects()
+  const prompter = createPrompter()
+  try {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const answer = await prompter.ask({ repeat: attempt > 1, projects })
+      if (!answer) {
+        log('\nNothing to edit — run `froam --help` to see the other commands.')
+        process.exit(0)
+      }
+
+      // "1" means the first project we listed, not port 1 — nothing serves a page there.
+      const picked = /^\d+$/.test(answer) ? projects[Number(answer) - 1] : null
+      let url
+      try {
+        url = normalizeTargetUrl(picked ? picked.href : answer)
+      } catch (error) {
+        warn(error.message, attempt, maxAttempts)
+        continue
+      }
+
+      log(`\n  Connecting to ${url.origin} …`)
+      const problem = await checkTargetReachable(url, [url.href])
+      if (problem?.fatal) {
+        warn(problem.message, attempt, maxAttempts)
+        continue
+      }
+      if (problem) log(`${WARN} ${problem.message}`)
+      return { url, project: await askWhereProjectLives(prompter, url) }
+    }
+  } finally {
+    prompter.close()
+  }
+
+  fail(`Could not open a website after ${maxAttempts} tries. Run \`npx @ahmadastic/froam\` to start again.`)
+}
+
+function warn(message, attempt, maxAttempts) {
+  log(`\n${BAD} ${message}`)
+  if (attempt < maxAttempts) log(dim('\n  Try another address.'))
+}
+
+/**
+ * Where should a local project's edits be written?
+ *
+ * Froam writes design files next to the code they belong to. But a tester runs
+ * this from wherever their terminal opened — System32, their home folder —
+ * which is not their project, and silently dropping a froam/ folder there would
+ * strand the edits away from the repo. So when the current folder is plainly not
+ * the project, ask. Enter keeps everything in the Froam folder.
+ *
+ * @returns {Promise<string | null | undefined>} a folder, null for "use the Froam
+ *   folder", or undefined when the question does not apply
+ */
+async function askWhereProjectLives(prompter, url) {
+  if (!isLocalhost(url)) return undefined
+  if (looksLikeProjectDir(cwd)) return cwd
+
+  const answer = await prompter.askLine(
+    `\n  ${bold('Where is this project on your computer?')}\n`
+    + `  ${dim('Paste the folder, or press Enter to keep the edits in your Froam folder.')}\n`
+    + '  Folder: ',
+  )
+  if (!answer) return null
+
+  const folder = path.resolve(cwd, answer.trim().replace(/^["']|["']$/g, ''))
+  if (!fs.existsSync(folder)) {
+    log(`${WARN} No folder at ${folder} — keeping the edits in your Froam folder instead.`)
+    return null
+  }
+  return folder
+}
+
+/**
+ * @param {URL} url
+ * @param {string[] | null} argvOverride what the child should re-run with, if a TLS retry is needed
+ * @returns {Promise<{ fatal: boolean, message: string } | null>} null when the target answered
+ */
+async function checkTargetReachable(url, argvOverride = null) {
+  const probe = await probeTarget(url)
+  if (probe.ok) return null
+  // A certificate we cannot verify will fail identically inside the proxy, so
+  // this is the moment to restart with the machine's own certificate store.
+  if (probe.kind === 'tls') reexecWithSystemCertificates(argvOverride)
+  return { fatal: isFatalTargetFailure(probe), message: describeTargetFailure(probe, url) }
+}
+
 /* ── dev ─────────────────────────────────────────────────────── */
 async function dev(flags) {
   let app = flags.app ?? flags.a ?? null
@@ -323,15 +466,33 @@ async function dev(flags) {
   }
   if (serveDir) serveDir = path.resolve(cwd, String(serveDir))
 
-  const froamDir = resolveFroamDir(flags.dir, normalizedApp)
-  ensureScaffold(froamDir, { glue: false })
-
   if (!fs.existsSync(EDITOR_BUNDLE)) {
     fail('editor bundle missing (dist/standalone/froam-editor.js) — reinstall @ahmadastic/froam or run `npm run build` inside it')
   }
 
+  // Confirm the target answers before creating a workspace for it, so a typo
+  // leaves nothing behind and the tester is told what went wrong.
+  if (normalizedApp && !flags.probed) {
+    const problem = await checkTargetReachable(normalizedApp)
+    if (problem?.fatal) fail(problem.message)
+    if (problem) log(`${WARN} ${problem.message}\n`)
+  }
+
+  let froamDir
+  try {
+    froamDir = resolveFroamDir(flags.dir, normalizedApp, flags.project)
+    ensureScaffold(froamDir, { glue: false })
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error))
+  }
+
   const requestedPort = flags.port ?? flags.p
-  const port = requestedPort ? Number(requestedPort) : await findFreePort(4600)
+  let port
+  try {
+    port = requestedPort ? Number(requestedPort) : await findFreePort(4600)
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error))
+  }
 
   const { server, appTarget } = createBridgeServer({
     port,
@@ -342,7 +503,11 @@ async function dev(flags) {
   })
 
   server.on('error', (error) => {
-    if (error.code === 'EADDRINUSE') fail(`port ${port} is already in use — try \`froam dev --port ${port + 1}\``)
+    if (error.code === 'EADDRINUSE') {
+      fail(requestedPort
+        ? `port ${port} is already in use — leave off --port and Froam will pick a free one`
+        : `port ${port} was taken while Froam was starting — run the same command again`)
+    }
     fail(error.message)
   })
 
@@ -368,7 +533,7 @@ async function dev(flags) {
     } else if (appTarget || serveDir) {
       log(`  ${dim('network')}  ${dim('add --host to expose on your local network')}`)
     }
-    log(`  ${bold('repo')}     ${relDir(froamDir)}/ ${dim('← Save to Repo (Ctrl+Shift+S) writes here')}`)
+    log(`  ${bold('repo')}     ${displayDir(froamDir)} ${dim('← Save to Repo (Ctrl+Shift+S) writes here')}`)
     log()
     log(dim('  Ctrl+C to stop'))
     if (flags.open && (appTarget || serveDir)) openBrowser(`http://localhost:${port}`)
@@ -726,7 +891,8 @@ function help() {
   log(`${teal('◆')} ${bold('froam')} ${dim(`v${packageVersion()}`)} — visual editor for served HTML and static sites`)
   log()
   log(bold('Quick start'))
-  log(`  ${teal('froam <url>')}        edit a running site   ${dim('froam http://localhost:3000')}`)
+  log(`  ${teal('froam')}              ask which site to edit, then open it`)
+  log(`  ${teal('froam <url>')}        edit a running site   ${dim('froam example.com · froam localhost:3000')}`)
   log(`  ${teal('froam <dir>')}        edit a static folder  ${dim('froam ./public')}`)
   log()
   log(bold('Commands'))
@@ -766,17 +932,26 @@ function resolveShorthand(command, args) {
 
   const looksLikeUrl = /^https?:\/\//i.test(command)
   const looksLikeHost = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(\/|$)/i.test(command)
-  const looksLikePort = /^\d{2,5}$/.test(command)
-  const looksLikeDomain = /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?::\d+)?(\/.*)?$/.test(command)
-  if (looksLikeUrl || looksLikeHost || looksLikePort || looksLikeDomain) {
+  const looksLikePort = /^\d{1,5}$/.test(command)
+  if (looksLikeUrl || looksLikeHost || looksLikePort) {
     return { command: 'dev', args: ['--app', command, '--open', ...args] }
   }
 
+  // A real folder wins over the domain guess, so `froam my.site` serves the
+  // folder that is actually sitting there rather than proxying a stranger.
   let isDirectory = false
   try {
     isDirectory = fs.statSync(path.resolve(cwd, command)).isDirectory()
   } catch { /* not a path we can serve — fall through to the unknown-command error */ }
   if (isDirectory) return { command: 'dev', args: ['--serve', command, '--open', ...args] }
+
+  // Anything normalizeTargetUrl accepts as a bare domain is a website shorthand.
+  // It rejects file names and folder paths, which keeps `froam index.html` from
+  // becoming a proxy to a host that cannot exist.
+  try {
+    normalizeTargetUrl(command)
+    return { command: 'dev', args: ['--app', command, '--open', ...args] }
+  } catch { /* not a website either — fall through to the unknown-command error */ }
 
   return { command, args }
 }
@@ -787,24 +962,8 @@ const { flags } = parseFlags(resolvedArgs)
 
 function useWindowsSystemCertificates(command, commandFlags) {
   const app = commandFlags.app ?? commandFlags.a
-  if (
-    process.platform !== 'win32'
-    || (command !== 'dev' && command !== 'check')
-    || typeof app !== 'string'
-    || !/^https:\/\//i.test(app)
-    || process.execArgv.includes('--use-system-ca')
-    || process.env.NODE_USE_SYSTEM_CA === '1'
-    || process.env.FROAM_SYSTEM_CA_REEXEC === '1'
-    || !process.allowedNodeEnvironmentFlags?.has('--use-system-ca')
-  ) return
-
-  const result = spawnSync(process.execPath, ['--use-system-ca', CLI_ENTRY, ...process.argv.slice(2)], {
-    cwd,
-    env: { ...process.env, FROAM_SYSTEM_CA_REEXEC: '1' },
-    stdio: 'inherit',
-  })
-  if (result.error) fail(`could not enable Windows system certificates: ${result.error.message}`)
-  process.exit(result.status ?? 1)
+  if (command !== 'check' || typeof app !== 'string' || !/^https:\/\//i.test(app)) return
+  reexecWithSystemCertificates()
 }
 
 useWindowsSystemCertificates(resolvedCommand, flags)
@@ -824,12 +983,8 @@ switch (resolvedCommand) {
   case '--help':
   case '-h': help(); break
   case undefined: {
-    const targetUrl = await promptWebsiteUrl()
-    if (!targetUrl) {
-      log('\nNo URL provided. Run `froam --help` for available commands.')
-      process.exit(0)
-    }
-    await dev({ app: targetUrl, open: true })
+    const { url, project } = await askForTarget()
+    await dev({ app: url.href, open: true, probed: true, project })
     break
   }
   default:
