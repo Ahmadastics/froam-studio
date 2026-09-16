@@ -1,6 +1,6 @@
 {
   "name": "@ahmadastic/froam",
-  "version": "8.3.0",
+  "version": "8.3.1",
   "description": "A visual editor for a running site or static HTML folder. Save supported revisions as a versioned design, generated override CSS, and a small content runtime.",
   "author": "Ahmad Modibbo <ahmadnuhu14@gmail.com>",
   "license": "FSL-1.1-MIT",
