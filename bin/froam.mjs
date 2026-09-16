@@ -32,6 +32,12 @@ import {
   writeArtifacts,
 } from '../lib/codegen.mjs'
 import { createBridgeServer, normalizeAppTarget } from '../lib/dev-server.mjs'
+import {
+  findFreePort,
+  normalizeTargetUrl,
+  promptWebsiteUrl,
+  resolveSafeWorkspaceDir,
+} from '../lib/launcher.mjs'
 
 const PACKAGE_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const CLI_ENTRY = fileURLToPath(import.meta.url)
@@ -159,16 +165,18 @@ function loadProjectConfig() {
   }
 }
 
-function resolveFroamDir(flagDir) {
+function resolveFroamDir(flagDir, appTarget = null) {
   if (flagDir) return path.resolve(cwd, flagDir)
   const config = loadProjectConfig()
   if (config.dir) return path.resolve(cwd, config.dir)
-  if (fs.existsSync(path.join(cwd, 'src', 'froam'))) return path.join(cwd, 'src', 'froam')
-  if (fs.existsSync(path.join(cwd, 'froam'))) return path.join(cwd, 'froam')
-  return fs.existsSync(path.join(cwd, 'src')) ? path.join(cwd, 'src', 'froam') : path.join(cwd, 'froam')
+  return resolveSafeWorkspaceDir({ targetUrl: appTarget, cwd })
 }
 
 function relDir(absDir) {
+  const home = os.homedir()
+  if (absDir.startsWith(home)) {
+    return '~' + absDir.slice(home.length).split(path.sep).join('/')
+  }
   const rel = path.relative(cwd, absDir)
   return rel === '' ? '.' : rel.split(path.sep).join('/')
 }
@@ -296,13 +304,16 @@ function init(flags) {
 }
 
 /* ── dev ─────────────────────────────────────────────────────── */
-function dev(flags) {
-  const port = Number(flags.port ?? flags.p ?? 4600)
-  const app = flags.app ?? flags.a ?? null
-  try {
-    normalizeAppTarget(app)
-  } catch (error) {
-    fail(error instanceof Error ? error.message : 'invalid app target')
+async function dev(flags) {
+  let app = flags.app ?? flags.a ?? null
+  let normalizedApp = null
+  if (app) {
+    try {
+      normalizedApp = normalizeTargetUrl(app)
+      app = normalizedApp.href
+    } catch (error) {
+      fail(error instanceof Error ? error.message : 'invalid app target')
+    }
   }
   const config = loadProjectConfig()
   let serveDir = flags.serve ?? flags.s ?? null
@@ -312,12 +323,15 @@ function dev(flags) {
   }
   if (serveDir) serveDir = path.resolve(cwd, String(serveDir))
 
-  const froamDir = resolveFroamDir(flags.dir)
+  const froamDir = resolveFroamDir(flags.dir, normalizedApp)
   ensureScaffold(froamDir, { glue: false })
 
   if (!fs.existsSync(EDITOR_BUNDLE)) {
     fail('editor bundle missing (dist/standalone/froam-editor.js) — reinstall @ahmadastic/froam or run `npm run build` inside it')
   }
+
+  const requestedPort = flags.port ?? flags.p
+  const port = requestedPort ? Number(requestedPort) : await findFreePort(4600)
 
   const { server, appTarget } = createBridgeServer({
     port,
@@ -335,7 +349,7 @@ function dev(flags) {
   const exposeHost = flags.host === true ? '0.0.0.0' : typeof flags.host === 'string' ? flags.host : null
 
   server.listen(port, exposeHost ?? '127.0.0.1', () => {
-    log(`${teal('◆')} ${bold('Froam Bridge')} ${dim(`v${packageVersion()}`)}`)
+    log(`${teal('◆')} ${bold('Froam Studio')} ${dim(`v${packageVersion()} · dev`)}`)
     log()
     if (appTarget) {
       log(`  ${bold('mode')}     proxy → ${teal(appTarget.origin)} ${dim('(editor injected into every page)')}`)
@@ -753,7 +767,8 @@ function resolveShorthand(command, args) {
   const looksLikeUrl = /^https?:\/\//i.test(command)
   const looksLikeHost = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(\/|$)/i.test(command)
   const looksLikePort = /^\d{2,5}$/.test(command)
-  if (looksLikeUrl || looksLikeHost || looksLikePort) {
+  const looksLikeDomain = /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?::\d+)?(\/.*)?$/.test(command)
+  if (looksLikeUrl || looksLikeHost || looksLikePort || looksLikeDomain) {
     return { command: 'dev', args: ['--app', command, '--open', ...args] }
   }
 
@@ -796,7 +811,7 @@ useWindowsSystemCertificates(resolvedCommand, flags)
 
 switch (resolvedCommand) {
   case 'init': init(flags); break
-  case 'dev': dev(flags); break
+  case 'dev': await dev(flags); break
   case 'build': build(flags); break
   case 'status': status(flags); break
   case 'check': await check(flags); break
@@ -807,8 +822,16 @@ switch (resolvedCommand) {
   case '-v': log(`froam v${packageVersion()}`); break
   case 'help':
   case '--help':
-  case '-h':
-  case undefined: help(); break
+  case '-h': help(); break
+  case undefined: {
+    const targetUrl = await promptWebsiteUrl()
+    if (!targetUrl) {
+      log('\nNo URL provided. Run `froam --help` for available commands.')
+      process.exit(0)
+    }
+    await dev({ app: targetUrl, open: true })
+    break
+  }
   default:
     log(`${BAD} unknown command: ${cmd}`)
     log()
