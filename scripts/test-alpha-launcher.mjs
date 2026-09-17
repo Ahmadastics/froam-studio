@@ -6,14 +6,17 @@ import path from 'node:path'
 import { Readable, Writable } from 'node:stream'
 
 import http from 'node:http'
+import { spawn } from 'node:child_process'
 
 import {
   describeTargetFailure,
   detectLocalProjects,
   findFreePort,
+  findProjectDirForPort,
   isFatalTargetFailure,
   isLocalhost,
   looksLikeProjectDir,
+  nearestProjectRoot,
   isPortAvailable,
   isSystemDirectory,
   isWritableDirectory,
@@ -23,6 +26,7 @@ import {
   PROMPT_BANNER,
   resolveSafeWorkspaceDir,
   sanitizeWorkspaceName,
+  windowsPathsIn,
 } from '../lib/launcher.mjs'
 
 const tests = []
@@ -281,6 +285,78 @@ test('detectLocalProjects finds a running dev server and labels it by page title
   }
 
   assert.deepEqual(await detectLocalProjects({ ports: [port] }), [], 'nothing running, nothing offered')
+})
+
+test('nearestProjectRoot walks out of node_modules to the project that owns it', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'froam-root-'))
+  const deep = path.join(project, 'node_modules', 'vite', 'bin')
+  fs.mkdirSync(deep, { recursive: true })
+  fs.writeFileSync(path.join(project, 'package.json'), '{"name":"my-app"}')
+  // The dependency has its own package.json — the wrong answer, one level closer
+  fs.writeFileSync(path.join(project, 'node_modules', 'vite', 'package.json'), '{"name":"vite"}')
+  fs.writeFileSync(path.join(deep, 'vite.js'), '// dev server')
+
+  try {
+    assert.equal(nearestProjectRoot(path.join(deep, 'vite.js')), project, 'skips the dependency')
+    assert.equal(nearestProjectRoot(project), project)
+    assert.equal(nearestProjectRoot(path.join(os.tmpdir(), 'froam-definitely-nothing-here')), null)
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  }
+})
+
+test('findProjectDirForPort locates the project a running dev server belongs to', async () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'froam-owner-'))
+  const binDir = path.join(project, 'node_modules', 'devserver', 'bin')
+  fs.mkdirSync(binDir, { recursive: true })
+  fs.writeFileSync(path.join(project, 'package.json'), '{"name":"owned-app"}')
+
+  const port = await findFreePort(4950)
+  const entry = path.join(binDir, 'serve.cjs')
+  fs.writeFileSync(entry, `require('node:http').createServer((q,s)=>{s.end('ok')}).listen(${port},'127.0.0.1')`)
+
+  const child = spawn(process.execPath, [entry], { stdio: 'ignore' })
+  try {
+    // Give the OS a moment to register the listening socket
+    await new Promise((resolve) => setTimeout(resolve, 1200))
+    const found = findProjectDirForPort(port)
+    assert.equal(
+      found && fs.realpathSync(found),
+      fs.realpathSync(project),
+      'a tester should never be asked where their own running project is',
+    )
+  } finally {
+    child.kill()
+    fs.rmSync(project, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
+  }
+})
+
+test('windowsPathsIn survives the spaces in a real Windows home folder', () => {
+  const project = path.join(os.tmpdir(), 'Ada Lovelace Projects', 'my portfolio site')
+  const entry = path.join(project, 'node_modules', 'vite', 'bin', 'vite.js')
+  fs.mkdirSync(path.dirname(entry), { recursive: true })
+  fs.writeFileSync(entry, '// dev server')
+
+  try {
+    // Unquoted argument containing two spaced segments — the normal Windows case
+    const found = windowsPathsIn(`"C:\\Program Files\\nodejs\\node.exe" ${entry} --port 3000`)
+    assert.ok(
+      found.includes(entry),
+      `stopping at the first space would truncate the path and lose the project\ngot: ${JSON.stringify(found)}`,
+    )
+
+    // Quoted form must work too
+    assert.ok(windowsPathsIn(`node "${entry}"`).includes(entry))
+  } finally {
+    fs.rmSync(path.join(os.tmpdir(), 'Ada Lovelace Projects'), {
+      recursive: true, force: true, maxRetries: 10, retryDelay: 200,
+    })
+  }
+})
+
+test('findProjectDirForPort admits when it cannot tell', () => {
+  // Nothing is listening here, so there is no project to find and no guess to make
+  assert.equal(findProjectDirForPort(39_914), null)
 })
 
 test('looksLikeProjectDir tells a project apart from wherever a terminal opened', () => {

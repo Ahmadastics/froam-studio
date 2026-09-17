@@ -56,8 +56,21 @@ npx @ahmadastic/froam ./public             # a static HTML folder
 ### Where your edits are saved
 
 Editing your own project writes a `froam/` workspace into that project, next to
-the code it belongs to. Froam asks where the project lives if your terminal is
-not already sitting in it.
+the code it belongs to.
+
+You do not have to tell Froam where the project is. It traces the port back to
+the process serving it, and that process back to the folder it was started from,
+then shows you the folder before creating anything:
+
+```text
+  Froam will save your edits here:
+    C:\Users\Ada\Desktop\my portfolio\froam
+  Enter to create it · n to keep them in your Froam folder · or paste another folder
+  [Y/n]
+```
+
+If a server cannot be traced — a container, or a language whose launcher hides
+the path — Froam asks rather than guessing.
 
 Editing a live site you do not have the source for writes to `~/Froam/<site>/`
 instead, so Froam never drops files into whatever directory your terminal

@@ -66,9 +66,30 @@ that explained, that is a finding.
 ```
 
 Froam scans the ports frameworks actually use, so a tester editing their own
-project presses `1` instead of knowing what a port is. The folder question is
-only asked when the terminal is not already sitting in the project — answer it
-and the design files land in the repo, press Enter and they stay in `~/Froam`.
+project presses `1` instead of knowing what a port is.
+
+It then works out where that project lives on disk — the port identifies the
+process, and the process identifies the folder — and shows it before writing
+anything:
+
+```
+  Website URL, or a number: 1
+
+  Connecting to http://localhost:3000 …
+
+  Froam will save your edits here:
+    C:\Users\Ada\Desktop\my portfolio\froam
+  Enter to create it · n to keep them in your Froam folder · or paste another folder
+  [Y/n]
+```
+
+Enter accepts. `n` keeps the edits in `~/Froam` and leaves the project untouched.
+Pasting a folder overrides the guess.
+
+The tester never hunts for a path, but Froam never writes into someone's
+repository without saying so first. If a server cannot be traced at all — a
+Docker container, or a runtime like Python whose launcher does not carry the
+project path — it asks for the folder outright rather than guessing.
 
 ---
 

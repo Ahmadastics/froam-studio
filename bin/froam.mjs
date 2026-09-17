@@ -37,6 +37,7 @@ import {
   describeTargetFailure,
   detectLocalProjects,
   findFreePort,
+  findProjectDirForPort,
   isFatalTargetFailure,
   isLocalhost,
   looksLikeProjectDir,
@@ -415,21 +416,61 @@ function warn(message, attempt, maxAttempts) {
  */
 async function askWhereProjectLives(prompter, url) {
   if (!isLocalhost(url)) return undefined
-  if (looksLikeProjectDir(cwd)) return cwd
 
-  const answer = await prompter.askLine(
-    `\n  ${bold('Where is this project on your computer?')}\n`
-    + `  ${dim('Paste the folder, or press Enter to keep the edits in your Froam folder.')}\n`
-    + '  Folder: ',
-  )
-  if (!answer) return null
+  // The OS knows which process owns the port, and that process knows where it
+  // lives — so the tester confirms a folder instead of hunting for one.
+  const port = Number(url.port || (url.protocol === 'https:' ? 443 : 80))
+  const guess = looksLikeProjectDir(cwd) ? cwd : findProjectDirForPort(port)
 
-  const folder = path.resolve(cwd, answer.trim().replace(/^["']|["']$/g, ''))
-  if (!fs.existsSync(folder)) {
-    log(`${WARN} No folder at ${folder} — keeping the edits in your Froam folder instead.`)
-    return null
+  let project = guess
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const answer = project
+      ? await confirmWorkspace(prompter, url, project)
+      : await prompter.askLine(
+        `\n  ${bold('Where should Froam save your edits?')}\n`
+        + `  ${dim('Paste your project folder, or press Enter to use your Froam folder.')}\n`
+        + '  Folder: ',
+      )
+
+    if (answer === CONFIRMED) return project
+    if (answer === DECLINED || (!answer && !project)) return null
+
+    const folder = path.resolve(cwd, String(answer).trim().replace(/^["']|["']$/g, ''))
+    if (fs.existsSync(folder)) {
+      project = folder
+      continue
+    }
+    log(`${WARN} There is no folder at ${folder}.`)
+    project = null
   }
-  return folder
+  return null
+}
+
+const CONFIRMED = Symbol('confirmed')
+const DECLINED = Symbol('declined')
+
+/**
+ * Show the folder Froam is about to create and take one keystroke for it.
+ *
+ * Froam writes into the tester's own repository, so it says where before it
+ * does, rather than acting on a guess that happened to be right. Enter accepts,
+ * `n` keeps the edits in ~/Froam, and a pasted path overrides.
+ *
+ * @returns {Promise<symbol | string>}
+ */
+async function confirmWorkspace(prompter, url, projectDir) {
+  const workspace = resolveSafeWorkspaceDir({ targetUrl: url, cwd: projectDir, create: false })
+
+  const answer = (await prompter.askLine(
+    `\n  ${bold('Froam will save your edits here:')}\n`
+    + `    ${teal(workspace)}\n`
+    + `  ${dim('Enter to create it · n to keep them in your Froam folder · or paste another folder')}\n`
+    + '  [Y/n] ',
+  )).trim()
+
+  if (!answer || /^(y|yes)$/i.test(answer)) return CONFIRMED
+  if (/^(n|no)$/i.test(answer)) return DECLINED
+  return answer
 }
 
 /**

@@ -24,7 +24,16 @@ const READY = 'Ctrl+C to stop'
  * Run the CLI and stop it as soon as the bridge is up, so a gate measures
  * "did Froam start" rather than "did the test wait long enough".
  */
-function runCli({ args = [], cwd = process.cwd(), input = null, timeoutMs = 25_000 }) {
+/**
+ * Somewhere harmless to run from.
+ *
+ * Never the repo: Froam treats a folder with a package.json as a project and
+ * would write a workspace into it, which for this repository means overwriting
+ * the committed src/froam design files.
+ */
+const NEUTRAL_CWD = fs.mkdtempSync(path.join(os.tmpdir(), 'froam-gate-cwd-'))
+
+function runCli({ args = [], cwd = NEUTRAL_CWD, input = null, timeoutMs = 25_000 }) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [CLI_PATH, ...args], {
       cwd,
@@ -71,14 +80,43 @@ function makeProject() {
   return dir
 }
 
-function startLocalProject() {
-  const server = http.createServer((req, res) => {
-    res.writeHead(200, { 'content-type': 'text/html' })
-    res.end('<html><body><h1>local project</h1></body></html>')
-  })
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port }))
-  })
+/**
+ * Start a dev server the way a tester's really runs: a separate process, owned
+ * by its own project folder.
+ *
+ * It must not be served from inside this script. Froam now traces a port back to
+ * the project that owns it, and an in-process server would trace back to the
+ * froam-studio repo — making the gates pass for the wrong reason and writing a
+ * froam/ workspace into this repository.
+ */
+async function startLocalProject({ port = 0, title = 'local project' } = {}) {
+  const project = makeProject()
+  const binDir = path.join(project, 'node_modules', 'devserver', 'bin')
+  fs.mkdirSync(binDir, { recursive: true })
+
+  const chosen = port || 4000 + Math.floor(Math.random() * 900)
+  const entry = path.join(binDir, 'serve.cjs')
+  fs.writeFileSync(entry, `require('node:http').createServer((q, s) => {
+    s.writeHead(200, { 'content-type': 'text/html' })
+    s.end('<html><head><title>${title}</title></head><body><h1>hi</h1></body></html>')
+  }).listen(${chosen}, '127.0.0.1')`)
+
+  const child = spawn(process.execPath, [entry], { stdio: 'ignore' })
+  await new Promise((resolve) => setTimeout(resolve, 1200))
+
+  return {
+    port: chosen,
+    project,
+    server: {
+      // Takes an optional callback so it can stand in for an http.Server,
+      // whose close(cb) callers await.
+      close(done) {
+        child.kill()
+        removeDir(project)
+        if (typeof done === 'function') done()
+      },
+    },
+  }
 }
 
 const gates = []
@@ -136,34 +174,74 @@ gate('a local project keeps its edits in the project (Repo Mode)', async () => {
   }
 })
 
-gate('a running local project is offered by number, and its edits land in it', async () => {
-  // Port 3000 is what a tester's project is most likely to be on
-  const site = http.createServer((req, res) => {
-    res.writeHead(200, { 'content-type': 'text/html' })
-    res.end('<html><head><title>My Portfolio</title></head><body>hi</body></html>')
-  })
-  const listening = await new Promise((resolve) => {
-    site.once('error', () => resolve(false))
-    site.listen(3000, '127.0.0.1', () => resolve(true))
-  })
-  if (!listening) {
+gate('a running project is offered by number, and its folder is found and confirmed', async () => {
+  // Port 3000 is where a tester's project most likely is, and what they will press 1 for
+  let running
+  try {
+    running = await startLocalProject({ port: 3000, title: 'My Portfolio' })
+  } catch {
     console.log('  skip (port 3000 is already in use on this machine)')
     return
   }
 
+  const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), 'froam-elsewhere-'))
+  try {
+    // A tester standing in a folder that is not their project: pick, then Enter.
+    const res = await runCli({ args: [], cwd: elsewhere, input: '1\n\n' })
+    assert.match(res.stdout, /Already running on this computer/, 'lists what is running')
+    assert.match(res.stdout, /1\s+localhost:3000\s+My Portfolio/, 'names the project')
+    assert.ok(res.started, `bridge never started:\n${res.stdout}\n${res.stderr}`)
+
+    // It works the folder out, but says so before writing into someone's repo
+    assert.match(res.stdout, /Froam will save your edits here/, 'shows the folder first')
+    assert.match(
+      res.stdout,
+      new RegExp(running.project.replace(/[\\^$*+?.()|[\]{}]/g, '\\$&')),
+      'the folder it offers is the one that owns the port',
+    )
+    assert.match(res.stdout, /\[Y\/n\]/, 'one keystroke accepts it')
+    assert.ok(
+      fs.existsSync(path.join(running.project, 'froam')),
+      'edits land in the project that owns the port',
+    )
+    assert.deepEqual(fs.readdirSync(elsewhere), [], 'nothing is written where the terminal happened to be')
+  } finally {
+    running.server.close()
+    removeDir(elsewhere)
+  }
+})
+
+gate('declining the folder keeps a tester out of their own repo', async () => {
+  let running
+  try {
+    running = await startLocalProject({ port: 3000, title: 'My Portfolio' })
+  } catch {
+    console.log('  skip (port 3000 is already in use on this machine)')
+    return
+  }
+
+  try {
+    const res = await runCli({ args: [], input: '1\nn\n' })
+    assert.ok(res.started, `bridge never started:\n${res.stdout}\n${res.stderr}`)
+    assert.match(res.stdout, /Froam[\\/]localhost-3000/, 'n sends the edits to the Froam folder')
+    assert.ok(
+      !fs.existsSync(path.join(running.project, 'froam')),
+      'n must leave the project untouched',
+    )
+  } finally {
+    running.server.close()
+  }
+})
+
+gate('a project Froam cannot trace still gets asked for, not guessed at', async () => {
+  // Nothing is listening, so there is no owning process and no folder to find
   const project = makeProject()
   const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), 'froam-elsewhere-'))
   try {
-    // A tester in a folder that is not their project: pick 1, then say where it lives
-    const res = await runCli({ args: [], cwd: elsewhere, input: `1\n${project}\n` })
-    assert.match(res.stdout, /Already running on this computer/, 'lists what is running')
-    assert.match(res.stdout, /1\s+localhost:3000\s+My Portfolio/, 'names the project')
-    assert.match(res.stdout, /Where is this project on your computer\?/, 'asks where it lives')
-    assert.ok(res.started, `bridge never started:\n${res.stdout}\n${res.stderr}`)
-    assert.ok(fs.existsSync(path.join(project, 'froam')), 'edits land in the project')
-    assert.deepEqual(fs.readdirSync(elsewhere), [], 'nothing is written where the terminal happened to be')
+    const res = await runCli({ args: [], cwd: elsewhere, input: 'localhost:39918\n\n' })
+    assert.match(res.stderr + res.stdout, /Nothing is running at/, 'says the project is not up')
+    assert.doesNotMatch(res.stdout, /found this project at/, 'never claims a folder it did not find')
   } finally {
-    site.close()
     removeDir(project)
     removeDir(elsewhere)
   }
@@ -233,8 +311,9 @@ gate('the advanced CLI still works', async () => {
   const project = makeProject()
   const { server, port } = await startLocalProject()
   // Claim a port, then hand it over, so --port is tested against one that is free here
-  const { server: spare, port: bridgePort } = await startLocalProject()
-  await new Promise((resolve) => spare.close(resolve))
+  const spare = await startLocalProject()
+  const bridgePort = spare.port
+  spare.server.close()
   try {
     const explicit = await runCli({
       args: ['dev', '--app', `http://localhost:${port}`, '--port', String(bridgePort), '--dir', 'custom-froam'],
