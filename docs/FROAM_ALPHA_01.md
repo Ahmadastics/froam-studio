@@ -24,6 +24,14 @@ Everything else — billing, accounts, teams, cloud storage — is out of scope.
 >
 > Copy that line rather than typing it — the `@` at the front matters.
 >
+> **If you get a red error mentioning `AppData\Roaming\npm`**, that is a bug in
+> npm itself on machines that have never installed a Node tool before. Paste
+> this once, then run the command above again:
+>
+> ```
+> New-Item -ItemType Directory -Force "$env:APPDATA\npm" | Out-Null
+> ```
+>
 > Paste the address of the website you want to edit. Froam opens it for you.
 >
 > Editing your own project instead? Start it the way you normally do
@@ -166,6 +174,24 @@ Do not publish until every box is ticked.
 Ask for: the exact command they ran, everything the terminal printed, and what
 they were trying to do. Do not ask them to add flags — a needed flag is a bug in
 this alpha.
+
+### `ENOENT ... lstat 'C:\Users\<name>\AppData\Roaming\npm'`
+
+npm failing on itself, before Froam is downloaded. `npx` stats its own global
+package directory without creating it, so any Windows machine where nobody has
+ever run `npm install -g` dies here. Nothing in this package can help — our code
+never runs.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:APPDATA\npm" | Out-Null
+```
+
+Then the normal command works. Updating npm (`npm install -g npm@latest`) also
+fixes it and is worth doing on a machine you control, but the line above is
+instant and cannot fail.
+
+Expect this on fresh laptops. It is the most likely first-contact failure for a
+tester who is not already a Node developer.
 
 ### It loaded, then nothing happened
 
