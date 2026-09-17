@@ -22,6 +22,8 @@ Everything else — billing, accounts, teams, cloud storage — is out of scope.
 > npx @ahmadastic/froam
 > ```
 >
+> Copy that line rather than typing it — the `@` at the front matters.
+>
 > Paste the address of the website you want to edit. Froam opens it for you.
 >
 > Editing your own project instead? Start it the way you normally do
@@ -164,3 +166,18 @@ Do not publish until every box is ticked.
 Ask for: the exact command they ran, everything the terminal printed, and what
 they were trying to do. Do not ask them to add flags — a needed flag is a bug in
 this alpha.
+
+### It loaded, then nothing happened
+
+Check the `@` first. `npx ahmadastic/froam` — no `@` — is not this package. npm
+reads `owner/name` as a GitHub repository and tries to clone it over SSH, so it
+hangs on a host-key prompt or a missing SSH key. Froam never starts, which is
+why there is no Froam error to read. Nothing in this package can catch that; it
+happens before our code runs.
+
+The other thing worth checking on a borrowed laptop:
+
+```
+node --version                    # 18 or newer
+npx @ahmadastic/froam version     # should print froam v8.3.0
+```
