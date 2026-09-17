@@ -16,7 +16,8 @@ Everything else — billing, accounts, teams, cloud storage — is out of scope.
 >
 > You need Node.js installed (nodejs.org, the LTS button).
 >
-> Open PowerShell (Windows) or Terminal (Mac/Linux) and run:
+> Open **Command Prompt** (Windows — press Start, type `cmd`, hit Enter) or
+> Terminal (Mac/Linux) and run:
 >
 > ```
 > npx @ahmadastic/froam
@@ -169,11 +170,47 @@ Do not publish until every box is ticked.
 
 ---
 
+## Getting to the prompt is the fragile part, not Froam
+
+Three test machines produced three different failures, and **every one of them
+happened before a line of Froam ran**: a missing `@`, npm's own missing global
+directory, and PowerShell's execution policy. The CLI was never the problem.
+
+Budget your support time accordingly. A tester who reports "it didn't work" has
+most likely not reached Froam at all, so ask for the terminal output before
+assuming anything about the editor. All three failures are below and each takes
+under a minute to clear.
+
+If a fourth distinct `npx` failure turns up, stop patching the invite and ship a
+downloadable launcher instead — at that point `npx` is costing more than it is
+saving.
+
 ## If a tester gets stuck
 
 Ask for: the exact command they ran, everything the terminal printed, and what
 they were trying to do. Do not ask them to add flags — a needed flag is a bug in
 this alpha.
+
+### `npx.ps1 cannot be loaded because running scripts is disabled`
+
+PowerShell's execution policy, on Windows' default `Restricted` setting. npm
+ships `npx`, `npx.cmd` and `npx.ps1`; PowerShell reaches for the `.ps1` and
+refuses it. Nothing to do with Froam.
+
+**Use Command Prompt instead** — Start, type `cmd`, Enter. It has no execution
+policy, needs no admin rights, and changes nothing on their machine. This is why
+the invite says Command Prompt rather than PowerShell.
+
+If they insist on PowerShell, naming the other shim also works and is equally
+harmless:
+
+```powershell
+npx.cmd @ahmadastic/froam
+```
+
+Do **not** talk a tester through `Set-ExecutionPolicy`. It works, but it weakens
+a security setting on a machine you do not own, to solve a problem that two
+harmless alternatives already solve.
 
 ### `ENOENT ... lstat 'C:\Users\<name>\AppData\Roaming\npm'`
 
