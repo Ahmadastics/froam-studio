@@ -45,4 +45,9 @@ export * from './responsive';
 export * from './screenshot-reconstruction';
 export * from './reference-intelligence';
 export * from './reference-build';
+export * from './page-profile';
+export * from './judge-deterministic';
+export * from './judge-priors';
+export * from './judge';
+export * from './degrade';
 //# sourceMappingURL=index.d.ts.map
