@@ -1,6 +1,6 @@
 export const FROAM_PRETEXT_VERSION = 'froam-pretext-v1';
 export const FROAM_SECTION_ARCHETYPES = [
-    'hero', 'proof', 'feature-grid', 'split', 'testimonial', 'pricing', 'faq', 'cta', 'footer', 'unknown',
+    'hero', 'proof', 'feature-grid', 'split', 'testimonial', 'pricing', 'faq', 'cta', 'content', 'footer', 'unknown',
 ];
 const DENSITIES = ['tight', 'balanced', 'airy'];
 // ── generators ──────────────────────────────────────────────────────────────

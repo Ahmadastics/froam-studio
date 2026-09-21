@@ -52,7 +52,7 @@ export type FroamPretextTask = {
 }
 
 export const FROAM_SECTION_ARCHETYPES: readonly FroamSectionArchetype[] = [
-  'hero', 'proof', 'feature-grid', 'split', 'testimonial', 'pricing', 'faq', 'cta', 'footer', 'unknown',
+  'hero', 'proof', 'feature-grid', 'split', 'testimonial', 'pricing', 'faq', 'cta', 'content', 'footer', 'unknown',
 ]
 
 const DENSITIES = ['tight', 'balanced', 'airy'] as const

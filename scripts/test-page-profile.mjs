@@ -25,7 +25,7 @@ function node(input) {
     rect = { x: 0, y: 0, width: 100, height: 40 },
     background = 'rgba(0, 0, 0, 0)', color = 'rgb(17, 17, 17)',
     fontSize = '16px', fontWeight = '400', lineHeight = '24px', fontFamily = 'Inter',
-    padding = '0px', margin = '0px', gap = 0, display = 'block',
+    padding = '0px', margin = '0px', gap = 0, display = 'block', position = 'static',
     borderRadius = '0px', boxShadow = 'none', border = '0px none',
     gridTemplateColumns = 'none', visible = true, warnings = [], focusable = false,
   } = input
@@ -39,7 +39,7 @@ function node(input) {
     signals: [
       { kind: 'identity', origin: 'observed', source: 'dom', values: { nodeId: id, path: `/${id}` } },
       { kind: 'structure', origin: 'observed', source: 'dom', values: { parentNodeId: parentId, childNodeIds: childIds, tag, signature: `${tag}|${role}|${display}` } },
-      { kind: 'layout', origin: 'observed', source: 'computed-style', values: { display, padding, margin, gapPx: gap, gridTemplateColumns, rect } },
+      { kind: 'layout', origin: 'observed', source: 'computed-style', values: { display, position, padding, margin, gapPx: gap, gridTemplateColumns, rect } },
       { kind: 'appearance', origin: 'observed', source: 'computed-style', values: { color, backgroundColor: background, fontFamily, fontSize, fontWeight, lineHeight, borderRadius, boxShadow, border } },
       { kind: 'semantics', origin: 'observed', source: 'dom', values: { role, textContent: text } },
       { kind: 'behavior', origin: 'observed', source: 'runtime', values: { focusable } },
@@ -304,6 +304,114 @@ test('component families report spacing variance across their instances', () => 
   assert.ok(cards, 'expected the three cards to form a family')
   assert.equal(cards.instances, 3)
   assert.equal(cards.variance, 0, 'identical cards must show zero variance')
+})
+
+/**
+ * The structure a real SPA actually produces, which is what broke the first two
+ * versions of section detection: two framework wrappers, a fixed header, a
+ * `<main>` holding the sections, and a `<footer>` that is main's sibling rather
+ * than its child.
+ */
+function spaPage() {
+  const records = [
+    node({ id: 'body', tag: 'body', childIds: ['shell'], rect: { x: 0, y: 0, width: 1440, height: 6200 }, background: 'rgb(255, 255, 255)' }),
+    node({ id: 'shell', tag: 'div', parentId: 'body', childIds: ['app'], rect: { x: 0, y: 0, width: 1440, height: 6200 } }),
+    node({ id: 'app', tag: 'div', parentId: 'shell', childIds: ['lava', 'header', 'main', 'footer'], rect: { x: 0, y: 0, width: 1440, height: 6200 } }),
+    // Out of flow: a fixed header and a full-bleed absolute background layer.
+    node({ id: 'lava', tag: 'div', parentId: 'app', rect: { x: 0, y: 0, width: 1440, height: 6200 }, position: 'absolute', background: 'rgb(255, 65, 56)' }),
+    node({ id: 'header', tag: 'header', parentId: 'app', childIds: [], rect: { x: 0, y: 0, width: 1440, height: 77 }, position: 'fixed' }),
+    node({ id: 'main', tag: 'main', parentId: 'app', childIds: ['s0', 's1', 's2', 's3'], rect: { x: 0, y: 0, width: 1440, height: 5800 } }),
+    node({ id: 'footer', tag: 'footer', role: 'footer', parentId: 'app', childIds: [], rect: { x: 0, y: 5800, width: 1440, height: 400 }, padding: '32px' }),
+  ]
+  const heights = [1200, 1500, 1600, 1500]
+  let y = 0
+  heights.forEach((height, index) => {
+    records.push(node({
+      id: `s${index}`, tag: 'section', parentId: 'main', childIds: [`h${index}`, `p${index}`],
+      rect: { x: 0, y, width: 1440, height }, position: 'relative', padding: '32px',
+    }))
+    records.push(node({ id: `h${index}`, tag: 'h2', role: 'heading', parentId: `s${index}`, text: `Heading ${index}`, rect: { x: 0, y: y + 40, width: 1100, height: 50 }, fontSize: '31px', fontWeight: '700' }))
+    records.push(node({ id: `p${index}`, tag: 'p', role: 'paragraph', parentId: `s${index}`, text: 'P'.repeat(120), rect: { x: 0, y: y + 110, width: 700, height: 60 } }))
+    y += height
+  })
+  return records
+}
+
+test('sections are found through framework wrappers at differing depths', () => {
+  // Four <section> inside <main>, plus a <footer> that is main's sibling. Reading
+  // the direct children of any single parent cannot produce this.
+  const profile = profileOf(spaPage())
+  assert.equal(profile.flow.sections.length, 5, `expected 4 sections plus the footer, got ${profile.flow.signature}`)
+  assert.equal(profile.flow.sections[4].archetype, 'footer')
+})
+
+test('<main> is a container of sections, never a section', () => {
+  // This exact mistake reported two sections on a real eight-section page: the
+  // walk matched <main> as a landmark, stopped, and never looked inside.
+  const profile = profileOf(spaPage())
+  assert.ok(profile.flow.sections.length > 1, 'main was treated as a single section')
+  assert.ok(profile.flow.sections.every((section) => section.heightRatio < 0.9), 'a section covering the whole page is main in disguise')
+})
+
+test('out-of-flow layers are neither sections nor evidence against tiling', () => {
+  // A position:fixed header and an absolute full-bleed background overlap every
+  // section beneath them. Counted, they sink the tiling score and no section is
+  // ever found.
+  const profile = profileOf(spaPage())
+  const withoutLayers = profileOf(spaPage().filter((record) => !['lava', 'header'].includes(record.node.nodeId)))
+  assert.equal(profile.flow.sections.length, withoutLayers.flow.sections.length, 'out-of-flow layers changed the section count')
+})
+
+test('a real footer is classified from its own tag, not its children', () => {
+  // The classifier previously looked for a footer role among a section's
+  // children, where it can never appear, so real footers came back as 'proof'.
+  const profile = profileOf(spaPage())
+  const last = profile.flow.sections[profile.flow.sections.length - 1]
+  assert.equal(last.archetype, 'footer')
+  assert.ok(last.confidence > 0.9, 'a footer tag is the strongest signal available')
+})
+
+test('a heading over prose is content, not unknown', () => {
+  const profile = profileOf(spaPage())
+  const middle = profile.flow.sections.slice(0, 4)
+  assert.ok(middle.every((section) => section.archetype !== 'unknown'), `left sections unlabelled: ${profile.flow.signature}`)
+  assert.ok(middle.some((section) => section.archetype === 'content'))
+})
+
+test('the same colour used as fill and as text appears once, not twice', () => {
+  const records = coherentPage()
+  // The accent as link text as well as a button background — one token, two uses.
+  records.push(node({ id: 'accentLink', tag: 'a', role: 'unknown', parentId: 'footer', text: 'Learn more', rect: { x: 300, y: 1420, width: 120, height: 32 }, color: 'rgb(230, 57, 70)', focusable: true }))
+  const footer = records.find((record) => record.node.nodeId === 'footer')
+  footer.signals.find((signal) => signal.kind === 'structure').values.childNodeIds = ['fl', 'accentLink']
+  const profile = profileOf(records)
+  const accents = profile.color.palette.filter((entry) => entry.role === 'accent')
+  assert.equal(accents.length, 1, `the accent was listed ${accents.length} times`)
+  assert.ok(accents[0].appearsOn.includes('cta'), 'merging must union the roles it was seen on')
+})
+
+test('text stronger than ink is ink, not muted', () => {
+  const records = coherentPage()
+  // A near-black wordmark on a page whose dominant text is a lighter grey.
+  for (let index = 0; index < 8; index += 1) {
+    records.push(node({ id: `grey${index}`, tag: 'p', role: 'paragraph', parentId: 'footer', text: 'G'.repeat(400), color: 'rgb(84, 89, 93)', rect: { x: 0, y: 1500 + index * 30, width: 900, height: 28 } }))
+  }
+  records.push(node({ id: 'wordmark', tag: 'span', role: 'unknown', parentId: 'footer', text: 'Run Am', color: 'rgb(0, 0, 0)', rect: { x: 0, y: 1460, width: 120, height: 24 } }))
+  const profile = profileOf(records)
+  const black = profile.color.palette.find((entry) => entry.hex === '#000000')
+  assert.ok(black, 'the wordmark colour is missing from the palette')
+  assert.notEqual(black.role, 'muted', 'the darkest text on the page cannot be the quiet one')
+  assert.equal(black.role, 'ink')
+})
+
+test('text below 10px is excluded from the scale but reported', () => {
+  const records = coherentPage()
+  for (const [index, size] of ['6px', '8px', '9px'].entries()) {
+    records.push(node({ id: `tiny${index}`, tag: 'span', role: 'unknown', parentId: 'footer', text: 'x', rect: { x: index * 20, y: 1480, width: 12, height: 12 }, fontSize: size }))
+  }
+  const profile = profileOf(records)
+  assert.ok(!profile.type.scale.some((step) => step.px < 10), `sub-10px sizes leaked into the scale: ${profile.type.scale.map((step) => step.px).join(', ')}`)
+  assert.equal(profile.type.belowMinimumSizes, 3, 'excluded text must still be counted')
 })
 
 test('section flow is ordered by position and ends at the footer', () => {

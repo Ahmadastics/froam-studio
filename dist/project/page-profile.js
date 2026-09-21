@@ -1,6 +1,8 @@
 export const FROAM_PAGE_PROFILE_SCHEMA_VERSION = 1;
 /** Roles that represent a user action. Accent discipline is measured against these. */
 export const FROAM_ACTION_ROLES = ['cta', 'button', 'input', 'form'];
+/** Smallest font size treated as a type-scale step. Below this it is decoration. */
+export const FROAM_MIN_TYPE_PX = 10;
 /** WCAG 2.5.8 AA minimum target size, in CSS pixels. */
 export const FROAM_MIN_TARGET_PX = 24;
 // ── colour ──────────────────────────────────────────────────────────────────
@@ -127,6 +129,7 @@ function toNodeViews(records) {
             border: String(appearance.border ?? ''),
             padding: String(layout.padding ?? ''),
             margin: String(layout.margin ?? ''),
+            position: String(layout.position ?? 'static'),
             gap: num(layout.gapPx ?? layout.gap),
             display: String(layout.display ?? ''),
             gridTemplateColumns: String(layout.gridTemplateColumns ?? 'none'),
@@ -255,11 +258,152 @@ const median = (values) => {
 function parseLengths(value) {
     return value.split(/\s+/).map((part) => Number.parseFloat(part)).filter((part) => Number.isFinite(part) && part > 0);
 }
+// ── section resolution ──────────────────────────────────────────────────────
+/**
+ * Landmark tags that *are* a section and are never exploded into their parts.
+ *
+ * `main` is deliberately absent. It is a container *of* sections, and treating
+ * it as one is precisely why a real page reported two sections instead of eight:
+ * the walk reached `<main>`, matched it as a landmark, stopped, and never looked
+ * at the seven `<section>` elements inside it.
+ */
+const SECTION_TAGS = new Set(['section', 'header', 'footer', 'article', 'aside', 'nav']);
+/** Container landmarks: never a section, always exploded. */
+const BAND_TAGS = new Set(['main', 'body']);
+/**
+ * Out-of-flow positioning. These never partition anything, so they are neither
+ * sections nor evidence against tiling — a fixed header and an absolutely
+ * positioned background layer both overlap every section beneath them, which
+ * would otherwise sink the tiling score and prevent any explosion at all.
+ * `sticky` stays in flow and is not excluded.
+ */
+const OUT_OF_FLOW = new Set(['fixed', 'absolute']);
+/** Sections are full-bleed relative to the document. */
+const SECTION_MIN_WIDTH_SHARE = 0.55;
+/** Below this share of document height a full-width block is content, not a section. */
+const SECTION_MIN_HEIGHT_SHARE = 0.02;
+const SECTION_MIN_HEIGHT_PX = 56;
+/** More children than this is a list or a card grid, not a section stack. */
+const SECTION_MAX_BAND_CHILDREN = 14;
+const SECTION_MAX_DEPTH = 14;
+/**
+ * Find a page's sections.
+ *
+ * Real pages nest, and they do not nest uniformly. Beneath `<body>` sit a
+ * framework mount, a theme provider and a layout shell before anything that
+ * resembles a section; sections then appear at different depths, because a hero
+ * might be a direct child of the shell while three feature blocks sit inside a
+ * container and the footer is a sibling of all of it.
+ *
+ * Reading the direct children of any single parent therefore cannot work. The
+ * first version of this walked down to one "section parent" and found a single
+ * section on every real page, silently emptying the flow axis and with it three
+ * of the six pretext tasks.
+ *
+ * What actually identifies a section stack is **vertical tiling**: sections
+ * partition the height of what contains them, edge to edge, with little overlap.
+ * That property survives arbitrary nesting, so this walks the tree deciding at
+ * each node whether it *is* a section or is a band that should be exploded into
+ * the sections beneath it.
+ */
+export function resolveSections(documentRoot, childrenOf) {
+    if (!documentRoot)
+        return [];
+    const documentHeight = documentRoot.rect.height || 1;
+    const documentWidth = documentRoot.rect.width || 1;
+    const minHeight = Math.max(SECTION_MIN_HEIGHT_PX, documentHeight * SECTION_MIN_HEIGHT_SHARE);
+    const qualifies = (view) => view.visible
+        && !OUT_OF_FLOW.has(view.position)
+        && view.rect.height >= minHeight
+        && view.rect.width >= documentWidth * SECTION_MIN_WIDTH_SHARE;
+    /** Collapse a wrapper chain: a node whose single qualifying child is essentially all of it. */
+    const unwrap = (view) => {
+        let cursor = view;
+        for (let depth = 0; depth < SECTION_MAX_DEPTH; depth += 1) {
+            if (SECTION_TAGS.has(cursor.tag))
+                return cursor;
+            const qualifying = childrenOf(cursor).filter(qualifies);
+            if (qualifying.length !== 1)
+                return cursor;
+            const only = qualifying[0];
+            if (only.rect.height < cursor.rect.height * 0.9)
+                return cursor;
+            cursor = only;
+        }
+        return cursor;
+    };
+    /**
+     * How well a node's children tile it vertically.
+     *
+     * Coverage alone would accept a hero whose headline and paragraph happen to be
+     * full width. The overlap term is what rejects layered or absolutely
+     * positioned children, which do not partition anything.
+     */
+    const tiling = (view, children) => {
+        if (children.length < 2)
+            return 0;
+        const ordered = [...children].sort((a, b) => a.rect.y - b.rect.y);
+        const height = view.rect.height || 1;
+        let covered = 0;
+        let overlap = 0;
+        let previousBottom = -Infinity;
+        for (const child of ordered) {
+            covered += child.rect.height;
+            if (child.rect.y < previousBottom)
+                overlap += Math.min(previousBottom - child.rect.y, child.rect.height);
+            previousBottom = Math.max(previousBottom, child.rect.y + child.rect.height);
+        }
+        return Math.max(0, Math.min(1, covered / height) - overlap / height);
+    };
+    const sections = [];
+    const queue = [{ view: documentRoot, depth: 0 }];
+    const seen = new Set();
+    while (queue.length) {
+        const { view, depth } = queue.shift();
+        const resolved = unwrap(view);
+        if (seen.has(resolved.id))
+            continue;
+        seen.add(resolved.id);
+        const children = childrenOf(resolved).filter(qualifies);
+        const tilesWell = tiling(resolved, children) >= 0.7;
+        // A landmark tag settles it: <section> is a section, however its insides
+        // happen to be laid out. Everything else is a band only if its children
+        // genuinely partition it and there are not so many that this is a list.
+        const isBand = BAND_TAGS.has(resolved.tag)
+            || (!SECTION_TAGS.has(resolved.tag)
+                && children.length >= 2
+                && children.length <= SECTION_MAX_BAND_CHILDREN
+                && tilesWell
+                && depth < SECTION_MAX_DEPTH);
+        if (isBand || resolved === documentRoot) {
+            // The document root is always a band — it is the page, not a section. If
+            // its children do not tile it, fall through so a thin page still reports
+            // whatever full-width blocks it has rather than nothing at all.
+            if (children.length) {
+                for (const child of children)
+                    queue.push({ view: child, depth: depth + 1 });
+                continue;
+            }
+            if (resolved === documentRoot)
+                continue;
+        }
+        if (qualifies(resolved) && resolved !== documentRoot)
+            sections.push(resolved);
+    }
+    return sections.sort((a, b) => a.rect.y - b.rect.y);
+}
 // ── section flow ────────────────────────────────────────────────────────────
 function classifySection(childRoles, input) {
     const has = (role) => childRoles.includes(role);
-    if (input.index === input.total - 1 && (has('footer') || input.linkDensity > 0.35))
-        return { archetype: 'footer', confidence: has('footer') ? 0.9 : 0.55 };
+    // The element's own tag is the strongest signal available and was previously
+    // ignored entirely: a real `<footer>` came back as 'proof' because the check
+    // looked for a footer role among its *children*, where it will never be.
+    if (input.ownTag === 'footer')
+        return { archetype: 'footer', confidence: 0.95 };
+    if (input.ownTag === 'header' || input.ownTag === 'nav')
+        return { archetype: 'unknown', confidence: 0 };
+    if (input.index === input.total - 1 && input.linkDensity > 0.35)
+        return { archetype: 'footer', confidence: 0.55 };
     if (input.index === 0 && has('heading') && (has('cta') || has('button')) && input.heightRatio > 0.15)
         return { archetype: 'hero', confidence: 0.72 };
     if (input.cardCount >= 3 && input.columns >= 2)
@@ -272,6 +416,19 @@ function classifySection(childRoles, input) {
         return { archetype: 'cta', confidence: 0.48 };
     if (has('media') && !has('heading'))
         return { archetype: 'proof', confidence: 0.35 };
+    // A heading over prose is the most common section on the web and deserves a
+    // name. Reporting six of eight sections as 'unknown' is not humility, it is a
+    // missing label — and it starves every pretext task that reads archetypes.
+    //
+    // Deliberately structural rather than density-based. A first version gated on
+    // characters per 1000px², which is an invented unit with an arbitrary cutoff:
+    // it labelled a text-heavy real page correctly and left an identically shaped
+    // sparse one unlabelled. What makes a content section is having a heading and
+    // prose, not how much prose.
+    if (has('heading') && has('paragraph'))
+        return { archetype: 'content', confidence: 0.45 };
+    if (has('heading'))
+        return { archetype: 'content', confidence: 0.3 };
     return { archetype: 'unknown', confidence: 0 };
 }
 export function buildPageProfile(input) {
@@ -341,12 +498,30 @@ export function buildPageProfile(input) {
             role = 'ink';
         else if (cluster.channel === 'background')
             role = 'raised';
-        // Muted is text that reads quieter than ink in the same direction. Text on
-        // the far side of the surface is inverse text sitting on a dark or accent
-        // panel — calling white-on-red "muted" would be backwards.
+        // Text painted in the accent colour is the accent — a link, typically.
+        // Because clustering is per-channel, the same hue arrives twice: once as a
+        // button background and once as link text. Labelling the second one 'muted'
+        // put the identical hex in the palette under two contradictory roles, and
+        // the design brief then told a model that #3366cc was both the quiet colour
+        // and the loud one.
+        else if (cluster.channel === 'text' && accentCluster
+            && Math.hypot(cluster.lab.L - accentCluster.lab.L, cluster.lab.a - accentCluster.lab.a, cluster.lab.b - accentCluster.lab.b) <= OKLAB_MERGE_THRESHOLD) {
+            role = 'accent';
+        }
+        // Muted means quieter than ink, which requires sitting *between* surface and
+        // ink — not merely on the same side of the surface. Wikipedia exposed the
+        // difference: its dominant readable text is #54595d, correctly chosen as ink,
+        // but the darker #202122 used on the wordmark then came back as 'muted'
+        // despite being the strongest text on the page. Anything at or beyond ink is
+        // ink; anything past the surface is inverse text on a dark panel.
         else if (cluster.channel === 'text') {
-            const sameSideAsInk = inkDarkerThanSurface ? cluster.lab.L < surfaceLightness : cluster.lab.L > surfaceLightness;
-            role = sameSideAsInk ? 'muted' : 'other';
+            if (!inkCluster)
+                role = 'muted';
+            else {
+                const beyondSurface = inkDarkerThanSurface ? cluster.lab.L >= surfaceLightness : cluster.lab.L <= surfaceLightness;
+                const atLeastAsStrongAsInk = inkDarkerThanSurface ? cluster.lab.L <= inkCluster.lab.L : cluster.lab.L >= inkCluster.lab.L;
+                role = beyondSurface ? 'other' : atLeastAsStrongAsInk ? 'ink' : 'muted';
+            }
         }
         return {
             oklch,
@@ -366,6 +541,23 @@ export function buildPageProfile(input) {
     // and on a page whose accent *is* its link colour, counting roles alone
     // reported perfect discipline as 0%. Any site with a conventional link colour
     // would have been scored wrong.
+    // Clustering runs per channel, so one design token arrives twice when it is
+    // used as both a fill and a text colour — a link colour that is also a button
+    // background. Wikipedia listed "#3366cc accent, #3366cc accent" twice over.
+    // Merge perceptual duplicates that resolved to the same role: it is one
+    // decision, and the palette should say so once.
+    const mergedPalette = [];
+    for (const entry of palette) {
+        const twin = mergedPalette.find((candidate) => candidate.role === entry.role
+            && Math.hypot(rgbToOklab(oklabToRgb(oklchToOklab(candidate.oklch))).L - rgbToOklab(oklabToRgb(oklchToOklab(entry.oklch))).L, candidate.oklch.c * Math.cos(candidate.oklch.h * Math.PI / 180) - entry.oklch.c * Math.cos(entry.oklch.h * Math.PI / 180), candidate.oklch.c * Math.sin(candidate.oklch.h * Math.PI / 180) - entry.oklch.c * Math.sin(entry.oklch.h * Math.PI / 180)) <= OKLAB_MERGE_THRESHOLD);
+        if (!twin) {
+            mergedPalette.push({ ...entry });
+            continue;
+        }
+        twin.areaShare = Math.round((twin.areaShare + entry.areaShare) * 10000) / 10000;
+        twin.nodeCount += entry.nodeCount;
+        twin.appearsOn = [...new Set([...twin.appearsOn, ...entry.appearsOn])];
+    }
     const accentNodesFound = [];
     if (accentCluster) {
         for (const view of rendered) {
@@ -426,7 +618,15 @@ export function buildPageProfile(input) {
         ? 'mixed'
         : surfaceLuminance > 0.5 ? 'light' : 'dark';
     // ── type ──────────────────────────────────────────────────────────────────
-    const textNodes = rendered.filter((view) => view.childIds.length === 0 && view.text.trim().length > 0);
+    // Text below 10px is an icon glyph, a screen-reader-only label or decoration —
+    // never a step in a type scale. A real page reported 6px and 8px as its two
+    // smallest "scale steps", which made a 17-step scale out of a 15-step one and
+    // buried the actual progression. Excluded from the scale and the measure, but
+    // counted and surfaced as a finding rather than quietly dropped: text that
+    // small is itself worth knowing about.
+    const allTextNodes = rendered.filter((view) => view.childIds.length === 0 && view.text.trim().length > 0);
+    const textNodes = allTextNodes.filter((view) => view.fontSize >= FROAM_MIN_TYPE_PX);
+    const belowMinimumSizes = allTextNodes.length - textNodes.length;
     const sizeClusters = clusterNumbers(textNodes.map((view) => view.fontSize), 0.04).sort((a, b) => a.value - b.value);
     const scale = sizeClusters.map((cluster) => {
         const members = textNodes.filter((view) => Math.abs(view.fontSize - cluster.value) <= Math.max(0.5, cluster.value * 0.04));
@@ -543,39 +743,10 @@ export function buildPageProfile(input) {
     // ── flow ──────────────────────────────────────────────────────────────────
     const documentRoot = rendered.filter((view) => !view.parentId || !byId.has(view.parentId)).sort((a, b) => b.area - a.area)[0]
         ?? rendered.sort((a, b) => b.area - a.area)[0];
-    // Real pages nest. The scan root is <body>, and beneath it sit wrapper divs
-    // from a framework, a layout shell and a theme provider before anything that
-    // resembles a section. Reading direct children of the root found exactly one
-    // section on the first real site scanned, which silently emptied the entire
-    // flow axis — and with it three of the six pretext tasks.
-    //
-    // So descend through pass-through containers until reaching a node whose
-    // children actually look like a stack of sections.
-    const sectionLike = (view, parent) => Boolean(view?.visible && view.rect.height >= Math.max(40, (parent.rect.height || 1) * 0.03) && view.rect.width >= (parent.rect.width || 1) * 0.6);
-    const SECTION_TAGS = new Set(['section', 'header', 'footer', 'main', 'article', 'nav', 'aside']);
     const childrenOf = (view) => view.childIds.map((id) => byId.get(id)).filter((child) => Boolean(child?.visible));
-    let sectionParent = documentRoot;
-    for (let depth = 0; depth < 12 && sectionParent; depth += 1) {
-        const children = childrenOf(sectionParent);
-        const qualifying = children.filter((child) => sectionLike(child, sectionParent));
-        // A semantic landmark among the children is decisive; otherwise two or more
-        // full-width blocks is the signal that this is the section stack.
-        if (qualifying.some((child) => SECTION_TAGS.has(child.tag)) || qualifying.length >= 2)
-            break;
-        const widest = [...children].sort((a, b) => b.area - a.area)[0];
-        // Only follow a child that is essentially the whole parent — a genuine
-        // wrapper. Anything smaller means the stack is here, however thin.
-        if (!widest || widest.area < sectionParent.area * 0.5)
-            break;
-        sectionParent = widest;
-    }
-    const rootHeight = sectionParent?.rect.height || 1;
-    const rootWidth = sectionParent?.rect.width || 1;
-    // An empty or fully-hidden scan leaves no root at all. Returning no sections
-    // is the correct answer; dereferencing one is not.
-    const sectionNodes = sectionParent
-        ? childrenOf(sectionParent).filter((view) => sectionLike(view, sectionParent)).sort((a, b) => a.rect.y - b.rect.y)
-        : [];
+    const sectionNodes = resolveSections(documentRoot, childrenOf);
+    const rootHeight = documentRoot?.rect.height || 1;
+    const rootWidth = documentRoot?.rect.width || 1;
     const sections = sectionNodes.map((section, index) => {
         const descendants = [];
         const walk = (view, depth) => {
@@ -603,6 +774,7 @@ export function buildPageProfile(input) {
             cardCount: descendants.filter((view) => view.role === 'card').length,
             hasForm: descendants.some((view) => view.role === 'form'),
             linkDensity,
+            ownTag: section.tag,
         });
         return {
             index,
@@ -649,7 +821,7 @@ export function buildPageProfile(input) {
         capturedAt,
         viewport: input.viewport,
         color: {
-            palette,
+            palette: mergedPalette,
             accentDiscipline: Math.round(accentDiscipline * 1000) / 1000,
             contrastFloor: Number.isFinite(contrastFloor) ? Math.round(contrastFloor * 100) / 100 : Infinity,
             contrastFailures,
@@ -657,7 +829,7 @@ export function buildPageProfile(input) {
             contrastUnmeasurable,
             modeSignal,
         },
-        type: { families, scale, ratio, ratioSpread: Math.round(ratioSpread * 1000) / 1000, measureCh },
+        type: { families, scale, ratio, ratioSpread: Math.round(ratioSpread * 1000) / 1000, belowMinimumSizes, measureCh },
         space: {
             base: best.base,
             scale: spacingScale,

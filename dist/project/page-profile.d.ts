@@ -42,7 +42,7 @@ export type FroamTypeStep = {
     usedBy: FroamSemanticRole[];
     count: number;
 };
-export type FroamSectionArchetype = 'hero' | 'proof' | 'feature-grid' | 'split' | 'testimonial' | 'pricing' | 'faq' | 'cta' | 'footer' | 'unknown';
+export type FroamSectionArchetype = 'hero' | 'proof' | 'feature-grid' | 'split' | 'testimonial' | 'pricing' | 'faq' | 'cta' | 'content' | 'footer' | 'unknown';
 export type FroamSectionProfile = {
     index: number;
     archetype: FroamSectionArchetype;
@@ -71,6 +71,8 @@ export type FroamTargetMeasurement = {
     /** Smaller dimension, which is what the standard constrains. */
     shortestSide: number;
 };
+/** Smallest font size treated as a type-scale step. Below this it is decoration. */
+export declare const FROAM_MIN_TYPE_PX = 10;
 /** WCAG 2.5.8 AA minimum target size, in CSS pixels. */
 export declare const FROAM_MIN_TARGET_PX = 24;
 export type FroamPageProfile = {
@@ -104,6 +106,8 @@ export type FroamPageProfile = {
         ratio: number | null;
         /** Spread of consecutive ratios. High spread means the scale is nominal only. */
         ratioSpread: number;
+        /** Text nodes below the 10px scale floor: icons, sr-only labels, decoration. */
+        belowMinimumSizes: number;
         /** Body line length in characters, approximate. */
         measureCh: number;
     };
@@ -216,6 +220,42 @@ export declare function contrastRatio(foreground: {
 }): number;
 /** WCAG AA threshold: 3.0 for large text (≥24px, or ≥18.66px at weight ≥700), else 4.5. */
 export declare function contrastRequirement(fontSizePx: number, fontWeight: number): 3 | 4.5;
+type NodeView = {
+    id: string;
+    role: FroamSemanticRole;
+    tag: string;
+    text: string;
+    parentId?: string;
+    childIds: string[];
+    rect: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    };
+    area: number;
+    ownArea: number;
+    visible: boolean;
+    background: ReturnType<typeof parseCssColor>;
+    backgroundImage: string;
+    colour: ReturnType<typeof parseCssColor>;
+    fontSize: number;
+    fontWeight: number;
+    lineHeight: number;
+    fontFamily: string;
+    radius: number;
+    shadow: string;
+    border: string;
+    padding: string;
+    margin: string;
+    position: string;
+    gap: number;
+    display: string;
+    gridTemplateColumns: string;
+    accessibilityWarnings: number;
+    focusable: boolean;
+    signature: string;
+};
 /**
  * Greedy perceptual clustering. Threshold is OKLab ΔE — below it, two values
  * are one design decision.
@@ -228,6 +268,27 @@ export declare function contrastRequirement(fontSizePx: number, fontWeight: numb
  */
 export declare const OKLAB_MERGE_THRESHOLD = 0.035;
 export declare const OKLAB_MERGE_THRESHOLD_BACKGROUND = 0.01;
+/**
+ * Find a page's sections.
+ *
+ * Real pages nest, and they do not nest uniformly. Beneath `<body>` sit a
+ * framework mount, a theme provider and a layout shell before anything that
+ * resembles a section; sections then appear at different depths, because a hero
+ * might be a direct child of the shell while three feature blocks sit inside a
+ * container and the footer is a sibling of all of it.
+ *
+ * Reading the direct children of any single parent therefore cannot work. The
+ * first version of this walked down to one "section parent" and found a single
+ * section on every real page, silently emptying the flow axis and with it three
+ * of the six pretext tasks.
+ *
+ * What actually identifies a section stack is **vertical tiling**: sections
+ * partition the height of what contains them, edge to edge, with little overlap.
+ * That property survives arbitrary nesting, so this walks the tree deciding at
+ * each node whether it *is* a section or is a band that should be exploded into
+ * the sections beneath it.
+ */
+export declare function resolveSections(documentRoot: NodeView | undefined, childrenOf: (view: NodeView) => NodeView[]): NodeView[];
 export type FroamProfileInput = {
     records: readonly FroamScanRecord[];
     origin: string;
@@ -236,4 +297,5 @@ export type FroamProfileInput = {
     capturedAt?: number;
 };
 export declare function buildPageProfile(input: FroamProfileInput): FroamPageProfile;
+export {};
 //# sourceMappingURL=page-profile.d.ts.map

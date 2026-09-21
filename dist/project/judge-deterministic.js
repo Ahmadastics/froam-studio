@@ -21,7 +21,7 @@
  *    requires bumping FROAM_JUDGE_VERSION, because verdicts from two versions
  *    are not comparable.
  */
-import { FROAM_MIN_TARGET_PX } from './page-profile.js';
+import { FROAM_MIN_TARGET_PX, FROAM_MIN_TYPE_PX } from './page-profile.js';
 /**
  * Bump on any change to checks, weights or thresholds. Verdicts are only
  * comparable within a version.
@@ -255,6 +255,7 @@ function checkTypeScale(profile) {
     // A usable scale has few steps that agree with each other. Both halves matter:
     // six steps at wildly different ratios is a list of sizes, not a scale.
     const stepScore = band(steps, 3, 7, 4);
+    const smallTextPenalty = profile.type.belowMinimumSizes > 0 ? Math.min(0.3, profile.type.belowMinimumSizes * 0.03) : 0;
     const spreadScore = profile.type.ratio === null ? 0.4 : clamp01(1 - spread / 0.25);
     const findings = [];
     if (steps > 7)
@@ -267,6 +268,17 @@ function checkTypeScale(profile) {
             threshold: 7,
             evidence: { sizes: profile.type.scale.map((step) => step.px) },
         });
+    // Excluded from the scale, but not from the report. Text this small is a
+    // legibility problem in its own right.
+    if (profile.type.belowMinimumSizes > 0)
+        findings.push({
+            id: 'type-scale:below-minimum',
+            check: 'type-scale',
+            severity: profile.type.belowMinimumSizes > 6 ? 'major' : 'minor',
+            summary: `${profile.type.belowMinimumSizes} text element${profile.type.belowMinimumSizes === 1 ? '' : 's'} render below ${FROAM_MIN_TYPE_PX}px, too small to read and excluded from the scale`,
+            measured: profile.type.belowMinimumSizes,
+            threshold: 0,
+        });
     if (profile.type.ratio === null && steps > 2)
         findings.push({
             id: 'type-scale:ratio',
@@ -277,7 +289,7 @@ function checkTypeScale(profile) {
             threshold: 0.25,
             evidence: { sizes: profile.type.scale.map((step) => step.px) },
         });
-    return { id: 'type-scale', score: round((stepScore + spreadScore) / 2), weight: FROAM_JUDGE_WEIGHTS['type-scale'], normative: false, findings };
+    return { id: 'type-scale', score: round(clamp01((stepScore + spreadScore) / 2 - smallTextPenalty)), weight: FROAM_JUDGE_WEIGHTS['type-scale'], normative: false, findings };
 }
 function checkMeasure(profile) {
     const measure = profile.type.measureCh;

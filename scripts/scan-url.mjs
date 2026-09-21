@@ -143,6 +143,32 @@ async function main() {
   const bundle = await buildScanBundle()
 
   const browser = await chromium.launch({ channel: 'chrome', headless: !flags.headed })
+
+  // A browser is only closed on the happy path unless you make it otherwise.
+  // Eighteen headless Chrome processes accumulated during development from runs
+  // that were interrupted or threw before reaching the close call, so teardown
+  // is registered immediately after launch and runs exactly once.
+  let closed = false
+  const shutdown = async () => {
+    if (closed) return
+    closed = true
+    await browser.close().catch(() => {})
+  }
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    process.once(signal, () => { void shutdown().then(() => process.exit(130)) })
+  }
+  process.once('uncaughtException', (error) => { console.error(error); void shutdown().then(() => process.exit(1)) })
+
+  try {
+    const results = await scanAll()
+    if (asJson) console.log(JSON.stringify({ viewport, results }, null, 2))
+    const failures = results.filter((result) => !result.ok).length
+    if (failures === urls.length) process.exitCode = 1
+  } finally {
+    await shutdown()
+  }
+
+  async function scanAll() {
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     locale: 'en-US',
@@ -190,11 +216,8 @@ async function main() {
       console.error(`  failed: ${error?.message ?? error}`)
     }
   }
-
-  await browser.close()
-  if (asJson) console.log(JSON.stringify({ viewport, results }, null, 2))
-  const failures = results.filter((result) => !result.ok).length
-  if (failures === urls.length) process.exit(1)
+  return results
+  }
 }
 
 main().catch((error) => { console.error(error); process.exit(1) })
