@@ -10,6 +10,7 @@
  * mutation rights. With no reliable selection this assembler returns null.
  */
 import type { FroamProjectDocument, FroamScanRecord, FroamDNA, FroamNode, FroamRelation } from './types'
+import type { FroamDesignReference } from './intelligence-reference'
 import type { FroamMutationIntelligenceRequest, FroamIntelligenceContext } from './intelligence-transport'
 import type { FroamMutationConstraints } from './mutation'
 import { normalizeMutationConstraints } from './mutation'
@@ -45,6 +46,14 @@ export type FroamContextAssemblerInput = {
     dna?: FroamDNA
     relationships?: FroamRelation[]
   }
+  /**
+   * Measured design system of the page, so an edit can stay on system.
+   *
+   * Strictly additive. It is attached to `context` and never consulted when
+   * building `scopeNodeIds`, so supplying it can widen what the model *knows*
+   * but never what it is permitted to change.
+   */
+  designReference?: FroamDesignReference
 }
 
 /** Maximum scan records to include per request (keeps payload bounded). */
@@ -64,7 +73,7 @@ const MAX_RESPONSIVE_POLICIES = 8
 export function assembleFroamIntelligenceRequest(
   input: FroamContextAssemblerInput,
 ): FroamMutationIntelligenceRequest | null {
-  const { project, intent, scope, priorAttemptFeedback, requestId, consent, selectionEvidence } = input
+  const { project, intent, scope, priorAttemptFeedback, requestId, consent, selectionEvidence, designReference } = input
   const state = deriveBranchState(project)
 
   // ── Scope resolution ──────────────────────────────────────────────────────
@@ -131,6 +140,9 @@ export function assembleFroamIntelligenceRequest(
     dna: dnaCount > 0 ? dna : undefined,
     relationships: relationships.length > 0 ? relationships : undefined,
     responsivePolicies: responsivePolicies.length > 0 ? responsivePolicies : undefined,
+    // Page-level design evidence. Attached to context only; scopeNodeIds above
+    // was resolved before this existed and is not revisited.
+    designReference,
     memory,
   }
 

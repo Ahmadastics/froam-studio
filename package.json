@@ -71,7 +71,7 @@
     "build": "node scripts/clean.mjs && tsc -p tsconfig.json && node scripts/fix-js-extensions.mjs && node scripts/copy-assets.mjs && node scripts/build-standalone.mjs && node scripts/build-server.mjs",
     "build:standalone": "node scripts/build-standalone.mjs",
     "clean": "node scripts/clean.mjs",
-    "test": "node scripts/test-alpha-launcher.mjs && node scripts/test-project-isolation.mjs && node scripts/test-oplog.mjs && node scripts/test-project.mjs && node scripts/test-design-system.mjs && node scripts/test-brand-fonts.mjs && node scripts/test-quick-looks.mjs && node scripts/test-drift.mjs && node scripts/test-project-sync.mjs && node scripts/test-committer.mjs && node scripts/test-rooms.mjs && node scripts/test-room-client.mjs && node scripts/test-editor-shell.mjs && node scripts/test-section-manipulation.mjs && node scripts/test-intelligence.mjs && node scripts/test-reference-intelligence.mjs && node scripts/test-froam-intent.mjs && node scripts/test-reference-build.mjs && node scripts/test-page-profile.mjs && node scripts/test-judge.mjs && node scripts/test-scan-profile-contract.mjs",
+    "test": "node scripts/test-alpha-launcher.mjs && node scripts/test-project-isolation.mjs && node scripts/test-oplog.mjs && node scripts/test-project.mjs && node scripts/test-design-system.mjs && node scripts/test-brand-fonts.mjs && node scripts/test-quick-looks.mjs && node scripts/test-drift.mjs && node scripts/test-project-sync.mjs && node scripts/test-committer.mjs && node scripts/test-rooms.mjs && node scripts/test-room-client.mjs && node scripts/test-editor-shell.mjs && node scripts/test-section-manipulation.mjs && node scripts/test-intelligence.mjs && node scripts/test-reference-intelligence.mjs && node scripts/test-froam-intent.mjs && node scripts/test-reference-build.mjs && node scripts/test-page-profile.mjs && node scripts/test-judge.mjs && node scripts/test-scan-profile-contract.mjs && node scripts/test-pretext.mjs && node scripts/test-design-reference.mjs",
     "verify:alpha": "node scripts/verify-alpha-gates.mjs",
     "check:release": "npm run build && npm test",
     "prepublishOnly": "npm run check:release",
@@ -96,6 +96,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "esbuild": "^0.27.4",
+    "playwright-core": "^1.63.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "~5.9.3"

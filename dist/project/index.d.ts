@@ -50,4 +50,8 @@ export * from './judge-deterministic';
 export * from './judge-priors';
 export * from './judge';
 export * from './degrade';
+export * from './corpus';
+export * from './pretext';
+export * from './predictors';
+export * from './intelligence-reference';
 //# sourceMappingURL=index.d.ts.map

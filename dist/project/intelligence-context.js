@@ -15,7 +15,7 @@ const MAX_RESPONSIVE_POLICIES = 8;
  * case rather than sending an empty request.
  */
 export function assembleFroamIntelligenceRequest(input) {
-    const { project, intent, scope, priorAttemptFeedback, requestId, consent, selectionEvidence } = input;
+    const { project, intent, scope, priorAttemptFeedback, requestId, consent, selectionEvidence, designReference } = input;
     const state = deriveBranchState(project);
     // ── Scope resolution ──────────────────────────────────────────────────────
     if (!scope.selectedNodeId)
@@ -79,6 +79,9 @@ export function assembleFroamIntelligenceRequest(input) {
         dna: dnaCount > 0 ? dna : undefined,
         relationships: relationships.length > 0 ? relationships : undefined,
         responsivePolicies: responsivePolicies.length > 0 ? responsivePolicies : undefined,
+        // Page-level design evidence. Attached to context only; scopeNodeIds above
+        // was resolved before this existed and is not revisited.
+        designReference,
         memory,
     };
     // ── Constraints ───────────────────────────────────────────────────────────

@@ -89,6 +89,8 @@ export type FroamPageProfile = {
         contrastFailures: FroamContrastPair[];
         /** Text nodes evaluated, so failure counts have an honest denominator. */
         contrastSamples: number;
+        /** Text whose backdrop is a gradient or image, so contrast cannot be computed. */
+        contrastUnmeasurable: number;
         modeSignal: 'light' | 'dark' | 'mixed';
     };
     type: {
@@ -127,6 +129,8 @@ export type FroamPageProfile = {
         smallestTargetPx: number;
         /** Inline links inside running text, exempt from the size rule but counted for honesty. */
         exemptInlineTargets: number;
+        /** Undersized targets passing the WCAG 2.5.8 spacing exception. */
+        exemptSpacedTargets: number;
     };
     flow: {
         sections: FroamSectionProfile[];

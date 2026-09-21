@@ -95,6 +95,8 @@ export type FroamPageProfile = {
     contrastFailures: FroamContrastPair[]
     /** Text nodes evaluated, so failure counts have an honest denominator. */
     contrastSamples: number
+    /** Text whose backdrop is a gradient or image, so contrast cannot be computed. */
+    contrastUnmeasurable: number
     modeSignal: 'light' | 'dark' | 'mixed'
   }
 
@@ -129,6 +131,8 @@ export type FroamPageProfile = {
     smallestTargetPx: number
     /** Inline links inside running text, exempt from the size rule but counted for honesty. */
     exemptInlineTargets: number
+    /** Undersized targets passing the WCAG 2.5.8 spacing exception. */
+    exemptSpacedTargets: number
   }
 
   flow: { sections: FroamSectionProfile[]; signature: string }
@@ -273,6 +277,7 @@ type NodeView = {
   ownArea: number
   visible: boolean
   background: ReturnType<typeof parseCssColor>
+  backgroundImage: string
   colour: ReturnType<typeof parseCssColor>
   fontSize: number
   fontWeight: number
@@ -315,6 +320,7 @@ function toNodeViews(records: readonly FroamScanRecord[]): NodeView[] {
       ownArea: 0,
       visible: responsive.visible !== false && rect.width > 0 && rect.height > 0,
       background: parseCssColor(appearance.backgroundColor as string),
+      backgroundImage: String(appearance.backgroundImage ?? 'none'),
       colour: parseCssColor(appearance.color as string),
       fontSize,
       fontWeight: num(appearance.fontWeight, 400),
@@ -349,12 +355,42 @@ function toNodeViews(records: readonly FroamScanRecord[]): NodeView[] {
   return [...views.values()]
 }
 
-/** Nearest ancestor with an opaque-enough background, flattened. Defaults to white. */
-function effectiveBackground(view: NodeView, byId: Map<string, NodeView>): { r: number; g: number; b: number } {
+/** Tags that are interactive regardless of what the semantic heuristic made of their copy. */
+const ACTION_TAGS = new Set(['a', 'button', 'input', 'select', 'textarea', 'summary'])
+
+/**
+ * Whether a node represents a user action.
+ *
+ * Tag-first, because the scan's semantic role is a copy heuristic: a link
+ * reading "Pricing" is 'unknown' while the identical element reading "Get
+ * started" is 'cta'. For questions about where action colour belongs, the
+ * element type is the reliable signal and the copy is not.
+ */
+function isActionNode(view: NodeView) {
+  return ACTION_TAGS.has(view.tag) || FROAM_ACTION_ROLES.includes(view.role) || view.focusable
+}
+
+/**
+ * Nearest ancestor with an opaque-enough background, flattened. Defaults to white.
+ *
+ * `certain` is false when a gradient or image sits anywhere in the resolved
+ * stack. A computed style reports `backgroundImage` but not the pixels it
+ * paints, so the true backdrop under that text is unknown.
+ *
+ * This matters more than it sounds. The first real site scanned reported 65 of
+ * 160 text elements failing contrast, several at 1.01:1 — white text on a
+ * gradient hero, where only the transparent `backgroundColor` was visible to
+ * the resolver, so white was being compared against white. Reporting a
+ * violation that cannot be substantiated is worse than reporting nothing:
+ * it is the fastest way for an audit to lose a reader's trust.
+ */
+function effectiveBackground(view: NodeView, byId: Map<string, NodeView>): { rgb: { r: number; g: number; b: number }; certain: boolean } {
   const stack: Array<{ r: number; g: number; b: number; a: number }> = []
   let cursor: NodeView | undefined = view
   let guard = 0
+  let certain = true
   while (cursor && guard++ < 64) {
+    if (cursor.backgroundImage && cursor.backgroundImage !== 'none') certain = false
     if (cursor.background && cursor.background.a > 0) {
       stack.push(cursor.background)
       if (cursor.background.a >= 1) break
@@ -363,7 +399,7 @@ function effectiveBackground(view: NodeView, byId: Map<string, NodeView>): { r: 
   }
   let result = { r: 1, g: 1, b: 1 }
   for (let index = stack.length - 1; index >= 0; index -= 1) result = flatten(stack[index], result)
-  return result
+  return { rgb: result, certain }
 }
 
 // ── clustering ──────────────────────────────────────────────────────────────
@@ -467,7 +503,7 @@ export function buildPageProfile(input: FroamProfileInput): FroamPageProfile {
   const rawColours = new Set<string>()
   for (const view of rendered) {
     if (view.background && view.background.a > 0 && view.ownArea > 0) {
-      const backdrop = view.parentId ? effectiveBackground(byId.get(view.parentId) ?? view, byId) : { r: 1, g: 1, b: 1 }
+      const backdrop = view.parentId ? effectiveBackground(byId.get(view.parentId) ?? view, byId).rgb : { r: 1, g: 1, b: 1 }
       const flat = flatten(view.background, backdrop)
       samples.push({ lab: rgbToOklab(flat), weight: view.ownArea * view.background.a, role: view.role, channel: 'background' })
       rawColours.add(toHex(flat))
@@ -475,7 +511,7 @@ export function buildPageProfile(input: FroamProfileInput): FroamPageProfile {
     }
     const leaf = view.childIds.length === 0
     if (leaf && view.colour && view.colour.a > 0 && view.text.length > 0) {
-      const flat = flatten(view.colour, effectiveBackground(view, byId))
+      const flat = flatten(view.colour, effectiveBackground(view, byId).rgb)
       samples.push({ lab: rgbToOklab(flat), weight: view.text.length * view.fontSize, role: view.role, channel: 'text' })
       rawColours.add(toHex(flat))
       colourUsages += 1
@@ -537,16 +573,44 @@ export function buildPageProfile(input: FroamProfileInput): FroamPageProfile {
     }
   })
 
-  const accentNodes = accentCluster ? [...accentCluster.roles].reduce((sum, [, count]) => sum + count, 0) : 0
-  const accentActionNodes = accentCluster ? [...accentCluster.roles].filter(([role]) => FROAM_ACTION_ROLES.includes(role)).reduce((sum, [, count]) => sum + count, 0) : 0
-  const accentDiscipline = accentNodes > 0 ? accentActionNodes / accentNodes : 1
+  // Accent discipline is measured over the nodes that actually carry the colour,
+  // with action-ness decided by tag as well as role.
+  //
+  // The first live scan exposed why. scan.ts only promotes an <a> to 'cta' when
+  // its copy matches buy/start/join/sign-up, so an ordinary link is 'unknown' —
+  // and on a page whose accent *is* its link colour, counting roles alone
+  // reported perfect discipline as 0%. Any site with a conventional link colour
+  // would have been scored wrong.
+  const accentNodesFound: NodeView[] = []
+  if (accentCluster) {
+    for (const view of rendered) {
+      const candidates: Array<{ colour: NonNullable<typeof view.background>; channel: 'background' | 'text' }> = []
+      if (view.background && view.background.a > 0 && view.ownArea > 0) candidates.push({ colour: view.background, channel: 'background' })
+      if (view.childIds.length === 0 && view.colour && view.colour.a > 0 && view.text.length > 0) candidates.push({ colour: view.colour, channel: 'text' })
+      for (const candidate of candidates) {
+        if (candidate.channel !== accentCluster.channel) continue
+        const backdrop = candidate.channel === 'background' && view.parentId
+          ? effectiveBackground(byId.get(view.parentId) ?? view, byId).rgb
+          : effectiveBackground(view, byId).rgb
+        const lab = rgbToOklab(flatten(candidate.colour, backdrop))
+        const distance = Math.hypot(lab.L - accentCluster.lab.L, lab.a - accentCluster.lab.a, lab.b - accentCluster.lab.b)
+        const limit = accentCluster.channel === 'background' ? OKLAB_MERGE_THRESHOLD_BACKGROUND : OKLAB_MERGE_THRESHOLD
+        if (distance <= limit) { accentNodesFound.push(view); break }
+      }
+    }
+  }
+  const accentActionNodes = accentNodesFound.filter((view) => isActionNode(view)).length
+  const accentDiscipline = accentNodesFound.length > 0 ? accentActionNodes / accentNodesFound.length : 1
 
   const contrastFailures: FroamContrastPair[] = []
   let contrastFloor = Infinity
   let contrastSamples = 0
+  let contrastUnmeasurable = 0
   for (const view of rendered) {
     if (view.childIds.length > 0 || !view.colour || view.colour.a <= 0 || !view.text.trim()) continue
-    const background = effectiveBackground(view, byId)
+    const resolved = effectiveBackground(view, byId)
+    if (!resolved.certain) { contrastUnmeasurable += 1; continue }
+    const background = resolved.rgb
     const ratio = contrastRatio(flatten(view.colour, background), background)
     const required = contrastRequirement(view.fontSize, view.fontWeight)
     contrastSamples += 1
@@ -636,41 +700,89 @@ export function buildPageProfile(input: FroamProfileInput): FroamPageProfile {
   // standard exempts targets sitting inside a sentence, so an inline link in a
   // paragraph is measured, exempted and counted rather than silently skipped —
   // a check that quietly drops its hard cases reports a cleaner page than exists.
-  const INTERACTIVE_TAGS = new Set(['a', 'button', 'input', 'select', 'textarea'])
   const undersizedTargets: FroamTargetMeasurement[] = []
-  let targetSamples = 0
+  const targets = rendered.filter((view) => isActionNode(view))
   let exemptInlineTargets = 0
+  let exemptSpacedTargets = 0
   let smallestTargetPx = Infinity
-  for (const view of rendered) {
-    const interactive = view.focusable || INTERACTIVE_TAGS.has(view.tag) || FROAM_ACTION_ROLES.includes(view.role)
-    if (!interactive) continue
+  const measured: NodeView[] = []
+  for (const view of targets) {
     const parent = view.parentId ? byId.get(view.parentId) : undefined
-    const inlineInProse = view.tag === 'a' && parent?.role === 'paragraph' && parent.text.length > view.text.length
+    // The standard's inline exception covers a target "in a sentence". Any
+    // text-bearing ancestor whose copy exceeds the link's own qualifies; the
+    // earlier paragraph-only test missed links inside headings and list items,
+    // which is most of the real web.
+    const inlineInProse = view.tag === 'a' && Boolean(parent) && parent!.text.length > view.text.length + 8 && view.text.length > 0
     if (inlineInProse) { exemptInlineTargets += 1; continue }
-    const shortestSide = Math.min(view.rect.width, view.rect.height)
-    targetSamples += 1
-    smallestTargetPx = Math.min(smallestTargetPx, shortestSide)
-    if (shortestSide < FROAM_MIN_TARGET_PX) {
-      undersizedTargets.push({
-        nodeId: view.id,
-        role: view.role,
-        tag: view.tag,
-        width: Math.round(view.rect.width * 10) / 10,
-        height: Math.round(view.rect.height * 10) / 10,
-        shortestSide: Math.round(shortestSide * 10) / 10,
-      })
-    }
+    measured.push(view)
+    smallestTargetPx = Math.min(smallestTargetPx, Math.min(view.rect.width, view.rect.height))
   }
 
+  // WCAG 2.5.8's spacing exception: an undersized target passes when a 24px
+  // circle centred on it does not touch another target's circle. Without this,
+  // every ordinary navigation bar reports as a pile of violations — a check
+  // that fires on well-built pages is one nobody reads twice.
+  const centreOf = (view: NodeView) => ({ x: view.rect.x + view.rect.width / 2, y: view.rect.y + view.rect.height / 2 })
+  for (const view of measured) {
+    const shortestSide = Math.min(view.rect.width, view.rect.height)
+    if (shortestSide >= FROAM_MIN_TARGET_PX) continue
+    const centre = centreOf(view)
+    const crowded = measured.some((other) => {
+      if (other === view) return false
+      const otherCentre = centreOf(other)
+      return Math.hypot(centre.x - otherCentre.x, centre.y - otherCentre.y) < FROAM_MIN_TARGET_PX
+    })
+    if (!crowded) { exemptSpacedTargets += 1; continue }
+    undersizedTargets.push({
+      nodeId: view.id,
+      role: view.role,
+      tag: view.tag,
+      width: Math.round(view.rect.width * 10) / 10,
+      height: Math.round(view.rect.height * 10) / 10,
+      shortestSide: Math.round(shortestSide * 10) / 10,
+    })
+  }
+  const targetSamples = measured.length
+
   // ── flow ──────────────────────────────────────────────────────────────────
-  const root = rendered.filter((view) => !view.parentId || !byId.has(view.parentId)).sort((a, b) => b.area - a.area)[0]
+  const documentRoot = rendered.filter((view) => !view.parentId || !byId.has(view.parentId)).sort((a, b) => b.area - a.area)[0]
     ?? rendered.sort((a, b) => b.area - a.area)[0]
-  const rootHeight = root?.rect.height || 1
-  const rootWidth = root?.rect.width || 1
-  const sectionNodes = (root?.childIds ?? [])
-    .map((id) => byId.get(id))
-    .filter((view): view is NodeView => Boolean(view?.visible && view.rect.height >= rootHeight * 0.04 && view.rect.width >= rootWidth * 0.6))
-    .sort((a, b) => a.rect.y - b.rect.y)
+
+  // Real pages nest. The scan root is <body>, and beneath it sit wrapper divs
+  // from a framework, a layout shell and a theme provider before anything that
+  // resembles a section. Reading direct children of the root found exactly one
+  // section on the first real site scanned, which silently emptied the entire
+  // flow axis — and with it three of the six pretext tasks.
+  //
+  // So descend through pass-through containers until reaching a node whose
+  // children actually look like a stack of sections.
+  const sectionLike = (view: NodeView | undefined, parent: NodeView): view is NodeView =>
+    Boolean(view?.visible && view.rect.height >= Math.max(40, (parent.rect.height || 1) * 0.03) && view.rect.width >= (parent.rect.width || 1) * 0.6)
+  const SECTION_TAGS = new Set(['section', 'header', 'footer', 'main', 'article', 'nav', 'aside'])
+
+  const childrenOf = (view: NodeView) => view.childIds.map((id) => byId.get(id)).filter((child): child is NodeView => Boolean(child?.visible))
+
+  let sectionParent = documentRoot
+  for (let depth = 0; depth < 12 && sectionParent; depth += 1) {
+    const children = childrenOf(sectionParent)
+    const qualifying = children.filter((child) => sectionLike(child, sectionParent))
+    // A semantic landmark among the children is decisive; otherwise two or more
+    // full-width blocks is the signal that this is the section stack.
+    if (qualifying.some((child) => SECTION_TAGS.has(child.tag)) || qualifying.length >= 2) break
+    const widest = [...children].sort((a, b) => b.area - a.area)[0]
+    // Only follow a child that is essentially the whole parent — a genuine
+    // wrapper. Anything smaller means the stack is here, however thin.
+    if (!widest || widest.area < sectionParent.area * 0.5) break
+    sectionParent = widest
+  }
+
+  const rootHeight = sectionParent?.rect.height || 1
+  const rootWidth = sectionParent?.rect.width || 1
+  // An empty or fully-hidden scan leaves no root at all. Returning no sections
+  // is the correct answer; dereferencing one is not.
+  const sectionNodes = sectionParent
+    ? childrenOf(sectionParent).filter((view) => sectionLike(view, sectionParent)).sort((a, b) => a.rect.y - b.rect.y)
+    : []
 
   const sections: FroamSectionProfile[] = sectionNodes.map((section, index) => {
     const descendants: NodeView[] = []
@@ -751,6 +863,7 @@ export function buildPageProfile(input: FroamProfileInput): FroamPageProfile {
       contrastFloor: Number.isFinite(contrastFloor) ? Math.round(contrastFloor * 100) / 100 : Infinity,
       contrastFailures,
       contrastSamples,
+      contrastUnmeasurable,
       modeSignal,
     },
     type: { families, scale, ratio, ratioSpread: Math.round(ratioSpread * 1000) / 1000, measureCh },
@@ -767,6 +880,7 @@ export function buildPageProfile(input: FroamProfileInput): FroamPageProfile {
       undersizedTargets,
       smallestTargetPx: Number.isFinite(smallestTargetPx) ? Math.round(smallestTargetPx * 10) / 10 : Infinity,
       exemptInlineTargets,
+      exemptSpacedTargets,
     },
     flow: { sections, signature: sections.map((section) => section.archetype === 'feature-grid' ? `feature-grid:${section.grid.columns}` : section.archetype).join('>') },
     components,

@@ -7,6 +7,7 @@
  * other purpose is analysis-only.
  */
 import type { FroamViewport } from '../collab/types'
+import type { FroamDesignReference } from './intelligence-reference'
 import type { FroamIntelligenceMemory } from './intelligence-memory'
 import type { FroamProviderPrivacy } from './intelligence-provider'
 import type { FroamMutationConstraints, FroamMutationDomain, FroamMutationProposal } from './mutation'
@@ -92,6 +93,13 @@ export type FroamIntelligenceContext = {
   responsiveObservations?: FroamIntelligenceResponsiveObservation[]
   references?: FroamIntelligenceReferenceSummary[]
   referenceEvidence?: FroamIntelligenceReferenceEvidence
+  /**
+   * Measured design system of the page being edited, plus corpus notes.
+   *
+   * Read-only evidence describing what is already there, so an edit can stay on
+   * system. It never widens what may be changed — see intelligence-reference.ts.
+   */
+  designReference?: FroamDesignReference
   memory?: FroamIntelligenceMemory
 }
 

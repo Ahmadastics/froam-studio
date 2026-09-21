@@ -10,6 +10,7 @@
  * mutation rights. With no reliable selection this assembler returns null.
  */
 import type { FroamProjectDocument, FroamScanRecord, FroamDNA, FroamNode, FroamRelation } from './types';
+import type { FroamDesignReference } from './intelligence-reference';
 import type { FroamMutationIntelligenceRequest } from './intelligence-transport';
 import type { FroamViewport } from '../collab/types';
 export type FroamIntentScope = {
@@ -39,6 +40,14 @@ export type FroamContextAssemblerInput = {
         dna?: FroamDNA;
         relationships?: FroamRelation[];
     };
+    /**
+     * Measured design system of the page, so an edit can stay on system.
+     *
+     * Strictly additive. It is attached to `context` and never consulted when
+     * building `scopeNodeIds`, so supplying it can widen what the model *knows*
+     * but never what it is permitted to change.
+     */
+    designReference?: FroamDesignReference;
 };
 /**
  * Assemble a bounded FroamIntelligencePlanRequest from current Froam state.
