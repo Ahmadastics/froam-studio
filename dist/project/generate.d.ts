@@ -46,6 +46,8 @@ type Tokens = {
     cardPad: number;
     /** Horizontal section padding, also density-scaled — see the note in resolveTokens. */
     gutter: number;
+    /** Background for full-bleed panels: raised only when it sits near the surface. */
+    panelTint: string;
     gap: number;
 };
 /**

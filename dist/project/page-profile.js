@@ -538,8 +538,14 @@ function classifySection(childRoles, input) {
         return { archetype: 'feature-grid', confidence: 0.5 };
     if (input.hasForm || has('input'))
         return { archetype: 'cta', confidence: 0.65 };
-    if ((has('cta') || has('button')) && input.heightRatio < 0.15 && items.count < 3)
+    // A call-to-action band is short *relative to this page*, not relative to an
+    // absolute fraction. On a five-section page every section averages 20% of the
+    // height, so a fixed 15% ceiling can never fire and real CTA bands were being
+    // labelled 'content'. Comparing against the page's own median section is what
+    // "short" actually means here.
+    if ((has('cta') || has('button')) && (input.heightRatio < 0.15 || input.relativeHeight < 0.9) && items.count < 3) {
         return { archetype: 'cta', confidence: 0.55 };
+    }
     // A heading over prose is the most common section on the web and deserves a
     // name. Reporting half of them as 'unknown' is not humility, it is a missing
     // label — and it starves every pretext task that reads archetypes.
@@ -871,6 +877,9 @@ export function buildPageProfile(input) {
     const sectionNodes = resolveSections(documentRoot, childrenOf);
     const rootHeight = documentRoot?.rect.height || 1;
     const rootWidth = documentRoot?.rect.width || 1;
+    // Median section height, so "short" can be judged against this page rather
+    // than an absolute fraction that depends on how many sections there are.
+    const medianSectionHeight = median(sectionNodes.map((view) => view.rect.height)) || 1;
     const isMediaNode = (view) => view.role === 'media' || ['img', 'picture', 'video', 'svg', 'canvas'].includes(view.tag);
     const pageMaxFontSize = rendered.reduce((max, view) => view.text.trim() ? Math.max(max, view.fontSize) : max, 0);
     const sections = sectionNodes.map((section, index) => {
@@ -906,6 +915,7 @@ export function buildPageProfile(input) {
             hasForm: descendants.some((view) => view.role === 'form'),
             linkDensity,
             ownTag: section.tag,
+            relativeHeight: section.rect.height / medianSectionHeight,
             items,
             mediaShare,
             // "Largest type on the page" has to be resolved page-wide, not per section:

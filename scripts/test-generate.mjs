@@ -107,6 +107,58 @@ test('placeholders that stand in for media are media', () => {
   assert.ok(html.includes('<svg'), 'proof strip must emit real media')
 })
 
+test('a contrasting raised colour is not painted across whole sections', () => {
+  // Several targets use a near-black 'raised' on small cards only. Painting
+  // full-bleed sections with it put a second large background on the far side
+  // of the lightness line, and the page reported 'mixed' where the target was
+  // plainly 'light'.
+  const contrasting = profile()
+  contrasting.color.palette.find((entry) => entry.role === 'raised').oklch = { l: 0.12, c: 0, h: 0 }
+  contrasting.color.palette.find((entry) => entry.role === 'raised').hex = '#171717'
+  const tokens = resolveTokens(contrasting)
+  assert.equal(tokens.panelTint, '#f4f1ea', 'a near-black raised must not tint whole sections')
+  assert.equal(tokens.raised, '#171717', 'cards should still use it')
+
+  const near = resolveTokens(profile())
+  assert.equal(near.panelTint, near.raised, 'a raised close to the surface is fine at section scale')
+})
+
+test('an accent exists even when the flow contains no call to action', () => {
+  // Real pages carry an action in their chrome. Without one, a flow of
+  // proof/split/split produced no accent anywhere and the role vanished from
+  // the palette entirely.
+  const noCta = profile({
+    flow: {
+      sections: ['proof', 'split', 'split'].map((archetype, index) => ({
+        index, archetype, confidence: 0.5,
+        grid: { columns: 2, gapPx: 24, maxWidthPx: 1200 }, heightRatio: 0.2, childRoles: [],
+      })),
+      signature: 'proof>split>split',
+    },
+  })
+  const html = generatePageFromProfile(noCta)
+  assert.ok(html.includes('<header'), 'no page chrome emitted')
+  assert.ok(html.includes('#ff4138'), 'the accent never appears')
+  // Fixed positioning keeps the chrome out of the section flow, so it cannot
+  // add a phantom section to the sequence.
+  assert.ok(/<header style="position:fixed/.test(html), 'chrome must be out of flow')
+})
+
+test('an opening section that is not a hero does not claim the top of the scale', () => {
+  const heroFirst = generatePageFromProfile(profile())
+  const ctaFirst = generatePageFromProfile(profile({
+    flow: {
+      sections: ['cta', 'content'].map((archetype, index) => ({
+        index, archetype, confidence: 0.5,
+        grid: { columns: 1, gapPx: 24, maxWidthPx: 1200 }, heightRatio: 0.3, childRoles: [],
+      })),
+      signature: 'cta>content',
+    },
+  }))
+  assert.ok(heroFirst.includes('48px'), 'a hero should use the largest step')
+  assert.ok(!ctaFirst.includes('font-size:48px'), 'a cta-first page must not own the top step')
+})
+
 test('generation is deterministic', () => {
   assert.equal(generatePageFromProfile(profile(), { seed: 7 }), generatePageFromProfile(profile(), { seed: 7 }))
 })

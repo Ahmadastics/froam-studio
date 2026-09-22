@@ -69,6 +69,8 @@ type Tokens = {
   cardPad: number
   /** Horizontal section padding, also density-scaled — see the note in resolveTokens. */
   gutter: number
+  /** Background for full-bleed panels: raised only when it sits near the surface. */
+  panelTint: string
   gap: number
 }
 
@@ -80,7 +82,8 @@ type Tokens = {
  * not confidently wrong.
  */
 export function resolveTokens(profile: FroamPageProfile): Tokens {
-  const hexFor = (role: string) => profile.color.palette.find((entry) => entry.role === role)?.hex
+  const entryFor = (role: string) => profile.color.palette.find((entry) => entry.role === role)
+  const hexFor = (role: string) => entryFor(role)?.hex
   const dark = profile.color.modeSignal === 'dark'
   const steps = profile.type.scale.map((step) => step.px).filter((px) => px >= 10)
   const base = profile.space.base > 0 ? profile.space.base : 8
@@ -114,6 +117,19 @@ export function resolveTokens(profile: FroamPageProfile): Tokens {
     // median over container padding; a constant in that set is a constant vote.
     gutter: profile.space.density === 'airy' ? base * 8 : profile.space.density === 'tight' ? base * 2 : base * 4,
     gap: Math.max(base * 2, Math.round((profile.space.sectionGapPx[0] ?? base * 3) / base) * base),
+    // A full-bleed section painted in a strongly contrasting colour is a
+    // deliberate choice, not a default. Several targets have a near-black
+    // 'raised' used only on small cards; painting whole sections with it put a
+    // second large background on the far side of the lightness line and the
+    // page reported 'mixed' where the target was plainly 'light'. Use raised at
+    // section scale only when it sits close to the surface.
+    panelTint: (() => {
+      const surfaceEntry = entryFor('surface')
+      const raisedEntry = entryFor('raised')
+      if (!surfaceEntry || !raisedEntry) return hexFor('raised') ?? (dark ? '#1c1c1c' : '#f7f7f7')
+      const apart = Math.abs(surfaceEntry.oklch.l - raisedEntry.oklch.l)
+      return apart < 0.25 ? raisedEntry.hex : surfaceEntry.hex
+    })(),
   }
 }
 
@@ -133,9 +149,12 @@ const mediaBlock = (width: string, height: string, fill: string, radius: number)
   `<svg width="${width}" height="${height}" viewBox="0 0 100 40" role="img" aria-label="placeholder" ` +
   `style="display:block;border-radius:${radius}px"><rect width="100" height="40" fill="${fill}" opacity="0.45"/></svg>`
 
-function section(archetype: FroamSectionArchetype, tokens: Tokens, index: number, columns: number, seed: number): string {
+function section(archetype: FroamSectionArchetype, tokens: Tokens, index: number, columns: number, seed: number, ownsTopType = true): string {
   const h1 = stepAt(tokens.steps, 0)
-  const h2 = stepAt(tokens.steps, 1)
+  // A first section that carries the page's biggest heading *is* hero-like, and
+  // the classifier is right to say so. When the flow opens with something else,
+  // step down so the opening section does not claim the top of the scale.
+  const h2 = ownsTopType ? stepAt(tokens.steps, 1) : stepAt(tokens.steps, 2)
   const h3 = stepAt(tokens.steps, 2)
   const body = tokens.steps.find((px) => px >= 14 && px <= 19) ?? tokens.steps[0]
   // Use more of the measured scale than four sizes. A generated page that only
@@ -187,12 +206,16 @@ function section(archetype: FroamSectionArchetype, tokens: Tokens, index: number
         + paragraph(20, tokens.ink) + eyebrow(filler(2, seed + position)))) + close
     case 'proof':
       return open() + `<div style="display:flex;gap:${tokens.base * 5}px;align-items:center;justify-content:center;flex-wrap:wrap">`
-        + Array.from({ length: 5 }, () => mediaBlock(`${tokens.base * 14}px`, `${tokens.base * 4}px`, tokens.muted, tokens.radius)).join('')
+        // Proof needs mediaShare > 0.06 to register, and base-derived logos were
+        // far too small: five at 56×16 covered under 3% of the band, so every
+        // generated proof strip scanned back as 'unknown'. Real logos are ~140×48.
+        + Array.from({ length: 5 }, () => mediaBlock('150px', '52px', tokens.muted, tokens.radius)).join('')
         + '</div>' + close
     case 'split':
       return open() + grid(2, 2, (position) => `<div style="min-height:${tokens.base * 36}px">` + (position === 0
         ? heading(2, h2, filler(4, seed + 3)) + paragraph(26)
-        : mediaBlock('100%', `${tokens.base * 36}px`, tokens.raised, tokens.radius)) + '</div>') + close
+        : `<div style="background:${tokens.raised};border-radius:${tokens.radius}px;padding:${tokens.cardPad}px">`
+          + mediaBlock('100%', `${tokens.base * 30}px`, tokens.muted, tokens.radius) + '</div>') + '</div>') + close
     case 'faq':
       return open() + heading(2, h2, filler(3, seed + 4))
         + Array.from({ length: 4 }, (_, position) =>
@@ -200,9 +223,9 @@ function section(archetype: FroamSectionArchetype, tokens: Tokens, index: number
           + `<summary style="font-size:${body}px;color:${tokens.ink};cursor:pointer">${escapeHtml(filler(5, seed + position))}</summary>`
           + paragraph(18) + '</details>').join('') + close
     case 'cta':
-      return open(`background:${tokens.raised}`) + heading(2, h2, filler(4, seed + 5)) + paragraph(14) + button('Talk to us') + close
+      return open(`background:${tokens.panelTint}`) + heading(2, h2, filler(4, seed + 5)) + paragraph(14) + button('Talk to us') + close
     case 'footer':
-      return `<footer style="padding:${pad}px ${tokens.gutter}px;background:${tokens.raised}">`
+      return `<footer style="padding:${pad}px ${tokens.gutter}px;background:${tokens.panelTint}">`
         + grid(4, 4, (position) => `<div>${heading(3, body, filler(2, seed + position))}`
           + Array.from({ length: 4 }, (_, link) =>
             `<a href="#" style="display:block;padding:${tokens.base}px 0;font-size:${body}px;color:${tokens.muted};text-decoration:none">${escapeHtml(filler(2, seed + position + link))}</a>`).join('')
@@ -226,8 +249,14 @@ export function generatePageFromProfile(profile: FroamPageProfile, options: Froa
   const flow = options.flow ?? profile.flow.sections.map((item) => item.archetype)
   const columnsFor = (index: number) => profile.flow.sections[index]?.grid.columns ?? 3
   const sections = (flow.length ? flow : (['hero', 'feature-grid', 'content', 'cta', 'footer'] as FroamSectionArchetype[]))
-    .map((archetype, index) => section(archetype, tokens, index, columnsFor(index), seed))
+    .map((archetype, index, all) => section(archetype, tokens, index, columnsFor(index), seed, !(index === 0 && all[0] !== 'hero')))
     .join('\n')
+
+  const chrome = `<header style="position:fixed;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;` +
+    `padding:${tokens.base * 2}px ${tokens.gutter}px;background:${tokens.surface};z-index:10">` +
+    `<span style="font-size:${stepAt(tokens.steps, 2)}px;color:${tokens.ink};font-weight:700">Froam</span>` +
+    `<button type="button" style="background:${tokens.accent};color:${tokens.onAccent};border:0;` +
+    `padding:${tokens.base * 2}px ${tokens.base * 3}px;border-radius:${tokens.radius}px;font-size:${tokens.steps.find((px) => px >= 14 && px <= 19) ?? 16}px;font-weight:600;cursor:pointer">Sign up</button></header>`
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -238,7 +267,7 @@ export function generatePageFromProfile(profile: FroamPageProfile, options: Froa
   main{display:block}
   main > section{max-width:none}
 </style></head>
-<body><main>
+<body>${chrome}<main>
 ${sections}
 </main></body></html>`
 }
