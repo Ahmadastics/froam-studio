@@ -299,6 +299,24 @@ export declare const FROAM_MIN_SPACING_PX = 2;
  * the sections beneath it.
  */
 export declare function resolveSections(documentRoot: NodeView | undefined, childrenOf: (view: NodeView) => NodeView[]): NodeView[];
+/** A repeated sibling group: the geometric signature of a grid, a price table, a testimonial row. */
+export type FroamItemGroup = {
+    count: number;
+    columns: number;
+    withMedia: number;
+    withHeading: number;
+};
+/**
+ * Find the strongest repeated-sibling group inside a section.
+ *
+ * This replaces counting `role === 'card'`, which came from scan.ts matching the
+ * *class name* "card" or "tile". Across eighteen real sites that fired twice —
+ * Stripe, Linear, Vercel and Tailwind all have obvious feature grids and none of
+ * them name the class that way. Geometry does not care what the class is called:
+ * three boxes of near-identical size sitting in a row is a grid, whatever the
+ * markup calls them.
+ */
+export declare function detectItemGroup(section: NodeView, childrenOf: (view: NodeView) => NodeView[], isMedia: (view: NodeView) => boolean): FroamItemGroup;
 export type FroamProfileInput = {
     records: readonly FroamScanRecord[];
     origin: string;

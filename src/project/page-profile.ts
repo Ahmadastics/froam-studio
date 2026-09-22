@@ -623,23 +623,128 @@ export function resolveSections(
 
 // ── section flow ────────────────────────────────────────────────────────────
 
-function classifySection(childRoles: FroamSemanticRole[], input: { index: number; total: number; columns: number; heightRatio: number; cardCount: number; hasForm: boolean; linkDensity: number; ownTag: string }): { archetype: FroamSectionArchetype; confidence: number } {
+/** A repeated sibling group: the geometric signature of a grid, a price table, a testimonial row. */
+export type FroamItemGroup = { count: number; columns: number; withMedia: number; withHeading: number }
+
+/** Below these an element is a nav link or a list row, not a card. */
+const ITEM_MIN_WIDTH = 80
+const ITEM_MIN_HEIGHT = 60
+const ITEM_MAX_COUNT = 16
+
+/**
+ * Find the strongest repeated-sibling group inside a section.
+ *
+ * This replaces counting `role === 'card'`, which came from scan.ts matching the
+ * *class name* "card" or "tile". Across eighteen real sites that fired twice —
+ * Stripe, Linear, Vercel and Tailwind all have obvious feature grids and none of
+ * them name the class that way. Geometry does not care what the class is called:
+ * three boxes of near-identical size sitting in a row is a grid, whatever the
+ * markup calls them.
+ */
+export function detectItemGroup(
+  section: NodeView,
+  childrenOf: (view: NodeView) => NodeView[],
+  isMedia: (view: NodeView) => boolean,
+): FroamItemGroup {
+  let best: FroamItemGroup = { count: 0, columns: 1, withMedia: 0, withHeading: 0 }
+  const visit = (node: NodeView, depth: number) => {
+    if (depth > 5) return
+    const kids = childrenOf(node).filter((kid) => kid.rect.width >= ITEM_MIN_WIDTH && kid.rect.height >= ITEM_MIN_HEIGHT)
+    if (kids.length >= 2) {
+      const clusters: Array<{ width: number; height: number; items: NodeView[] }> = []
+      for (const kid of kids) {
+        const match = clusters.find((cluster) =>
+          Math.abs(cluster.width - kid.rect.width) <= Math.max(8, cluster.width * 0.12)
+          && Math.abs(cluster.height - kid.rect.height) <= Math.max(12, cluster.height * 0.3))
+        if (match) match.items.push(kid)
+        else clusters.push({ width: kid.rect.width, height: kid.rect.height, items: [kid] })
+      }
+      for (const cluster of clusters) {
+        if (cluster.items.length < 2 || cluster.items.length > ITEM_MAX_COUNT) continue
+        if (cluster.items.length <= best.count) continue
+        // Columns are how many items share a horizontal band, not a CSS property:
+        // most real grids are flex, so gridTemplateColumns reads 'none'.
+        const bands = new Map<number, number>()
+        for (const item of cluster.items) {
+          const band = Math.round(item.rect.y / 32)
+          bands.set(band, (bands.get(band) ?? 0) + 1)
+        }
+        const descendantsOf = (item: NodeView, depthLimit = 3): NodeView[] => {
+          const out: NodeView[] = []
+          const walk = (view: NodeView, level: number) => {
+            if (level > depthLimit) return
+            for (const child of childrenOf(view)) { out.push(child); walk(child, level + 1) }
+          }
+          walk(item, 0)
+          return out
+        }
+        best = {
+          count: cluster.items.length,
+          columns: Math.max(...bands.values()),
+          withMedia: cluster.items.filter((item) => descendantsOf(item).some(isMedia)).length,
+          withHeading: cluster.items.filter((item) => descendantsOf(item).some((view) => view.role === 'heading' || /^h[1-6]$/.test(view.tag))).length,
+        }
+      }
+    }
+    for (const kid of childrenOf(node)) visit(kid, depth + 1)
+  }
+  visit(section, 0)
+  return best
+}
+
+/**
+ * Money-shaped text, detected and counted — never retained.
+ *
+ * A price table is one of the few archetypes with an unmistakable signal, and a
+ * boolean count of how many leaves looked like a price keeps the profile
+ * derived-only. No copy crosses into the profile.
+ */
+const PRICE_PATTERN = /(^|\s)[$£€₦¥]\s?\d|\d\s?(usd|ngn|eur|gbp|jpy)\b|\/\s?(mo|month|yr|year|seat|user)\b|\bfree\b/i
+
+function classifySection(childRoles: FroamSemanticRole[], input: {
+  index: number; total: number; columns: number; heightRatio: number; hasForm: boolean
+  linkDensity: number; ownTag: string
+  items: FroamItemGroup; mediaShare: number; ownsLargestType: boolean
+  priceLikeCount: number; disclosureCount: number
+}): { archetype: FroamSectionArchetype; confidence: number } {
   const has = (role: FroamSemanticRole) => childRoles.includes(role)
+  const items = input.items
   // The element's own tag is the strongest signal available and was previously
   // ignored entirely: a real `<footer>` came back as 'proof' because the check
   // looked for a footer role among its *children*, where it will never be.
+  // Ordered by strength of evidence, most decisive first. A landmark tag or a
+  // page's largest type is near-certain; a bare heading is a last resort.
   if (input.ownTag === 'footer') return { archetype: 'footer', confidence: 0.95 }
   if (input.ownTag === 'header' || input.ownTag === 'nav') return { archetype: 'unknown', confidence: 0 }
-  if (input.index === input.total - 1 && input.linkDensity > 0.35) return { archetype: 'footer', confidence: 0.55 }
-  if (input.index === 0 && has('heading') && (has('cta') || has('button')) && input.heightRatio > 0.15) return { archetype: 'hero', confidence: 0.72 }
-  if (input.cardCount >= 3 && input.columns >= 2) return { archetype: 'feature-grid', confidence: 0.68 }
-  if (input.hasForm) return { archetype: 'cta', confidence: 0.6 }
-  if (input.cardCount === 2 || input.columns === 2) return { archetype: 'split', confidence: 0.5 }
-  if ((has('cta') || has('button')) && childRoles.length <= 4) return { archetype: 'cta', confidence: 0.48 }
-  if (has('media') && !has('heading')) return { archetype: 'proof', confidence: 0.35 }
+  if (input.index === input.total - 1 && input.linkDensity > 0.35) return { archetype: 'footer', confidence: 0.6 }
+
+  // Owning the largest type on the page, at the top, is what a hero is.
+  if (input.index === 0 && input.ownsLargestType && input.heightRatio > 0.1) return { archetype: 'hero', confidence: 0.8 }
+
+  // Repeated items carrying money: a price table, whatever it is called.
+  if (items.count >= 2 && input.priceLikeCount >= 2) return { archetype: 'pricing', confidence: 0.7 }
+  // Disclosure widgets in a stack are an FAQ and essentially nothing else.
+  if (input.disclosureCount >= 3) return { archetype: 'faq', confidence: 0.8 }
+
+  // A logo strip: short, media-dense, and deliberately says nothing.
+  if (!has('heading') && input.mediaShare > 0.06 && input.heightRatio < 0.12) return { archetype: 'proof', confidence: 0.65 }
+
+  // Quotes: repeated items that carry a face and prose but no heading of their own.
+  if (items.count >= 2 && items.withMedia >= items.count - 1 && items.withHeading === 0 && has('paragraph')) {
+    return { archetype: 'testimonial', confidence: 0.55 }
+  }
+
+  if (items.count >= 3 && items.columns >= 2) return { archetype: 'feature-grid', confidence: 0.75 }
+  if (items.count === 2 && items.columns === 2) return { archetype: 'split', confidence: 0.6 }
+  // A stacked list of like items is still a feature list, just in one column.
+  if (items.count >= 3 && has('heading')) return { archetype: 'feature-grid', confidence: 0.5 }
+
+  if (input.hasForm || has('input')) return { archetype: 'cta', confidence: 0.65 }
+  if ((has('cta') || has('button')) && input.heightRatio < 0.15 && items.count < 3) return { archetype: 'cta', confidence: 0.55 }
+
   // A heading over prose is the most common section on the web and deserves a
-  // name. Reporting six of eight sections as 'unknown' is not humility, it is a
-  // missing label — and it starves every pretext task that reads archetypes.
+  // name. Reporting half of them as 'unknown' is not humility, it is a missing
+  // label — and it starves every pretext task that reads archetypes.
   //
   // Deliberately structural rather than density-based. A first version gated on
   // characters per 1000px², which is an invented unit with an arbitrary cutoff:
@@ -969,6 +1074,9 @@ export function buildPageProfile(input: FroamProfileInput): FroamPageProfile {
   const rootHeight = documentRoot?.rect.height || 1
   const rootWidth = documentRoot?.rect.width || 1
 
+  const isMediaNode = (view: NodeView) => view.role === 'media' || ['img', 'picture', 'video', 'svg', 'canvas'].includes(view.tag)
+  const pageMaxFontSize = rendered.reduce((max, view) => view.text.trim() ? Math.max(max, view.fontSize) : max, 0)
+
   const sections: FroamSectionProfile[] = sectionNodes.map((section, index) => {
     const descendants: NodeView[] = []
     const walk = (view: NodeView, depth: number) => {
@@ -988,19 +1096,35 @@ export function buildPageProfile(input: FroamProfileInput): FroamPageProfile {
         ? section.childIds.filter((id) => byId.get(id)?.visible).length
         : 1
     const linkDensity = descendants.length ? descendants.filter((view) => view.tag === 'a').length / descendants.length : 0
+    const items = detectItemGroup(section, childrenOf, isMediaNode)
+    const sectionArea = Math.max(1, section.rect.width * section.rect.height)
+    const mediaShare = descendants.filter(isMediaNode).reduce((sum, view) => sum + view.rect.width * view.rect.height, 0) / sectionArea
+    const sectionMaxFont = descendants.reduce((max, view) => view.text.trim() ? Math.max(max, view.fontSize) : max, 0)
+    const priceLikeCount = descendants.filter((view) => view.childIds.length === 0 && PRICE_PATTERN.test(view.text)).length
+    const disclosureCount = descendants.filter((view) => view.tag === 'details' || view.tag === 'summary').length
     const classification = classifySection(childRoles, {
       index, total: sectionNodes.length, columns,
       heightRatio: section.rect.height / rootHeight,
-      cardCount: descendants.filter((view) => view.role === 'card').length,
       hasForm: descendants.some((view) => view.role === 'form'),
       linkDensity,
       ownTag: section.tag,
+      items,
+      mediaShare,
+      // "Largest type on the page" has to be resolved page-wide, not per section:
+      // a section holding 48px text is only a hero if nothing else is bigger.
+      ownsLargestType: pageMaxFontSize > 0 && sectionMaxFont >= pageMaxFontSize - 0.5,
+      priceLikeCount,
+      disclosureCount,
     })
     return {
       index,
       archetype: classification.archetype,
       confidence: classification.confidence,
-      grid: { columns, gapPx: section.gap, maxWidthPx: Math.round(section.rect.width) },
+      // Report the column count that the classification was actually made on.
+      // Reporting the CSS-derived one instead produced "feature-grid:30" for a
+      // group capped at sixteen items — a number from one metric printed beside
+      // a label from another.
+      grid: { columns: items.count >= 2 ? items.columns : columns, gapPx: section.gap, maxWidthPx: Math.round(section.rect.width) },
       heightRatio: Math.round((section.rect.height / rootHeight) * 1000) / 1000,
       childRoles,
     }
