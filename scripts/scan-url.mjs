@@ -34,6 +34,9 @@ import { addToCorpus, emptyCorpus, corpusStats } from '../dist/project/corpus.js
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
+/** Below this, a "page" is a block screen, a consent wall or a failed load. */
+const MIN_PLAUSIBLE_NODES = 25
+
 const VIEWPORTS = {
   desktop: { width: 1440, height: 900 },
   tablet: { width: 834, height: 1112 },
@@ -181,6 +184,19 @@ async function main() {
     try {
       log(`\nscanning ${url} (${viewport})…`)
       const result = await scanOne(page, url, { viewport, maxNodes, bundle, timeout })
+
+      // A blocked or errored page still renders *something*, and the profiler
+      // will dutifully measure it. craigslist.org answered 403 with four nodes
+      // and was scored 85.9 and filed into the corpus — a profile of an error
+      // page, indistinguishable from data once written. Refuse both the status
+      // and the implausible thinness rather than trusting either alone: some
+      // blocks answer 200.
+      if (result.status >= 400) {
+        throw new Error(`HTTP ${result.status} — refusing to profile an error page`)
+      }
+      if (result.profile.provenance.nodesRendered < MIN_PLAUSIBLE_NODES) {
+        throw new Error(`only ${result.profile.provenance.nodesRendered} nodes rendered — the page is blocked, gated or did not load`)
+      }
       const report = judgePage(result.profile)
       results.push({ url, ok: true, ...result, score: report.score, findings: report.findings.length })
 

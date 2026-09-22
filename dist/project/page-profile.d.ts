@@ -269,6 +269,16 @@ type NodeView = {
 export declare const OKLAB_MERGE_THRESHOLD = 0.035;
 export declare const OKLAB_MERGE_THRESHOLD_BACKGROUND = 0.01;
 /**
+ * Smallest value treated as layout spacing.
+ *
+ * A 1px padding is a hairline rule or an optical nudge, not a step in a spacing
+ * system. Counting them is not harmless: across eighteen real sites the spacing
+ * scale came back as [1,2,3,4,5] and every site resolved to a 4px base, because
+ * sub-pixel noise outnumbered the actual 16/24/32px layout values. The grid was
+ * being inferred from borders.
+ */
+export declare const FROAM_MIN_SPACING_PX = 2;
+/**
  * Find a page's sections.
  *
  * Real pages nest, and they do not nest uniformly. Beneath `<body>` sit a

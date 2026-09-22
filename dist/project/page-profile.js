@@ -255,8 +255,18 @@ const median = (values) => {
     const middle = sorted.length >> 1;
     return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 };
+/**
+ * Smallest value treated as layout spacing.
+ *
+ * A 1px padding is a hairline rule or an optical nudge, not a step in a spacing
+ * system. Counting them is not harmless: across eighteen real sites the spacing
+ * scale came back as [1,2,3,4,5] and every site resolved to a 4px base, because
+ * sub-pixel noise outnumbered the actual 16/24/32px layout values. The grid was
+ * being inferred from borders.
+ */
+export const FROAM_MIN_SPACING_PX = 2;
 function parseLengths(value) {
-    return value.split(/\s+/).map((part) => Number.parseFloat(part)).filter((part) => Number.isFinite(part) && part > 0);
+    return value.split(/\s+/).map((part) => Number.parseFloat(part)).filter((part) => Number.isFinite(part) && part >= FROAM_MIN_SPACING_PX);
 }
 // ── section resolution ──────────────────────────────────────────────────────
 /**
@@ -789,9 +799,19 @@ export function buildPageProfile(input) {
         const current = sectionNodes[index + 1], previous = sectionNodes[index];
         return Math.round(current.rect.y - (previous.rect.y + previous.rect.height));
     }).filter((gap) => gap >= 0);
-    const paddingTotal = rendered.reduce((sum, view) => sum + parseLengths(view.padding).reduce((inner, value) => inner + value, 0), 0);
-    const densityRatio = paddingTotal / Math.max(1, rendered.length);
-    const density = densityRatio < 8 ? 'tight' : densityRatio > 28 ? 'airy' : 'balanced';
+    // Density is the median of the padding values a page actually uses, in pixels.
+    //
+    // It was total padding divided by every rendered node, which works on a
+    // sixteen-node fixture and collapses on a real page: most of two thousand
+    // nodes carry no padding at all, so the average drags toward zero regardless
+    // of how generous the layout is. Fifteen of eighteen real sites came back
+    // 'tight', including Stripe, Linear, Vercel and Tailwind — and because
+    // density is a prior scope, that single miscalibration was conditioning half
+    // the induced priors on a fiction.
+    const paddingValues = rendered.flatMap((view) => parseLengths(view.padding));
+    const medianPadding = median(paddingValues);
+    const density = !paddingValues.length ? 'balanced'
+        : medianPadding < 12 ? 'tight' : medianPadding > 28 ? 'airy' : 'balanced';
     // ── components ────────────────────────────────────────────────────────────
     const signatureGroups = new Map();
     for (const view of rendered) {
