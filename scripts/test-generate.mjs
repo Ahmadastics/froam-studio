@@ -159,6 +159,32 @@ test('an opening section that is not a hero does not claim the top of the scale'
   assert.ok(!ctaFirst.includes('font-size:48px'), 'a cta-first page must not own the top step')
 })
 
+test('a quoted font stack does not break the style attribute', () => {
+  // Real stacks quote any family whose name has a space. A double quote inside
+  // a double-quoted attribute terminates it, so every declaration *after*
+  // font-family was silently dropped — generated headings fell back to the
+  // browser's 2em default and a target's 64px top step came back as 32px. It
+  // cost the top of the type scale on most pages in the corpus.
+  const quoted = profile()
+  quoted.type.families = [
+    { stack: '"Inter Variable", "SF Pro Display", -apple-system, sans-serif', role: 'display', areaShare: 0.6 },
+    { stack: '"Segoe UI", Roboto, sans-serif', role: 'body', areaShare: 0.4 },
+  ]
+  const tokens = resolveTokens(quoted)
+  assert.ok(!tokens.displayFont.includes('"'), `display stack still carries a double quote: ${tokens.displayFont}`)
+  assert.ok(tokens.displayFont.includes("'Inter Variable'"), 'the family name must survive, just requoted')
+  assert.ok(!tokens.bodyFont.includes('"'))
+
+  const html = generatePageFromProfile(quoted)
+  // Every heading must still carry its size after the font declaration.
+  const headings = [...html.matchAll(/<h1[^>]*style="([^"]*)"/g)].map((match) => match[1])
+  assert.ok(headings.length > 0, 'no h1 emitted')
+  for (const style of headings) {
+    assert.ok(/font-size:\s*\d/.test(style), `font-size lost from the attribute: ${style}`)
+  }
+  assert.ok(html.includes('font-size:48px'), 'the largest step never reaches the markup')
+})
+
 test('generation is deterministic', () => {
   assert.equal(generatePageFromProfile(profile(), { seed: 7 }), generatePageFromProfile(profile(), { seed: 7 }))
 })

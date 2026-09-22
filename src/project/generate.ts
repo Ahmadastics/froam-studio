@@ -51,6 +51,21 @@ function filler(wordCount: number, seed: number) {
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] as string))
 
+/**
+ * Make a font stack safe inside a `style="…"` attribute.
+ *
+ * Real stacks quote any family whose name has a space — `"Inter Variable",
+ * "SF Pro Display", …` — and a double quote inside a double-quoted attribute
+ * terminates it. Every declaration after font-family was therefore dropped, so
+ * generated headings fell back to the browser's default 2em and a target's 64px
+ * top step came back as 32px. It cost the whole top of the type scale on every
+ * page whose font stack quoted a family name, which is most of them.
+ *
+ * CSS accepts single quotes, so swapping them keeps the stack intact and the
+ * attribute closed.
+ */
+const cssFontStack = (stack: string) => stack.replace(/"/g, "'")
+
 type Tokens = {
   surface: string
   raised: string
@@ -101,10 +116,10 @@ export function resolveTokens(profile: FroamPageProfile): Tokens {
     base,
     radius: profile.surface.radii[0] ?? 0,
     steps: steps.length >= 3 ? steps : [16, 20, 25, 31],
-    bodyFont: profile.type.families.find((family) => family.role === 'body')?.stack
-      ?? profile.type.families[0]?.stack ?? 'system-ui, sans-serif',
-    displayFont: profile.type.families.find((family) => family.role === 'display')?.stack
-      ?? profile.type.families[0]?.stack ?? 'system-ui, sans-serif',
+    bodyFont: cssFontStack(profile.type.families.find((family) => family.role === 'body')?.stack
+      ?? profile.type.families[0]?.stack ?? 'system-ui, sans-serif'),
+    displayFont: cssFontStack(profile.type.families.find((family) => family.role === 'display')?.stack
+      ?? profile.type.families[0]?.stack ?? 'system-ui, sans-serif'),
     measureCh: profile.type.measureCh >= 30 && profile.type.measureCh <= 110 ? profile.type.measureCh : 66,
     sectionPad: Math.max(base * 2, Math.min(sectionPad, base * 12)),
     // Density is measured from container padding, so a generated page has to

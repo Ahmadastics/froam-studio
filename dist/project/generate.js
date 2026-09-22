@@ -16,6 +16,20 @@ function filler(wordCount, seed) {
 }
 const escapeHtml = (value) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 /**
+ * Make a font stack safe inside a `style="…"` attribute.
+ *
+ * Real stacks quote any family whose name has a space — `"Inter Variable",
+ * "SF Pro Display", …` — and a double quote inside a double-quoted attribute
+ * terminates it. Every declaration after font-family was therefore dropped, so
+ * generated headings fell back to the browser's default 2em and a target's 64px
+ * top step came back as 32px. It cost the whole top of the type scale on every
+ * page whose font stack quoted a family name, which is most of them.
+ *
+ * CSS accepts single quotes, so swapping them keeps the stack intact and the
+ * attribute closed.
+ */
+const cssFontStack = (stack) => stack.replace(/"/g, "'");
+/**
  * Resolve a profile into the concrete values a page needs.
  *
  * Every fallback here is a deliberate, plain default rather than an invented
@@ -42,10 +56,10 @@ export function resolveTokens(profile) {
         base,
         radius: profile.surface.radii[0] ?? 0,
         steps: steps.length >= 3 ? steps : [16, 20, 25, 31],
-        bodyFont: profile.type.families.find((family) => family.role === 'body')?.stack
-            ?? profile.type.families[0]?.stack ?? 'system-ui, sans-serif',
-        displayFont: profile.type.families.find((family) => family.role === 'display')?.stack
-            ?? profile.type.families[0]?.stack ?? 'system-ui, sans-serif',
+        bodyFont: cssFontStack(profile.type.families.find((family) => family.role === 'body')?.stack
+            ?? profile.type.families[0]?.stack ?? 'system-ui, sans-serif'),
+        displayFont: cssFontStack(profile.type.families.find((family) => family.role === 'display')?.stack
+            ?? profile.type.families[0]?.stack ?? 'system-ui, sans-serif'),
         measureCh: profile.type.measureCh >= 30 && profile.type.measureCh <= 110 ? profile.type.measureCh : 66,
         sectionPad: Math.max(base * 2, Math.min(sectionPad, base * 12)),
         // Density is measured from container padding, so a generated page has to
