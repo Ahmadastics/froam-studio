@@ -13,6 +13,29 @@
  * raw accuracy means nothing; uniform is weak everywhere and flatters anything
  * compared against it. A predictor has to beat the *majority* baseline before
  * anyone should believe it learned something.
+ *
+ * ── tested and rejected ────────────────────────────────────────────────────
+ *
+ * The section tasks stopped improving with data: going from 12 to 40 origins
+ * moved section-infill from z=0.56 to z=0.78, still far short of significance.
+ * The obvious next hypothesis was that the model, not the corpus, was the
+ * bottleneck — section-infill uses only the section *before* the gap, when
+ * filling a gap is constrained by both neighbours. So it was rewritten to score
+ * candidates as P(x | before) × P(after | x), with Jelinek–Mercer interpolation
+ * against the positional prior weighted by bigram support.
+ *
+ * It measured *worse*: section-infill 24.4% → 22.2%, next-section 24.3% → 21.6%.
+ * Within noise on a 45-task hold-out, but certainly not an improvement, so it
+ * was reverted — a more complex model that does not measurably help is a worse
+ * model, and tuning it against five hold-out origins would be fitting noise.
+ *
+ * What that leaves is a live question rather than a to-do. blind-role, which
+ * asks what a section *looks like*, transfers across sites at z=3.37.
+ * section-infill and next-section, which ask where a section *sits*, do not.
+ * The honest reading is that section ordering may simply be less transferable
+ * than section appearance — different niches order pages differently — and no
+ * amount of modelling recovers a signal that is not shared. Distinguishing that
+ * from "still too little data" needs a larger hold-out than five origins.
  */
 import type { FroamPageProfile, FroamSectionArchetype } from './page-profile'
 import type { FroamPretextTask, FroamPretextPrediction } from './pretext'

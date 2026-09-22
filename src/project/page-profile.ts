@@ -562,11 +562,17 @@ export function resolveSections(
   }
 
   /**
-   * How well a node's children tile it vertically.
+   * How well a node lays its children out as a vertical sequence.
    *
-   * Coverage alone would accept a hero whose headline and paragraph happen to be
-   * full width. The overlap term is what rejects layered or absolutely
-   * positioned children, which do not partition anything.
+   * Measured over *all* in-flow children, not just the ones large enough to be
+   * sections. That distinction is the whole fix: linear.app interleaves its
+   * sections with 1×1 spacers, hairline dividers and loose headings, so the
+   * section-sized children covered only 64% of the parent. Tiling failed, the
+   * container was not recognised as a stack, and the entire 9,394px wrapper was
+   * emitted as one "hero" section.
+   *
+   * Tiling answers "is this a stack of things?"; qualification answers "which of
+   * them are sections?". Conflating the two made a page's whole body a section.
    */
   const tiling = (view: NodeView, children: NodeView[]) => {
     if (children.length < 2) return 0
@@ -583,6 +589,12 @@ export function resolveSections(
     return Math.max(0, Math.min(1, covered / height) - overlap / height)
   }
 
+  /** In-flow children, which are the ones that participate in a vertical stack. */
+  const flowChildren = (view: NodeView) => childrenOf(view).filter((child) => !OUT_OF_FLOW.has(child.position) && child.rect.height > 0)
+
+  /** A section covering most of the document is a container that was not broken down. */
+  const SECTION_MAX_DOCUMENT_SHARE = 0.8
+
   const sections: NodeView[] = []
   const queue: Array<{ view: NodeView; depth: number }> = [{ view: documentRoot, depth: 0 }]
   const seen = new Set<string>()
@@ -594,7 +606,7 @@ export function resolveSections(
     seen.add(resolved.id)
 
     const children = childrenOf(resolved).filter(qualifies)
-    const tilesWell = tiling(resolved, children) >= 0.7
+    const tilesWell = tiling(resolved, flowChildren(resolved)) >= 0.7
     // A landmark tag settles it: <section> is a section, however its insides
     // happen to be laid out. Everything else is a band only if its children
     // genuinely partition it and there are not so many that this is a list.
@@ -614,6 +626,15 @@ export function resolveSections(
         continue
       }
       if (resolved === documentRoot) continue
+    }
+    // Never emit a "section" that is most of the page. If it still has
+    // qualifying children, descend into them regardless of how poorly they
+    // tiled; a partial answer beats calling the whole body a hero.
+    if (resolved.rect.height > documentHeight * SECTION_MAX_DOCUMENT_SHARE) {
+      if (children.length && depth < SECTION_MAX_DEPTH) {
+        for (const child of children) queue.push({ view: child, depth: depth + 1 })
+      }
+      continue
     }
     if (qualifies(resolved) && resolved !== documentRoot) sections.push(resolved)
   }
@@ -1143,10 +1164,22 @@ export function buildPageProfile(input: FroamProfileInput): FroamPageProfile {
   // 'tight', including Stripe, Linear, Vercel and Tailwind — and because
   // density is a prior scope, that single miscalibration was conditioning half
   // the induced priors on a fiction.
-  const paddingValues = rendered.flatMap((view) => parseLengths(view.padding))
+  // Measured over layout containers only — nodes with element children that span
+  // a meaningful share of the page. Padding on a button or a chip is component
+  // detail; "airy" is a statement about the space between blocks of content.
+  //
+  // The median over every padded node made 'airy' unreachable, because buttons
+  // and chips outnumber containers on every real page and drag the median to
+  // component scale. A prior scope with a bucket that can never fire wastes a
+  // conditioning dimension.
+  const documentWidthForDensity = rendered.reduce((max, view) => Math.max(max, view.rect.width), 1)
+  const containerPadding = rendered
+    .filter((view) => view.childIds.length > 0 && view.rect.width >= documentWidthForDensity * 0.3)
+    .flatMap((view) => parseLengths(view.padding))
+  const paddingValues = containerPadding.length ? containerPadding : rendered.flatMap((view) => parseLengths(view.padding))
   const medianPadding = median(paddingValues)
   const density: FroamPageProfile['space']['density'] = !paddingValues.length ? 'balanced'
-    : medianPadding < 12 ? 'tight' : medianPadding > 28 ? 'airy' : 'balanced'
+    : medianPadding < 16 ? 'tight' : medianPadding > 40 ? 'airy' : 'balanced'
 
   // ── components ────────────────────────────────────────────────────────────
   const signatureGroups = new Map<string, NodeView[]>()
