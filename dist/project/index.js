@@ -54,4 +54,6 @@ export * from './corpus.js';
 export * from './pretext.js';
 export * from './predictors.js';
 export * from './intelligence-reference.js';
+export * from './generate.js';
+export * from './profile-distance.js';
 //# sourceMappingURL=index.js.map

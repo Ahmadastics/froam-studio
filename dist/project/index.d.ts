@@ -54,4 +54,6 @@ export * from './corpus';
 export * from './pretext';
 export * from './predictors';
 export * from './intelligence-reference';
+export * from './generate';
+export * from './profile-distance';
 //# sourceMappingURL=index.d.ts.map
