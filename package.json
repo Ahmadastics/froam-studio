@@ -76,6 +76,7 @@
     "induce": "node scripts/induce.mjs",
     "roundtrip": "node scripts/roundtrip.mjs",
     "audit:demo": "node scripts/demo-audit.mjs",
+    "adoption": "node scripts/adoption.mjs",
     "verify:alpha": "node scripts/verify-alpha-gates.mjs",
     "check:release": "npm run build && npm test",
     "prepublishOnly": "npm run check:release",
