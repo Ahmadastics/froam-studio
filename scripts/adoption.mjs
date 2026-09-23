@@ -147,7 +147,12 @@ console.log(`\n  weekday ${weekdayMean.toFixed(1)}/day   weekend ${weekendMean.t
 // Below a handful of downloads a day the weekday signal is noise, and calling
 // it either way would be inventing a conclusion from nothing — the same trap as
 // reporting a significance test on nine samples.
-if (steadyTotal < 30) console.log('  Too little steady traffic to read a weekly pattern from.')
+// Gate on the daily rate, not the window total: 53 downloads across 30 days is
+// under two a day, where one quiet Tuesday flips the comparison. The first
+// version gated on the total and duly announced a pattern from 1.8/day. Both
+// buckets must be measurable, not just one: comparing 5.1/day against 0.8/day
+// is not a weekly pattern, it is one bucket being empty.
+if (Math.min(weekdayMean, weekendMean) < 3) console.log('  Too little steady traffic to read a weekly pattern from.')
 else if (weekdayMean > weekendMean * 1.5) console.log('  Human-shaped: usage dips at weekends.')
 else console.log('  Flat across the week, which is what automated traffic looks like.')
 
@@ -157,7 +162,28 @@ if (github) {
 }
 console.log(`  npm     ${Object.keys(packument.versions ?? {}).length} versions published`)
 
+// ── trend ───────────────────────────────────────────────────────────────────
+// A single reading is not progress. Every run prints the whole series so the
+// question is always "is this moving" rather than "what is it today".
+if (history.length > 1) {
+  console.log(`\n── trend ${'─'.repeat(52)}`)
+  console.log(`  ${'when'.padEnd(12)} ${'baseline'.padStart(9)} ${'latest%'.padStart(8)} ${'stars'.padStart(6)} ${'issues'.padStart(7)}`)
+  // One row per day, most recent wins. Checking twice in an afternoon should not
+  // look like two data points.
+  const byDay = new Map(history.map((entry) => [entry.at.slice(0, 10), entry]))
+  for (const entry of [...byDay.values()].slice(-12)) {
+    console.log(`  ${entry.at.slice(0, 10).padEnd(12)} ${String(entry.baselineDaily).padStart(7)}/d ` +
+      `${String(Math.round((entry.latestShare ?? 0) * 100)).padStart(7)}% ${String(entry.stars ?? '—').padStart(6)} ${String(entry.openIssues ?? '—').padStart(7)}`)
+  }
+  const first = history[0]
+  const moved = ['baselineDaily', 'stars', 'openIssues'].filter((key) => (snapshot[key] ?? 0) !== (first[key] ?? 0))
+  console.log(moved.length
+    ? `\n  moved since the first snapshot: ${moved.join(', ')}`
+    : `\n  nothing has moved since the first snapshot (${first.at.slice(0, 10)}).`)
+}
+
 console.log(`\n  The numbers that would mean somebody actually used this — a dependent,`)
 console.log(`  an issue, a fork, a question — are the ones to watch. Downloads can rise`)
 console.log(`  a long way without any of them moving.\n`)
-console.log(`  history: ${HISTORY} (${history.length} snapshot${history.length === 1 ? '' : 's'})\n`)
+console.log(`  history: ${HISTORY} (${history.length} snapshot${history.length === 1 ? '' : 's'}, ${new Set(history.map((entry) => entry.at.slice(0, 10))).size} day${new Set(history.map((entry) => entry.at.slice(0, 10))).size === 1 ? '' : 's'})`)
+console.log(`  run \`npm run adoption\` whenever — each run appends and reprints the series.\n`)
