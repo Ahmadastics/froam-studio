@@ -41,6 +41,31 @@ the sweep's click order).
 - Hover, click, double-click and the context menu all resolve through one
   function, so the hover highlight always previews what a click will select.
 
+**Auto text mode: selected copy is ready to write.** No tool to pick first —
+Froam reads the intent:
+
+- **Just type.** With copy selected, the first keystroke starts writing at the
+  spot last clicked (or the end), and that keystroke is kept. The selection chip
+  says *Type to edit* so this is discoverable, and the pointer becomes a text
+  cursor over selected copy.
+- **Click selected copy again** to place the caret there; **double-click** to
+  start with that word selected; **Enter** to start writing; **paste** to write
+  the clipboard in — always as plain text, never someone else's markup.
+- Tool shortcuts keep working. V/H/T/R/F on selected copy wait 260ms: more
+  typing means writing, a lone letter is the shortcut.
+- In headings, buttons, links and other one-line copy, Enter finishes
+  (Shift+Enter still breaks the line); Escape finishes anywhere and keeps the
+  selection.
+- Every entry point — typing, clicks, Enter, paste, double-click, the Text tool —
+  goes through one `startWriting()`, so they remember original copy and save
+  identically. "Am I writing?" is read from the DOM rather than React state, so a
+  key arriving before a render can't restart writing that just finished.
+
+Fixed along the way: single-letter tool shortcuts, arrow nudging, Delete and `?`
+fired while typing in one of Froam's own fields; clicking inside copy being
+written ended writing instead of moving the caret; and the caret lookup could hit
+the selection box's resize edge instead of the text beneath it.
+
 **Clicking feels like locking on.** A ripple from the exact point clicked, a
 flash across the element it picked, the selection box snapping in from slightly
 larger and the handles popping in corner by corner. The old handoff ring was a
