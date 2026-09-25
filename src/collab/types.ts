@@ -152,11 +152,13 @@ export function compareOps(a: FroamOp, b: FroamOp) {
  * makes it a studio. There is no `mode` field on purpose — the roles are the
  * mode, so a room can be upgraded by inviting someone.
  */
-export type FroamRole = 'owner' | 'editor' | 'commenter' | 'viewer'
+export type FroamRole = 'owner' | 'editor' | 'contributor' | 'commenter' | 'viewer'
 
+/** Live, shared editing. A contributor edits privately and submits instead. */
 export const FROAM_ROLE_CAN_EDIT: Record<FroamRole, boolean> = {
   owner: true,
   editor: true,
+  contributor: false,
   commenter: false,
   viewer: false,
 }
@@ -164,6 +166,7 @@ export const FROAM_ROLE_CAN_EDIT: Record<FroamRole, boolean> = {
 export const FROAM_ROLE_CAN_COMMENT: Record<FroamRole, boolean> = {
   owner: true,
   editor: true,
+  contributor: true,
   commenter: true,
   viewer: false,
 }
@@ -276,6 +279,7 @@ export type FroamRoomEvent =
   | { seq: number; type: 'revision'; createdAt: number; actor: FroamActorId; revisionId: string }
   | { seq: number; type: 'proposal'; createdAt: number; actor: FroamActorId; proposal: FroamRevertProposal }
   | { seq: number; type: 'design'; createdAt: number; actor: FroamActorId; routeKey: string; viewport: FroamViewport }
+  | { seq: number; type: 'request'; createdAt: number; actor: FroamActorId; requestId: string }
 
 /** Session talk. Unlike an anchored comment it has no design lifecycle. */
 export type FroamChatMessage = {

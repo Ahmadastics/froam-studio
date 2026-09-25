@@ -54,11 +54,11 @@ test('opening a room mints one invite per role', async () => {
   const { api } = await freshApi()
   const created = await open(api)
   assert.equal(created.success, true)
-  assert.deepEqual(Object.keys(created.invites).sort(), ['commenter', 'editor', 'owner', 'viewer'])
+  assert.deepEqual(Object.keys(created.invites).sort(), ['commenter', 'contributor', 'editor', 'owner', 'viewer'])
   assert.equal(created.you.role, 'owner')
   assert.equal(created.room.members.length, 1)
-  // Four distinct tokens, or a role boundary is decorative.
-  assert.equal(new Set(Object.values(created.invites)).size, 4)
+  // Distinct tokens, or a role boundary is decorative.
+  assert.equal(new Set(Object.values(created.invites)).size, 5)
 })
 
 test('room creation can be gated', async () => {
@@ -648,6 +648,127 @@ test('a guest-editor cross-user undo becomes a proposal the owner decides', asyn
   })
   assert.equal(decided.proposal.status, 'approved')
   assert.equal(decided.accepted[0].actor, created.you.actor, 'the enactment belongs to the owner who allowed it')
+})
+
+/* ─── change requests: a contributor submits, the owner publishes ─── */
+
+async function requestRoom(options = {}) {
+  const dir = await fsp.mkdtemp(nodePath.join(os.tmpdir(), 'froam-rooms-'))
+  const published = []
+  const api = createFroamRoomApi({
+    file: nodePath.join(dir, 'froam.rooms.json'),
+    now,
+    onApproveRequest: options.onApproveRequest ?? (async ({ request }) => { published.push(request); return { detail: 'Published to test' } }),
+  })
+  const created = await open(api)
+  const contributor = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, { token: created.invites.contributor, name: 'Maya' })
+  const owner = { token: created.invites.owner, actor: created.you.actor, session: created.you.session }
+  const maya = { token: created.invites.contributor, actor: contributor.you.actor, session: contributor.you.session }
+  const base = `/api/froam/rooms/${created.room.id}/requests`
+  const submit = (who, extra = {}) => call(api, 'POST', base, {
+    ...who, routeKey: '/', viewport: 'desktop', title: 'New hero copy',
+    store: { 'main:1/h1:1': { text: 'Plan your escape' } },
+    changes: [{ label: 'Headline', before: 'Plan a trip', after: 'Plan your escape' }],
+    textEdits: [{ from: 'Plan a trip', to: 'Plan your escape' }],
+    note: 'For the spring campaign', ...extra,
+  })
+  const list = (who) => call(api, 'GET', `${base}?token=${who.token}&actor=${who.actor}&session=${who.session}`)
+  return { api, created, owner, maya, base, submit, list, published }
+}
+
+test('a contributor link joins as a contributor, and cannot push live edits', async () => {
+  const { api, created, maya } = await requestRoom()
+  const joined = await call(api, 'GET', `/api/froam/rooms/${created.room.id}?token=${maya.token}&actor=${maya.actor}&session=${maya.session}`)
+  assert.equal(joined.room.you.role, 'contributor')
+  const pushed = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/ops`, {
+    ...maya, baseSeq: 0, ops: [edit(maya.actor, 'live-try', 'red', 'style:color')],
+  })
+  assert.equal(pushed.status, 403, 'a contributor edited the shared design live')
+})
+
+test('a contributor submits changes; the owner sees them with what changed', async () => {
+  const { owner, maya, submit, list } = await requestRoom()
+  const submitted = await submit(maya)
+  assert.equal(submitted.success, true)
+  assert.equal(submitted.request.status, 'pending')
+  assert.equal(submitted.request.createdBy, 'Maya')
+  const seen = await list(owner)
+  assert.equal(seen.requests.length, 1)
+  assert.deepEqual(seen.requests[0].changes[0], { label: 'Headline', before: 'Plan a trip', after: 'Plan your escape' })
+})
+
+test('approving publishes through the host, once', async () => {
+  const { api, base, owner, maya, submit, published } = await requestRoom()
+  const { request } = await submit(maya)
+  const approved = await call(api, 'POST', `${base}/${request.id}/decision`, { ...owner, decision: 'approved', note: 'Looks great' })
+  assert.equal(approved.request.status, 'approved')
+  assert.equal(approved.request.decisionNote, 'Looks great')
+  assert.deepEqual(approved.request.published, { ok: true, detail: 'Published to test' })
+  assert.equal(published.length, 1)
+  assert.equal(published[0].store['main:1/h1:1'].text, 'Plan your escape')
+  const again = await call(api, 'POST', `${base}/${request.id}/decision`, { ...owner, decision: 'approved' })
+  assert.notEqual(again.status, 200, 'a decided request was decided again')
+  assert.equal(published.length, 1, 'published twice')
+})
+
+test('sending back records the note and publishes nothing', async () => {
+  const { api, base, owner, maya, submit, list, published } = await requestRoom()
+  const { request } = await submit(maya)
+  const back = await call(api, 'POST', `${base}/${request.id}/decision`, { ...owner, decision: 'changes-requested', note: 'Shorter, please' })
+  assert.equal(back.request.status, 'changes-requested')
+  assert.equal(published.length, 0)
+  const mine = await list(maya)
+  assert.equal(mine.requests[0].decisionNote, 'Shorter, please', 'the contributor cannot see why')
+})
+
+test('only the owner decides; contributors see only their own requests', async () => {
+  const { api, created, base, owner, maya, submit, list } = await requestRoom()
+  const { request } = await submit(maya)
+  const selfApprove = await call(api, 'POST', `${base}/${request.id}/decision`, { ...maya, decision: 'approved' })
+  assert.equal(selfApprove.status, 403)
+  const editor = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, { token: created.invites.editor, name: 'Ade' })
+  const ade = { token: created.invites.editor, actor: editor.you.actor, session: editor.you.session }
+  const editorApprove = await call(api, 'POST', `${base}/${request.id}/decision`, { ...ade, decision: 'approved' })
+  assert.equal(editorApprove.status, 403, 'an editor published without the owner')
+  const other = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, { token: created.invites.contributor, name: 'Sam' })
+  const sam = { token: created.invites.contributor, actor: other.you.actor, session: other.you.session }
+  assert.equal((await list(sam)).requests.length, 0, 'a contributor saw someone else\'s request')
+  assert.equal((await list(owner)).requests.length, 1)
+})
+
+test('commenters and viewers cannot submit changes', async () => {
+  const { api, created, base } = await requestRoom()
+  const client = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, { token: created.invites.commenter, name: 'Client' })
+  const res = await call(api, 'POST', base, {
+    token: created.invites.commenter, actor: client.you.actor, session: client.you.session,
+    routeKey: '/', viewport: 'desktop', store: { 'main:1/h1:1': { text: 'x' } },
+  })
+  assert.equal(res.status, 403)
+})
+
+test('an empty or malformed submission is refused', async () => {
+  const { maya, submit } = await requestRoom()
+  assert.equal((await submit(maya, { store: {} })).status, 400)
+  const odd = await submit(maya, { store: { '<script>': { text: 'x' }, 'no-colon': { text: 'y' } } })
+  assert.equal(odd.status, 400, 'odd keys were accepted as changes')
+})
+
+test('the author can withdraw a pending request; nobody else can', async () => {
+  const { api, base, owner, maya, submit } = await requestRoom()
+  const { request } = await submit(maya)
+  const byOwner = await call(api, 'POST', `${base}/${request.id}/withdraw`, { ...owner })
+  assert.notEqual(byOwner.status, 200)
+  const byMaya = await call(api, 'POST', `${base}/${request.id}/withdraw`, { ...maya })
+  assert.equal(byMaya.request.status, 'withdrawn')
+})
+
+test('if publishing fails, the request stays pending and says why', async () => {
+  const { api, base, owner, maya, submit, list } = await requestRoom({ onApproveRequest: async () => { throw new Error('disk full') } })
+  const { request } = await submit(maya)
+  const failed = await call(api, 'POST', `${base}/${request.id}/decision`, { ...owner, decision: 'approved' })
+  assert.equal(failed.status, 502)
+  assert.match(failed.error, /disk full/)
+  assert.equal((await list(owner)).requests[0].status, 'pending')
 })
 
 let failed = 0

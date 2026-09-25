@@ -98,9 +98,41 @@ export function createFroamRoomApi(options: {
   file?: string
   storage?: FroamRoomStorage
   authorize?: (req: IncomingMessage) => boolean | Promise<boolean>
+  /**
+   * Makes an approved change request live — called when the owner approves
+   * what a contributor submitted. Store the publish, commit it (see
+   * createGitHubCommitter), trigger a deploy. Resolve `{ detail }` for the
+   * record; throw to leave the request pending with the error shown.
+   */
+  onApproveRequest?: (input: {
+    room: { id: string }
+    request: {
+      id: string
+      routeKey: string
+      viewport: 'desktop' | 'tablet' | 'mobile'
+      title: string
+      note: string | null
+      store: Record<string, Record<string, unknown>>
+      removed: string[]
+      changes: Array<{ label: string; before: string | null; after: string | null }>
+      textEdits: Array<{ from: string; to: string }>
+      createdBy: string
+    }
+  }) => Promise<{ detail?: string } | void> | { detail?: string } | void
   log?: (line: string) => void
   now?: () => number
 }): (req: IncomingMessage, res: ServerResponse) => Promise<boolean>
+
+/**
+ * Apply an approved change request to a design: only the paths it changed
+ * (never the contributor's whole snapshot); text listed in `writtenText` was
+ * placed in the source and is dropped from the drafts.
+ */
+export function applyChangeRequest<T extends { routes?: Record<string, unknown> }>(
+  design: T,
+  request: { routeKey: string; viewport: string; store: Record<string, Record<string, unknown>>; removed?: string[] },
+  options?: { writtenText?: string[] },
+): T
 
 /**
  * Beta branch/checkpoint project-document delta contract. The existing Room

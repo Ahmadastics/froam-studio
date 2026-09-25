@@ -32,6 +32,8 @@ type ToolMode = 'pointer' | 'hand' | 'text' | 'frame' | 'shape' | 'move'
 
 type Props = {
   workspace?: ReactNode
+  /** Share / Submit — the collaboration control (collaborate/FroamCollaborate). */
+  collaborate?: ReactNode
   viewportMode: ViewportMode
   onViewportChange: (mode: ViewportMode) => void
   activeTool: ToolMode
@@ -93,6 +95,7 @@ function ToolButton({
 
 export default function FroamToolbar({
   workspace,
+  collaborate,
   viewportMode,
   onViewportChange,
   activeTool,
@@ -310,6 +313,8 @@ export default function FroamToolbar({
         <button type="button" className="froam-tb__icon-btn froam-tb__desktop-only" onClick={onShortcutsOverlay} title="Keyboard shortcuts (?)" data-chef-editor-root="true">
           <Keyboard size={14} />
         </button>
+
+        {collaborate}
 
         <button type="button" className="froam-tb__ask-btn" onClick={onAskFroam} title="Open Quick Edit" data-chef-editor-root="true">
           <Sparkles size={14} />

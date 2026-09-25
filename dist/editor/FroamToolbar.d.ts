@@ -4,6 +4,8 @@ type ViewportMode = 'desktop' | 'tablet' | 'mobile';
 type ToolMode = 'pointer' | 'hand' | 'text' | 'frame' | 'shape' | 'move';
 type Props = {
     workspace?: ReactNode;
+    /** Share / Submit — the collaboration control (collaborate/FroamCollaborate). */
+    collaborate?: ReactNode;
     viewportMode: ViewportMode;
     onViewportChange: (mode: ViewportMode) => void;
     activeTool: ToolMode;
@@ -34,6 +36,6 @@ type Props = {
     onMinimize: () => void;
     onClose: () => void;
 };
-export default function FroamToolbar({ workspace, viewportMode, onViewportChange, activeTool, onToolChange, canUndo, canRedo, onUndo, onRedo, onSave, onSaveRepo, repoStatus, repoDirtyCount, onAskFroam, onCommandPalette, onShortcutsOverlay, routeKey, persona, onOpenPersonaEditor, draftCount, moveMode, onToggleMoveMode, zoom, setZoom, leftPanelOpen, rightPanelOpen, onToggleLeftPanel, onToggleRightPanel, onMinimize, onClose, }: Props): import("react").JSX.Element;
+export default function FroamToolbar({ workspace, collaborate, viewportMode, onViewportChange, activeTool, onToolChange, canUndo, canRedo, onUndo, onRedo, onSave, onSaveRepo, repoStatus, repoDirtyCount, onAskFroam, onCommandPalette, onShortcutsOverlay, routeKey, persona, onOpenPersonaEditor, draftCount, moveMode, onToggleMoveMode, zoom, setZoom, leftPanelOpen, rightPanelOpen, onToggleLeftPanel, onToggleRightPanel, onMinimize, onClose, }: Props): import("react").JSX.Element;
 export type { ToolMode };
 //# sourceMappingURL=FroamToolbar.d.ts.map

@@ -32,6 +32,7 @@ var publish_store_exports = {};
 __export(publish_store_exports, {
   FroamStaleRevisionError: () => FroamStaleRevisionError,
   PRESENCE_TTL_MS: () => PRESENCE_TTL_MS,
+  applyChangeRequest: () => applyChangeRequest,
   createFileProjectDocumentStore: () => createFileProjectDocumentStore,
   createFroamIntelligenceApi: () => createFroamIntelligenceApi,
   createFroamProjectSyncApi: () => createFroamProjectSyncApi,
@@ -64,8 +65,37 @@ function normalizeRouteKey(value) {
   p = p.replace(/\/+$/, "");
   return p || "/";
 }
+function emptyDesign() {
+  return {
+    version: DESIGN_VERSION,
+    updatedAt: null,
+    meta: { createdWith: "froam-studio@3" },
+    routes: {}
+  };
+}
 function designRootScope(design) {
   return design?.rootScope === "page" ? "page" : "auto";
+}
+function designHasDrafts(design) {
+  return Object.values(design?.routes ?? {}).some((viewports) => Object.values(viewports ?? {}).some((store) => store && Object.keys(store).length > 0));
+}
+function migrateDesign(design) {
+  if (!design || typeof design !== "object" || typeof design.routes !== "object" || design.routes === null) {
+    return emptyDesign();
+  }
+  const routes = {};
+  for (const [routeKey, viewports] of Object.entries(design.routes)) {
+    const key = normalizeRouteKey(routeKey);
+    routes[key] = routes[key] ? { ...viewports, ...routes[key] } : viewports;
+  }
+  const { rootScope, ...rest } = design;
+  return {
+    ...rest,
+    ...rootScope === "page" ? { rootScope: "page" } : {},
+    version: DESIGN_VERSION,
+    meta: { createdWith: "froam-studio@3", ...design.meta ?? {} },
+    routes
+  };
 }
 function camelToKebab(value) {
   return value.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
@@ -649,6 +679,54 @@ function buildDesignArtifacts(design) {
     runtime: generateRuntimeJs(design)
   };
 }
+function applyChangeRequest(design, request, { writtenText = [] } = {}) {
+  const written = new Set(writtenText.map((text) => String(text).trim()));
+  const next = migrateDesign(design);
+  const routeKey = normalizeRouteKey(request.routeKey);
+  const viewport = VIEWPORTS.includes(request.viewport) ? request.viewport : "desktop";
+  const current = { ...next.routes?.[routeKey]?.[viewport] ?? {} };
+  for (const [key, draft] of Object.entries(request.store ?? {})) {
+    const value = { ...draft };
+    if (typeof value.text === "string" && written.has(value.text.trim())) delete value.text;
+    if (Object.keys(value).some((field) => field !== "fingerprint")) current[key] = value;
+    else delete current[key];
+  }
+  for (const key of request.removed ?? []) delete current[key];
+  return mergeSave(next, { routeKey, viewportMode: viewport, store: current });
+}
+function sanitizeBrandFonts(value) {
+  if (!Array.isArray(value)) return [];
+  const clean = [];
+  for (const font of value) {
+    const family = typeof font?.family === "string" ? font.family.trim() : "";
+    if (!family) continue;
+    const faces = [];
+    for (const face of Array.isArray(font.faces) ? font.faces : []) {
+      if (!isSafeFontSrc(face?.src)) continue;
+      const kept = { src: face.src };
+      if (face.weight !== void 0) kept.weight = face.weight;
+      if (face.style === "italic") kept.style = "italic";
+      if (BRAND_FONT_FORMATS.has(face.format)) kept.format = face.format;
+      faces.push(kept);
+    }
+    if (faces.length) clean.push({ family, faces });
+  }
+  return clean;
+}
+function mergeSave(design, { routeKey, viewportMode, store, brandFonts, rootScope }) {
+  const next = migrateDesign(design);
+  if (rootScope === "page" && !designHasDrafts(next)) next.rootScope = "page";
+  const key = normalizeRouteKey(routeKey);
+  next.routes[key] = next.routes[key] ?? {};
+  next.routes[key][viewportMode] = store;
+  if (brandFonts !== void 0) {
+    const clean = sanitizeBrandFonts(brandFonts);
+    if (clean.length) next.brandFonts = clean;
+    else delete next.brandFonts;
+  }
+  next.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  return next;
+}
 
 // lib/github-committer.mjs
 var API = "https://api.github.com";
@@ -738,8 +816,14 @@ function createGitHubCommitter(options = {}) {
 var import_node_fs = __toESM(require("node:fs"), 1);
 var import_node_path = __toESM(require("node:path"), 1);
 var import_node_crypto = require("node:crypto");
-var ROLES = /* @__PURE__ */ new Set(["owner", "editor", "commenter", "viewer"]);
-var ROLE_RANK = { owner: 60, editor: 40, commenter: 10, viewer: 0 };
+var ROLES = /* @__PURE__ */ new Set(["owner", "editor", "contributor", "commenter", "viewer"]);
+var ROLE_RANK = { owner: 60, editor: 40, contributor: 20, commenter: 10, viewer: 0 };
+var INVITE_ROLES = ["owner", "editor", "contributor", "commenter", "viewer"];
+var MAX_REQUESTS = 300;
+var MAX_REQUEST_PATHS = 400;
+var MAX_REQUEST_CHANGES = 200;
+var MAX_CHANGE_TEXT = 400;
+var MAX_TITLE_LENGTH = 120;
 var MAX_COMMENT_LENGTH = 4e3;
 var MAX_COMMENTS = 500;
 var MAX_BODY_BYTES = 2e5;
@@ -950,7 +1034,7 @@ function publicRoom(room, now, you) {
     you: you ?? null
   };
 }
-function createFroamRoomApi({ file, storage, authorize = null, log = () => {
+function createFroamRoomApi({ file, storage, authorize = null, onApproveRequest = null, log = () => {
 }, now = () => Date.now() }) {
   if (!storage && !file) throw new Error("[froam] createFroamRoomApi needs a file or a storage");
   const store = storage ?? fileStorage(file);
@@ -1003,7 +1087,7 @@ data: ${JSON.stringify({ sequence })}
       const stamp = now();
       const tokens = {};
       const invites = {};
-      for (const role2 of ["owner", "editor", "commenter", "viewer"]) {
+      for (const role2 of INVITE_ROLES) {
         const token2 = mintToken();
         tokens[token2] = role2;
         invites[role2] = token2;
@@ -1511,9 +1595,142 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
         return true;
       }
     }
+    if (action === "requests") {
+      room.requests = room.requests && typeof room.requests === "object" ? room.requests : {};
+      const member = method === "GET" ? memberFor(room, url.searchParams.get("actor"), url.searchParams.get("session")) : memberFor(room, req.body?.actor, req.body?.session);
+      if (!member || ROLE_RANK[member.role] < ROLE_RANK.contributor) {
+        sendJson(res, 403, { success: false, error: "This link cannot submit changes" });
+        return true;
+      }
+      const isReviewer = ROLE_RANK[member.role] >= ROLE_RANK.editor;
+      if (!commentId && method === "GET") {
+        const list = Object.values(room.requests).filter((request2) => isReviewer || request2.actor === member.actor).sort((a, b) => b.createdAt - a.createdAt);
+        sendJson(res, 200, { success: true, requests: list });
+        return true;
+      }
+      if (!commentId && method === "POST") {
+        const body = req.body ?? {};
+        if (!routeAllowed(room, body.routeKey)) {
+          sendJson(res, 403, { success: false, error: "That page is outside this room" });
+          return true;
+        }
+        const store2 = cleanRequestStore(body.store);
+        const removed = Array.isArray(body.removed) ? body.removed.filter(isRequestPath).slice(0, MAX_REQUEST_PATHS) : [];
+        if (!store2 || !Object.keys(store2).length && !removed.length) {
+          sendJson(res, 400, { success: false, error: "There are no changes to submit" });
+          return true;
+        }
+        if (Object.keys(room.requests).length >= MAX_REQUESTS) {
+          sendJson(res, 409, { success: false, error: "This room has too many requests \u2014 ask the owner to open a new one" });
+          return true;
+        }
+        const request2 = {
+          id: (0, import_node_crypto.randomUUID)(),
+          routeKey: normalizeRouteKey(body.routeKey ?? "/"),
+          viewport: VIEWPORTS.includes(body.viewport) ? body.viewport : "desktop",
+          title: cleanText(body.title, MAX_TITLE_LENGTH) || "Changes",
+          note: cleanText(body.note, MAX_COMMENT_LENGTH),
+          store: store2,
+          removed,
+          changes: cleanChanges(body.changes),
+          textEdits: cleanTextEdits(body.textEdits),
+          actor: member.actor,
+          createdBy: member.name,
+          createdAt: now(),
+          status: "pending",
+          decidedBy: null,
+          decidedAt: null,
+          decisionNote: null,
+          published: null
+        };
+        room.requests[request2.id] = request2;
+        appendEvent(room, { type: "request", createdAt: request2.createdAt, actor: member.actor, requestId: request2.id });
+        await persist(room);
+        log(`${member.name} submitted "${request2.title}" on ${request2.routeKey} for approval`);
+        sendJson(res, 200, { success: true, request: request2 });
+        return true;
+      }
+      const request = commentId ? room.requests[commentId] : null;
+      if (!request || !isReviewer && request.actor !== member.actor) {
+        sendJson(res, 404, { success: false, error: "No such request" });
+        return true;
+      }
+      if (commentAction === "withdraw" && method === "POST") {
+        if (request.actor !== member.actor || request.status !== "pending") {
+          sendJson(res, 409, { success: false, error: "Only a pending request of your own can be withdrawn" });
+          return true;
+        }
+        request.status = "withdrawn";
+        request.decidedAt = now();
+        appendEvent(room, { type: "request", createdAt: request.decidedAt, actor: member.actor, requestId: request.id });
+        await persist(room);
+        sendJson(res, 200, { success: true, request });
+        return true;
+      }
+      if (commentAction === "decision" && method === "POST") {
+        if (member.role !== "owner") {
+          sendJson(res, 403, { success: false, error: "Only the owner can approve or send back changes" });
+          return true;
+        }
+        if (request.status !== "pending") {
+          sendJson(res, 409, { success: false, error: `This request is already ${request.status}` });
+          return true;
+        }
+        const decision = req.body?.decision;
+        if (decision !== "approved" && decision !== "changes-requested") {
+          sendJson(res, 400, { success: false, error: "Say approved or changes-requested" });
+          return true;
+        }
+        if (decision === "approved") {
+          try {
+            const result = onApproveRequest ? await onApproveRequest({ room, request }) : null;
+            request.published = { ok: Boolean(onApproveRequest), detail: result?.detail ?? (onApproveRequest ? "Published" : "Approved \u2014 applied in the owner\u2019s editor") };
+          } catch (error) {
+            sendJson(res, 502, { success: false, error: `Could not publish: ${error instanceof Error ? error.message : "unknown error"}` });
+            return true;
+          }
+        }
+        request.status = decision;
+        request.decidedBy = member.name;
+        request.decidedAt = now();
+        request.decisionNote = cleanText(req.body?.note, MAX_COMMENT_LENGTH);
+        appendEvent(room, { type: "request", createdAt: request.decidedAt, actor: member.actor, requestId: request.id });
+        await persist(room);
+        log(`${member.name} ${decision === "approved" ? "approved and published" : "sent back"} "${request.title}"`);
+        sendJson(res, 200, { success: true, request });
+        return true;
+      }
+    }
     sendJson(res, 405, { success: false, error: "Method not allowed" });
     return true;
   };
+}
+function cleanText(value, max) {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
+}
+function isRequestPath(value) {
+  return typeof value === "string" && value.length > 0 && value.length <= 400 && value.includes(":") && !/[<>]/.test(value);
+}
+function cleanRequestStore(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const out = {};
+  for (const [key, draft] of Object.entries(value).slice(0, MAX_REQUEST_PATHS)) {
+    if (!isRequestPath(key) || !draft || typeof draft !== "object" || Array.isArray(draft)) continue;
+    out[key] = draft;
+  }
+  return out;
+}
+function cleanChanges(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, MAX_REQUEST_CHANGES).map((change) => ({
+    label: cleanText(change?.label, MAX_CHANGE_TEXT) ?? "Change",
+    before: cleanText(change?.before, MAX_CHANGE_TEXT),
+    after: cleanText(change?.after, MAX_CHANGE_TEXT)
+  }));
+}
+function cleanTextEdits(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, MAX_REQUEST_PATHS).filter((edit) => typeof edit?.from === "string" && typeof edit?.to === "string").map((edit) => ({ from: edit.from.slice(0, 4e3), to: edit.to.slice(0, 4e3) }));
 }
 
 // lib/project-document-store.mjs
@@ -2489,6 +2706,7 @@ function createFroamPublishApi({ file, authorize = null, log = () => {
 0 && (module.exports = {
   FroamStaleRevisionError,
   PRESENCE_TTL_MS,
+  applyChangeRequest,
   createFileProjectDocumentStore,
   createFroamIntelligenceApi,
   createFroamProjectSyncApi,

@@ -5,6 +5,8 @@
 export const FROAM_ROLE_RANK = {
     owner: 60,
     editor: 40,
+    /** Edits privately and submits for the owner's approval (lib/room-store.mjs). */
+    contributor: 20,
     commenter: 10,
     viewer: 0,
 };
@@ -13,6 +15,10 @@ export function outranks(a, b) {
 }
 export function canEdit(role) {
     return FROAM_ROLE_RANK[role] >= FROAM_ROLE_RANK.editor;
+}
+/** Can make changes of their own — live (editor+) or as a request (contributor). */
+export function canContribute(role) {
+    return FROAM_ROLE_RANK[role] >= FROAM_ROLE_RANK.contributor;
 }
 export function canComment(role) {
     return FROAM_ROLE_RANK[role] >= FROAM_ROLE_RANK.commenter;

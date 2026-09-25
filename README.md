@@ -86,6 +86,42 @@ npx @ahmadastic/froam example.com --host
 Keep the terminal running. `--host` exposes the development bridge to your local
 network for phone testing; do not expose it directly to the public internet.
 
+## Publishing without a developer
+
+Invite teammates who aren't developers to change the site themselves, with
+you approving what goes live:
+
+1. In the editor, open **Share** in the toolbar and copy the **Can suggest
+   changes** link. Send it to them — no account, no install. (With
+   `froam dev`, run it with `--host` or behind a tunnel so they can reach it.)
+2. They open it, say their name, and edit anything on the page. Nothing they
+   do is live. When they're done they press **Submit** and add a note.
+3. You get the request in **Share → Requests**: who, why, and exactly what
+   changed. **Preview** shows it on the page; **Approve & publish** makes it
+   live; **Request changes** sends it back with your note.
+
+Approving under `froam dev` does what Save to Repo does: copy is written into
+your source files where it can be placed, and the rest into the Froam design
+files — ready to commit. On a hosted backend, give the room API a publish step:
+
+```js
+import { applyChangeRequest, createFroamRoomApi, createGitHubCommitter } from '@ahmadastic/froam/server'
+
+const commit = createGitHubCommitter({ token: process.env.GITHUB_TOKEN, repo: 'you/site', dir: 'froam' })
+const rooms = createFroamRoomApi({
+  storage,                                   // your database adapter
+  onApproveRequest: async ({ request }) => {
+    const design = applyChangeRequest(await loadDesign(), request)   // only what changed
+    await saveDesign(design)                                         // your storage
+    await commit({ design, message: `${request.title} — approved from Froam` })
+    return { detail: 'Committed — deploying' }
+  },
+})
+```
+
+The other links: **Can edit together** (live co-editing, for designers and
+developers), **Can comment** (clients: notes and approvals), **Can view**.
+
 ## Verified static workflow
 
 From a static site's root:

@@ -113,6 +113,12 @@ export declare function useFroamRoom(options: {
             note?: string;
         }): Promise<import("./room").RoomRevision | null>;
         decide(revisionId: string, decision: "approved" | "changes-requested", note?: string): Promise<import("./room").RoomRevision | null>;
+        requests(): Promise<import("./room").RoomRequest[]>;
+        submitRequest(input: Pick<import("./room").RoomRequest, "routeKey" | "viewport" | "title" | "store" | "removed" | "changes" | "textEdits"> & {
+            note?: string;
+        }): Promise<import("./room").RoomRequest | null>;
+        withdrawRequest(requestId: string): Promise<import("./room").RoomRequest | null>;
+        decideRequest(requestId: string, decision: "approved" | "changes-requested", note?: string): Promise<import("./room").RoomRequest | null>;
         resolveComment(commentId: string, resolved?: boolean): Promise<import("./room").RoomComment | null>;
         chat(): Promise<import("./types").FroamChatMessage[]>;
         sendChat(body: string): Promise<import("./types").FroamChatMessage | null>;

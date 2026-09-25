@@ -81,6 +81,33 @@ export type RoomRevision = {
   decisionNote: string | null
 }
 
+/**
+ * Changes a contributor submitted for the owner's approval. Approving is what
+ * publishes them (lib/room-store.mjs → the host's onApproveRequest).
+ */
+export type RoomRequest = {
+  id: string
+  routeKey: string
+  viewport: FroamViewport
+  title: string
+  note: string | null
+  /** Only the drafts that changed, keyed by path. */
+  store: Record<string, Record<string, unknown>>
+  /** Paths whose draft the contributor cleared. */
+  removed: string[]
+  /** What changed, for a person to read. */
+  changes: Array<{ label: string; before: string | null; after: string | null }>
+  textEdits: Array<{ from: string; to: string }>
+  actor: string
+  createdBy: string
+  createdAt: number
+  status: 'pending' | 'approved' | 'changes-requested' | 'withdrawn'
+  decidedBy: string | null
+  decidedAt: number | null
+  decisionNote: string | null
+  published: { ok: boolean; detail: string } | null
+}
+
 export type RoomTransport = {
   get: (path: string) => Promise<unknown>
   post: (path: string, body: unknown) => Promise<unknown>
@@ -99,6 +126,8 @@ export const ROOM_BEAT_MS = 15_000
 /* ─── the invite in the URL ─── */
 
 export const ROOM_PARAM = 'froam-room'
+/** Fired on window when this browser joins a room (detail: { roomId, role }). */
+export const ROOM_IDENTITY_EVENT = 'froam:room-identity'
 export const TOKEN_PARAM = 'froam-token'
 
 /**
@@ -158,6 +187,17 @@ export function rememberRoomIdentity(roomId: string, identity: RoomIdentity) {
   try {
     if (typeof window !== 'undefined') window.localStorage.setItem(`froam-room:${roomId}`, JSON.stringify(identity))
   } catch { /* private mode */ }
+}
+
+/** The role this browser joined a room with, if it has — from any surface. */
+export function readRememberedRole(roomId: string): FroamRole | null {
+  try {
+    if (typeof window === 'undefined') return null
+    const raw = window.localStorage.getItem(`froam-room:${roomId}`)
+    return raw ? (JSON.parse(raw) as RoomIdentity).role ?? null : null
+  } catch {
+    return null
+  }
 }
 
 export function forgetOwnedRoom() {
@@ -309,6 +349,9 @@ export function createRoomClient(options: {
       if (!payload?.you?.actor) throw new Error('Could not join the room')
       remember(payload.you)
       adopt(payload)
+      // Other surfaces on this page (the client review bar) hold their own
+      // client; tell them who this browser now is in the room.
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(ROOM_IDENTITY_EVENT, { detail: { roomId, role: payload.you.role } }))
       return payload.you
     },
 
@@ -490,6 +533,33 @@ export function createRoomClient(options: {
         token, ...credentials(), decision, note,
       }) as { revision?: RoomRevision }
       return payload?.revision ?? null
+    },
+
+    /* ─── change requests ─── */
+
+    async requests() {
+      if (!identity) return []
+      const params = new URLSearchParams({ token, actor: identity.actor, session: identity.session })
+      const payload = await transport.get(`/api/froam/rooms/${roomId}/requests?${params}`) as { requests?: RoomRequest[] }
+      return payload?.requests ?? []
+    },
+
+    async submitRequest(input: Pick<RoomRequest, 'routeKey' | 'viewport' | 'title' | 'store' | 'removed' | 'changes' | 'textEdits'> & { note?: string }) {
+      if (!identity) throw new Error('Join the room first')
+      const payload = await post(`/api/froam/rooms/${roomId}/requests`, { token, ...credentials(), ...input }) as { request?: RoomRequest }
+      return payload?.request ?? null
+    },
+
+    async withdrawRequest(requestId: string) {
+      if (!identity) throw new Error('Join the room first')
+      const payload = await post(`/api/froam/rooms/${roomId}/requests/${requestId}/withdraw`, { token, ...credentials() }) as { request?: RoomRequest }
+      return payload?.request ?? null
+    },
+
+    async decideRequest(requestId: string, decision: 'approved' | 'changes-requested', note?: string) {
+      if (!identity) throw new Error('Join the room first')
+      const payload = await post(`/api/froam/rooms/${roomId}/requests/${requestId}/decision`, { token, ...credentials(), decision, note }) as { request?: RoomRequest }
+      return payload?.request ?? null
     },
 
     async resolveComment(commentId: string, resolved = true) {

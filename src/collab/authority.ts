@@ -21,6 +21,8 @@ import type { FroamActorId, FroamOp, FroamRole } from './types'
 export const FROAM_ROLE_RANK: Record<FroamRole, number> = {
   owner: 60,
   editor: 40,
+  /** Edits privately and submits for the owner's approval (lib/room-store.mjs). */
+  contributor: 20,
   commenter: 10,
   viewer: 0,
 }
@@ -31,6 +33,11 @@ export function outranks(a: FroamRole, b: FroamRole) {
 
 export function canEdit(role: FroamRole) {
   return FROAM_ROLE_RANK[role] >= FROAM_ROLE_RANK.editor
+}
+
+/** Can make changes of their own — live (editor+) or as a request (contributor). */
+export function canContribute(role: FroamRole) {
+  return FROAM_ROLE_RANK[role] >= FROAM_ROLE_RANK.contributor
 }
 
 export function canComment(role: FroamRole) {

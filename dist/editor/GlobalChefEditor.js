@@ -29,6 +29,7 @@ import FroamPersonaEditor from './FroamPersonaEditor.js';
 import { getFroamStudioConfig } from '../config.js';
 import { createOpLogSession } from '../collab/session.js';
 import { useFroamRoom } from '../collab/useFroamRoom.js';
+import { readRoomFromLocation } from '../collab/room.js';
 import FroamNotePins from './FroamNotePins.js';
 import FroamPresenceLayer from './FroamPresenceLayer.js';
 import FroamConnectedCanvas from './FroamConnectedCanvas.js';
@@ -72,6 +73,8 @@ import { useCanvasPointer } from './chef/useCanvasPointer.js';
 import { useSelectionTracking } from './chef/useSelectionTracking.js';
 import { sampleSiteTheme } from './library/site-theme.js';
 import { usePatternDrop } from './library/pattern-drop.js';
+import { FroamCollaborate } from './collaborate/FroamCollaborate.js';
+import { buildChangeRequest } from './collaborate/request-builder.js';
 import { PSEUDO_HOST_ATTR, pseudoKey } from './chef/pseudo.js';
 import { useDraftPainter } from './chef/useDraftPainter.js';
 import { useDeviceShell } from './chef/useDeviceShell.js';
@@ -379,6 +382,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
      */
     const [roomLockedPath, setRoomLockedPath] = useState(null);
     const [roomCursor, setRoomCursor] = useState(null);
+    // Someone who arrived by an invite link is asked their name — it's what the
+    // owner sees on their changes. The owner, in their own room, is just in it.
+    const [invitedByLink] = useState(() => readRoomFromLocation() !== null);
     const room = useFroamRoom({
         where: {
             routeKey,
@@ -391,7 +397,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             tool: activeTool,
             action: roomLockedPath ? 'Transforming selection' : selection ? 'Editing selection' : null,
         },
-        autoJoinAs: persona.name || 'Designer',
+        autoJoinAs: invitedByLink ? undefined : persona.name || 'Designer',
         autoJoinProfile: { avatarUrl: persona.imageUrl || null },
     });
     const roomPresence = room.present;
@@ -587,6 +593,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [notes, setNotes] = useState([]);
     const [activeNoteId, setActiveNoteId] = useState(null);
     const [revisions, setRevisions] = useState([]);
+    /* Change requests: a contributor's submissions, and the owner's inbox. */
+    const [requests, setRequests] = useState([]);
+    const [previewingRequestId, setPreviewingRequestId] = useState(null);
+    const isContributor = room.role === 'contributor';
     const [sharing, setSharing] = useState(false);
     const [copied, setCopied] = useState(false);
     /** The link to hand over — a commenter one, since that is what a client is. */
@@ -641,9 +651,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         try {
             setNotes(await room.client.comments(routeKey));
             setRevisions(await room.client.revisions(routeKey));
+            if (room.role === 'owner' || room.role === 'editor' || room.role === 'contributor')
+                setRequests(await room.client.requests());
         }
         catch { /* offline */ }
-    }, [room.client, room.inRoom, routeKey]);
+    }, [room.client, room.inRoom, routeKey, room.role]);
     /**
      * Send what is on screen for a decision.
      *
@@ -677,9 +689,188 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         return () => window.clearInterval(timer);
     }, [room.inRoom, refreshNotes]);
     useEffect(() => {
-        if (room.events.some((event) => event.type === 'comment' || event.type === 'revision'))
+        if (room.events.some((event) => event.type === 'comment' || event.type === 'revision' || event.type === 'request'))
             void refreshNotes();
     }, [room.events, refreshNotes]);
+    /**
+     * Which of the contributor's ops are already in a request that's pending or
+     * approved. A request sent back or withdrawn frees its ops, so its changes
+     * show up again to be revised and resubmitted as one.
+     */
+    const requestOpsKey = room.roomId ? `froam-room-request-ops:${room.roomId}` : null;
+    const readRequestOps = () => {
+        if (!requestOpsKey)
+            return {};
+        try {
+            return JSON.parse(window.localStorage.getItem(requestOpsKey) ?? '{}');
+        }
+        catch {
+            return {};
+        }
+    };
+    const excludedRequestOps = useMemo(() => {
+        const byRequest = readRequestOps();
+        const held = new Set();
+        for (const request of requests) {
+            if (request.status !== 'pending' && request.status !== 'approved')
+                continue;
+            for (const id of byRequest[request.id] ?? [])
+                held.add(id);
+        }
+        return held;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [requests, requestOpsKey]);
+    const contributorRequest = useMemo(() => {
+        if (!isContributor)
+            return null;
+        const mine = room.identity?.actor;
+        return buildChangeRequest({
+            ops: opLog.all(),
+            isMine: (actor) => actor === mine || actor === LOCAL_ACTOR,
+            routeKey,
+            viewport: viewportMode,
+            drafts: stripPersonaDrafts(store[viewportStoreKey] ?? {}),
+            root: getRoot(),
+            excludedOpIds: excludedRequestOps,
+            originalText: (path) => {
+                const original = originalsRef.current[viewportStoreKey]?.[path]?.text;
+                if (original !== undefined)
+                    return original;
+                const sample = store[viewportStoreKey]?.[path]?.fingerprint?.text;
+                return sample && sample.length < 80 ? sample : undefined;
+            },
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isContributor, room.identity?.actor, store, viewportStoreKey, routeKey, viewportMode, excludedRequestOps, logVersion]);
+    const submitChangeRequest = useCallback(async (title, note) => {
+        if (!room.client || !contributorRequest || !contributorRequest.changes.length)
+            return false;
+        try {
+            const request = await room.client.submitRequest({
+                routeKey,
+                viewport: viewportMode,
+                title: title || `Changes to ${routeKey === '/' ? 'the home page' : routeKey}`,
+                note,
+                store: contributorRequest.store,
+                removed: contributorRequest.removed,
+                changes: contributorRequest.changes,
+                textEdits: contributorRequest.textEdits,
+            });
+            if (request && requestOpsKey) {
+                try {
+                    window.localStorage.setItem(requestOpsKey, JSON.stringify({ ...readRequestOps(), [request.id]: contributorRequest.opIds }));
+                }
+                catch { /* private mode */ }
+            }
+            await refreshNotes();
+            showToast('Sent for approval — you’ll see the answer here');
+            return true;
+        }
+        catch (error) {
+            showToast(error instanceof Error ? error.message : 'Could not reach the room');
+            return false;
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [room.client, contributorRequest, routeKey, viewportMode, requestOpsKey, refreshNotes]);
+    const withdrawChangeRequest = useCallback(async (request) => {
+        if (!room.client)
+            return;
+        try {
+            await room.client.withdrawRequest(request.id);
+            await refreshNotes();
+            showToast('Withdrawn — your changes are back to edit');
+        }
+        catch (error) {
+            showToast(error instanceof Error ? error.message : 'Could not reach the room');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [room.client, refreshNotes]);
+    /** The request's changes over the current page, without touching the design. */
+    const applyRequestToStore = (base, request) => {
+        const key = `${request.routeKey}@@${request.viewport}`;
+        const route = { ...(base[key] ?? {}) };
+        for (const [path, draft] of Object.entries(request.store))
+            route[path] = draft;
+        for (const path of request.removed)
+            delete route[path];
+        return { ...base, [key]: route };
+    };
+    const previewChangeRequest = useCallback((request) => {
+        if (!request) {
+            previewConnectedCanvas(null);
+            setPreviewingRequestId(null);
+            return;
+        }
+        if (request.routeKey !== routeKey || request.viewport !== viewportMode) {
+            showToast(`Open ${request.routeKey} on ${request.viewport} to preview this`);
+            return;
+        }
+        previewConnectedCanvas(applyRequestToStore(storeRef.current, request));
+        setPreviewingRequestId(request.id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [routeKey, viewportMode]);
+    const decideChangeRequest = useCallback(async (request, decision, note) => {
+        if (!room.client)
+            return;
+        if (previewingRequestId) {
+            previewConnectedCanvas(null);
+            setPreviewingRequestId(null);
+        }
+        try {
+            const decided = await room.client.decideRequest(request.id, decision, note || undefined);
+            if (decision === 'approved' && decided) {
+                // The owner's own editor takes the change too — its next Save to Repo
+                // must include it, not overwrite it. Where the bridge published, read
+                // back exactly what it wrote (copy placed in source is not a draft).
+                let next = applyRequestToStore(storeRef.current, decided);
+                try {
+                    const loaded = await window.fetch(bridgeUrl('/__froam/repo/load')).then((response) => response.json());
+                    const written = loaded?.design?.routes?.[decided.routeKey]?.[decided.viewport];
+                    if (written) {
+                        const key = `${decided.routeKey}@@${decided.viewport}`;
+                        const route = { ...(next[key] ?? {}) };
+                        for (const path of [...Object.keys(decided.store), ...decided.removed]) {
+                            if (written[path])
+                                route[path] = written[path];
+                            else
+                                delete route[path];
+                        }
+                        next = { ...next, [key]: route };
+                    }
+                }
+                catch { /* hosted, no bridge: the request's own changes stand */ }
+                opPendingLabelRef.current = `Approved: ${decided.title}`;
+                storeRef.current = next;
+                setStore(next);
+                saveStore(next);
+                showToast(decided.published?.detail ? `${decided.title} — ${decided.published.detail}` : `${decided.title} approved`);
+            }
+            else {
+                showToast(`Sent back to ${request.createdBy}`);
+            }
+            await refreshNotes();
+        }
+        catch (error) {
+            showToast(error instanceof Error ? error.message : 'Could not reach the room');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [room.client, previewingRequestId, refreshNotes]);
+    const inviteLinks = useMemo(() => {
+        const owned = room.owned;
+        if (!owned)
+            return {};
+        const link = (role) => (owned.invites[role] ? room.inviteLink(owned, role) : undefined);
+        return { editor: link('editor'), contributor: link('contributor'), commenter: link('commenter'), viewer: link('viewer') };
+    }, [room.owned, room.inviteLink]);
+    const copyInviteLink = useCallback(async (link) => {
+        try {
+            await navigator.clipboard.writeText(link);
+        }
+        catch {
+            showToast('Copy failed — select the link and copy it');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     const resolveNote = useCallback(async (note) => {
         if (!room.client)
             return;
@@ -2608,6 +2799,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
      * interrupting anyone for.
      */
     async function publishForSession() {
+        // A contributor's edits are private until the owner approves them.
+        if (room.role === 'contributor')
+            return;
         try {
             const routeSnapshot = collectVersionRouteDrafts();
             await apiPost('/api/froam/published', {
@@ -2635,6 +2829,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         setStore(nextStore);
         saveStore(nextStore);
         window.localStorage.setItem(froamStorageKey(SAVE_META_KEY, projectKey), JSON.stringify(payload));
+        if (room.role === 'contributor') {
+            showToast('Saved in this browser — Submit when you’re ready for approval');
+            return;
+        }
         try {
             await apiPost('/api/froam/published', {
                 routeKey,
@@ -2706,6 +2904,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         }
     }
     async function saveToRepo() {
+        if (room.role === 'contributor') {
+            showToast('Your changes go live when the owner approves them — use Submit');
+            return;
+        }
         keepStudioPinned();
         const routeSnapshot = collectVersionRouteDrafts();
         const { drafts: cleanDrafts, note: sourceNote } = await writeCopyToSource(stripPersonaDrafts(routeSnapshot));
@@ -4900,7 +5102,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 }
                                 setActiveTool(tool);
                                 setMoveMode(tool === 'move');
-                            }, canUndo: canUndo, canRedo: canRedo, onSave: actionsRef.current.saveToRunam, onSaveRepo: () => { void actionsRef.current.saveToRepo(); }, repoStatus: repoStatus, repoDirtyCount: repoDirtyCount, onAskFroam: () => setQuickChatOpen(true), onUndo: actionsRef.current.undo, onRedo: actionsRef.current.redo, onCommandPalette: openCommandPalette, onShortcutsOverlay: () => setShowShortcutOverlay(true), routeKey: routeKey, persona: persona, onOpenPersonaEditor: openPersonaEditor, draftCount: draftCount, moveMode: moveMode, onToggleMoveMode: () => setMoveMode((value) => !value), zoom: zoom, setZoom: setZoom, leftPanelOpen: leftPanelOpen, rightPanelOpen: (workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen, onToggleLeftPanel: () => {
+                            }, canUndo: canUndo, canRedo: canRedo, onSave: actionsRef.current.saveToRunam, onSaveRepo: isContributor ? undefined : () => { void actionsRef.current.saveToRepo(); }, collaborate: (_jsx(FroamCollaborate, { role: room.role, isOwner: room.role === 'owner', inRoom: room.inRoom, myName: room.identity?.name ?? persona.name ?? 'You', people: room.others, links: inviteLinks, opening: sharing, onOpenRoom: (fresh) => { void startSharing(fresh); }, onCopyLink: (link) => { void copyInviteLink(link); }, requests: requests, pendingChanges: contributorRequest?.changes ?? [], onSubmit: submitChangeRequest, onWithdraw: (request) => { void withdrawChangeRequest(request); }, previewingId: previewingRequestId, onPreview: previewChangeRequest, onDecide: decideChangeRequest, onEditName: openPersonaEditor, needsName: room.needsName && invitedByLink, onJoin: async (name) => { await room.join(name); } })), repoStatus: repoStatus, repoDirtyCount: repoDirtyCount, onAskFroam: () => setQuickChatOpen(true), onUndo: actionsRef.current.undo, onRedo: actionsRef.current.redo, onCommandPalette: openCommandPalette, onShortcutsOverlay: () => setShowShortcutOverlay(true), routeKey: routeKey, persona: persona, onOpenPersonaEditor: openPersonaEditor, draftCount: draftCount, moveMode: moveMode, onToggleMoveMode: () => setMoveMode((value) => !value), zoom: zoom, setZoom: setZoom, leftPanelOpen: leftPanelOpen, rightPanelOpen: (workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen, onToggleLeftPanel: () => {
                                 if (workspaceMode !== 'create' && leftWorkspaceMode !== 'reference' && leftWorkspaceMode !== 'layers') {
                                     setWorkspaceMode('create');
                                     setLeftPanelOpen(true);

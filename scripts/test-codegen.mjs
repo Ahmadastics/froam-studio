@@ -13,7 +13,7 @@
  * JavaScript. These do.
  */
 import assert from 'node:assert/strict'
-import { designRootScope, generateCss, generateRuntimeJs, mergeSave, migrateDesign } from '../lib/codegen.mjs'
+import { applyChangeRequest, designRootScope, generateCss, generateRuntimeJs, mergeSave, migrateDesign } from '../lib/codegen.mjs'
 
 const tests = []
 const test = (name, fn) => tests.push([name, fn])
@@ -199,6 +199,28 @@ test('the runtime ignores its own writes (no repaint loop)', () => {
   const js = generateRuntimeJs(design())
   assert.ok(/apply\(\)\s*\n\s*if \(observer\) observer\.takeRecords\(\)/.test(js), 'apply is not followed by observer.takeRecords()')
   assert.ok(js.includes('requestAnimationFrame(applyOwnChanges)'), 'scheduled applies bypass the own-writes filter')
+})
+
+test('an approved change request changes only its own paths', () => {
+  const owner = design({ routes: { '/': { desktop: {
+    'section:1/h1:1': { text: 'Owner headline', styles: { color: 'red' } },
+    'section:1/p:1': { text: 'Owner copy' },
+    'section:1/a:1': { styles: { color: 'blue' } },
+  } } } })
+  const request = {
+    routeKey: '/', viewport: 'desktop',
+    store: {
+      'section:1/p:1': { text: 'Contributor copy', fingerprint: { tag: 'p' } },
+      'section:1/h2:1': { text: 'Written to source', fingerprint: { tag: 'h2' } },
+    },
+    removed: ['section:1/a:1'],
+  }
+  const next = applyChangeRequest(owner, request, { writtenText: ['Written to source'] })
+  const route = next.routes['/'].desktop
+  assert.equal(route['section:1/h1:1'].text, 'Owner headline', 'the work the owner saved was overwritten')
+  assert.equal(route['section:1/p:1'].text, 'Contributor copy')
+  assert.equal(route['section:1/h2:1'], undefined, 'copy placed in the source is still a draft')
+  assert.equal(route['section:1/a:1'], undefined, 'a removed draft stayed')
 })
 
 test('codegen is deterministic', () => {

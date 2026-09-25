@@ -46,15 +46,18 @@ export function compareOps(a, b) {
         return a.actor < b.actor ? -1 : 1;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
+/** Live, shared editing. A contributor edits privately and submits instead. */
 export const FROAM_ROLE_CAN_EDIT = {
     owner: true,
     editor: true,
+    contributor: false,
     commenter: false,
     viewer: false,
 };
 export const FROAM_ROLE_CAN_COMMENT = {
     owner: true,
     editor: true,
+    contributor: true,
     commenter: true,
     viewer: false,
 };

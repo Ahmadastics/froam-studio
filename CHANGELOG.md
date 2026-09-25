@@ -1,5 +1,38 @@
 # Changelog
 
+## 8.6.0 - 2026-09-25
+
+**Publishing without a developer, and collaboration you can find.**
+
+- **Share, in the toolbar.** One control shows who is here (with their
+  avatars and pending requests) and opens the Share panel: invite links by
+  what each person may do — *Can suggest changes*, *Can edit together*, *Can
+  comment*, *Can view* — the people in the session and which page they're
+  on, and a reset that revokes every old link. No accounts: the link is the
+  way in, and someone who arrives by one is asked their name.
+- **A new role: contributor.** For teammates who aren't developers. They edit
+  anything on the page, privately — nothing they do reaches the shared design,
+  the published page or the repo — then **Submit for approval** with a title
+  and a note. Their change list is built from their own edits, never from
+  diffing the page, so the owner's live work is never swept into it.
+- **Requests, in the owner's inbox.** Each shows who sent it, their note, and
+  what changed (old text struck through, new text beside it). **Preview**
+  shows it on the page without applying it; **Approve & publish** makes it
+  live; **Request changes** sends it back with a note, and the contributor's
+  edits count again to revise and resubmit. Contributors see each answer as it
+  lands, and can withdraw a request still waiting.
+- **Approving publishes.** Under `froam dev` it does what Save to Repo does —
+  copy written into the source where it can be placed, then only the changed
+  paths merged onto the current design (never the contributor's whole
+  snapshot, so the owner's newer work survives). A hosted setup passes
+  `onApproveRequest` to `createFroamRoomApi` — store the publish, commit it
+  with `createGitHubCommitter`, trigger a deploy.
+- **Only this machine writes the repo.** Save to Repo, project saves and
+  source write-back are refused from any other address (`--host`, tunnels):
+  people joining over the network change things through approved requests.
+- A contributor's Save stays in their browser, and their edits are never
+  pushed to people watching the session.
+
 ## 8.5.0 - 2026-09-25
 
 **Copy edits land in your source. A Library that looks like your site. Every

@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFroamRoom } from '../collab/useFroamRoom'
-import { ROOM_PARAM, TOKEN_PARAM, type RoomComment, type RoomRevision } from '../collab/room'
+import { readRememberedRole, ROOM_IDENTITY_EVENT, ROOM_PARAM, TOKEN_PARAM, type RoomComment, type RoomRevision } from '../collab/room'
 import { createAnchor } from '../collab/anchor'
 import type { FroamAnchor, FroamViewport } from '../collab/types'
 import FroamRoomChat from './FroamRoomChat'
@@ -35,6 +35,17 @@ function urlForRoute(routeKey: string) {
 
 export default function FroamReview({ routeKey, viewport }: Props) {
   const room = useFroamRoom({ where: { routeKey, viewport } })
+  // The editor may join this room itself (as owner, editor or contributor);
+  // hearing it is what hides this client-only surface for them.
+  const [joinedElsewhere, setJoinedElsewhere] = useState<string | null>(null)
+  useEffect(() => {
+    const onJoined = (event: Event) => {
+      const detail = (event as CustomEvent<{ roomId: string; role: string }>).detail
+      if (detail?.roomId === room.roomId) setJoinedElsewhere(detail.role)
+    }
+    window.addEventListener(ROOM_IDENTITY_EVENT, onJoined)
+    return () => window.removeEventListener(ROOM_IDENTITY_EVENT, onJoined)
+  }, [room.roomId])
   const [name, setName] = useState('')
   const [asking, setAsking] = useState(false)
   const [paused, setPaused] = useState(false)
@@ -228,7 +239,11 @@ export default function FroamReview({ routeKey, viewport }: Props) {
    * two surfaces from fighting over one stored identity on a machine where
    * both happen to mount.
    */
-  if (room.role === 'owner' || room.role === 'editor') return null
+  // Anyone with the full editor (owner, editor, contributor) has their own
+  // surfaces — including when it was the editor, not this surface, that joined.
+  const joinedAs = room.roomId ? readRememberedRole(room.roomId) ?? joinedElsewhere : null
+  const hasStudio = (role: string | null) => role === 'owner' || role === 'editor' || role === 'contributor'
+  if (hasStudio(room.role) || hasStudio(joinedAs)) return null
 
   /* ── Arrival: name yourself once. No account, ever. ── */
   if (room.needsName) {

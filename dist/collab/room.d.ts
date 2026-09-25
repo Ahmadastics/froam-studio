@@ -94,6 +94,42 @@ export type RoomRevision = {
     decidedAt: number | null;
     decisionNote: string | null;
 };
+/**
+ * Changes a contributor submitted for the owner's approval. Approving is what
+ * publishes them (lib/room-store.mjs → the host's onApproveRequest).
+ */
+export type RoomRequest = {
+    id: string;
+    routeKey: string;
+    viewport: FroamViewport;
+    title: string;
+    note: string | null;
+    /** Only the drafts that changed, keyed by path. */
+    store: Record<string, Record<string, unknown>>;
+    /** Paths whose draft the contributor cleared. */
+    removed: string[];
+    /** What changed, for a person to read. */
+    changes: Array<{
+        label: string;
+        before: string | null;
+        after: string | null;
+    }>;
+    textEdits: Array<{
+        from: string;
+        to: string;
+    }>;
+    actor: string;
+    createdBy: string;
+    createdAt: number;
+    status: 'pending' | 'approved' | 'changes-requested' | 'withdrawn';
+    decidedBy: string | null;
+    decidedAt: number | null;
+    decisionNote: string | null;
+    published: {
+        ok: boolean;
+        detail: string;
+    } | null;
+};
 export type RoomTransport = {
     get: (path: string) => Promise<unknown>;
     post: (path: string, body: unknown) => Promise<unknown>;
@@ -107,6 +143,8 @@ export type RoomStorage = {
 /** Heartbeat well inside the server's 45s window, so one dropped beat is survivable. */
 export declare const ROOM_BEAT_MS = 15000;
 export declare const ROOM_PARAM = "froam-room";
+/** Fired on window when this browser joins a room (detail: { roomId, role }). */
+export declare const ROOM_IDENTITY_EVENT = "froam:room-identity";
 export declare const TOKEN_PARAM = "froam-token";
 /**
  * An invite is a link, so the link is where the room comes from.
@@ -134,6 +172,8 @@ export type OwnedRoom = {
 export declare function readOwnedRoom(): OwnedRoom | null;
 export declare function rememberOwnedRoom(room: OwnedRoom): void;
 export declare function rememberRoomIdentity(roomId: string, identity: RoomIdentity): void;
+/** The role this browser joined a room with, if it has — from any surface. */
+export declare function readRememberedRole(roomId: string): FroamRole | null;
 export declare function forgetOwnedRoom(): void;
 /** The link you actually send someone, for a given role and page. */
 export declare function inviteLink(room: OwnedRoom, role?: FroamRole, href?: string): string;
@@ -237,6 +277,12 @@ export declare function createRoomClient(options: {
         note?: string;
     }): Promise<RoomRevision | null>;
     decide(revisionId: string, decision: "approved" | "changes-requested", note?: string): Promise<RoomRevision | null>;
+    requests(): Promise<RoomRequest[]>;
+    submitRequest(input: Pick<RoomRequest, "routeKey" | "viewport" | "title" | "store" | "removed" | "changes" | "textEdits"> & {
+        note?: string;
+    }): Promise<RoomRequest | null>;
+    withdrawRequest(requestId: string): Promise<RoomRequest | null>;
+    decideRequest(requestId: string, decision: "approved" | "changes-requested", note?: string): Promise<RoomRequest | null>;
     resolveComment(commentId: string, resolved?: boolean): Promise<RoomComment | null>;
     chat(): Promise<FroamChatMessage[]>;
     sendChat(body: string): Promise<FroamChatMessage | null>;

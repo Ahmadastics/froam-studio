@@ -146,6 +146,31 @@ test('--allow-origin lets a custom dev domain in', async () => {
   assert.equal(res.headers['access-control-allow-origin'], 'http://app.test')
 })
 
+test('over the network (--host), the repo cannot be written directly — only through an approved request', async () => {
+  const lan = Object.values(os.networkInterfaces()).flat().find((net) => net && net.family === 'IPv4' && !net.internal)?.address
+  if (!lan) return // no network interface here (some CI sandboxes)
+  const exposed = createBridgeServer({ froamDir, serveDir: site })
+  await new Promise((resolve) => exposed.server.listen(0, '0.0.0.0', resolve))
+  const exposedPort = exposed.server.address().port
+  const viaLan = (url, body) => new Promise((resolve) => {
+    const req = http.request({ host: lan, port: exposedPort, method: 'POST', path: url, headers: { host: `${lan}:${exposedPort}`, 'content-type': 'application/json' } }, (res) => {
+      res.resume()
+      res.on('end', () => resolve(res.statusCode))
+    })
+    req.on('error', () => resolve(0))
+    req.end(JSON.stringify(body))
+  })
+  const before = designText()
+  const statuses = [
+    await viaLan('/__froam/repo/save', { routeKey: '/', viewportMode: 'desktop', store: { 'body:1/h1:1': { text: 'from the LAN' } } }),
+    await viaLan('/__froam/repo/project/save', {}),
+    await viaLan('/__froam/source/text', { edits: [{ from: 'Hello there', to: 'from the LAN' }] }),
+  ]
+  exposed.server.close()
+  assert.deepEqual(statuses, [403, 403, 403])
+  assert.equal(designText(), before)
+})
+
 test('--serve still serves the site', async () => {
   const res = await request({ url: '/' })
   assert.equal(res.status, 200)

@@ -20,6 +20,8 @@ import type { FroamActorId, FroamOp, FroamRole } from './types';
 export declare const FROAM_ROLE_RANK: Record<FroamRole, number>;
 export declare function outranks(a: FroamRole, b: FroamRole): boolean;
 export declare function canEdit(role: FroamRole): boolean;
+/** Can make changes of their own — live (editor+) or as a request (contributor). */
+export declare function canContribute(role: FroamRole): boolean;
 export declare function canComment(role: FroamRole): boolean;
 /**
  * What happens when someone reaches for the undo on a change that is not

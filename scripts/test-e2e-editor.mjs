@@ -85,13 +85,16 @@ function productionHtml(fixture = FIXTURE) {
 
 // Two sites: a static page (test/e2e/site) and an app with a #root and a
 // dialog it mounts on <body>, the way React portals do (test/e2e/app).
-const suites = { site: [], app: [] }
+const suites = { site: [], app: [], collab: [] }
 const only = process.env.FROAM_E2E_ONLY ? new RegExp(process.env.FROAM_E2E_ONLY, 'i') : null
 function test(name, fn) {
   suites.site.push({ name, fn })
 }
 function appTest(name, fn) {
   suites.app.push({ name, fn })
+}
+function collabTest(name, fn) {
+  suites.collab.push({ name, fn })
 }
 function assert(condition, message) {
   if (!condition) throw new Error(message)
@@ -735,6 +738,128 @@ appTest('the editor opens on the first Ctrl+. straight after load, and stays ope
   assert(open, 'the editor closed itself right after opening')
 })
 
+/* ─── collaboration: invite, suggest, approve & publish ─── */
+
+const collab = { contributor: null, contributorContext: null, link: null }
+
+async function openShare(page) {
+  if (!(await page.locator('.froam-collab__panel').count())) await page.click('.froam-collab__trigger')
+  await page.locator('.froam-collab__panel').waitFor({ timeout: 5000 })
+}
+async function closeShare(page) {
+  if (await page.locator('.froam-collab__panel').count()) await page.keyboard.press('Escape')
+  await page.waitForTimeout(150)
+}
+
+collabTest('the owner creates invite links from Share, one per role', async ({ page, url }) => {
+  await openShare(page)
+  await page.click('text=Create invite links')
+  await page.locator('.froam-collab__invite').first().waitFor({ timeout: 8000 })
+  const enabled = await page.locator('.froam-collab__copy:not([disabled])').count()
+  const owned = await page.evaluate(() => JSON.parse(localStorage.getItem('froam-room-owner:v1') || 'null'))
+  await closeShare(page)
+  assert(enabled === 4, `${enabled} invite links can be copied`)
+  assert(owned?.invites?.contributor, 'no "Can suggest changes" invite was minted')
+  collab.link = `${url}?froam-room=${owned.roomId}&froam-token=${owned.invites.contributor}`
+})
+
+collabTest('a contributor joins by link, says their name, and edits privately', async ({ page, context }) => {
+  collab.contributorContext = await context.browser().newContext({ viewport: { width: 1440, height: 900 } })
+  const maya = await collab.contributorContext.newPage()
+  collab.contributor = maya
+  await maya.goto(collab.link)
+  await maya.waitForSelector('.global-chef-button', { timeout: 20000 })
+  await maya.waitForTimeout(400)
+  if (!(await maya.locator('#froam-editor-portal .froam-chrome').count())) await maya.keyboard.press('Control+.')
+  await maya.waitForSelector('input[aria-label="Your name"]', { timeout: 10000 })
+  await maya.fill('input[aria-label="Your name"]', 'Maya')
+  await maya.click('button:has-text("Join")')
+  await maya.waitForSelector('.froam-collab__trigger:has-text("Submit")', { timeout: 8000 })
+  await maya.waitForTimeout(600)
+  const banner = await maya.locator('text=sent this to review').count()
+  assert(banner === 0, 'a contributor was shown the client review banner')
+  const box = await maya.locator('#subtitle').boundingBox()
+  await maya.mouse.click(box.x + 2, box.y + box.height / 2)
+  await maya.waitForTimeout(250)
+  await maya.keyboard.type('Spring deals. ', { delay: 20 })
+  await maya.mouse.click(700, 880)
+  await maya.waitForTimeout(2500)
+  const onOwnersPage = await page.evaluate(() => document.getElementById('subtitle').innerText)
+  assert(!onOwnersPage.includes('Spring deals'), 'the contributor\'s edit reached the owner\'s page before approval')
+})
+
+collabTest('the contributor submits; the owner sees what changed, previews it, and approves', async ({ page, siteDir }) => {
+  const maya = collab.contributor
+  await openShare(maya)
+  const listed = await maya.locator('.froam-collab__changes li').count()
+  assert(listed === 1, `the contributor sees ${listed} changes`)
+  await maya.fill('input[aria-label="Title for your changes"]', 'Spring sale copy')
+  await maya.fill('textarea[aria-label="Note for the owner"]', 'For Monday')
+  await maya.click('text=Submit for approval')
+  await maya.locator('.froam-collab__request.is-pending').waitFor({ timeout: 8000 })
+  await closeShare(maya)
+
+  await page.locator('.froam-collab__trigger .froam-collab__badge').waitFor({ timeout: 12000 })
+  await openShare(page)
+  const request = page.locator('.froam-collab__request.is-pending')
+  await request.waitFor({ timeout: 5000 })
+  const text = await request.innerText()
+  assert(text.includes('Maya') && text.includes('For Monday'), `request reads: ${text.slice(0, 120)}`)
+  assert(await request.locator('del').count() === 1 && await request.locator('ins').count() === 1, 'no before → after shown')
+  await request.locator('button:has-text("Preview")').click()
+  await page.waitForTimeout(400)
+  const previewed = await page.evaluate(() => document.getElementById('subtitle').innerText)
+  assert(previewed.startsWith('Spring deals.'), `preview shows "${previewed.slice(0, 30)}"`)
+  await request.locator('button:has-text("Approve & publish")').click()
+  await page.locator('.froam-collab__request.is-approved').waitFor({ timeout: 8000 })
+  await closeShare(page)
+  const source = fs.readFileSync(path.join(siteDir, 'index.html'), 'utf8')
+  assert(source.includes('Spring deals. Extraordinary places.'), 'approved copy was not written into index.html')
+})
+
+collabTest('the contributor sees it approved, and their change list is clear', async () => {
+  const maya = collab.contributor
+  await maya.waitForTimeout(5500)
+  await openShare(maya)
+  await maya.locator('.froam-collab__request.is-approved').waitFor({ timeout: 8000 })
+  const remaining = await maya.locator('.froam-collab__changes li').count()
+  await closeShare(maya)
+  assert(remaining === 0, `${remaining} changes still listed after approval`)
+})
+
+collabTest('sending back: the note reaches the contributor, and the change counts again', async ({ page }) => {
+  const maya = collab.contributor
+  await maya.evaluate(() => document.getElementById('cta').scrollIntoView({ block: 'center' }))
+  const box = await maya.locator('#cta').boundingBox()
+  await maya.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await maya.waitForTimeout(250)
+  for (let i = 0; i < 4; i += 1) await maya.keyboard.press('ArrowRight')
+  await maya.waitForTimeout(400)
+  await openShare(maya)
+  await maya.click('text=Submit for approval')
+  await maya.locator('.froam-collab__request.is-pending').waitFor({ timeout: 8000 })
+  await closeShare(maya)
+
+  await page.locator('.froam-collab__trigger .froam-collab__badge').waitFor({ timeout: 12000 })
+  await openShare(page)
+  const request = page.locator('.froam-collab__request.is-pending')
+  await request.locator('button:has-text("Request changes")').click()
+  await page.fill('textarea[aria-label="What should change"]', 'Keep it where it was')
+  await page.click('button:has-text("Send back")')
+  await page.locator('.froam-collab__request.is-changes-requested').waitFor({ timeout: 8000 })
+  await closeShare(page)
+
+  await maya.waitForTimeout(5500)
+  await openShare(maya)
+  await maya.locator('.froam-collab__request.is-changes-requested').waitFor({ timeout: 8000 })
+  const note = await maya.locator('.froam-collab__request.is-changes-requested blockquote').innerText()
+  const again = await maya.locator('.froam-collab__changes li').count()
+  await closeShare(maya)
+  await collab.contributorContext.close()
+  assert(note.includes('Keep it where it was'), `note reads "${note}"`)
+  assert(again === 1, `the sent-back change should count again (${again} listed)`)
+})
+
 /* ─── run ─── */
 
 const browserPath = findBrowser()
@@ -807,7 +932,7 @@ const browser = await chromium.launch({ executablePath: browserPath, headless: !
 let passed = 0
 let total = 0
 try {
-  for (const [label, fixture, tests] of [['static site', FIXTURE, suites.site], ['app with a portal', APP_FIXTURE, suites.app]]) {
+  for (const [label, fixture, tests] of [['static site', FIXTURE, suites.site], ['app with a portal', APP_FIXTURE, suites.app], ['collaboration', FIXTURE, suites.collab]]) {
     const result = await runSuite(browser, label, fixture, tests)
     passed += result.passed
     total += result.total
