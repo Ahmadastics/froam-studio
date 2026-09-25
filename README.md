@@ -1,12 +1,13 @@
 # Froam Studio
 
-[![CI](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/Ahmadastics/froam-studio/actions/workflows/ci.yml)
-[![License: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-14b8a0.svg)](LICENSE)
-[![Node >= 18](https://img.shields.io/badge/node-%3E%3D18-5eead4.svg)](package.json)
+[![License: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-14b8a0.svg)](https://cdn.jsdelivr.net/npm/@ahmadastic/froam/LICENSE)
+[![Node >= 18](https://img.shields.io/badge/node-%3E%3D18-5eead4.svg)](https://www.npmjs.com/package/@ahmadastic/froam)
 
 <p align="center">
-  <img src="docs/froam-mark.svg" alt="Froam" width="460">
+  <img src="https://cdn.jsdelivr.net/npm/@ahmadastic/froam/docs/froam-mark.svg" alt="Froam" width="460">
 </p>
+
+<p align="center"><a href="https://froam.vercel.app"><b>Try it live in your browser → froam.vercel.app</b></a></p>
 
 **A visual editor for the site you already have.** Froam overlays controls on a
 rendered page. Supported revisions can be saved as a versioned Froam design,
@@ -237,7 +238,7 @@ Edit, publishing primitives, rooms, and project intelligence surfaces.
 Implementation or unit coverage is not the same as a completed customer
 workflow. The exact classification (implemented, tested, unverified, and
 unsupported) is maintained in
-[docs/VERIFIED_CAPABILITIES.md](docs/VERIFIED_CAPABILITIES.md).
+[docs/VERIFIED_CAPABILITIES.md](https://cdn.jsdelivr.net/npm/@ahmadastic/froam/docs/VERIFIED_CAPABILITIES.md).
 
 Remote model interpretation is disabled in the shipping editor by default.
 Local deterministic Quick Edit does not require remote AI.
@@ -295,7 +296,7 @@ newer is required.
 
 ## License
 
-[FSL-1.1-MIT](LICENSE). Froam is source-available, not OSI-approved open source.
+[FSL-1.1-MIT](https://cdn.jsdelivr.net/npm/@ahmadastic/froam/LICENSE). Froam is source-available, not OSI-approved open source.
 Each release converts to MIT two years after the date that version is made
 available. Read the license itself for the authoritative terms.
 
@@ -306,4 +307,4 @@ and research.
 A commercial licence is needed only to ship Froam inside a product you sell (a
 builder, CMS, page editor or design tool), or to replace FSL for an organisation
 whose policy requires an OSI-approved licence. See
-[Commercial licensing](docs/COMMERCIAL_LICENSE.md).
+[Commercial licensing](https://cdn.jsdelivr.net/npm/@ahmadastic/froam/docs/COMMERCIAL_LICENSE.md).

@@ -1,17 +1,10 @@
 {
   "name": "@ahmadastic/froam",
-  "version": "8.3.3",
+  "version": "8.4.0",
   "description": "A visual editor for a running site or static HTML folder. Save supported revisions as a versioned design, generated override CSS, and a small content runtime.",
   "author": "Ahmad Modibbo <ahmadnuhu14@gmail.com>",
   "license": "FSL-1.1-MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Ahmadastics/froam-studio.git"
-  },
-  "homepage": "https://github.com/Ahmadastics/froam-studio#readme",
-  "bugs": {
-    "url": "https://github.com/Ahmadastics/froam-studio/issues"
-  },
+  "homepage": "https://froam.vercel.app",
   "keywords": [
     "froam",
     "visual-editor",
@@ -40,7 +33,10 @@
     "vite-plugin.d.ts",
     "server.cjs",
     "server.d.ts",
-    "README.md"
+    "README.md",
+    "docs/froam-mark.svg",
+    "docs/VERIFIED_CAPABILITIES.md",
+    "docs/COMMERCIAL_LICENSE.md"
   ],
   "exports": {
     ".": {
