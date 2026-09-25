@@ -1020,6 +1020,61 @@ function canApplyTextDraft(element: HTMLElement) {
 const TEXT_VISUAL_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'small', 'strong', 'em', 'b', 'i', 'blockquote', 'figcaption', 'cite', 'dt', 'dd', 'li'])
 const INLINE_TEXT_CHILD_TAGS = new Set(['span', 'small', 'strong', 'em', 'b', 'i', 'mark', 'cite', 'br', 'wbr'])
 
+/* ─── Writing: which elements hold copy a person can type into ─── */
+
+const NON_WRITABLE_TAGS = new Set(['img', 'input', 'textarea', 'select', 'option', 'video', 'audio', 'canvas', 'iframe', 'svg', 'br', 'hr', 'picture', 'source', 'track', 'object', 'embed', 'area', 'map', 'meter', 'progress', 'ul', 'ol', 'table', 'tbody', 'thead', 'tfoot', 'tr'])
+const WRITABLE_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'small', 'strong', 'em', 'b', 'i', 'u', 'mark', 'q', 'cite', 'abbr', 'time', 'code', 'a', 'button', 'label', 'li', 'dt', 'dd', 'td', 'th', 'caption', 'figcaption', 'blockquote', 'summary', 'legend', 'address'])
+/** Enter finishes writing in these (Shift+Enter still breaks the line); elsewhere it's a new line. */
+const SINGLE_LINE_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'button', 'label', 'span', 'small', 'strong', 'em', 'b', 'i', 'u', 'mark', 'q', 'cite', 'abbr', 'time', 'code', 'summary', 'legend', 'dt', 'td', 'th', 'caption'])
+
+/** Copy someone could want to rewrite: text tags, or any leaf that already shows text. */
+function isWritableElement(element: Element | null | undefined): element is HTMLElement {
+  if (!(element instanceof HTMLElement)) return false
+  const tag = element.tagName.toLowerCase()
+  if (NON_WRITABLE_TAGS.has(tag)) return false
+  if (element.dataset.froamShape === 'true') return true
+  if (!canApplyTextDraft(element)) return false
+  return WRITABLE_TAGS.has(tag) || (element.children.length === 0 && !!element.innerText?.trim())
+}
+
+type CaretTarget = 'end' | { x: number; y: number; word?: boolean }
+
+/** Put the caret where the person pointed (or select the word there), else at the end. */
+function placeCaret(element: HTMLElement, caret: CaretTarget) {
+  const selection = window.getSelection()
+  if (!selection) return
+  let range: Range | null = null
+  if (caret !== 'end') {
+    // Froam's own overlay (resize edges, handles) sits over the element's
+    // edges; let the caret lookup see through it to the text beneath.
+    const html = document.documentElement
+    html.setAttribute('data-froam-caret-probe', 'true')
+    let hit: Range | null = null
+    try {
+      hit = document.caretRangeFromPoint?.(caret.x, caret.y) ?? null
+    } finally {
+      html.removeAttribute('data-froam-caret-probe')
+    }
+    if (hit && element.contains(hit.startContainer)) range = hit
+  }
+  if (!range) {
+    range = document.createRange()
+    range.selectNodeContents(element)
+    range.collapse(false)
+  }
+  selection.removeAllRanges()
+  selection.addRange(range)
+  if (caret !== 'end' && caret.word && typeof selection.modify === 'function') {
+    selection.modify('move', 'backward', 'word')
+    selection.modify('extend', 'forward', 'word')
+  }
+}
+
+function isEditableField(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+}
+
 function isTextVisualLayer(element: HTMLElement) {
   if (element.dataset.froamShape === 'true') return false
   const tag = element.tagName.toLowerCase()
@@ -1884,6 +1939,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null)
   const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null)
   const [selectionHandoffKey, setSelectionHandoffKey] = useState(0)
+  // Where the last selecting click landed — typing then writes from that spot.
+  const lastClickPointRef = useRef<{ x: number; y: number } | null>(null)
+  // A tool-shortcut letter typed on selected copy waits a beat: more typing
+  // means writing, silence means the shortcut.
+  const pendingToolKeyRef = useRef<{ key: string; timer: number } | null>(null)
   // The click feedback: a ripple where the pointer landed + a flash over what it picked.
   const [clickPulse, setClickPulse] = useState<{ key: number; x: number; y: number; rect: DOMRect } | null>(null)
   const [selectionHandoffMode, setSelectionHandoffMode] = useState('Editing')
@@ -2633,6 +2693,85 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     reader.readAsDataURL(file)
   }
 
+  /**
+   * Start writing into a page element: remember its original copy, make it
+   * editable, put the caret where the person meant, and save the new text
+   * when they leave. Every entry point — typing, a second click, double-click,
+   * Enter, paste, the Text tool — comes through here, so they all save alike.
+   */
+  function startWriting(target: HTMLElement, caret: CaretTarget = 'end') {
+    const root = getRoot()
+    if (!root || !root.contains(target) || !isWritableElement(target)) return false
+    if (target.isContentEditable) {
+      placeCaret(target, caret)
+      return true
+    }
+    const editPath = getElementPath(target, root)
+    const originalRoute = originalsRef.current[viewportStoreKeyRef.current] ?? {}
+    if (!originalRoute[editPath]) {
+      // Remember the copy as it was before anyone typed. Undo can take the
+      // draft's text away, but only this can put the page's own words back.
+      originalRoute[editPath] = { text: target.innerText }
+      originalsRef.current[viewportStoreKeyRef.current] = originalRoute
+    }
+    const singleLine = SINGLE_LINE_TAGS.has(target.tagName.toLowerCase())
+    target.contentEditable = 'true'
+    target.focus({ preventScroll: true })
+    placeCaret(target, caret)
+    setInlineEditing(true)
+    markSelectionSwitch(target, 'Writing')
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' && !event.shiftKey && singleLine) {
+        event.preventDefault()
+        target.blur()
+      }
+    }
+    // Pasted copy arrives as plain text — never someone else's markup.
+    const onPaste = (event: ClipboardEvent) => {
+      const text = event.clipboardData?.getData('text/plain')
+      if (text == null) return
+      event.preventDefault()
+      document.execCommand('insertText', false, text)
+    }
+    const finish = () => {
+      target.contentEditable = 'false'
+      setInlineEditing(false)
+      target.removeEventListener('blur', finish)
+      target.removeEventListener('keydown', onKeyDown)
+      target.removeEventListener('paste', onPaste)
+      const liveRoot = getRoot()
+      if (!liveRoot || !liveRoot.contains(target)) return
+      const path = getElementPath(target, liveRoot)
+      const newText = target.innerText
+      opPendingLabelRef.current = 'Rewrote copy'
+      setStore((currentStore) => {
+        const vsk = viewportStoreKeyRef.current
+        return { ...currentStore, [vsk]: { ...(currentStore[vsk] ?? {}), [path]: { ...(currentStore[vsk]?.[path] ?? {}), text: newText } } }
+      })
+      setSelection((s) => (s ? { ...s, text: newText } : s))
+      persistLiveRouteSnapshot()
+    }
+    target.addEventListener('blur', finish)
+    target.addEventListener('keydown', onKeyDown)
+    target.addEventListener('paste', onPaste)
+    return true
+  }
+
+  /** Type into the selected copy: at the last click if it was on this element, else at the end. */
+  function writeIntoSelection(text: string) {
+    const target = currentSelectionRef.current
+    if (!target) return false
+    const point = lastClickPointRef.current
+    const rect = target.getBoundingClientRect()
+    const caret: CaretTarget = point && point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom
+      ? { x: point.x, y: point.y }
+      : 'end'
+    if (!startWriting(target, caret)) return false
+    if (text) document.execCommand('insertText', false, text)
+    return true
+  }
+
   function markSelectionSwitch(element: HTMLElement | null, mode = 'Editing') {
     selectionSwitchTargetRef.current?.removeAttribute('data-froam-switching')
     selectionSwitchTargetRef.current = null
@@ -3244,6 +3383,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
 
     function handleClick(event: MouseEvent) {
+      // Clicks inside copy that's being written move the caret — the browser's job.
+      const writing = currentSelectionRef.current
+      if (writing?.isContentEditable && event.target instanceof Node && writing.contains(event.target)) return
       const { target, stack } = resolveClick(event)
       if (!target) {
         if (!(event.target instanceof HTMLElement) || event.target.closest('[data-chef-editor-root="true"]')) return
@@ -3266,6 +3408,20 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
       event.preventDefault()
       event.stopPropagation()
+
+      // A second click on copy that's already selected means "let me write here".
+      if (
+        event.detail === 1
+        && !event.shiftKey
+        && !event.altKey
+        && activeToolRef.current === 'pointer'
+        && target === currentSelectionRef.current
+        && isWritableElement(target)
+      ) {
+        lastClickPointRef.current = { x: event.clientX, y: event.clientY }
+        startWriting(target, { x: event.clientX, y: event.clientY })
+        return
+      }
 
       // Exit inline editing if clicking something else
       if (inlineEditing && currentSelectionRef.current) {
@@ -3292,35 +3448,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       // controls arrive as pointerup, which reports detail 0.
       if (event.detail > 0 || event.type === 'pointerup') {
         setClickPulse({ key: window.performance.now(), x: event.clientX, y: event.clientY, rect: target.getBoundingClientRect() })
+        lastClickPointRef.current = { x: event.clientX, y: event.clientY }
       }
       setMeasureRect(null)
       setContextMenuPos(null)
 
-      // Text tool — single click enters inline editing immediately (no double-click required)
-      if (activeToolRef.current === 'text' && canApplyTextDraft(target)) {
-        const textEl = target // capture non-null for closure
-        const originalRoute = originalsRef.current[viewportStoreKeyRef.current] ?? {}
-        if (!originalRoute[path]) {
-          originalRoute[path] = { text: textEl.innerText }
-          originalsRef.current[viewportStoreKeyRef.current] = originalRoute
-        }
-        textEl.contentEditable = 'true'
-        textEl.focus()
-        setInlineEditing(true)
-        function handleTextToolBlur() {
-          textEl.contentEditable = 'false'
-          setInlineEditing(false)
-          const newText = textEl.innerText
-          opPendingLabelRef.current = 'Rewrote copy'
-          setStore((currentStore) => {
-            const vsk = viewportStoreKeyRef.current
-            return { ...currentStore, [vsk]: { ...(currentStore[vsk] ?? {}), [path]: { ...(currentStore[vsk]?.[path] ?? {}), text: newText } } }
-          })
-          setSelection((s) => s ? { ...s, text: newText } : s)
-          persistLiveRouteSnapshot()
-          textEl.removeEventListener('blur', handleTextToolBlur)
-        }
-        textEl.addEventListener('blur', handleTextToolBlur)
+      // Text tool — single click writes where you clicked (no double-click required)
+      if (activeToolRef.current === 'text' && isWritableElement(target)) {
+        startWriting(target, { x: event.clientX, y: event.clientY })
         return
       }
 
@@ -3333,10 +3468,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       const target = selected && rootElement.contains(selected) ? selected : resolveClick(event).target
       if (!target) return
       const textTarget = target
+      // Already writing here: a double-click is the browser selecting a word.
+      if (textTarget.isContentEditable) return
       setQuickChatOpen(false)
       event.preventDefault()
       event.stopPropagation()
-      if (!canApplyTextDraft(textTarget)) {
+      if (!isWritableElement(textTarget)) {
         showToast('Select a text layer to edit copy')
         return
       }
@@ -3348,53 +3485,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         textTarget.style.justifyContent = 'center'
         textTarget.style.cursor = 'text'
       }
-      // Remember the copy as it was before anyone typed. Undo can take the
-      // draft's text away, but only this can put the page's own words back.
-      const editPath = getElementPath(textTarget, rootElement)
-      const originalRoute = originalsRef.current[viewportStoreKeyRef.current] ?? {}
-      if (!originalRoute[editPath]) {
-        originalRoute[editPath] = { text: textTarget.innerText }
-        originalsRef.current[viewportStoreKeyRef.current] = originalRoute
-      }
-
-      // Enable contentEditable
-      textTarget.contentEditable = 'true'
-      textTarget.focus()
-      if (textTarget.dataset.froamShape === 'true' && !textTarget.innerText.trim()) {
-        const selectionRange = document.createRange()
-        selectionRange.selectNodeContents(textTarget)
-        selectionRange.collapse(false)
-        const browserSelection = window.getSelection()
-        browserSelection?.removeAllRanges()
-        browserSelection?.addRange(selectionRange)
-      }
-      setInlineEditing(true)
-
-      function handleBlur() {
-        textTarget.contentEditable = 'false'
-        setInlineEditing(false)
-        // Sync text back to draft
-        const path = getElementPath(textTarget, rootElement)
-        const newText = textTarget.innerText
-        opPendingLabelRef.current = 'Rewrote copy'
-        setStore((currentStore) => {
-          const vsk = viewportStoreKeyRef.current
-          return {
-            ...currentStore,
-            [vsk]: {
-              ...(currentStore[vsk] ?? {}),
-              [path]: {
-                ...(currentStore[vsk]?.[path] ?? {}),
-                text: newText,
-              },
-            },
-          }
-        })
-        setSelection((s) => s ? { ...s, text: newText } : s)
-        persistLiveRouteSnapshot()
-        textTarget.removeEventListener('blur', handleBlur)
-      }
-      textTarget.addEventListener('blur', handleBlur)
+      startWriting(textTarget, textTarget.innerText.trim() ? { x: event.clientX, y: event.clientY, word: true } : 'end')
     }
 
     function handleContextMenu(event: MouseEvent) {
@@ -4171,6 +4262,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       node.removeAttribute('data-froam-switching')
       node.removeAttribute('data-froam-pin')
       node.removeAttribute('data-froam-pe')
+      node.removeAttribute('data-froam-writable')
       node.removeAttribute('data-froam-moving')
     })
     return clone.outerHTML
@@ -4915,8 +5007,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         ? getElementPath(previousElement, root)
         : ''
       if (root) {
-        root.querySelectorAll('[data-chef-selected="true"]').forEach((el) => {
+        root.querySelectorAll('[data-chef-selected="true"], [data-froam-writable]').forEach((el) => {
           el.removeAttribute('data-chef-selected')
+          el.removeAttribute('data-froam-writable')
           el.removeAttribute('data-froam-multi-selected')
           el.removeAttribute('data-froam-boundary-label')
           el.removeAttribute('data-froam-static-boundary')
@@ -4950,7 +5043,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       if (!nextElement) {
         markSelectionSwitch(null)
       } else if (primary.path !== previousPath) {
-        markSelectionSwitch(nextElement, moveMode ? 'Moving' : 'Editing')
+        markSelectionSwitch(nextElement, moveMode ? 'Moving' : isWritableElement(nextElement) ? 'Type to edit' : 'Editing')
+      }
+      if (nextElement && identifiedSelections.length === 1 && isWritableElement(nextElement)) {
+        nextElement.setAttribute('data-froam-writable', 'true')
       }
       if (root) {
         try { setLayers(collectLayers(root)) } catch { /* DOM may be mid-render */ }
@@ -6561,7 +6657,93 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   useEffect(() => {
     if (!showPanel) return
 
+    const TOOL_SHORTCUT_KEYS = new Set(['v', 'h', 't', 'r', 'f'])
+
+    function runToolShortcut(key: string) {
+      switch (key.toLowerCase()) {
+        case 'v': setActiveTool('pointer'); break
+        case 'h': setActiveTool('hand'); break
+        case 't': setActiveTool('text'); break
+        case 'r': setActiveTool('shape'); break
+        case 'f': setActiveTool('frame'); break
+        default: return
+      }
+      setMoveMode(false)
+    }
+
+    function cancelPendingToolKey(runIt: boolean) {
+      const pending = pendingToolKeyRef.current
+      if (!pending) return
+      window.clearTimeout(pending.timer)
+      pendingToolKeyRef.current = null
+      if (runIt) runToolShortcut(pending.key)
+    }
+
+    /** Start writing, replaying a held shortcut letter as the first typed character. */
+    function writeTyped(text: string) {
+      const pending = pendingToolKeyRef.current
+      cancelPendingToolKey(false)
+      writeIntoSelection((pending?.key ?? '') + text)
+    }
+
+    function handlePaste(e: ClipboardEvent) {
+      if (isEditableField(e.target) || inlineEditing || commandPaletteOpen) return
+      const selected = currentSelectionRef.current
+      if (!selected || !isWritableElement(selected)) return
+      const text = e.clipboardData?.getData('text/plain')
+      if (!text) return
+      e.preventDefault()
+      writeIntoSelection(text)
+    }
+
     function handleKeyDown(e: KeyboardEvent) {
+      // Keys typed into a field (Froam's own inputs, or copy being written)
+      // belong to that field; only modified shortcuts below still apply.
+      const inField = isEditableField(e.target)
+
+      // ─── Auto text mode: typing on selected copy writes into it ───
+      const selectedCopy = currentSelectionRef.current
+      // Read "am I writing?" from the DOM, not React state: a key can arrive
+      // before the render that follows startWriting(), and a key the copy
+      // itself already handled (Enter finishing a heading) must not restart it.
+      if (
+        !e.defaultPrevented
+        && !inField
+        && !inlineEditing
+        && !commandPaletteOpen
+        && selectedCopy
+        && !selectedCopy.isContentEditable
+        && isWritableElement(selectedCopy)
+        && (activeToolRef.current === 'pointer' || activeToolRef.current === 'text')
+      ) {
+        const printable = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey
+        if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault()
+          writeTyped('')
+          return
+        }
+        if (printable) {
+          e.preventDefault()
+          if (pendingToolKeyRef.current) {
+            writeTyped(e.key)
+            return
+          }
+          if (TOOL_SHORTCUT_KEYS.has(e.key.toLowerCase())) {
+            // Could be the start of a word or a tool shortcut: wait a beat.
+            const key = e.key
+            const timer = window.setTimeout(() => {
+              pendingToolKeyRef.current = null
+              runToolShortcut(key)
+            }, 260)
+            pendingToolKeyRef.current = { key, timer }
+            return
+          }
+          writeTyped(e.key)
+          return
+        }
+        if (!['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(e.key)) cancelPendingToolKey(true)
+      }
+
       // Command palette
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault()
@@ -6608,9 +6790,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           setContextMenuPos(null)
           return
         }
-        if (inlineEditing && currentSelectionRef.current) {
-          currentSelectionRef.current.contentEditable = 'false'
+        if ((inlineEditing || currentSelectionRef.current?.isContentEditable) && currentSelectionRef.current) {
+          // blur() runs startWriting's finish, which saves the copy and turns editing off.
           currentSelectionRef.current.blur()
+          currentSelectionRef.current.contentEditable = 'false'
           setInlineEditing(false)
           return
         }
@@ -6634,19 +6817,19 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         return
       }
       // Delete to clear
-      if (e.key === 'Delete' && selection && !inlineEditing) {
+      if (e.key === 'Delete' && selection && !inlineEditing && !inField) {
         e.preventDefault()
         actionsRef.current.clearSelectionDraft()
         return
       }
       // ? key for shortcut overlay
-      if (e.key === '?' && !inlineEditing && !commandPaletteOpen) {
+      if (e.key === '?' && !inlineEditing && !commandPaletteOpen && !inField) {
         e.preventDefault()
         setShowShortcutOverlay((v) => !v)
         return
       }
       // ─── Tool shortcuts — only when not typing ───
-      if (!inlineEditing && !commandPaletteOpen && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (!inlineEditing && !commandPaletteOpen && !inField && !e.ctrlKey && !e.metaKey && !e.altKey) {
         if (e.key === 'v' || e.key === 'V') {
           e.preventDefault()
           setActiveTool('pointer')
@@ -6726,7 +6909,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         return
       }
       // Arrow keys to nudge position (only when not inline editing)
-      if (selection && !inlineEditing && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      if (selection && !inlineEditing && !inField && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         e.preventDefault()
         const root = getRoot()
         if (!root) return
@@ -6750,7 +6933,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
 
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    document.addEventListener('paste', handlePaste)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('paste', handlePaste)
+    }
   }, [showPanel, selection, commandPaletteOpen, inlineEditing, clipboardStyles, viewportStoreKey, labsOpen, intelligenceOpen, connectedCanvasOpen, workspacePreference.advancedOpen])
 
   /* ─── Gradient helpers ─── */

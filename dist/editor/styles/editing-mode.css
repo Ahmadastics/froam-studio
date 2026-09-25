@@ -33,6 +33,15 @@
   cursor: auto !important;
 }
 
+/* Selected copy invites writing: the pointer becomes a text cursor, and copy
+   being written keeps it (the crosshair rule above would otherwise win). */
+html[data-chef-editing] [data-chef-selected='true'][data-froam-writable='true'],
+html[data-chef-editing] [data-chef-selected='true'][data-froam-writable='true'] *,
+html[data-chef-editing] [contenteditable='true'],
+html[data-chef-editing] [contenteditable='true'] * {
+  cursor: text !important;
+}
+
 .global-chef-button[data-chef-editor-root='true'] {
   cursor: grab !important;
 }
@@ -48,6 +57,13 @@
    (measured: ~15ms on an 800-element page, ~100ms at 7,000). */
 [data-froam-hittest='true'] [data-froam-pe='none'] {
   pointer-events: auto !important;
+}
+
+/* Set for one caretRangeFromPoint() call (placeCaret) so Froam's overlay
+   doesn't stand between the pointer and the text the caret belongs in. */
+html[data-froam-caret-probe] #froam-editor-portal,
+html[data-froam-caret-probe] #froam-editor-portal * {
+  pointer-events: none !important;
 }
 
 [data-chef-hovered='true'] {
