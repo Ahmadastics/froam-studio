@@ -11,6 +11,19 @@
  * the anchor resolver and a room server can all agree on.
  */
 
+/**
+ * Which elements a path can address: every HTML element, plus an `<svg>` root
+ * (icons, logos, illustrations). SVG internals (path, g, circle…) roll up to
+ * their <svg>. Siblings are counted per tag, so admitting <svg> changes no
+ * existing HTML path — only paths ending in `svg:n` become resolvable.
+ *
+ * Typed as HTMLElement because the editor treats both uniformly (style,
+ * dataset, attributes, geometry); callers must not assume innerText on an svg.
+ */
+export function isPathElement(node: Element | null | undefined): node is HTMLElement {
+  return node instanceof HTMLElement || node instanceof SVGSVGElement
+}
+
 export function isSafeDraftPath(path: string) {
   return path.trim().length > 0 && path.includes(':')
 }
@@ -19,12 +32,12 @@ export function getElementPath(element: HTMLElement, root: HTMLElement) {
   const segments: string[] = []
   let current: HTMLElement | null = element
   while (current && current !== root) {
-    const parent: HTMLElement | null = current.parentElement
+    const parent = current.parentElement as HTMLElement | null
     if (!parent) break
     const tag = current.tagName.toLowerCase()
     const currentTag = current.tagName
     const siblings = Array.from(parent.children).filter(
-      (child): child is HTMLElement => child instanceof HTMLElement && child.tagName === currentTag,
+      (child): child is HTMLElement => isPathElement(child) && child.tagName === currentTag,
     )
     const index = Math.max(1, siblings.indexOf(current) + 1)
     segments.unshift(`${tag}:${index}`)
@@ -42,7 +55,7 @@ export function findElementByPath(root: HTMLElement, path: string): HTMLElement 
     const [tag, position] = segment.split(':')
     const index = Math.max(0, Number(position) - 1)
     const next: HTMLElement | undefined = Array.from(current.children).filter(
-      (child): child is HTMLElement => child instanceof HTMLElement && child.tagName.toLowerCase() === tag,
+      (child): child is HTMLElement => isPathElement(child) && child.tagName.toLowerCase() === tag,
     )[index]
     if (!next) return null
     current = next

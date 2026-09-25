@@ -45,7 +45,7 @@ function getEdgeSegments(rect, handleSize, edgeSize) {
         { dir: 'w', x: l - edgeHalf, y: t + inset, w: edgeSize, h: h - inset * 2, cursor: 'ew-resize' },
     ];
 }
-export default function FroamResizeHandles({ targetRect, onResizeStart, onResize, onResizeEnd, visible }) {
+export default function FroamResizeHandles({ targetRect, onResizeStart, onResize, onResizeEnd, visible, lockKey = 0 }) {
     const dragRef = useRef(null);
     const [activeCursor, setActiveCursor] = useState(null);
     const coarsePointer = useMediaQuery(COARSE_POINTER_QUERY);
@@ -158,7 +158,7 @@ export default function FroamResizeHandles({ targetRect, onResizeStart, onResize
                     cursor: CURSORS[dir],
                     zIndex: 1306,
                     touchAction: 'none',
-                }, onPointerDown: (e) => handlePointerDown(dir, e), onPointerMove: handlePointerMove, onPointerUp: handlePointerUp, onPointerCancel: handlePointerUp }, dir))), _jsx("div", { className: "froam-selection-outline", "data-chef-editor-root": "true", style: {
+                }, onPointerDown: (e) => handlePointerDown(dir, e), onPointerMove: handlePointerMove, onPointerUp: handlePointerUp, onPointerCancel: handlePointerUp }, `${dir}:${lockKey}`))), _jsx("div", { className: "froam-selection-outline", "data-chef-editor-root": "true", style: {
                     position: 'fixed',
                     left: targetRect.left - 1,
                     top: targetRect.top - 1,
@@ -166,7 +166,7 @@ export default function FroamResizeHandles({ targetRect, onResizeStart, onResize
                     height: targetRect.height + 2,
                     zIndex: 1304,
                     pointerEvents: 'none',
-                } }), _jsxs("div", { className: "froam-resize-size-badge", "data-chef-editor-root": "true", style: {
+                } }, lockKey), _jsxs("div", { className: "froam-resize-size-badge", "data-chef-editor-root": "true", style: {
                     position: 'fixed',
                     left: Math.max(8, targetRect.left + targetRect.width / 2),
                     top: Math.min(window.innerHeight - 34, targetRect.bottom + 10),

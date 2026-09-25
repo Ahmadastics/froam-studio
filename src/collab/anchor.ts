@@ -18,6 +18,7 @@
 import {
   getElementPath,
   findElementByPath,
+  isPathElement,
 } from './paths'
 import type {
   FroamAnchor,
@@ -109,7 +110,7 @@ function ordinalAmongSiblings(element: HTMLElement) {
   const parent = element.parentElement
   if (!parent) return undefined
   const sameTag = Array.from(parent.children).filter(
-    (child): child is HTMLElement => child instanceof HTMLElement && child.tagName === element.tagName,
+    (child): child is HTMLElement => isPathElement(child) && child.tagName === element.tagName,
   )
   const index = sameTag.indexOf(element)
   return index < 0 ? undefined : index + 1

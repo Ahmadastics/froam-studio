@@ -10,6 +10,16 @@
  * Extracted from the editor so the format has one definition that the log,
  * the anchor resolver and a room server can all agree on.
  */
+/**
+ * Which elements a path can address: every HTML element, plus an `<svg>` root
+ * (icons, logos, illustrations). SVG internals (path, g, circle…) roll up to
+ * their <svg>. Siblings are counted per tag, so admitting <svg> changes no
+ * existing HTML path — only paths ending in `svg:n` become resolvable.
+ *
+ * Typed as HTMLElement because the editor treats both uniformly (style,
+ * dataset, attributes, geometry); callers must not assume innerText on an svg.
+ */
+export declare function isPathElement(node: Element | null | undefined): node is HTMLElement;
 export declare function isSafeDraftPath(path: string): boolean;
 export declare function getElementPath(element: HTMLElement, root: HTMLElement): string;
 export declare function findElementByPath(root: HTMLElement, path: string): HTMLElement | null;

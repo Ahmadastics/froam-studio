@@ -41,6 +41,15 @@
   cursor: grabbing !important;
 }
 
+/* Set for the duration of one elementsFromPoint() call (visualStackAtPoint)
+   so click-through layers — pointer-events: none — are hit-tested too.
+   Only the elements marked as click-through are targeted: a universal
+   descendant rule here would restyle the whole page on every hover
+   (measured: ~15ms on an 800-element page, ~100ms at 7,000). */
+[data-froam-hittest='true'] [data-froam-pe='none'] {
+  pointer-events: auto !important;
+}
+
 [data-chef-hovered='true'] {
   outline: 1.5px dashed rgba(var(--fs-accent-control-rgb), 0.58);
   outline-offset: 2px;

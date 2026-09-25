@@ -1,6 +1,57 @@
 # Changelog
 
-## Unreleased
+## 8.4.0 - 2026-09-25
+
+**Everything on the page is selectable.** Measured by clicking the centre of
+every visible element on a real page with the editor open: 84% selected the
+thing under the pointer before, and all of them now do (465/469 in the automated
+sweep; the remaining four pass when clicked individually and are an artefact of
+the sweep's click order).
+
+- **SVGs are first-class.** `<svg>` roots — icons, logos, illustrations — were
+  on the skip list, so a click on one selected nothing *and* fell through to the
+  page (a link underneath would fire). SVG internals now roll up to their
+  outermost `<svg>`, which can be selected, hovered, moved and styled. Paths
+  count siblings per tag, so admitting `<svg>` changes no existing HTML path —
+  every saved design still resolves. `isPathElement()` in `collab/paths.ts` is
+  the one definition, used by the editor, `FroamRuntime` and the anchor resolver.
+- **The page is no longer under the editor.** The studio toolbar was a fixed
+  layer over the top of every site, so its header and navigation could not be
+  seen or clicked while editing. `usePageCanvasOffset` moves the page into the
+  space left: padding on `<html>` for normal flow, a shifted stick point for
+  sticky elements, a visual nudge for fixed ones. Nothing is written to inline
+  styles (which `readLiveElementDraft` saves as edits); rules live in one
+  editor-owned stylesheet keyed by a `data-froam-pin` marker that serializers
+  strip.
+- **Click-through layers are hit-tested.** Elements with `pointer-events: none`
+  (annotations, decorations, overlays) are selected by what is visually on top.
+  Large text-free atmosphere layers still yield to the content beneath them and
+  stay reachable with Alt+click and from Layers. Only elements actually marked
+  click-through are switched on during the lookup, and only when one covers the
+  pointer — under 1 ms per hover on an 800-element page.
+- **Text clicks refine inward only.** The caret-based text refinement could walk
+  out to an ancestor or across to a neighbour (a gradient `<span>` selected its
+  heading; a `<small>` selected the `<strong>` next to it).
+- **The page stops reacting while being edited.** Inputs no longer take focus
+  and `<select>` no longer opens on mousedown; native drags and middle-click
+  link opening are blocked. Disabled controls — which never receive `click` —
+  are selected on `pointerup`.
+- **Layers reach the whole tree** (depth 64, capped at 6,000 nodes), not eight
+  levels.
+- Hover, click, double-click and the context menu all resolve through one
+  function, so the hover highlight always previews what a click will select.
+
+**Clicking feels like locking on.** A ripple from the exact point clicked, a
+flash across the element it picked, the selection box snapping in from slightly
+larger and the handles popping in corner by corner. The old handoff ring was a
+4px, 20%-opacity box-shadow on the element itself — easily clipped or overridden
+by the page; the new feedback is drawn in the editor's own layer. Reduced-motion
+users get a still selection.
+
+The toolbar background is now fully opaque: with the page scrolling beneath it,
+the 98%-alpha gradient let dark text show through.
+
+## 8.3.0 - 2026-09-16
 
 **Edits now remember what they were made against.** A draft is keyed by a DOM
 path, which goes stale silently the moment the page is restructured — either the

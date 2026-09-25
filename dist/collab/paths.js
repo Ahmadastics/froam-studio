@@ -10,6 +10,18 @@
  * Extracted from the editor so the format has one definition that the log,
  * the anchor resolver and a room server can all agree on.
  */
+/**
+ * Which elements a path can address: every HTML element, plus an `<svg>` root
+ * (icons, logos, illustrations). SVG internals (path, g, circle…) roll up to
+ * their <svg>. Siblings are counted per tag, so admitting <svg> changes no
+ * existing HTML path — only paths ending in `svg:n` become resolvable.
+ *
+ * Typed as HTMLElement because the editor treats both uniformly (style,
+ * dataset, attributes, geometry); callers must not assume innerText on an svg.
+ */
+export function isPathElement(node) {
+    return node instanceof HTMLElement || node instanceof SVGSVGElement;
+}
 export function isSafeDraftPath(path) {
     return path.trim().length > 0 && path.includes(':');
 }
@@ -22,7 +34,7 @@ export function getElementPath(element, root) {
             break;
         const tag = current.tagName.toLowerCase();
         const currentTag = current.tagName;
-        const siblings = Array.from(parent.children).filter((child) => child instanceof HTMLElement && child.tagName === currentTag);
+        const siblings = Array.from(parent.children).filter((child) => isPathElement(child) && child.tagName === currentTag);
         const index = Math.max(1, siblings.indexOf(current) + 1);
         segments.unshift(`${tag}:${index}`);
         current = parent;
@@ -39,7 +51,7 @@ export function findElementByPath(root, path) {
             return null;
         const [tag, position] = segment.split(':');
         const index = Math.max(0, Number(position) - 1);
-        const next = Array.from(current.children).filter((child) => child instanceof HTMLElement && child.tagName.toLowerCase() === tag)[index];
+        const next = Array.from(current.children).filter((child) => isPathElement(child) && child.tagName.toLowerCase() === tag)[index];
         if (!next)
             return null;
         current = next;

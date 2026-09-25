@@ -10,7 +10,16 @@
   box-shadow:
     0 0 0 1px rgba(var(--fs-accent-control-rgb), 0.18),
     0 0 12px rgba(var(--fs-accent-control-rgb), 0.08);
-  animation: froam-selection-pulse 2s ease-in-out infinite;
+  transform-origin: center;
+  /* Lock-on: the box snaps in from slightly larger, then settles into its breathe. */
+  animation:
+    froam-selection-lock 280ms cubic-bezier(0.2, 0.9, 0.3, 1.15) both,
+    froam-selection-pulse 2s 280ms ease-in-out infinite;
+}
+
+@keyframes froam-selection-lock {
+  from { opacity: 0; transform: scale(1.035); }
+  to { opacity: 1; transform: none; }
 }
 
 @keyframes froam-selection-pulse {
@@ -26,6 +35,70 @@
   border-radius: 2px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
   transition: transform 80ms ease, box-shadow 80ms ease;
+  /* Handles pop in just after the box locks on, corner by corner. 'backwards'
+     (not 'both') so the hover scale still works once they've landed. */
+  animation: froam-handle-pop 240ms cubic-bezier(0.3, 1.6, 0.5, 1) backwards;
+  animation-delay: 90ms;
+}
+
+.froam-resize-handle--ne { animation-delay: 120ms; }
+.froam-resize-handle--e { animation-delay: 135ms; }
+.froam-resize-handle--se { animation-delay: 150ms; }
+.froam-resize-handle--s { animation-delay: 165ms; }
+.froam-resize-handle--sw { animation-delay: 180ms; }
+.froam-resize-handle--w { animation-delay: 195ms; }
+.froam-resize-handle--n { animation-delay: 105ms; }
+
+@keyframes froam-handle-pop {
+  from { opacity: 0; transform: scale(0.2); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ─── Click feedback: ripple from the pointer + a flash over what it picked ─── */
+
+.froam-click-pulse {
+  position: fixed;
+  inset: 0;
+  z-index: 1303;
+  pointer-events: none;
+}
+
+.froam-click-pulse__flash {
+  position: fixed;
+  border-radius: 4px;
+  background: rgba(var(--fs-accent-control-rgb), 0.12);
+  box-shadow:
+    0 0 0 1.5px rgba(var(--fs-accent-control-rgb), 0.55),
+    0 0 28px rgba(var(--fs-accent-control-rgb), 0.35);
+  animation: froam-click-flash 560ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes froam-click-flash {
+  0% { opacity: 0; }
+  18% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.froam-click-pulse__ring {
+  position: fixed;
+  width: 36px;
+  height: 36px;
+  margin: -18px 0 0 -18px;
+  border-radius: 50%;
+  border: 2px solid rgb(var(--fs-accent-control-rgb));
+  animation: froam-click-ring 480ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes froam-click-ring {
+  from { opacity: 0.9; transform: scale(0.25); }
+  to { opacity: 0; transform: scale(1.6); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .froam-selection-outline { animation: none; }
+  .froam-resize-handle { animation: none; }
+  .froam-click-pulse__ring { display: none; }
+  .froam-click-pulse__flash { animation-duration: 1ms; }
 }
 
 .froam-resize-handle:hover {

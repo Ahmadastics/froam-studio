@@ -54,7 +54,8 @@ import { useFroamProjectDocument } from './useFroamProjectDocument.js';
 import FroamRoomChat from './FroamRoomChat.js';
 import { diffStores } from '../collab/oplog.js';
 import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist.js';
-import { findElementByPath, getElementPath, isSafeDraftPath, tagOfPath } from '../collab/paths.js';
+import { findElementByPath, getElementPath, isPathElement, isSafeDraftPath, tagOfPath } from '../collab/paths.js';
+import { usePageCanvasOffset } from './usePageCanvasOffset.js';
 import { createAnchor, resolveAnchor } from '../collab/anchor.js';
 import { fingerprintForDraft } from './draft-fingerprint.js';
 import { LOCAL_ACTOR, scopeKey } from '../collab/types.js';
@@ -300,9 +301,16 @@ function applyGlobalCSS(css) {
     }
     styleEl.textContent = css || '';
 }
+const SVG_NS = 'http://www.w3.org/2000/svg';
+/** An element inside an <svg> (path, g, circle…) — edited through its <svg>. */
+function isSvgInternal(element) {
+    return element.namespaceURI === SVG_NS && element.tagName.toLowerCase() !== 'svg';
+}
 function shouldSkipElement(element) {
     const tag = element.tagName.toLowerCase();
-    if (['html', 'body', 'script', 'style', 'path', 'svg'].includes(tag))
+    if (['html', 'body', 'head', 'script', 'style', 'noscript', 'template', 'link', 'meta'].includes(tag))
+        return true;
+    if (isSvgInternal(element))
         return true;
     if (element.id === 'root')
         return true;
@@ -703,7 +711,9 @@ function buildSelection(element, path) {
     }
 }
 function canApplyTextDraft(element) {
-    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)
+    if (!(element instanceof HTMLElement))
+        return false; // <svg>: style it, don't retype it
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement)
         return false;
     if (element.dataset.froamShape === 'true')
         return true;
@@ -718,7 +728,7 @@ function isTextVisualLayer(element) {
     if (element.dataset.froamShape === 'true')
         return false;
     const tag = element.tagName.toLowerCase();
-    if (!TEXT_VISUAL_TAGS.has(tag) || !element.innerText.trim())
+    if (!TEXT_VISUAL_TAGS.has(tag) || !element.innerText?.trim())
         return false;
     return Array.from(element.children).every((child) => INLINE_TEXT_CHILD_TAGS.has(child.tagName.toLowerCase()));
 }
@@ -803,7 +813,7 @@ function syncStructureBoundaryLabel(element) {
 function buildLayerNode(element, root) {
     const path = getElementPath(element, root);
     const computed = window.getComputedStyle(element);
-    const elementChildren = Array.from(element.children).filter((child) => child instanceof HTMLElement && !shouldSkipElement(child));
+    const elementChildren = Array.from(element.children).filter((child) => isPathElement(child) && !shouldSkipElement(child));
     return {
         element,
         path,
@@ -1040,19 +1050,23 @@ function buildGradientCSS(type, angle, stops) {
         ? `linear-gradient(${angle}deg, ${stopStr})`
         : `radial-gradient(circle, ${stopStr})`;
 }
-function collectLayers(root, maxDepth = 8) {
+// Every element should be reachable from Layers, however deeply it's nested;
+// the cap only protects the panel on pathological pages.
+const LAYER_MAX_DEPTH = 64;
+const LAYER_MAX_NODES = 6000;
+function collectLayers(root, maxDepth = LAYER_MAX_DEPTH) {
     const nodes = [];
     function walk(el, depth) {
-        if (depth > maxDepth)
+        if (depth > maxDepth || nodes.length >= LAYER_MAX_NODES)
             return;
         if (shouldSkipElement(el))
             return;
-        const elementChildren = Array.from(el.children).filter((child) => child instanceof HTMLElement && !shouldSkipElement(child));
+        const elementChildren = Array.from(el.children).filter((child) => isPathElement(child) && !shouldSkipElement(child));
         nodes.push(buildLayerNode(el, root));
         elementChildren.forEach((child) => walk(child, depth + 1));
     }
     for (const child of Array.from(root.children)) {
-        if (child instanceof HTMLElement)
+        if (isPathElement(child))
             walk(child, 0);
     }
     return nodes;
@@ -1292,6 +1306,13 @@ function MeasurementOverlay({ rect }) {
             height: rect.height,
         }, children: _jsxs("span", { className: "fs-measure__badge", children: [w, " \u00D7 ", h] }) }));
 }
+/** Click feedback: a ripple from the exact point clicked and a flash across the element it selected. */
+function ClickPulseOverlay({ pulse }) {
+    if (!pulse)
+        return null;
+    const { rect } = pulse;
+    return (_jsxs("div", { className: "froam-click-pulse", "data-chef-editor-root": "true", "aria-hidden": "true", children: [_jsx("span", { className: "froam-click-pulse__flash", style: { left: rect.left - 2, top: rect.top - 2, width: rect.width + 4, height: rect.height + 4 } }), _jsx("span", { className: "froam-click-pulse__ring", style: { left: pulse.x, top: pulse.y } })] }, pulse.key));
+}
 function SelectionHandoffOverlay({ rect, label, mode, count, pulseKey, }) {
     if (!rect)
         return null;
@@ -1438,6 +1459,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [contextMenuPos, setContextMenuPos] = useState(null);
     const [selectionRect, setSelectionRect] = useState(null);
     const [selectionHandoffKey, setSelectionHandoffKey] = useState(0);
+    // The click feedback: a ripple where the pointer landed + a flash over what it picked.
+    const [clickPulse, setClickPulse] = useState(null);
     const [selectionHandoffMode, setSelectionHandoffMode] = useState('Editing');
     const [smartGuides] = useState([]);
     const [clipboardStyles, setClipboardStyles] = useState(null);
@@ -1648,6 +1671,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 label,
             })]));
     }, [projectActorId, projectSession.setProject]);
+    useEffect(() => {
+        if (!clickPulse)
+            return undefined;
+        const timer = window.setTimeout(() => setClickPulse(null), 700);
+        return () => window.clearTimeout(timer);
+    }, [clickPulse]);
     useEffect(() => {
         const catalogFamilies = componentCatalogFamilies(FROAM_COMPONENTS);
         if (catalogFamilies.every((family) => activeProjectState.designSystem.componentFamilies[family.id]))
@@ -2443,6 +2472,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         document.documentElement.toggleAttribute('data-chef-editing', showPanel);
         return () => { document.documentElement.removeAttribute('data-chef-editing'); };
     }, [showPanel]);
+    // Keep the page's own header out from under Froam's toolbar while editing.
+    usePageCanvasOffset(showPanel && !studioMinimized, getRoot);
     /* ─── Move mode cursor ─── */
     /* ─── Tool cursor ─── */
     useEffect(() => {
@@ -2638,29 +2669,42 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             currentHoverRef.current?.removeAttribute('data-froam-static-boundary');
             currentHoverRef.current = null;
         }
+        /** The editable element for a raw event/hit target: SVG internals roll up
+         *  to their outermost <svg>; editor UI and skipped tags resolve to null. */
         function resolveTarget(rawTarget) {
-            let element = rawTarget instanceof HTMLElement ? rawTarget : null;
+            let element = rawTarget instanceof Element ? rawTarget : null;
+            if (element && element.namespaceURI === SVG_NS) {
+                let svgRoot = element.tagName.toLowerCase() === 'svg' ? element : element.closest('svg');
+                while (svgRoot?.parentElement?.namespaceURI === SVG_NS)
+                    svgRoot = svgRoot.parentElement.closest('svg');
+                element = svgRoot;
+            }
             while (element && rootElement.contains(element)) {
                 if (element.closest('[data-chef-editor-root="true"]'))
                     return null;
-                if (!shouldSkipElement(element))
+                if (isPathElement(element) && !shouldSkipElement(element))
                     return element;
                 element = element.parentElement;
             }
             return null;
         }
+        /**
+         * Inside a text block, the caret position says which inline piece was
+         * clicked. Only ever refine *inward* (to the target or something inside
+         * it) — never out to an ancestor, never across to a neighbour.
+         */
         function resolveTextTargetAtPoint(event, fallback) {
             const range = document.caretRangeFromPoint?.(event.clientX, event.clientY);
             const start = range?.startContainer;
             let element = start instanceof HTMLElement ? start : start?.parentElement ?? null;
-            while (element && rootElement.contains(element)) {
+            if (!element || !fallback.contains(element))
+                return fallback;
+            while (element && element !== fallback) {
                 if (isTextVisualLayer(element)) {
                     const rect = element.getBoundingClientRect();
                     if (event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom)
                         return element;
                 }
-                if (element === fallback)
-                    break;
                 element = element.parentElement;
             }
             return fallback;
@@ -2684,19 +2728,112 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             }
             return ancestors;
         }
-        function selectionStackAtPoint(event, primary) {
-            const elements = typeof document.elementsFromPoint === 'function'
-                ? document.elementsFromPoint(event.clientX, event.clientY)
-                : [];
+        /* Click-through layers are found once (and again when the page changes),
+           and marked so visualStackAtPoint() can switch just those on. */
+        const PE_ATTR = 'data-froam-pe';
+        let clickThroughLayers = [];
+        function markClickThroughLayers() {
+            const found = [];
+            for (const el of Array.from(rootElement.querySelectorAll('*'))) {
+                if (el.closest('[data-chef-editor-root="true"]'))
+                    continue;
+                const none = window.getComputedStyle(el).pointerEvents === 'none';
+                if (none) {
+                    found.push(el);
+                    if (el.getAttribute(PE_ATTR) !== 'none')
+                        el.setAttribute(PE_ATTR, 'none');
+                }
+                else if (el.hasAttribute(PE_ATTR))
+                    el.removeAttribute(PE_ATTR);
+            }
+            clickThroughLayers = found;
+        }
+        markClickThroughLayers();
+        let peDebounce = 0;
+        const peObserver = new MutationObserver((records) => {
+            if (records.every((r) => r.type === 'attributes' && (r.attributeName === PE_ATTR || r.attributeName?.startsWith('data-chef') || r.attributeName?.startsWith('data-froam'))))
+                return;
+            window.clearTimeout(peDebounce);
+            peDebounce = window.setTimeout(markClickThroughLayers, 500);
+        });
+        peObserver.observe(rootElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
+        /**
+         * Everything under a point, in visual order — including layers the page
+         * made click-through with `pointer-events: none` (overlays, decorations,
+         * annotations), which the browser's own hit test skips. Hit-testing is
+         * briefly switched to "everything counts" for this one query.
+         */
+        function visualStackAtPoint(x, y) {
+            if (typeof document.elementsFromPoint !== 'function')
+                return [];
+            // Most points have no click-through layer over them: then the browser's
+            // own hit test is already the full answer, and nothing gets restyled.
+            const covered = clickThroughLayers.some((el) => {
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+            });
+            let hits;
+            if (!covered) {
+                hits = document.elementsFromPoint(x, y);
+            }
+            else {
+                rootElement.setAttribute('data-froam-hittest', 'true');
+                try {
+                    hits = document.elementsFromPoint(x, y);
+                }
+                finally {
+                    rootElement.removeAttribute('data-froam-hittest');
+                }
+            }
+            const stack = [];
+            for (const hit of hits)
+                pushSelectionCandidate(stack, resolveTarget(hit));
+            return stack;
+        }
+        /**
+         * A click-through layer that's just atmosphere — no text of its own, and
+         * spanning most of the screen (background art, gradient washes, noise) —
+         * shouldn't swallow every click. It stays reachable with Alt+click and
+         * from Layers; the content beneath it is selected first.
+         */
+        function isAmbientOverlay(element) {
+            if (window.getComputedStyle(element).pointerEvents !== 'none')
+                return false;
+            if (element.innerText?.trim())
+                return false;
+            const rect = element.getBoundingClientRect();
+            return rect.width * rect.height >= window.innerWidth * window.innerHeight * 0.35;
+        }
+        function selectionStackAtPoint(event, primary, visual) {
             const stack = [];
             pushSelectionCandidate(stack, primary);
-            for (const element of elements) {
-                if (element instanceof HTMLElement)
-                    pushSelectionCandidate(stack, resolveTarget(element));
-            }
+            for (const element of visual)
+                pushSelectionCandidate(stack, element);
             for (const ancestor of selectableAncestors(primary))
                 pushSelectionCandidate(stack, ancestor);
             return stack;
+        }
+        /** What a click at this point should select, plus everything beneath it for Alt+click. */
+        function resolveClick(event) {
+            // A click on Froam's own UI is never also a click on the page beneath it.
+            if (event.target instanceof Element && event.target.closest('[data-chef-editor-root="true"]')) {
+                return { target: null, stack: [] };
+            }
+            // Keyboard-activated clicks (Enter/Space on a focused control) carry no
+            // position; fall back to the element the event was fired at.
+            const positioned = event.detail > 0 || event.clientX !== 0 || event.clientY !== 0;
+            let visual = positioned ? visualStackAtPoint(event.clientX, event.clientY) : [];
+            if (visual.length > 1 && isAmbientOverlay(visual[0])) {
+                const firstContent = visual.findIndex((element) => !isAmbientOverlay(element));
+                if (firstContent > 0)
+                    visual = [...visual.slice(firstContent), ...visual.slice(0, firstContent)];
+            }
+            const hit = visual[0] ?? resolveTarget(event.target);
+            if (!hit)
+                return { target: null, stack: [] };
+            const primary = resolveTextTargetAtPoint(event, hit);
+            const stack = selectionStackAtPoint(event, primary, visual);
+            return { target: chooseSelectionTarget(event, stack), stack };
         }
         function chooseSelectionTarget(event, stack) {
             if (!event.altKey || stack.length < 2)
@@ -2711,7 +2848,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         function handlePointerOver(event) {
             cancelAnimationFrame(hoverFrame);
             hoverFrame = requestAnimationFrame(() => {
-                const target = resolveTarget(event.target);
+                const { target } = resolveClick(event);
                 if (!target || target === currentSelectionRef.current)
                     return;
                 if (currentHoverRef.current === target)
@@ -2727,10 +2864,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             hoverFrame = requestAnimationFrame(clearHover);
         }
         function handleClick(event) {
-            const resolvedTarget = resolveTarget(event.target);
-            const primaryTarget = resolvedTarget ? resolveTextTargetAtPoint(event, resolvedTarget) : null;
-            const stack = primaryTarget ? selectionStackAtPoint(event, primaryTarget) : [];
-            const target = chooseSelectionTarget(event, stack);
+            const { target, stack } = resolveClick(event);
             if (!target) {
                 if (!(event.target instanceof HTMLElement) || event.target.closest('[data-chef-editor-root="true"]'))
                     return;
@@ -2773,6 +2907,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             else {
                 updateSelectionsState([buildSelection(target, path)]);
             }
+            // Real pointer clicks only (keyboard activation has no position). Disabled
+            // controls arrive as pointerup, which reports detail 0.
+            if (event.detail > 0 || event.type === 'pointerup') {
+                setClickPulse({ key: window.performance.now(), x: event.clientX, y: event.clientY, rect: target.getBoundingClientRect() });
+            }
             setMeasureRect(null);
             setContextMenuPos(null);
             // Text tool — single click enters inline editing immediately (no double-click required)
@@ -2805,8 +2944,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             // Left-click only selects. Quick Edit opens from an explicit user command.
         }
         function handleDblClick(event) {
-            const resolvedTarget = resolveTarget(event.target);
-            const target = resolvedTarget ? resolveTextTargetAtPoint(event, resolvedTarget) : null;
+            // Edit what the clicks selected (Alt-cycling included), not a re-resolution.
+            const selected = currentSelectionRef.current;
+            const target = selected && rootElement.contains(selected) ? selected : resolveClick(event).target;
             if (!target)
                 return;
             const textTarget = target;
@@ -2872,8 +3012,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             textTarget.addEventListener('blur', handleBlur);
         }
         function handleContextMenu(event) {
-            const resolvedTarget = resolveTarget(event.target);
-            const target = resolvedTarget ? resolveTextTargetAtPoint(event, resolvedTarget) : null;
+            const { target } = resolveClick(event);
             if (!target)
                 return;
             event.preventDefault();
@@ -2939,8 +3078,46 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 longPressFired = false;
             }
         }
+        /* ─── Page interaction guards while editing ───
+           Design mode edits the page instead of using it. Browsers act on some
+           controls before any click: inputs take focus and <select> opens its
+           menu on mousedown, links and images start native drags, middle-click
+           opens a link in a new tab. And a disabled control never receives a
+           click at all — only pointer events — so it's selected on pointerup. */
+        function isPageTarget(raw) {
+            return raw instanceof Element && rootElement.contains(raw) && !raw.closest('[data-chef-editor-root="true"]');
+        }
+        function handleMouseDown(event) {
+            if (activeToolRef.current === 'hand' || !isPageTarget(event.target))
+                return;
+            if (event.target.isContentEditable)
+                return; // caret placement while typing
+            if (event.target.closest('input, textarea, select, option, button, summary, label, video, audio, [contenteditable]')) {
+                event.preventDefault();
+            }
+        }
+        function handleDisabledPointerUp(event) {
+            if (event.button !== 0 || !isPageTarget(event.target))
+                return;
+            if (!event.target.closest(':disabled'))
+                return;
+            handleClick(event);
+        }
+        function handleDragStart(event) {
+            if (!isPageTarget(event.target) || event.target.isContentEditable)
+                return;
+            event.preventDefault();
+        }
+        function handleAuxClick(event) {
+            if (event.button === 1 && isPageTarget(event.target) && event.target.closest('a[href]'))
+                event.preventDefault();
+        }
         document.addEventListener('mouseover', handlePointerOver, { capture: true, passive: true });
         document.addEventListener('mouseout', handlePointerLeave, { capture: true, passive: true });
+        document.addEventListener('mousedown', handleMouseDown, true);
+        document.addEventListener('pointerup', handleDisabledPointerUp, true);
+        document.addEventListener('dragstart', handleDragStart, true);
+        document.addEventListener('auxclick', handleAuxClick, true);
         document.addEventListener('click', handleClick, true);
         document.addEventListener('dblclick', handleDblClick, true);
         document.addEventListener('contextmenu', handleContextMenu, true);
@@ -2950,8 +3127,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         document.addEventListener('touchcancel', cancelLongPress, { capture: true, passive: true });
         return () => {
             cancelAnimationFrame(hoverFrame);
+            window.clearTimeout(peDebounce);
+            peObserver.disconnect();
+            rootElement.querySelectorAll('[data-froam-pe]').forEach((el) => el.removeAttribute('data-froam-pe'));
             document.removeEventListener('mouseover', handlePointerOver, true);
             document.removeEventListener('mouseout', handlePointerLeave, true);
+            document.removeEventListener('mousedown', handleMouseDown, true);
+            document.removeEventListener('pointerup', handleDisabledPointerUp, true);
+            document.removeEventListener('dragstart', handleDragStart, true);
+            document.removeEventListener('auxclick', handleAuxClick, true);
             document.removeEventListener('click', handleClick, true);
             document.removeEventListener('dblclick', handleDblClick, true);
             document.removeEventListener('contextmenu', handleContextMenu, true);
@@ -2971,11 +3155,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         if (!root)
             return;
         function resolveMovTarget(rawTarget) {
-            let element = rawTarget instanceof HTMLElement ? rawTarget : null;
+            // Same rules as selection: SVG internals move their whole <svg>.
+            let element = rawTarget instanceof Element ? rawTarget : null;
+            if (element && isSvgInternal(element))
+                element = element.closest('svg');
             while (element && root.contains(element)) {
                 if (element.closest('[data-chef-editor-root="true"]'))
                     return null;
-                if (!shouldSkipElement(element))
+                if (isPathElement(element) && !shouldSkipElement(element))
                     return element;
                 element = element.parentElement;
             }
@@ -3607,6 +3794,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             node.removeAttribute('data-froam-static-boundary');
             node.removeAttribute('data-froam-runtime-injected');
             node.removeAttribute('data-froam-switching');
+            node.removeAttribute('data-froam-pin');
+            node.removeAttribute('data-froam-pe');
             node.removeAttribute('data-froam-moving');
         });
         return clone.outerHTML;
@@ -6273,7 +6462,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     'global-chef-button',
                     showPanel ? 'is-active' : '',
                     showPanel && !studioMinimized ? 'is-studio-open' : '',
-                ].filter(Boolean).join(' '), "data-chef-editor-root": "true", type: "button", style: { left: buttonPosition.x, top: buttonPosition.y }, onPointerDown: handleButtonPointerDown, onPointerMove: handleButtonPointerMove, onPointerUp: handleButtonPointerUp, onPointerCancel: handleButtonPointerUp, onContextMenu: handleFroamContextMenu, "aria-label": showPanel ? `Toggle ${persona.name} Studio` : `Open ${persona.name} Studio`, title: showPanel && !studioMinimized ? 'Minimize (Ctrl+.)' : showPanel ? 'Restore (Ctrl+.)' : `Open ${persona.name} (Ctrl+.)`, children: [_jsx("span", { className: "global-chef-button__halo", "aria-hidden": "true" }), _jsx("span", { className: "global-chef-button__ring", "aria-hidden": "true" }), _jsx("span", { className: "global-chef-button__core", "aria-hidden": "true", children: persona.imageUrl ? (_jsx("img", { src: persona.imageUrl, alt: "", className: "global-chef-button__avatar" })) : (_jsxs("svg", { className: "global-chef-button__mark", viewBox: "0 0 24 24", "aria-hidden": "true", children: [_jsx("defs", { children: _jsxs("linearGradient", { id: "froam-mark-grad", x1: "0", y1: "0", x2: "1", y2: "1", children: [_jsx("stop", { offset: "0", stopColor: "#f0fdfa" }), _jsx("stop", { offset: "1", stopColor: "#5eead4" })] }) }), _jsx("path", { fill: "url(#froam-mark-grad)", d: "M7.2 21V3h10.6v3.3h-6.9v4.3h6.2v3.3h-6.2V21Z" })] })) }), _jsxs("span", { className: "global-chef-button__hint", "aria-hidden": "true", children: ["Edit this page ", _jsx("kbd", { children: "Ctrl+." })] }), showPanel && _jsx("span", { className: "global-chef-button__dot" })] }), showPanel && _jsx(MeasurementOverlay, { rect: measureRect }), showPanel && selection && (_jsx(SelectionHandoffOverlay, { rect: selectionRect, label: selection.label, mode: selectionHandoffMode, count: selections.length, pulseKey: selectionHandoffKey }, selectionHandoffKey)), _jsx(Toast, { message: toastMsg, visible: toastVisible }), _jsx(FroamWelcomeTips, { open: showPanel && !studioMinimized && tipsReady && !scanActive }), _jsx(FroamScan, { active: scanActive, onDone: () => {
+                ].filter(Boolean).join(' '), "data-chef-editor-root": "true", type: "button", style: { left: buttonPosition.x, top: buttonPosition.y }, onPointerDown: handleButtonPointerDown, onPointerMove: handleButtonPointerMove, onPointerUp: handleButtonPointerUp, onPointerCancel: handleButtonPointerUp, onContextMenu: handleFroamContextMenu, "aria-label": showPanel ? `Toggle ${persona.name} Studio` : `Open ${persona.name} Studio`, title: showPanel && !studioMinimized ? 'Minimize (Ctrl+.)' : showPanel ? 'Restore (Ctrl+.)' : `Open ${persona.name} (Ctrl+.)`, children: [_jsx("span", { className: "global-chef-button__halo", "aria-hidden": "true" }), _jsx("span", { className: "global-chef-button__ring", "aria-hidden": "true" }), _jsx("span", { className: "global-chef-button__core", "aria-hidden": "true", children: persona.imageUrl ? (_jsx("img", { src: persona.imageUrl, alt: "", className: "global-chef-button__avatar" })) : (_jsxs("svg", { className: "global-chef-button__mark", viewBox: "0 0 24 24", "aria-hidden": "true", children: [_jsx("defs", { children: _jsxs("linearGradient", { id: "froam-mark-grad", x1: "0", y1: "0", x2: "1", y2: "1", children: [_jsx("stop", { offset: "0", stopColor: "#f0fdfa" }), _jsx("stop", { offset: "1", stopColor: "#5eead4" })] }) }), _jsx("path", { fill: "url(#froam-mark-grad)", d: "M7.2 21V3h10.6v3.3h-6.9v4.3h6.2v3.3h-6.2V21Z" })] })) }), _jsxs("span", { className: "global-chef-button__hint", "aria-hidden": "true", children: ["Edit this page ", _jsx("kbd", { children: "Ctrl+." })] }), showPanel && _jsx("span", { className: "global-chef-button__dot" })] }), showPanel && _jsx(MeasurementOverlay, { rect: measureRect }), showPanel && _jsx(ClickPulseOverlay, { pulse: clickPulse }), showPanel && selection && (_jsx(SelectionHandoffOverlay, { rect: selectionRect, label: selection.label, mode: selectionHandoffMode, count: selections.length, pulseKey: selectionHandoffKey }, selectionHandoffKey)), _jsx(Toast, { message: toastMsg, visible: toastVisible }), _jsx(FroamWelcomeTips, { open: showPanel && !studioMinimized && tipsReady && !scanActive }), _jsx(FroamScan, { active: scanActive, onDone: () => {
                     setScanActive(false);
                     setTipsReady(true);
                     // v4.5: the first scan doesn't just count the page — it drafts it
@@ -6589,7 +6778,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     storeRef.current = nextStore;
                     setStore(nextStore);
                     applyStyle({ animation: inline }, undefined, 'Animation');
-                }, onToast: showToast, project: projectSession.project, onProjectChange: projectSession.setProject, requestedTab: requestedConnectedTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'replay' || current === 'animator' ? null : current)) }), _jsx(FroamIntelligence, { open: showPanel && intelligenceOpen, onClose: () => { setIntelligenceOpen(false); setTemporalOwner((owner) => owner === 'breakpoint-cinema' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, root: getRoot(), registry: nodeRegistryRef.current, onRegistryChange: (registry) => { nodeRegistryRef.current = registry; saveNodeRegistry(registry); }, routeKey: routeKey, viewport: viewportMode, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, selectedElement: currentSelectionRef.current, onSelectNode: selectConnectedNode, onInsertArchived: insertArchivedHtml, onApplyArchivedStyle: (styles) => applyStyle(styles, undefined, 'Archive style'), onPreviewWidth: previewIntelligenceWidth, onToast: showToast, requestedTab: requestedIntelligenceTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'breakpoint-cinema' ? null : current)), onActivityChange: setWorkspaceActivity }), _jsx(FroamLabs, { open: showPanel && labsOpen, onClose: () => { setLabsOpen(false); setTemporalOwner((owner) => owner === 'sampling' || owner === 'trailer' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, selectedNodeId: selection?.nodeId, selectedElement: currentSelectionRef.current, onToast: showToast, requestedLab: requestedLab, flags: labsFlags, onFlagsChange: setLabsFlags, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'sampling' || current === 'trailer' ? null : current)), onActivityChange: setWorkspaceActivity }), showPanel && selection && !inlineEditing && (_jsx(FroamResizeHandles, { targetRect: selectionRect, visible: !!selectionRect, onResizeStart: () => {
+                }, onToast: showToast, project: projectSession.project, onProjectChange: projectSession.setProject, requestedTab: requestedConnectedTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'replay' || current === 'animator' ? null : current)) }), _jsx(FroamIntelligence, { open: showPanel && intelligenceOpen, onClose: () => { setIntelligenceOpen(false); setTemporalOwner((owner) => owner === 'breakpoint-cinema' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, root: getRoot(), registry: nodeRegistryRef.current, onRegistryChange: (registry) => { nodeRegistryRef.current = registry; saveNodeRegistry(registry); }, routeKey: routeKey, viewport: viewportMode, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, selectedElement: currentSelectionRef.current, onSelectNode: selectConnectedNode, onInsertArchived: insertArchivedHtml, onApplyArchivedStyle: (styles) => applyStyle(styles, undefined, 'Archive style'), onPreviewWidth: previewIntelligenceWidth, onToast: showToast, requestedTab: requestedIntelligenceTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'breakpoint-cinema' ? null : current)), onActivityChange: setWorkspaceActivity }), _jsx(FroamLabs, { open: showPanel && labsOpen, onClose: () => { setLabsOpen(false); setTemporalOwner((owner) => owner === 'sampling' || owner === 'trailer' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, selectedNodeId: selection?.nodeId, selectedElement: currentSelectionRef.current, onToast: showToast, requestedLab: requestedLab, flags: labsFlags, onFlagsChange: setLabsFlags, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'sampling' || current === 'trailer' ? null : current)), onActivityChange: setWorkspaceActivity }), showPanel && selection && !inlineEditing && (_jsx(FroamResizeHandles, { targetRect: selectionRect, visible: !!selectionRect, lockKey: selectionHandoffKey, onResizeStart: () => {
                     if (!selection)
                         return;
                     if (guardRemoteLock(selection.path))

@@ -14,7 +14,9 @@ type Props = {
     onResize: (payload: ResizePayload) => void;
     onResizeEnd?: () => void;
     visible: boolean;
+    /** Changes on every new selection; remounts the outline + handles so their lock-on entrance replays. */
+    lockKey?: number;
 };
-export default function FroamResizeHandles({ targetRect, onResizeStart, onResize, onResizeEnd, visible }: Props): import("react").JSX.Element | null;
+export default function FroamResizeHandles({ targetRect, onResizeStart, onResize, onResizeEnd, visible, lockKey }: Props): import("react").JSX.Element | null;
 export {};
 //# sourceMappingURL=FroamResizeHandles.d.ts.map

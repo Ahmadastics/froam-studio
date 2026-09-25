@@ -9,6 +9,7 @@ import { normalizeFroamRouteKey, useFroamRouteKey } from '../routing.js';
 import { isFroamPersonaPath } from './froamPersona.js';
 import { SECTION_STRUCTURE_KEY } from './section-structure.js';
 import { resolveAnchor } from '../collab/anchor.js';
+import { isPathElement } from '../collab/paths.js';
 const CANVAS_KEY = '__froam_canvas__';
 const INJECTION_KEY = '__froam_injection__';
 const ROOT_PARENT_KEY = '__froam_root__';
@@ -60,7 +61,7 @@ function findElementByPath(root, path) {
         const index = Number(indexRaw) - 1;
         if (!tag || Number.isNaN(index) || index < 0)
             return null;
-        const siblings = Array.from(current.children).filter((child) => child instanceof HTMLElement && child.tagName.toLowerCase() === tag);
+        const siblings = Array.from(current.children).filter((child) => isPathElement(child) && child.tagName.toLowerCase() === tag);
         current = siblings[index] ?? null;
         if (!current)
             return null;

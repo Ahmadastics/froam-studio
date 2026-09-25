@@ -19,6 +19,8 @@ type Props = {
   onResize: (payload: ResizePayload) => void
   onResizeEnd?: () => void
   visible: boolean
+  /** Changes on every new selection; remounts the outline + handles so their lock-on entrance replays. */
+  lockKey?: number
 }
 
 /* Touch needs finger-sized targets; mobile.css scales the visual dot to match */
@@ -69,7 +71,7 @@ function getEdgeSegments(rect: DOMRect, handleSize: number, edgeSize: number) {
   ]
 }
 
-export default function FroamResizeHandles({ targetRect, onResizeStart, onResize, onResizeEnd, visible }: Props) {
+export default function FroamResizeHandles({ targetRect, onResizeStart, onResize, onResizeEnd, visible, lockKey = 0 }: Props) {
   const dragRef = useRef<{ direction: HandleDirection; startX: number; startY: number } | null>(null)
   const [activeCursor, setActiveCursor] = useState<string | null>(null)
   const coarsePointer = useMediaQuery(COARSE_POINTER_QUERY)
@@ -207,7 +209,7 @@ export default function FroamResizeHandles({ targetRect, onResizeStart, onResize
       {/* Corner + midpoint handles */}
       {(Object.entries(handles) as [HandleDirection, { x: number; y: number }][]).map(([dir, pos]) => (
         <div
-          key={dir}
+          key={`${dir}:${lockKey}`}
           className={`froam-resize-handle froam-resize-handle--${dir}`}
           data-chef-editor-root="true"
           style={{
@@ -229,6 +231,7 @@ export default function FroamResizeHandles({ targetRect, onResizeStart, onResize
 
       {/* Selection rectangle outline (animated) */}
       <div
+        key={lockKey}
         className="froam-selection-outline"
         data-chef-editor-root="true"
         style={{

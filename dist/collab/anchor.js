@@ -15,7 +15,7 @@
  * Scoring is deliberately split from the DOM walk so the judgement — the part
  * with all the tuning in it — can be tested without a browser.
  */
-import { getElementPath, findElementByPath, } from './paths.js';
+import { getElementPath, findElementByPath, isPathElement, } from './paths.js';
 const TEXT_SAMPLE = 80;
 /**
  * Below this, a candidate is not the element — better an honest orphan than a
@@ -104,7 +104,7 @@ function ordinalAmongSiblings(element) {
     const parent = element.parentElement;
     if (!parent)
         return undefined;
-    const sameTag = Array.from(parent.children).filter((child) => child instanceof HTMLElement && child.tagName === element.tagName);
+    const sameTag = Array.from(parent.children).filter((child) => isPathElement(child) && child.tagName === element.tagName);
     const index = sameTag.indexOf(element);
     return index < 0 ? undefined : index + 1;
 }

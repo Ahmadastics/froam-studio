@@ -13,6 +13,7 @@ import { normalizeFroamRouteKey, useFroamRouteKey } from '../routing'
 import { isFroamPersonaPath } from './froamPersona'
 import { SECTION_STRUCTURE_KEY } from './section-structure'
 import { resolveAnchor } from '../collab/anchor'
+import { isPathElement } from '../collab/paths'
 import type { FroamAnchorFingerprint } from '../collab/types'
 
 type ElementDraft = {
@@ -143,7 +144,7 @@ function findElementByPath(root: HTMLElement, path: string): HTMLElement | null 
     const index = Number(indexRaw) - 1
     if (!tag || Number.isNaN(index) || index < 0) return null
     const siblings: HTMLElement[] = Array.from(current.children).filter(
-      (child): child is HTMLElement => child instanceof HTMLElement && child.tagName.toLowerCase() === tag,
+      (child): child is HTMLElement => isPathElement(child) && child.tagName.toLowerCase() === tag,
     )
     current = siblings[index] ?? null
     if (!current) return null

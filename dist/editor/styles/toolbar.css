@@ -8,6 +8,9 @@
   display: grid;
   grid-template-rows: 48px 38px;
   background: var(--fs-surface-toolbar);
+  /* Solid base under the 98%-alpha gradient: the page now scrolls beneath the
+     chrome, and 2% is enough to read dark text through it. */
+  background-color: #181818;
   border-bottom: 1px solid var(--fs-border-muted);
   z-index: 20;
 }
