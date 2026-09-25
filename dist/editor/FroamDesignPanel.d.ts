@@ -1,4 +1,5 @@
 import { type FontOption } from './fontSources';
+import type { PseudoElement } from './chef/pseudo';
 type SelectionState = {
     path: string;
     label: string;
@@ -102,7 +103,10 @@ type Props = {
     onAddBrandFont?: () => void;
     getRootEl: () => HTMLElement | null;
     onOpenBlueprint: () => void;
+    /** The selection's saved draft styles (for its ::before / ::after edits). */
+    draftStyles?: Record<string, string>;
+    onApplyPseudoStyle?: (pseudo: PseudoElement, styles: Record<string, string>, label: string) => void;
 };
-export default function FroamDesignPanel({ projectKey, selection, selectionRect, onApplyStyle, onUpdateDraft, onOpenImageUpload, onClearImage, onClearSelectionDraft, marginLinked, paddingLinked, radiusLinked, onToggleMarginLinked, onTogglePaddingLinked, onToggleRadiusLinked, onApplySizePreset, onBuildTransformString, fontOptions, onAddBrandFont, getRootEl, onOpenBlueprint, }: Props): import("react").JSX.Element;
+export default function FroamDesignPanel({ projectKey, selection, selectionRect, onApplyStyle, onUpdateDraft, onOpenImageUpload, onClearImage, onClearSelectionDraft, marginLinked, paddingLinked, radiusLinked, onToggleMarginLinked, onTogglePaddingLinked, onToggleRadiusLinked, onApplySizePreset, onBuildTransformString, fontOptions, onAddBrandFont, getRootEl, onOpenBlueprint, draftStyles, onApplyPseudoStyle, }: Props): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=FroamDesignPanel.d.ts.map

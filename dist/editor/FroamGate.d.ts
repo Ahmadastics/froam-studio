@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { type FroamStudioConfig } from '../config';
-export type FroamGateProps = Pick<FroamStudioConfig, 'apiBaseUrl' | 'authProvider' | 'fetch' | 'rootSelector'> & {
+export type FroamGateProps = Pick<FroamStudioConfig, 'apiBaseUrl' | 'authProvider' | 'fetch' | 'rootSelector' | 'rootScope'> & {
     enabled?: boolean;
     initialOpen?: boolean;
     routeKey?: string;
@@ -12,5 +12,5 @@ export type FroamGateProps = Pick<FroamStudioConfig, 'apiBaseUrl' | 'authProvide
     fallback?: ReactNode;
     lockedFallback?: ReactNode;
 };
-export default function FroamGate({ apiBaseUrl, authProvider, enabled, fallback, fetch, initialOpen, localRoutes, lockedFallback, ownerEmails, rootSelector, routeKey: explicitRouteKey, projectKey: explicitProjectKey, allowLocalhost, }: FroamGateProps): import("react").JSX.Element;
+export default function FroamGate({ apiBaseUrl, authProvider, enabled, fallback, fetch, initialOpen, localRoutes, lockedFallback, ownerEmails, rootSelector, rootScope, routeKey: explicitRouteKey, projectKey: explicitProjectKey, allowLocalhost, }: FroamGateProps): import("react").JSX.Element;
 //# sourceMappingURL=FroamGate.d.ts.map

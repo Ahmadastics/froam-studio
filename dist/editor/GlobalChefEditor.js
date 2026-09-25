@@ -1,8 +1,7 @@
-import { jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState, } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'framer-motion';
-import { AlignCenter, AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignLeft, AlignRight, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, Bold, Box, ChevronDown, ClipboardCheck, Clock, Code, Command, Copy, Download, Eraser, Eye, EyeOff, FileImage, FileText, GitCommit, Grid2X2, Grip, ImagePlus, Italic, Keyboard, Layers, LayoutGrid, ListTree, Link, Minus, Monitor, MousePointer, Share2, Smartphone, Tablet, MousePointer2, MessageSquare, Move, Paintbrush, Palette, PencilLine, Plus, Redo2, RotateCw, Save, DraftingCompass, ScanLine, Search, SlidersHorizontal, Sparkles, Square, SquareDashedBottom, Strikethrough, Type, Underline, Undo2, Unlink, Variable, Maximize2, X, Zap, Coins, AlignCenterHorizontal, AlignCenterVertical, Timer, } from 'lucide-react';
+import { AlignCenter, AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignLeft, AlignRight, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, Bold, Box, ClipboardCheck, Clock, Code, Command, Copy, Download, Eraser, Eye, EyeOff, FileImage, FileText, GitCommit, Grid2X2, Grip, ImagePlus, Italic, Keyboard, Layers, LayoutGrid, ListTree, Link, Minus, Monitor, MousePointer, Share2, Smartphone, Tablet, MousePointer2, MessageSquare, Move, Paintbrush, Palette, PencilLine, Plus, Redo2, RotateCw, Save, DraftingCompass, ScanLine, Search, SlidersHorizontal, Sparkles, Square, SquareDashedBottom, Strikethrough, Type, Underline, Undo2, Unlink, Variable, Maximize2, X, Zap, Coins, AlignCenterHorizontal, AlignCenterVertical, Timer, } from 'lucide-react';
 import FroamSectionBoundary from './FroamSectionBoundary.js';
 import { apiGetFresh, apiPost } from '../lib/api.js';
 import { bridgeUrl } from '../lib/bridge.js';
@@ -19,6 +18,7 @@ import FroamVersionPanel from './FroamVersionPanel.js';
 import FroamSitePlanner from './FroamSitePlanner.js';
 import { createFroamLibraryComponent, FROAM_COMPONENTS } from './FroamComponentCatalog.js';
 import FroamDesignSystemPanel from './FroamDesignSystemPanel.js';
+import { FROAM_FRAME_PRESETS, } from './FroamPlannerTypes.js';
 import FroamToolbar from './FroamToolbar.js';
 import FroamIntel from './FroamIntel.js';
 import FroamLayersPanel from './FroamLayersPanel.js';
@@ -26,7 +26,7 @@ import FroamDesignPanel from './FroamDesignPanel.js';
 import FroamInspirationPanel from './FroamInspirationPanel.js';
 import FroamShapeLibrary from './FroamShapeLibrary.js';
 import FroamPersonaEditor from './FroamPersonaEditor.js';
-import { getFroamRootElement } from '../config.js';
+import { getFroamStudioConfig } from '../config.js';
 import { createOpLogSession } from '../collab/session.js';
 import { useFroamRoom } from '../collab/useFroamRoom.js';
 import FroamNotePins from './FroamNotePins.js';
@@ -53,8 +53,8 @@ import { sitePlanGraphRecords } from '../project/adapters.js';
 import { useFroamProjectDocument } from './useFroamProjectDocument.js';
 import FroamRoomChat from './FroamRoomChat.js';
 import { diffStores } from '../collab/oplog.js';
-import { clearOpLog, loadOpLog, saveOpLog } from '../collab/persist.js';
-import { findElementByPath, getElementPath, isPathElement, isSafeDraftPath, tagOfPath } from '../collab/paths.js';
+import { loadOpLog, saveOpLog } from '../collab/persist.js';
+import { findElementByPath, getElementPath, isInPageScope, isPathElement, isSafeDraftPath } from '../collab/paths.js';
 import { usePageCanvasOffset } from './usePageCanvasOffset.js';
 import { createAnchor, resolveAnchor } from '../collab/anchor.js';
 import { fingerprintForDraft } from './draft-fingerprint.js';
@@ -68,1314 +68,24 @@ import { createFrameworkIdentityObserver } from '../project/framework-identity.j
 import { froamProjectId as createFroamProjectId, froamStorageKey, resolveFroamProjectKey } from '../project/storage-scope.js';
 import { collectStoreFontFamilies, ensureBrandFontStyle, ensureFontLinks, fontOptionsFor, sanitizeBrandFonts, } from './fontSources.js';
 import { useFroamRouteKey } from '../routing.js';
-import { DEFAULT_FROAM_PERSONA, FROAM_PERSONA_PATH, PERSONA_STORAGE_KEY, readFroamPersonaDraft, sanitizeFroamPersona, isFroamPersonaPath, } from './froamPersona.js';
-const intelligenceTabs = { scan: 'scan', dna: 'dna', archive: 'archive', archaeology: 'archaeology', flow: 'flow', attention: 'attention', rhythm: 'rhythm', responsive: 'responsive' };
-const labTabs = { laboratory: 'overview', mutate: 'mutate', sample: 'sample', interactions: 'interactions', 'interactions-create': 'interactions', physics: 'physics', gravity: 'physics', break: 'break', 'test-user': 'user', sound: 'sound', trailer: 'trailer', reality: 'reality' };
-const cursorOptions = ['auto', 'default', 'pointer', 'grab', 'grabbing', 'text', 'crosshair', 'move', 'not-allowed', 'wait', 'zoom-in', 'zoom-out', 'none'];
-/* ═══════════════════════════════════════════════════════════════
-   Constants
-   ═══════════════════════════════════════════════════════════════ */
-const STORAGE_KEY = 'froam-editor-store-v1';
-const NODE_REGISTRY_KEY = 'froam-node-registry-v1';
-/** Retired in 4.9.4 — history is the op log now. Kept only to clear it. */
-const LEGACY_HISTORY_KEY = 'froam-history-v1';
-const MAX_INLINE_ASSET_LENGTH = 40_000;
-const MAX_PERSONA_IMAGE_BYTES = 400_000;
-const SAVE_META_KEY = 'froam-last-save-v1';
-/* Migrate drafts saved under pre-3.1 (Run'Am-branded) localStorage keys. */
-if (typeof window !== 'undefined') {
-    try {
-        const legacyPairs = [
-            ['runam-chef-editor-store-v1', STORAGE_KEY],
-            ['runam-froam-last-save-v1', SAVE_META_KEY],
-        ];
-        // Snapshot history is gone; don't leave 600 KB of it behind.
-        for (const dead of ['runam-froam-history-v1', LEGACY_HISTORY_KEY]) {
-            try {
-                window.localStorage.removeItem(dead);
-            }
-            catch { /* ignore */ }
-        }
-        for (const [oldKey, newKey] of legacyPairs) {
-            const legacy = window.localStorage.getItem(oldKey);
-            if (legacy !== null && window.localStorage.getItem(newKey) === null) {
-                window.localStorage.setItem(newKey, legacy);
-            }
-        }
-    }
-    catch { /* storage unavailable */ }
-}
-const CHEF_BUTTON_START = { x: 20, y: 480 };
-const CANVAS_KEY = '__froam_canvas__';
-const INJECTION_KEY = '__froam_injection__';
-const ROOT_PARENT_KEY = '__froam_root__';
-const INJECTED_BLOCK_SELECTOR = '[data-froam-injected="true"][data-froam-block="true"], [data-froam-runtime-injected="true"]';
-const VIEWPORT_MODES = [
-    { id: 'desktop', label: 'Desktop', width: null, height: null },
-    { id: 'tablet', label: 'Tablet', width: 768, height: 1024 },
-    { id: 'mobile', label: 'Mobile', width: 390, height: 844 },
-];
-const VIEWPORTS_AGREE = true;
-void VIEWPORTS_AGREE;
-// ID of the portal element Froam injects to host the device shell
-const DEVICE_SHELL_ID = 'froam-device-shell';
-/* The picker's list is derived from the font catalog (see fontOptionsFor),
-   so it can only ever offer families the editor and codegen can both load.
-   The list this replaced was hand-kept and had drifted: it offered
-   "Editorial Sans" and "Neue Montreal", which are in no font source, so
-   picking them changed nothing on the page. */
-const BRAND_FONTS_KEY = 'froam-brand-fonts-v1';
-/** A woff2 is usually well under 100KB; this is generous but still loadable. */
-const BRAND_FONT_MAX_BYTES = 1_000_000;
-function loadBrandFonts(projectKey) {
-    if (typeof window === 'undefined')
-        return [];
-    try {
-        const raw = window.localStorage.getItem(froamStorageKey(BRAND_FONTS_KEY, projectKey));
-        return raw ? sanitizeBrandFonts(JSON.parse(raw)) : [];
-    }
-    catch {
-        return [];
-    }
-}
-function saveBrandFontsForProject(fonts, projectKey) {
-    if (typeof window === 'undefined')
-        return;
-    try {
-        window.localStorage.setItem(froamStorageKey(BRAND_FONTS_KEY, projectKey), JSON.stringify(fonts));
-    }
-    catch {
-        // An uploaded face can be large enough to blow the quota. The design
-        // matters more than the convenience copy, so fail quietly — the font
-        // still lives in the design once it has been saved to the repo.
-    }
-}
-const displayOptions = ['block', 'flex', 'grid', 'inline-flex', 'inline-block', 'inline', 'none'];
-const flexDirectionOptions = ['row', 'row-reverse', 'column', 'column-reverse'];
-const justifyOptions = ['flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly'];
-const alignOptions = ['stretch', 'flex-start', 'center', 'flex-end', 'baseline'];
-const positionOptions = ['static', 'relative', 'absolute', 'fixed', 'sticky'];
-const overflowOptions = ['visible', 'hidden', 'scroll', 'auto'];
-const borderStyleOptions = ['none', 'solid', 'dashed', 'dotted', 'double'];
-const blendModeOptions = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn', 'hard-light', 'soft-light', 'difference', 'exclusion'];
-const textTransformOptions = ['none', 'uppercase', 'lowercase', 'capitalize'];
-const persistedStyleKeys = [
-    'backgroundColor', 'color', 'borderColor', 'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius',
-    'borderBottomRightRadius', 'borderBottomLeftRadius', 'borderWidth', 'borderStyle', 'opacity', 'margin',
-    'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'padding', 'paddingTop', 'paddingRight',
-    'paddingBottom', 'paddingLeft', 'fontSize', 'fontFamily', 'fontWeight', 'fontStyle', 'textAlign',
-    'lineHeight', 'letterSpacing', 'wordSpacing', 'textTransform', 'textDecorationLine', 'display',
-    'flex', 'flexBasis', 'flexGrow', 'flexShrink', 'flexDirection', 'justifyContent', 'alignItems', 'flexWrap', 'gap', 'gridTemplateColumns',
-    'gridTemplateRows', 'position', 'zIndex', 'overflow', 'cursor', 'width', 'height', 'minWidth',
-    'maxWidth', 'minHeight', 'maxHeight', 'aspectRatio', 'boxSizing', 'left', 'top', 'right', 'bottom', 'transform', 'boxShadow', 'textShadow',
-    'filter', 'backdropFilter', 'mixBlendMode', 'backgroundImage', 'backgroundSize',
-    'backgroundPosition', 'backgroundRepeat', 'backgroundAttachment',
-];
-/* ═══════════════════════════════════════════════════════════════
-   Utility functions
-   ═══════════════════════════════════════════════════════════════ */
-function loadStore(projectKey) {
-    if (typeof window === 'undefined')
-        return {};
-    try {
-        const raw = window.localStorage.getItem(froamStorageKey(STORAGE_KEY, projectKey));
-        if (!raw)
-            return {};
-        return sanitizeStore(JSON.parse(raw));
-    }
-    catch {
-        return {};
-    }
-}
-function saveStoreForProject(store, projectKey) {
-    if (typeof window === 'undefined')
-        return;
-    const serialized = JSON.stringify(sanitizeStore(store));
-    try {
-        window.localStorage.setItem(froamStorageKey(STORAGE_KEY, projectKey), serialized);
-    }
-    catch {
-        // History is disposable and the design is not. Clear both records of how
-        // the design got here before risking the design itself.
-        try {
-            window.localStorage.removeItem(LEGACY_HISTORY_KEY);
-        }
-        catch { /* ignore */ }
-        clearOpLog(projectKey);
-        try {
-            window.localStorage.setItem(froamStorageKey(STORAGE_KEY, projectKey), serialized);
-        }
-        catch {
-            // Keep the in-memory editor usable even when persistence is unavailable.
-        }
-    }
-}
-function loadNodeRegistry(projectKey) {
-    try {
-        const parsed = JSON.parse(window.localStorage.getItem(froamStorageKey(NODE_REGISTRY_KEY, projectKey)) ?? '{}');
-        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-    }
-    catch {
-        return {};
-    }
-}
-function saveNodeRegistryForProject(registry, projectKey) {
-    try {
-        const entries = Object.entries(registry)
-            .sort(([, left], [, right]) => right.updatedAt - left.updatedAt)
-            .slice(0, 5_000);
-        window.localStorage.setItem(froamStorageKey(NODE_REGISTRY_KEY, projectKey), JSON.stringify(Object.fromEntries(entries)));
-    }
-    catch { /* private mode or quota pressure */ }
-}
-function loadPersonaPreference() {
-    if (typeof window === 'undefined')
-        return DEFAULT_FROAM_PERSONA;
-    try {
-        const raw = window.localStorage.getItem(PERSONA_STORAGE_KEY);
-        return raw ? sanitizeFroamPersona(JSON.parse(raw)) : DEFAULT_FROAM_PERSONA;
-    }
-    catch {
-        return DEFAULT_FROAM_PERSONA;
-    }
-}
-function savePersonaPreference(persona) {
-    if (typeof window === 'undefined')
-        return;
-    try {
-        window.localStorage.setItem(PERSONA_STORAGE_KEY, JSON.stringify(sanitizeFroamPersona(persona)));
-    }
-    catch {
-        // Keep editing usable even if profile persistence is unavailable.
-    }
-}
-function personasEqual(left, right) {
-    return left.name === right.name
-        && left.tagline === right.tagline
-        && left.imageUrl === right.imageUrl;
-}
-function stripPersonaDrafts(drafts) {
-    const nextDrafts = { ...drafts };
-    delete nextDrafts[FROAM_PERSONA_PATH];
-    return nextDrafts;
-}
-function withPersonaDraft(drafts, persona) {
-    return {
-        ...stripPersonaDrafts(drafts),
-        [FROAM_PERSONA_PATH]: { text: JSON.stringify(sanitizeFroamPersona(persona)) },
-    };
-}
-function countRenderableDrafts(drafts) {
-    return Object.keys(drafts).filter((path) => !isFroamPersonaPath(path)).length;
-}
-function sanitizeStore(store) {
-    const nextStore = {};
-    for (const [route, drafts] of Object.entries(store)) {
-        const nextDrafts = {};
-        for (const [path, draft] of Object.entries(drafts ?? {})) {
-            if (path === CANVAS_KEY || isSafeDraftPath(path)) {
-                nextDrafts[path] = draft;
-            }
-        }
-        if (Object.keys(nextDrafts).length) {
-            nextStore[route] = nextDrafts;
-        }
-    }
-    return nextStore;
-}
-function getRoot() {
-    return getFroamRootElement();
-}
-function getCanvasHost() {
-    const root = getRoot();
-    return root?.querySelector('[data-froam-canvas]') ?? null;
-}
-function applyGlobalCSS(css) {
-    if (typeof window === 'undefined')
-        return;
-    let styleEl = document.getElementById('froam-global-styles');
-    if (!styleEl) {
-        styleEl = document.createElement('style');
-        styleEl.id = 'froam-global-styles';
-        document.head.appendChild(styleEl);
-    }
-    styleEl.textContent = css || '';
-}
-const SVG_NS = 'http://www.w3.org/2000/svg';
-/** An element inside an <svg> (path, g, circle…) — edited through its <svg>. */
-function isSvgInternal(element) {
-    return element.namespaceURI === SVG_NS && element.tagName.toLowerCase() !== 'svg';
-}
-function shouldSkipElement(element) {
-    const tag = element.tagName.toLowerCase();
-    if (['html', 'body', 'head', 'script', 'style', 'noscript', 'template', 'link', 'meta'].includes(tag))
-        return true;
-    if (isSvgInternal(element))
-        return true;
-    if (element.id === 'root')
-        return true;
-    if (element.dataset.chefEditorRoot === 'true')
-        return true;
-    return false;
-}
-/* ─── Reading a change back to the person who made it ─── */
-/** "Fill · h1" — what changed, and on what. */
-function describeChange(change) {
-    const tag = tagOfPath(change.paths[0] ?? '');
-    const where = change.paths.length > 1 ? `${tag} +${change.paths.length - 1}` : tag;
-    return where ? `${change.label} · ${where}` : change.label;
-}
-function relativeTime(ts) {
-    const seconds = Math.max(0, Math.round((Date.now() - ts) / 1000));
-    if (seconds < 45)
-        return 'just now';
-    const minutes = Math.round(seconds / 60);
-    if (minutes < 60)
-        return `${minutes}m ago`;
-    const hours = Math.round(minutes / 60);
-    if (hours < 24)
-        return `${hours}h ago`;
-    return new Date(ts).toLocaleDateString();
-}
-/**
- * Who and when. The local actor reads as "you" — an id is the right thing to
- * store and the wrong thing to show someone.
- */
-function changeByline(change) {
-    const who = change.actor === LOCAL_ACTOR ? 'You' : change.actor;
-    return `${who} · ${relativeTime(change.ts)}`;
-}
-function readNumber(value, fallback) {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-}
-function camelToKebab(str) {
-    return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
-}
-function readCssUrl(value) {
-    const match = value.match(/url\((['"]?)(.*?)\1\)/i);
-    return match?.[2] ?? null;
-}
-function smallHash(value) {
-    let hash = 5381;
-    for (let i = 0; i < value.length; i += 1) {
-        hash = ((hash << 5) + hash) ^ value.charCodeAt(i);
-    }
-    return (hash >>> 0).toString(16).padStart(8, '0');
-}
-function describeImageSource(src) {
-    const mime = src.startsWith('data:') ? src.match(/^data:([^;]+);/)?.[1] ?? 'data-uri' : 'url';
-    const kind = src.startsWith('data:') ? 'embedded data URI' : 'external URL';
-    const preview = src.length > 520 ? `${src.slice(0, 520)}...` : src;
-    return [
-        `kind: ${kind}`,
-        `mime: ${mime}`,
-        `chars: ${src.length}`,
-        `hash: ${smallHash(src)}`,
-        `preview: ${preview}`,
-    ].join('\n    ');
-}
-function parseInjectionDraft(draft) {
-    if (!draft.text)
-        return null;
-    try {
-        const parsed = JSON.parse(draft.text);
-        if (typeof parsed.html !== 'string')
-            return null;
-        return {
-            html: parsed.html,
-            parentPath: typeof parsed.parentPath === 'string' ? parsed.parentPath : ROOT_PARENT_KEY,
-            order: typeof parsed.order === 'number' ? parsed.order : 0,
-        };
-    }
-    catch {
-        return null;
-    }
-}
-function compactText(value, max = 500) {
-    const cleaned = value.replace(/\s+/g, ' ').trim();
-    return cleaned.length > max ? `${cleaned.slice(0, max)}...` : cleaned;
-}
-function buildFroamChangeReport(params) {
-    const { routeKey, viewportMode, viewportStoreKey, drafts, persona } = params;
-    const entries = Object.entries(stripPersonaDrafts(drafts));
-    const canvasDraft = drafts[CANVAS_KEY];
-    const insertedBlocks = entries
-        .filter(([path]) => path.startsWith(`${INJECTION_KEY}:`))
-        .map(([, draft]) => parseInjectionDraft(draft))
-        .filter((draft) => draft !== null);
-    const editedElements = entries.filter(([path]) => path !== CANVAS_KEY && !path.startsWith(`${INJECTION_KEY}:`));
-    const imageRefs = [];
-    let styleCount = 0;
-    let textCount = 0;
-    const lines = [
-        '# Froam Design Change Report',
-        '',
-        `Generated: ${new Date().toISOString()}`,
-        `Route: ${routeKey}`,
-        `Viewport: ${viewportMode}`,
-        `Store key: ${viewportStoreKey}`,
-        `Froam persona: ${persona.name} (${persona.role})`,
-        '',
-        '## Summary',
-        `- Edited elements: ${editedElements.length}`,
-        `- Inserted blocks/shapes: ${insertedBlocks.length}`,
-    ];
-    if (canvasDraft?.styles) {
-        styleCount += Object.keys(canvasDraft.styles).length;
-        const canvasImage = typeof canvasDraft.styles.backgroundImage === 'string'
-            ? readCssUrl(canvasDraft.styles.backgroundImage)
-            : null;
-        if (canvasImage) {
-            imageRefs.push(`[canvas background]\n    ${describeImageSource(canvasImage)}`);
-        }
-    }
-    for (const [path, draft] of editedElements) {
-        if (typeof draft.text === 'string')
-            textCount += 1;
-        if (draft.styles) {
-            styleCount += Object.keys(draft.styles).length;
-            if (typeof draft.styles.backgroundImage === 'string') {
-                const image = readCssUrl(draft.styles.backgroundImage);
-                if (image)
-                    imageRefs.push(`[${path} background]\n    ${describeImageSource(image)}`);
-            }
-        }
-        if (typeof draft.imageUrl === 'string') {
-            imageRefs.push(`[${path} image]\n    ${describeImageSource(draft.imageUrl)}`);
-        }
-    }
-    lines.push(`- Text changes: ${textCount}`);
-    lines.push(`- Style properties changed: ${styleCount}`);
-    lines.push(`- Image references: ${imageRefs.length}`);
-    if (canvasDraft?.styles && Object.keys(canvasDraft.styles).length > 0) {
-        lines.push('', '## Page / Canvas Changes');
-        for (const [key, value] of Object.entries(canvasDraft.styles)) {
-            if (key === 'backgroundImage') {
-                const image = readCssUrl(value);
-                lines.push(`- ${key}: ${image ? `[image ${smallHash(image)}]` : value}`);
-            }
-            else {
-                lines.push(`- ${key}: ${value}`);
-            }
-        }
-    }
-    if (insertedBlocks.length > 0) {
-        lines.push('', '## Inserted Blocks / Shapes');
-        insertedBlocks
-            .sort((a, b) => a.order - b.order)
-            .forEach((block, index) => {
-            lines.push(`### Block ${index + 1}`);
-            lines.push(`- Parent: ${block.parentPath}`);
-            lines.push(`- Order: ${block.order}`);
-            lines.push('```html');
-            lines.push(block.html);
-            lines.push('```');
-        });
-    }
-    if (editedElements.length > 0) {
-        lines.push('', '## Edited Existing Elements');
-        editedElements.forEach(([path, draft], index) => {
-            lines.push(`### ${index + 1}. ${path}`);
-            if (typeof draft.text === 'string')
-                lines.push(`- Text: ${compactText(draft.text)}`);
-            if (typeof draft.imageUrl === 'string')
-                lines.push(`- Image: ${smallHash(draft.imageUrl)} (${draft.imageUrl.length} chars)`);
-            if (draft.styles && Object.keys(draft.styles).length > 0) {
-                lines.push('- Styles:');
-                for (const [key, value] of Object.entries(draft.styles)) {
-                    if (key === 'backgroundImage') {
-                        const image = readCssUrl(value);
-                        lines.push(`  - ${key}: ${image ? `[image ${smallHash(image)}]` : value}`);
-                    }
-                    else {
-                        lines.push(`  - ${key}: ${value}`);
-                    }
-                }
-            }
-        });
-    }
-    if (imageRefs.length > 0) {
-        lines.push('', '## Image Manifest');
-        imageRefs.forEach((ref, index) => {
-            lines.push(`### Image ${index + 1}`);
-            lines.push(ref);
-        });
-    }
-    lines.push('', '## Notes For Codex', '- This report is the readable implementation brief.', '- If exact embedded image data is needed, also paste Froam\'s "Copy page JSON" output.', '- Element paths are Froam DOM paths. Inserted blocks include their HTML.', '', '## Raw Froam Store JSON Snapshot', '```json', JSON.stringify(drafts, null, 2), '```');
-    return lines.join('\n');
-}
-function parseTransformValues(transformStr) {
-    const result = { rotate: 0, scaleX: 1, scaleY: 1, skewX: 0, skewY: 0, translateX: 0, translateY: 0 };
-    if (!transformStr || transformStr === 'none')
-        return result;
-    // Parse matrix(a, b, c, d, tx, ty)
-    const matrixMatch = transformStr.match(/matrix\(([^)]+)\)/);
-    if (matrixMatch) {
-        const parts = matrixMatch[1].split(',').map((s) => parseFloat(s.trim()));
-        if (parts.length >= 6) {
-            const [a, b, c, d, tx, ty] = parts;
-            result.rotate = Math.round(Math.atan2(b, a) * (180 / Math.PI));
-            result.scaleX = Math.round(Math.sqrt(a * a + b * b) * 10) / 10;
-            result.scaleY = Math.round(Math.sqrt(c * c + d * d) * 10) / 10;
-            result.translateX = Math.round(tx);
-            result.translateY = Math.round(ty);
-        }
-        return result;
-    }
-    // Parse individual functions
-    const rotateMatch = transformStr.match(/rotate\(([\d.-]+)deg\)/);
-    if (rotateMatch)
-        result.rotate = parseFloat(rotateMatch[1]);
-    const scaleXMatch = transformStr.match(/scaleX\(([\d.-]+)\)/);
-    if (scaleXMatch)
-        result.scaleX = parseFloat(scaleXMatch[1]);
-    const scaleYMatch = transformStr.match(/scaleY\(([\d.-]+)\)/);
-    if (scaleYMatch)
-        result.scaleY = parseFloat(scaleYMatch[1]);
-    const scaleMatch = transformStr.match(/scale\(([\d.-]+)\)/);
-    if (scaleMatch) {
-        result.scaleX = parseFloat(scaleMatch[1]);
-        result.scaleY = parseFloat(scaleMatch[1]);
-    }
-    const skewXMatch = transformStr.match(/skewX\(([\d.-]+)deg\)/);
-    if (skewXMatch)
-        result.skewX = parseFloat(skewXMatch[1]);
-    const skewYMatch = transformStr.match(/skewY\(([\d.-]+)deg\)/);
-    if (skewYMatch)
-        result.skewY = parseFloat(skewYMatch[1]);
-    const translateXMatch = transformStr.match(/translateX\(([\d.-]+)px\)/);
-    if (translateXMatch)
-        result.translateX = parseFloat(translateXMatch[1]);
-    const translateYMatch = transformStr.match(/translateY\(([\d.-]+)px\)/);
-    if (translateYMatch)
-        result.translateY = parseFloat(translateYMatch[1]);
-    return result;
-}
-function rgbToHex(value) {
-    if (value.startsWith('#'))
-        return value;
-    const match = value.match(/\d+(\.\d+)?/g);
-    if (!match || match.length < 3)
-        return '#ffffff';
-    const [r, g, b] = match.map((part) => Math.round(Number(part)));
-    return `#${[r, g, b].map((part) => part.toString(16).padStart(2, '0')).join('')}`;
-}
-function readImageUrl(value) {
-    const match = value.match(/url\((['"]?)(.*?)\1\)/i);
-    return match?.[2] ?? '';
-}
-function buildSelection(element, path) {
-    try {
-        const c = window.getComputedStyle(element);
-        const imageUrl = element instanceof HTMLImageElement ? element.currentSrc || element.src || '' : readImageUrl(c.backgroundImage);
-        // Parse transform matrix to get rotate/scale/skew/translate
-        const transformValues = parseTransformValues(c.transform);
-        // Normalize lineHeight: computed gives px, convert to ratio using fontSize
-        const fontSizePx = readNumber(c.fontSize, 16);
-        const lineHeightPx = readNumber(c.lineHeight, fontSizePx * 1.5);
-        const lineHeightRatio = fontSizePx > 0 ? Math.round((lineHeightPx / fontSizePx) * 10) / 10 : 1.5;
-        return {
-            path,
-            label: `${element.tagName.toLowerCase()}${element.className && typeof element.className === 'string' ? `.${element.className.split(' ').filter(Boolean).slice(0, 2).join('.')}` : ''}`,
-            text: element.innerText || '',
-            background: c.backgroundColor === 'rgba(0, 0, 0, 0)' ? '#ffffff' : rgbToHex(c.backgroundColor),
-            color: rgbToHex(c.color),
-            borderColor: c.borderColor === 'rgba(0, 0, 0, 0)' ? '#d1d5db' : rgbToHex(c.borderColor),
-            borderWidth: readNumber(c.borderTopWidth, 0),
-            borderStyle: c.borderTopStyle || 'none',
-            borderRadiusTL: readNumber(c.borderTopLeftRadius, 0),
-            borderRadiusTR: readNumber(c.borderTopRightRadius, 0),
-            borderRadiusBR: readNumber(c.borderBottomRightRadius, 0),
-            borderRadiusBL: readNumber(c.borderBottomLeftRadius, 0),
-            opacity: readNumber(c.opacity, 1),
-            marginTop: readNumber(c.marginTop, 0),
-            marginRight: readNumber(c.marginRight, 0),
-            marginBottom: readNumber(c.marginBottom, 0),
-            marginLeft: readNumber(c.marginLeft, 0),
-            paddingTop: readNumber(c.paddingTop, 0),
-            paddingRight: readNumber(c.paddingRight, 0),
-            paddingBottom: readNumber(c.paddingBottom, 0),
-            paddingLeft: readNumber(c.paddingLeft, 0),
-            width: c.width || 'auto',
-            height: c.height || 'auto',
-            minWidth: c.minWidth === '0px' ? '' : c.minWidth,
-            maxWidth: c.maxWidth === 'none' ? '' : c.maxWidth,
-            minHeight: c.minHeight === '0px' ? '' : c.minHeight,
-            maxHeight: c.maxHeight === 'none' ? '' : c.maxHeight,
-            aspectRatio: c.aspectRatio === 'auto' ? '' : c.aspectRatio,
-            fontSize: fontSizePx,
-            fontFamily: c.fontFamily || 'Satoshi, system-ui, sans-serif',
-            fontWeight: c.fontWeight || '400',
-            fontStyle: c.fontStyle || 'normal',
-            textAlign: c.textAlign || 'start',
-            lineHeight: lineHeightRatio,
-            letterSpacing: readNumber(c.letterSpacing, 0),
-            wordSpacing: readNumber(c.wordSpacing, 0),
-            textTransform: c.textTransform || 'none',
-            textDecoration: c.textDecorationLine || 'none',
-            display: c.display || 'block',
-            flexDirection: c.flexDirection || 'row',
-            justifyContent: c.justifyContent || 'flex-start',
-            alignItems: c.alignItems || 'stretch',
-            flexWrap: c.flexWrap || 'nowrap',
-            gap: readNumber(c.gap, 0),
-            gridTemplateColumns: c.gridTemplateColumns === 'none' ? '' : c.gridTemplateColumns,
-            gridTemplateRows: c.gridTemplateRows === 'none' ? '' : c.gridTemplateRows,
-            position: c.position || 'static',
-            zIndex: readNumber(c.zIndex, 0),
-            overflow: c.overflow || 'visible',
-            cursor: c.cursor || 'auto',
-            rotate: transformValues.rotate,
-            scaleX: transformValues.scaleX,
-            scaleY: transformValues.scaleY,
-            skewX: transformValues.skewX,
-            skewY: transformValues.skewY,
-            translateX: transformValues.translateX,
-            translateY: transformValues.translateY,
-            boxShadow: c.boxShadow === 'none' ? '' : c.boxShadow,
-            textShadow: c.textShadow === 'none' ? '' : c.textShadow,
-            mixBlendMode: c.mixBlendMode || 'normal',
-            filter: c.filter === 'none' ? '' : c.filter,
-            backdropFilter: c.backdropFilter === 'none' ? '' : (c.backdropFilter || ''),
-            imageUrl,
-        };
-    }
-    catch {
-        // Element may be disconnected from DOM — return safe defaults
-        return {
-            path,
-            label: 'unknown',
-            text: '',
-            background: '#ffffff',
-            color: '#000000',
-            borderColor: '#d1d5db',
-            borderWidth: 0,
-            borderStyle: 'none',
-            borderRadiusTL: 0,
-            borderRadiusTR: 0,
-            borderRadiusBR: 0,
-            borderRadiusBL: 0,
-            opacity: 1,
-            marginTop: 0,
-            marginRight: 0,
-            marginBottom: 0,
-            marginLeft: 0,
-            paddingTop: 0,
-            paddingRight: 0,
-            paddingBottom: 0,
-            paddingLeft: 0,
-            width: 'auto',
-            height: 'auto',
-            minWidth: '',
-            maxWidth: '',
-            minHeight: '',
-            maxHeight: '',
-            aspectRatio: '',
-            fontSize: 16,
-            fontFamily: 'Satoshi, system-ui, sans-serif',
-            fontWeight: '400',
-            fontStyle: 'normal',
-            textAlign: 'start',
-            lineHeight: 1.5,
-            letterSpacing: 0,
-            wordSpacing: 0,
-            textTransform: 'none',
-            textDecoration: 'none',
-            display: 'block',
-            flexDirection: 'row',
-            justifyContent: 'flex-start',
-            alignItems: 'stretch',
-            flexWrap: 'nowrap',
-            gap: 0,
-            gridTemplateColumns: '',
-            gridTemplateRows: '',
-            position: 'static',
-            zIndex: 0,
-            overflow: 'visible',
-            cursor: 'auto',
-            rotate: 0,
-            scaleX: 1,
-            scaleY: 1,
-            skewX: 0,
-            skewY: 0,
-            translateX: 0,
-            translateY: 0,
-            boxShadow: '',
-            textShadow: '',
-            mixBlendMode: 'normal',
-            filter: '',
-            backdropFilter: '',
-            imageUrl: '',
-        };
-    }
-}
-function canApplyTextDraft(element) {
-    if (!(element instanceof HTMLElement))
-        return false; // <svg>: style it, don't retype it
-    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement)
-        return false;
-    if (element.dataset.froamShape === 'true')
-        return true;
-    if (element.children.length === 0)
-        return true;
-    const tag = element.tagName.toLowerCase();
-    return ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'small', 'strong', 'em', 'b', 'i', 'label', 'button', 'a', 'li'].includes(tag);
-}
-const TEXT_VISUAL_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'small', 'strong', 'em', 'b', 'i', 'blockquote', 'figcaption', 'cite', 'dt', 'dd', 'li']);
-const INLINE_TEXT_CHILD_TAGS = new Set(['span', 'small', 'strong', 'em', 'b', 'i', 'mark', 'cite', 'br', 'wbr']);
-/* ─── Writing: which elements hold copy a person can type into ─── */
-const NON_WRITABLE_TAGS = new Set(['img', 'input', 'textarea', 'select', 'option', 'video', 'audio', 'canvas', 'iframe', 'svg', 'br', 'hr', 'picture', 'source', 'track', 'object', 'embed', 'area', 'map', 'meter', 'progress', 'ul', 'ol', 'table', 'tbody', 'thead', 'tfoot', 'tr']);
-const WRITABLE_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'small', 'strong', 'em', 'b', 'i', 'u', 'mark', 'q', 'cite', 'abbr', 'time', 'code', 'a', 'button', 'label', 'li', 'dt', 'dd', 'td', 'th', 'caption', 'figcaption', 'blockquote', 'summary', 'legend', 'address']);
-/** Enter finishes writing in these (Shift+Enter still breaks the line); elsewhere it's a new line. */
-const SINGLE_LINE_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'button', 'label', 'span', 'small', 'strong', 'em', 'b', 'i', 'u', 'mark', 'q', 'cite', 'abbr', 'time', 'code', 'summary', 'legend', 'dt', 'td', 'th', 'caption']);
-/** Copy someone could want to rewrite: text tags, or any leaf that already shows text. */
-function isWritableElement(element) {
-    if (!(element instanceof HTMLElement))
-        return false;
-    const tag = element.tagName.toLowerCase();
-    if (NON_WRITABLE_TAGS.has(tag))
-        return false;
-    if (element.dataset.froamShape === 'true')
-        return true;
-    if (!canApplyTextDraft(element))
-        return false;
-    return WRITABLE_TAGS.has(tag) || (element.children.length === 0 && !!element.innerText?.trim());
-}
-/** Put the caret where the person pointed (or select the word there), else at the end. */
-function placeCaret(element, caret) {
-    const selection = window.getSelection();
-    if (!selection)
-        return;
-    let range = null;
-    if (caret !== 'end') {
-        // Froam's own overlay (resize edges, handles) sits over the element's
-        // edges; let the caret lookup see through it to the text beneath.
-        const html = document.documentElement;
-        html.setAttribute('data-froam-caret-probe', 'true');
-        let hit = null;
-        try {
-            hit = document.caretRangeFromPoint?.(caret.x, caret.y) ?? null;
-        }
-        finally {
-            html.removeAttribute('data-froam-caret-probe');
-        }
-        if (hit && element.contains(hit.startContainer))
-            range = hit;
-    }
-    if (!range) {
-        range = document.createRange();
-        range.selectNodeContents(element);
-        range.collapse(false);
-    }
-    selection.removeAllRanges();
-    selection.addRange(range);
-    if (caret !== 'end' && caret.word && typeof selection.modify === 'function') {
-        selection.modify('move', 'backward', 'word');
-        selection.modify('extend', 'forward', 'word');
-    }
-}
-function isEditableField(target) {
-    if (!(target instanceof HTMLElement))
-        return false;
-    return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
-}
-function isTextVisualLayer(element) {
-    if (element.dataset.froamShape === 'true')
-        return false;
-    const tag = element.tagName.toLowerCase();
-    if (!TEXT_VISUAL_TAGS.has(tag) || !element.innerText?.trim())
-        return false;
-    return Array.from(element.children).every((child) => INLINE_TEXT_CHILD_TAGS.has(child.tagName.toLowerCase()));
-}
-function sanitizeDraftForElement(element, draft) {
-    if (draft.text === undefined || canApplyTextDraft(element))
-        return draft;
-    const safeDraft = { ...draft };
-    delete safeDraft.text;
-    return safeDraft;
-}
-function applyDraft(element, draft) {
-    try {
-        const safeDraft = sanitizeDraftForElement(element, draft);
-        if (safeDraft.text !== undefined) {
-            element.innerText = safeDraft.text;
-        }
-        if (element instanceof HTMLImageElement && safeDraft.imageUrl !== undefined) {
-            if (safeDraft.imageUrl) {
-                element.src = safeDraft.imageUrl;
-            }
-            else {
-                element.removeAttribute('src');
-            }
-        }
-        if (safeDraft.styles) {
-            for (const [key, value] of Object.entries(safeDraft.styles)) {
-                if (key.startsWith('__froamState:'))
-                    continue;
-                // setProperty requires kebab-case, but our store uses camelCase
-                const kebabKey = camelToKebab(key);
-                element.style.setProperty(kebabKey, value);
-            }
-        }
-    }
-    catch {
-        // Element may have been removed from DOM by React re-render — safe to ignore
-    }
-}
-function isInjectionPath(path) {
-    return path.startsWith(`${INJECTION_KEY}:`);
-}
-function isSectionStructurePath(path) {
-    return path === SECTION_STRUCTURE_KEY;
-}
-function ensureFroamNodeId(element) {
-    const existing = element.dataset.froamId;
-    if (existing)
-        return existing;
-    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    element.dataset.froamId = id;
-    return id;
-}
-function layerDepthFromPath(path) {
-    return Math.max(0, path.split('/').filter(Boolean).length - 1);
-}
-function labelLayerElement(element) {
-    return element.dataset.froamMerged === 'true'
-        ? 'Stamp group'
-        : element.dataset.froamShape === 'true'
-            ? 'Shape'
-            : element.dataset.froamFrameLabel
-                || element.getAttribute('aria-label')
-                || element.dataset.froamComponentCategory
-                || element.tagName.toLowerCase();
-}
-function isStructuralLayerElement(element) {
-    return ['section', 'header', 'footer', 'main', 'article', 'nav', 'aside'].includes(element.tagName.toLowerCase());
-}
-function syncStructureBoundaryLabel(element) {
-    if (isStructuralLayerElement(element)) {
-        element.dataset.froamBoundaryLabel = labelLayerElement(element);
-        if (window.getComputedStyle(element).position === 'static')
-            element.dataset.froamStaticBoundary = 'true';
-        else
-            element.removeAttribute('data-froam-static-boundary');
-    }
-    else {
-        element.removeAttribute('data-froam-boundary-label');
-        element.removeAttribute('data-froam-static-boundary');
-    }
-}
-function buildLayerNode(element, root) {
-    const path = getElementPath(element, root);
-    const computed = window.getComputedStyle(element);
-    const elementChildren = Array.from(element.children).filter((child) => isPathElement(child) && !shouldSkipElement(child));
-    return {
-        element,
-        path,
-        tag: element.tagName.toLowerCase(),
-        label: labelLayerElement(element),
-        kind: element.dataset.froamMerged === 'true' ? 'stamp' : element.dataset.froamShape === 'true' ? 'shape' : 'element',
-        className: typeof element.className === 'string' ? element.className.split(' ').filter(Boolean).slice(0, 2).join(' ') : '',
-        depth: layerDepthFromPath(path),
-        hidden: computed.display === 'none',
-        editorHidden: element.dataset.froamEditorHidden === 'true',
-        exportHidden: element.dataset.froamExportHidden === 'true',
-        hasChildren: elementChildren.length > 0,
-        childCount: elementChildren.length,
-        nodeId: element.dataset.froamId || undefined,
-    };
-}
-function readInjectionDraft(draft) {
-    if (!draft.text)
-        return null;
-    try {
-        const parsed = JSON.parse(draft.text);
-        if (typeof parsed.html !== 'string')
-            return null;
-        if (typeof parsed.parentPath !== 'string')
-            return null;
-        return {
-            html: parsed.html,
-            parentPath: parsed.parentPath,
-            parentId: typeof parsed.parentId === 'string' ? parsed.parentId : undefined,
-            order: typeof parsed.order === 'number' ? parsed.order : 0,
-        };
-    }
-    catch {
-        return null;
-    }
-}
-function readLiveElementDraft(element, existingDraft = {}) {
-    const nextDraft = { ...existingDraft };
-    if (existingDraft.text !== undefined || element.isContentEditable || canApplyTextDraft(element)) {
-        nextDraft.text = element.innerText || '';
-    }
-    const liveStyles = { ...(existingDraft.styles ?? {}) };
-    persistedStyleKeys.forEach((key) => {
-        const value = element.style[key];
-        if (value)
-            liveStyles[key] = value;
-    });
-    const imageUrl = element instanceof HTMLImageElement
-        ? element.currentSrc || element.src || ''
-        : readImageUrl(element.style.backgroundImage);
-    if (imageUrl || existingDraft.imageUrl !== undefined) {
-        nextDraft.imageUrl = imageUrl;
-    }
-    if (Object.keys(liveStyles).length > 0) {
-        nextDraft.styles = liveStyles;
-    }
-    return nextDraft;
-}
-function collectCSSVars() {
-    const vars = [];
-    try {
-        const rootStyles = window.getComputedStyle(document.documentElement);
-        // Check all stylesheets for custom properties
-        for (const sheet of Array.from(document.styleSheets)) {
-            try {
-                for (const rule of Array.from(sheet.cssRules)) {
-                    if (rule instanceof CSSStyleRule && rule.selectorText === ':root') {
-                        for (const prop of Array.from(rule.style)) {
-                            if (prop.startsWith('--') && !prop.startsWith('--fs-')) {
-                                vars.push({ name: prop, value: rootStyles.getPropertyValue(prop).trim() });
-                            }
-                        }
-                    }
-                }
-            }
-            catch { /* cross-origin sheets */ }
-        }
-        // Also check inline styles on :root
-        for (const prop of Array.from(document.documentElement.style)) {
-            if (prop.startsWith('--') && !prop.startsWith('--fs-') && !vars.some((v) => v.name === prop)) {
-                vars.push({ name: prop, value: document.documentElement.style.getPropertyValue(prop).trim() });
-            }
-        }
-    }
-    catch { /* safe fallback */ }
-    return vars;
-}
-function readCanvasState() {
-    const host = getCanvasHost();
-    if (!host) {
-        return { background: '#050505', text: '#ffffff', imageUrl: '' };
-    }
-    const computed = window.getComputedStyle(host);
-    return {
-        background: computed.backgroundColor === 'rgba(0, 0, 0, 0)' ? '#050505' : rgbToHex(computed.backgroundColor),
-        text: rgbToHex(computed.color),
-        imageUrl: readImageUrl(computed.backgroundImage),
-    };
-}
-async function capturePageThumb() {
-    try {
-        const root = getRoot();
-        if (!root)
-            return null;
-        const rect = root.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0)
-            return null;
-        const scale = Math.min(360 / rect.width, 220 / rect.height, 1);
-        const w = Math.round(rect.width * scale);
-        const h = Math.round(rect.height * scale);
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        if (!ctx)
-            return null;
-        const clone = root.cloneNode(true);
-        clone.querySelectorAll('[data-chef-editor-root="true"], #froam-editor-portal, script').forEach((node) => node.remove());
-        clone.style.width = `${rect.width}px`;
-        clone.style.height = `${rect.height}px`;
-        clone.style.overflow = 'hidden';
-        clone.style.transform = 'none';
-        clone.style.position = 'relative';
-        const html = new XMLSerializer().serializeToString(clone);
-        const svg = [
-            `<svg xmlns="http://www.w3.org/2000/svg" width="${rect.width}" height="${rect.height}">`,
-            '<foreignObject width="100%" height="100%">',
-            `<div xmlns="http://www.w3.org/1999/xhtml">${html}</div>`,
-            '</foreignObject>',
-            '</svg>',
-        ].join('');
-        const image = new Image();
-        const loaded = new Promise((resolve) => {
-            image.onload = () => {
-                try {
-                    ctx.drawImage(image, 0, 0, rect.width, rect.height, 0, 0, w, h);
-                    resolve(canvas.toDataURL('image/jpeg', 0.72));
-                }
-                catch {
-                    resolve(null);
-                }
-            };
-            image.onerror = () => resolve(null);
-        });
-        image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-        const snapshot = await loaded;
-        if (snapshot)
-            return snapshot;
-        const computed = window.getComputedStyle(root);
-        ctx.fillStyle = computed.backgroundColor !== 'rgba(0, 0, 0, 0)' ? computed.backgroundColor : '#050505';
-        ctx.fillRect(0, 0, w, h);
-        const children = Array.from(root.querySelectorAll('[data-froam-canvas], section, header, footer, main, article, div[class]')).slice(0, 30);
-        for (const child of children) {
-            if (child.closest('[data-chef-editor-root="true"]'))
-                continue;
-            const cr = child.getBoundingClientRect();
-            if (cr.width < 4 || cr.height < 4)
-                continue;
-            const cc = window.getComputedStyle(child);
-            if (cc.display === 'none' || cc.visibility === 'hidden')
-                continue;
-            const x = (cr.left - rect.left) * scale;
-            const y = (cr.top - rect.top) * scale;
-            const cw = cr.width * scale;
-            const ch = cr.height * scale;
-            const bg = cc.backgroundColor;
-            if (bg && bg !== 'rgba(0, 0, 0, 0)') {
-                ctx.fillStyle = bg;
-                const r = Math.min(parseFloat(cc.borderTopLeftRadius) * scale || 0, cw / 2, ch / 2);
-                if (ctx.roundRect) {
-                    ctx.beginPath();
-                    ctx.roundRect(x, y, cw, ch, r);
-                    ctx.fill();
-                }
-                else {
-                    ctx.fillRect(x, y, cw, ch);
-                }
-            }
-        }
-        return canvas.toDataURL('image/jpeg', 0.65);
-    }
-    catch {
-        return null;
-    }
-}
-function applyCanvasDraftStyles(background, color, styles) {
-    const host = getCanvasHost();
-    if (!host)
-        return;
-    if (background)
-        host.style.setProperty('background-color', background);
-    else
-        host.style.removeProperty('background-color');
-    if (color)
-        host.style.setProperty('color', color);
-    else
-        host.style.removeProperty('color');
-    const imageKeys = ['backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'backgroundAttachment'];
-    imageKeys.forEach((key) => {
-        const value = styles?.[key];
-        const cssKey = camelToKebab(key);
-        if (value)
-            host.style.setProperty(cssKey, value);
-        else
-            host.style.removeProperty(cssKey);
-    });
-    applyGlobalCSS(styles?.customCSS);
-}
-function clearCanvasDraftStyles() {
-    const host = getCanvasHost();
-    if (!host)
-        return;
-    host.style.removeProperty('background-color');
-    host.style.removeProperty('color');
-    host.style.removeProperty('background-image');
-    host.style.removeProperty('background-size');
-    host.style.removeProperty('background-position');
-    host.style.removeProperty('background-repeat');
-    host.style.removeProperty('background-attachment');
-    applyGlobalCSS('');
-}
-function syncFroamArtboardMetadata(element) {
-    if (element.dataset.froamArtboard !== 'true')
-        return;
-    const rect = element.getBoundingClientRect();
-    element.dataset.froamFrameWidth = String(Math.max(1, Math.round(rect.width)));
-    element.dataset.froamFrameHeight = String(Math.max(1, Math.round(rect.height)));
-    element.dataset.froamFramePreset = 'custom';
-}
-function buildGradientCSS(type, angle, stops) {
-    const sortedStops = [...stops].sort((a, b) => a.position - b.position);
-    const stopStr = sortedStops.map((s) => `${s.color} ${s.position}%`).join(', ');
-    return type === 'linear'
-        ? `linear-gradient(${angle}deg, ${stopStr})`
-        : `radial-gradient(circle, ${stopStr})`;
-}
-// Every element should be reachable from Layers, however deeply it's nested;
-// the cap only protects the panel on pathological pages.
-const LAYER_MAX_DEPTH = 64;
-const LAYER_MAX_NODES = 6000;
-function collectLayers(root, maxDepth = LAYER_MAX_DEPTH) {
-    const nodes = [];
-    function walk(el, depth) {
-        if (depth > maxDepth || nodes.length >= LAYER_MAX_NODES)
-            return;
-        if (shouldSkipElement(el))
-            return;
-        const elementChildren = Array.from(el.children).filter((child) => isPathElement(child) && !shouldSkipElement(child));
-        nodes.push(buildLayerNode(el, root));
-        elementChildren.forEach((child) => walk(child, depth + 1));
-    }
-    for (const child of Array.from(root.children)) {
-        if (isPathElement(child))
-            walk(child, 0);
-    }
-    return nodes;
-}
-/* ═══════════════════════════════════════════════════════════════
-   Sub-components
-   ═══════════════════════════════════════════════════════════════ */
-function AccordionSection({ id, icon, title, isOpen, onToggle, children, }) {
-    return (_jsxs("div", { className: "froam-accordion", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: "froam-accordion__trigger", "aria-expanded": isOpen, "aria-controls": `froam-section-${id}`, onClick: onToggle, "data-chef-editor-root": "true", children: [_jsxs("span", { className: "froam-accordion__trigger-left", children: [icon, title] }), _jsx(ChevronDown, { size: 14, className: "froam-accordion__chevron", "aria-hidden": "true" })] }), _jsx(AnimatePresence, { initial: false, children: isOpen && (_jsx(motion.div, { className: "froam-accordion__body", id: `froam-section-${id}`, initial: { height: 0, opacity: 0 }, animate: { height: 'auto', opacity: 1 }, exit: { height: 0, opacity: 0 }, transition: { duration: 0.22, ease: [0.4, 0, 0.2, 1] }, children: _jsx("div", { className: "froam-accordion__content", "data-chef-editor-root": "true", children: children }) })) })] }));
-}
-function Toast({ message, visible }) {
-    return (_jsxs("div", { className: `fs-toast ${visible ? 'is-visible' : ''}`, "data-chef-editor-root": "true", children: [_jsx(Zap, { size: 14, "aria-hidden": "true" }), message] }));
-}
-const WELCOME_TIPS_KEY = 'froam:welcome-tips-dismissed:v1';
-function FroamWelcomeTips({ open }) {
-    const [dismissed, setDismissed] = useState(() => {
-        try {
-            return window.localStorage.getItem(WELCOME_TIPS_KEY) === '1';
-        }
-        catch {
-            return true;
-        }
-    });
-    if (!open || dismissed)
-        return null;
-    const dismiss = () => {
-        setDismissed(true);
-        try {
-            window.localStorage.setItem(WELCOME_TIPS_KEY, '1');
-        }
-        catch { /* storage unavailable */ }
-    };
-    return (_jsxs("div", { className: "fs-welcome-tips", "data-chef-editor-root": "true", role: "note", "aria-label": "Froam quick tips", children: [_jsxs("div", { className: "fs-welcome-tips__title", children: [_jsx(Sparkles, { size: 13, "aria-hidden": "true" }), _jsx("span", { children: "Welcome to Froam" }), _jsx("button", { type: "button", className: "fs-welcome-tips__close", onClick: dismiss, "aria-label": "Dismiss tips", children: _jsx(X, { size: 12, "aria-hidden": "true" }) })] }), _jsxs("ul", { className: "fs-welcome-tips__list", children: [_jsxs("li", { children: [_jsx("b", { children: "Click any element" }), " on the page to select and restyle it"] }), _jsxs("li", { children: [_jsx("kbd", { children: "Ctrl+K" }), " opens the command palette"] }), _jsxs("li", { children: [_jsx("kbd", { children: "Ctrl+Shift+S" }), " saves the design to your repo, git-ready"] })] }), _jsx("button", { type: "button", className: "fs-welcome-tips__cta", onClick: dismiss, children: "Got it" })] }));
-}
-/* ═══════════════════════════════════════════════════════════════
-   Froam Scan — one-time laser sweep that maps the page's real DOM.
-   Auto-runs the first time the editor opens on a project, and can be
-   replayed from the command palette. Purely visual, but the counts
-   are real: it reads actual headings, media, actions and containers.
-   ═══════════════════════════════════════════════════════════════ */
-const SCAN_DONE_KEY = 'froam:scan-done:v1';
-const BLUEPRINT_SEEN_KEY = 'froam:blueprint-seen:v1';
-const SCAN_CATEGORY_COLOR = {
-    heading: '#5eead4',
-    media: '#ff8168',
-    action: '#fbbf24',
-    container: 'rgba(125, 211, 235, 0.75)',
-    text: 'rgba(190, 205, 220, 0.6)',
-};
-function scanCategoryOf(el) {
-    const tag = el.tagName.toLowerCase();
-    if (/^h[1-6]$/.test(tag))
-        return 'heading';
-    if (tag === 'img' || tag === 'svg' || tag === 'picture' || tag === 'video' || tag === 'canvas')
-        return 'media';
-    if (tag === 'button' || tag === 'a' || tag === 'input' || tag === 'select' || tag === 'textarea')
-        return 'action';
-    if (tag === 'p' || tag === 'li' || tag === 'blockquote' || tag === 'span')
-        return 'text';
-    if (['section', 'header', 'footer', 'main', 'article', 'nav', 'aside', 'form', 'ul', 'ol', 'div'].includes(tag))
-        return 'container';
-    return null;
-}
-function collectScanTargets() {
-    const root = getRoot();
-    if (!root)
-        return [];
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const selector = 'h1,h2,h3,h4,h5,h6,p,img,svg,picture,video,canvas,button,a,input,select,textarea,section,header,footer,main,article,nav,aside,form,ul,ol,li,blockquote,div,span';
-    const nodes = root.querySelectorAll(selector);
-    const targets = [];
-    for (let i = 0; i < nodes.length; i += 1) {
-        const el = nodes[i];
-        if (el.closest('[data-chef-editor-root]'))
-            continue;
-        const category = scanCategoryOf(el);
-        if (!category)
-            continue;
-        const r = el.getBoundingClientRect();
-        if (r.width < 18 || r.height < 12)
-            continue;
-        if (r.bottom < 4 || r.top > vh - 4 || r.right < 4 || r.left > vw - 4)
-            continue;
-        if ((category === 'container' || category === 'text') && (r.width < 48 || r.height < 24))
-            continue;
-        targets.push({ top: r.top, left: r.left, width: r.width, height: r.height, category });
-        if (targets.length >= 130)
-            break;
-    }
-    targets.sort((a, b) => a.top - b.top);
-    return targets;
-}
-function FroamScan({ active, onDone }) {
-    const canvasRef = useRef(null);
-    const hudRef = useRef(null);
-    const rafRef = useRef(0);
-    const doneRef = useRef(onDone);
-    doneRef.current = onDone;
-    useEffect(() => {
-        if (!active)
-            return undefined;
-        const canvas = canvasRef.current;
-        const ctx = canvas?.getContext('2d');
-        if (!canvas || !ctx) {
-            doneRef.current();
-            return undefined;
-        }
-        const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        canvas.width = Math.round(vw * dpr);
-        canvas.height = Math.round(vh * dpr);
-        ctx.scale(dpr, dpr);
-        const targets = collectScanTargets();
-        const SWEEP = reduce ? 0 : 1300;
-        const HOLD = reduce ? 620 : 420;
-        const FADE = 380;
-        const START_DELAY = reduce ? 0 : 150;
-        const trail = 130;
-        const total = START_DELAY + SWEEP + HOLD + FADE;
-        const start = performance.now();
-        let skipped = false;
-        const drawTarget = (x, y, w, h, color, alpha) => {
-            const s = Math.max(4, Math.min(11, w / 2, h / 2));
-            ctx.fillStyle = color;
-            ctx.globalAlpha = alpha * 0.05;
-            ctx.fillRect(x, y, w, h);
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 1;
-            ctx.globalAlpha = alpha * 0.3;
-            ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-            ctx.globalAlpha = alpha;
-            ctx.lineWidth = 1.75;
-            ctx.beginPath();
-            ctx.moveTo(x, y + s);
-            ctx.lineTo(x, y);
-            ctx.lineTo(x + s, y);
-            ctx.moveTo(x + w - s, y);
-            ctx.lineTo(x + w, y);
-            ctx.lineTo(x + w, y + s);
-            ctx.moveTo(x + w, y + h - s);
-            ctx.lineTo(x + w, y + h);
-            ctx.lineTo(x + w - s, y + h);
-            ctx.moveTo(x + s, y + h);
-            ctx.lineTo(x, y + h);
-            ctx.lineTo(x, y + h - s);
-            ctx.stroke();
-            ctx.globalAlpha = 1;
-        };
-        const frame = (now) => {
-            const t = skipped ? total : now - start;
-            ctx.clearRect(0, 0, vw, vh);
-            const sweepT = SWEEP === 0 ? 1 : Math.max(0, Math.min(1, (t - START_DELAY) / SWEEP));
-            const scanY = -trail + (vh + trail) * sweepT;
-            let backdrop = 1;
-            const fadeStart = START_DELAY + SWEEP + HOLD;
-            if (t < 260)
-                backdrop = Math.max(0, t / 260);
-            else if (t >= fadeStart)
-                backdrop = Math.max(0, 1 - (t - fadeStart) / FADE);
-            ctx.globalAlpha = 0.42 * backdrop;
-            const grad = ctx.createLinearGradient(0, 0, 0, vh);
-            grad.addColorStop(0, 'rgba(6,10,16,0.92)');
-            grad.addColorStop(1, 'rgba(4,7,12,0.97)');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, vw, vh);
-            ctx.globalAlpha = 1;
-            let crossed = 0;
-            const seen = { heading: 0, media: 0, action: 0, container: 0, text: 0 };
-            for (const tg of targets) {
-                if (tg.top > scanY)
-                    continue;
-                crossed += 1;
-                seen[tg.category] += 1;
-                const since = Math.max(0, Math.min(1, (scanY - tg.top) / 60));
-                drawTarget(tg.left, tg.top, tg.width, tg.height, SCAN_CATEGORY_COLOR[tg.category], (0.35 + 0.65 * since) * backdrop);
-            }
-            if (!reduce && t >= START_DELAY && t <= START_DELAY + SWEEP) {
-                const trailGrad = ctx.createLinearGradient(0, scanY - trail, 0, scanY);
-                trailGrad.addColorStop(0, 'rgba(94,234,212,0)');
-                trailGrad.addColorStop(1, 'rgba(94,234,212,0.18)');
-                ctx.fillStyle = trailGrad;
-                ctx.fillRect(0, scanY - trail, vw, trail);
-                ctx.strokeStyle = 'rgba(150,255,238,0.95)';
-                ctx.lineWidth = 2;
-                ctx.shadowColor = 'rgba(94,234,212,0.9)';
-                ctx.shadowBlur = 16;
-                ctx.beginPath();
-                ctx.moveTo(0, scanY);
-                ctx.lineTo(vw, scanY);
-                ctx.stroke();
-                ctx.shadowBlur = 0;
-            }
-            const hud = hudRef.current;
-            if (hud) {
-                hud.style.opacity = String(backdrop);
-                const countEl = hud.querySelector('[data-scan-count]');
-                const labelEl = hud.querySelector('[data-scan-label]');
-                const breakEl = hud.querySelector('[data-scan-break]');
-                if (countEl)
-                    countEl.textContent = String(crossed);
-                if (labelEl)
-                    labelEl.textContent = t >= START_DELAY + SWEEP ? 'elements mapped' : 'scanning…';
-                if (breakEl)
-                    breakEl.textContent = `${seen.heading} headings · ${seen.media} media · ${seen.action} actions · ${seen.container} containers · ${seen.text} text`;
-            }
-            if (t >= total) {
-                ctx.clearRect(0, 0, vw, vh);
-                doneRef.current();
-                return;
-            }
-            rafRef.current = requestAnimationFrame(frame);
-        };
-        const skip = () => { skipped = true; };
-        canvas.addEventListener('pointerdown', skip);
-        rafRef.current = requestAnimationFrame(frame);
-        return () => {
-            cancelAnimationFrame(rafRef.current);
-            canvas.removeEventListener('pointerdown', skip);
-        };
-    }, [active]);
-    if (!active)
-        return null;
-    return (_jsxs("div", { className: "fs-scan", "data-chef-editor-root": "true", "aria-hidden": "true", children: [_jsx("canvas", { ref: canvasRef, className: "fs-scan__canvas" }), _jsxs("div", { ref: hudRef, className: "fs-scan__hud", children: [_jsxs("span", { className: "fs-scan__count", children: [_jsx("b", { "data-scan-count": true, children: "0" }), " ", _jsx("span", { "data-scan-label": true, children: "scanning\u2026" })] }), _jsx("span", { className: "fs-scan__break", "data-scan-break": true }), _jsx("span", { className: "fs-scan__skip", children: "click to skip" })] })] }));
-}
-function MeasurementOverlay({ rect }) {
-    if (!rect)
-        return null;
-    const w = Math.round(rect.width);
-    const h = Math.round(rect.height);
-    return (_jsx("div", { className: "fs-measure", "data-chef-editor-root": "true", style: {
-            left: rect.left,
-            top: rect.top,
-            width: rect.width,
-            height: rect.height,
-        }, children: _jsxs("span", { className: "fs-measure__badge", children: [w, " \u00D7 ", h] }) }));
-}
-/** Click feedback: a ripple from the exact point clicked and a flash across the element it selected. */
-function ClickPulseOverlay({ pulse }) {
-    if (!pulse)
-        return null;
-    const { rect } = pulse;
-    return (_jsxs("div", { className: "froam-click-pulse", "data-chef-editor-root": "true", "aria-hidden": "true", children: [_jsx("span", { className: "froam-click-pulse__flash", style: { left: rect.left - 2, top: rect.top - 2, width: rect.width + 4, height: rect.height + 4 } }), _jsx("span", { className: "froam-click-pulse__ring", style: { left: pulse.x, top: pulse.y } })] }, pulse.key));
-}
-function SelectionHandoffOverlay({ rect, label, mode, count, pulseKey, }) {
-    if (!rect)
-        return null;
-    const top = Math.max(10, rect.top - 36);
-    const left = Math.min(Math.max(10, rect.left), Math.max(10, window.innerWidth - 210));
-    return (_jsxs("div", { className: "froam-selection-handoff", "data-chef-editor-root": "true", style: { left, top }, children: [_jsx("span", { className: "froam-selection-handoff__dot" }), _jsx("span", { className: "froam-selection-handoff__mode", children: mode }), _jsx("span", { className: "froam-selection-handoff__label", children: count > 1 ? `${count} selected` : label })] }, pulseKey));
-}
+import { useCanvasPointer } from './chef/useCanvasPointer.js';
+import { useSelectionTracking } from './chef/useSelectionTracking.js';
+import { sampleSiteTheme } from './library/site-theme.js';
+import { usePatternDrop } from './library/pattern-drop.js';
+import { PSEUDO_HOST_ATTR, pseudoKey } from './chef/pseudo.js';
+import { useDraftPainter } from './chef/useDraftPainter.js';
+import { useDeviceShell } from './chef/useDeviceShell.js';
+import { readFroamPersonaDraft, sanitizeFroamPersona, isFroamPersonaPath, } from './froamPersona.js';
+import { intelligenceTabs, labTabs, CHEF_BUTTON_START, CANVAS_KEY, INJECTION_KEY, ROOT_PARENT_KEY, INJECTED_BLOCK_SELECTOR, VIEWPORT_MODES, DEVICE_SHELL_ID, } from './chef/types.js';
+import { cursorOptions, displayOptions, flexDirectionOptions, justifyOptions, alignOptions, positionOptions, overflowOptions, borderStyleOptions, blendModeOptions, textTransformOptions, persistedStyleKeys, } from './chef/style-options.js';
+import { MAX_PERSONA_IMAGE_BYTES, SAVE_META_KEY, BRAND_FONT_MAX_BYTES, loadBrandFonts, saveBrandFontsForProject, loadStore, saveStoreForProject, loadNodeRegistry, saveNodeRegistryForProject, loadPersonaPreference, savePersonaPreference, personasEqual, stripPersonaDrafts, withPersonaDraft, countRenderableDrafts, } from './chef/storage.js';
+import { getRoot, getCanvasHost, applyGlobalCSS, isSvgInternal, shouldSkipElement, readNumber, camelToKebab, readImageUrl, buildSelection, } from './chef/dom.js';
+import { describeChange, relativeTime, changeByline, buildFroamChangeReport } from './chef/change-report.js';
+import { SINGLE_LINE_TAGS, isWritableElement, placeCaret, isEditableField, isTextVisualLayer, } from './chef/writing.js';
+import { sanitizeDraftForElement, applyDraft, isInjectionPath, isSectionStructurePath, readInjectionDraft, readLiveElementDraft, applyCanvasDraftStyles, clearCanvasDraftStyles, } from './chef/drafts.js';
+import { ensureFroamNodeId, isStructuralLayerElement, syncStructureBoundaryLabel, buildLayerNode, collectLayers, } from './chef/layers.js';
+import { collectCSSVars, readCanvasState, capturePageThumb, syncFroamArtboardMetadata, buildGradientCSS, } from './chef/canvas.js';
+import { AccordionSection, Toast, FroamWelcomeTips, SCAN_DONE_KEY, BLUEPRINT_SEEN_KEY, FroamScan, MeasurementOverlay, ClickPulseOverlay, SelectionHandoffOverlay, } from './chef/overlays.js';
 export default function GlobalChefEditor({ initialOpen = false, routeKey: explicitRouteKey, projectKey: explicitProjectKey }) {
     const routeKey = useFroamRouteKey(explicitRouteKey);
     const projectKey = useMemo(() => resolveFroamProjectKey(explicitProjectKey), [explicitProjectKey]);
@@ -2320,7 +1030,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
      */
     function startWriting(target, caret = 'end') {
         const root = getRoot();
-        if (!root || !root.contains(target) || !isWritableElement(target))
+        if (!root || !isInPageScope(target, root) || !isWritableElement(target))
             return false;
         if (target.isContentEditable) {
             placeCaret(target, caret);
@@ -2361,7 +1071,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             target.removeEventListener('keydown', onKeyDown);
             target.removeEventListener('paste', onPaste);
             const liveRoot = getRoot();
-            if (!liveRoot || !liveRoot.contains(target))
+            if (!liveRoot || !isInPageScope(target, liveRoot))
                 return;
             const path = getElementPath(target, liveRoot);
             const newText = target.innerText;
@@ -2416,189 +1126,16 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
     }, []);
     /* ─── Device shell: CSS-transform viewport simulation (no DOM tree moves) ─── */
-    const prevViewportRef = useRef('desktop');
-    useEffect(() => {
-        const appRoot = getRoot();
-        if (!appRoot)
-            return;
-        // Strip previous viewport's drafted styles
-        const prevKey = `${routeKey}@@${prevViewportRef.current}`;
-        const prevDrafts = store[prevKey] ?? {};
-        Object.keys(prevDrafts).forEach((path) => {
-            if (path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path))
-                return;
-            const el = findElementByPath(appRoot, path);
-            if (el)
-                el.removeAttribute('style');
-        });
-        if (prevDrafts[CANVAS_KEY]) {
-            clearCanvasDraftStyles();
-        }
-        // Remove any old shell overlay
-        document.getElementById(DEVICE_SHELL_ID)?.remove();
-        // Always make sure #root is back in body (safety) — unless the root
-        // IS <body>/<html>, which can never be re-parented into itself.
-        if (appRoot !== document.body && appRoot !== document.documentElement && appRoot.parentElement && appRoot.parentElement !== document.body) {
-            document.body.appendChild(appRoot);
-        }
-        // Reset root styles
-        appRoot.style.removeProperty('width');
-        appRoot.style.removeProperty('min-height');
-        appRoot.style.removeProperty('height');
-        appRoot.style.removeProperty('overflow-y');
-        appRoot.style.removeProperty('overflow-x');
-        appRoot.style.removeProperty('position');
-        appRoot.style.removeProperty('left');
-        appRoot.style.removeProperty('top');
-        appRoot.style.removeProperty('z-index');
-        appRoot.style.removeProperty('border-radius');
-        appRoot.style.removeProperty('box-shadow');
-        appRoot.style.removeProperty('background');
-        appRoot.style.removeProperty('transform');
-        appRoot.style.removeProperty('transform-origin');
-        appRoot.style.removeProperty('max-width');
-        appRoot.style.removeProperty('margin-inline');
-        appRoot.style.removeProperty('margin-left');
-        appRoot.style.removeProperty('margin-right');
-        appRoot.style.removeProperty('margin-top');
-        appRoot.style.removeProperty('margin');
-        appRoot.style.removeProperty('isolation');
-        document.body.style.removeProperty('overflow');
-        document.body.style.removeProperty('background');
-        document.body.style.removeProperty('display');
-        document.body.style.removeProperty('align-items');
-        document.body.style.removeProperty('justify-content');
-        document.body.style.removeProperty('min-height');
-        prevViewportRef.current = viewportMode;
-        setPanelPosition(null);
-        const mode = VIEWPORT_MODES.find((m) => m.id === viewportMode);
-        if (!mode || mode.width === null) {
-            // Desktop — plain, repaint desktop drafts
-            const newDrafts = store[`${routeKey}@@desktop`] ?? {};
-            Object.entries(newDrafts).forEach(([path, draft]) => {
-                if (path === CANVAS_KEY || isFroamPersonaPath(path))
-                    return;
-                const el = findElementByPath(appRoot, path);
-                if (el)
-                    applyDraft(el, draft);
-            });
-            const cd = newDrafts[CANVAS_KEY];
-            applyCanvasDraftStyles(cd?.styles?.backgroundColor, cd?.styles?.color, cd?.styles);
-            currentSelectionRef.current?.removeAttribute('data-chef-selected');
-            currentSelectionRef.current = null;
-            setSelection(null);
-            // Desktop stays true to the page. Froam controls float above it instead of
-            // pushing the canvas into a dark editor workbench.
-            appRoot.style.minHeight = '100vh';
-            appRoot.style.transformOrigin = 'top left';
-            appRoot.style.transform = zoom !== 1 ? `scale(${zoom})` : '';
-            return;
-        }
-        // Mobile / Tablet: put #root inside a fixed device screen and scale it.
-        // This keeps #root in document.body, triggers real media queries, and aligns the page with the phone frame.
-        const deviceW = mode.width;
-        const deviceH = mode.height;
-        const padding = viewportMode === 'mobile' ? 28 : 32;
-        const availW = window.innerWidth - padding * 2;
-        const availH = window.innerHeight - padding * 2;
-        const scale = Math.min(availW / deviceW, availH / deviceH, viewportMode === 'mobile' ? 0.96 : 0.92);
-        const scaledW = deviceW * scale;
-        const scaledH = deviceH * scale;
-        const screenLeft = Math.round((window.innerWidth - scaledW) / 2);
-        const screenTop = Math.round((window.innerHeight - scaledH) / 2);
-        const screenRadius = viewportMode === 'mobile' ? 32 : 18;
-        // Size #root to device width so media queries fire correctly
-        appRoot.style.width = `${deviceW}px`;
-        appRoot.style.height = `${deviceH}px`;
-        appRoot.style.minHeight = `${deviceH}px`;
-        appRoot.style.maxWidth = 'none';
-        appRoot.style.marginInline = '0';
-        appRoot.style.position = 'fixed';
-        appRoot.style.left = `${screenLeft}px`;
-        appRoot.style.top = `${screenTop}px`;
-        appRoot.style.zIndex = '1045';
-        appRoot.style.isolation = 'isolate';
-        appRoot.style.borderRadius = `${screenRadius}px`;
-        appRoot.style.boxShadow = '0 0 0 1px rgba(255,255,255,0.06)';
-        appRoot.style.background = '#fff';
-        appRoot.style.overflowX = 'hidden';
-        appRoot.style.overflowY = 'auto';
-        appRoot.style.transformOrigin = 'top left';
-        appRoot.style.transform = `scale(${scale})`;
-        // Dark background behind the scaled frame
-        document.body.style.background = 'rgba(6,8,14,0.95)';
-        document.body.style.minHeight = '100vh';
-        document.body.style.overflow = 'hidden';
-        // Build a thin bezel overlay (purely decorative, pointer-events:none)
-        const bezelPad = viewportMode === 'mobile' ? 12 : 16;
-        const bezelRadius = screenRadius;
-        const shell = document.createElement('div');
-        shell.id = DEVICE_SHELL_ID;
-        shell.setAttribute('data-chef-editor-root', 'true');
-        shell.style.cssText = [
-            'position:fixed',
-            `left:${screenLeft}px`,
-            `top:${screenTop}px`,
-            `width:${scaledW}px`,
-            `height:${scaledH}px`,
-            `border-radius:${bezelRadius}px`,
-            `box-shadow:0 0 0 ${bezelPad}px #1f2430,0 0 0 ${bezelPad + 1}px rgba(255,255,255,0.08),0 32px 80px rgba(0,0,0,0.7)`,
-            'border:2px solid rgba(255,255,255,0.08)',
-            'z-index:1048',
-            'pointer-events:none',
-        ].join(';');
-        if (viewportMode === 'mobile') {
-            const notch = document.createElement('div');
-            notch.setAttribute('data-chef-editor-root', 'true');
-            notch.style.cssText = 'position:absolute;top:10px;left:50%;transform:translateX(-50%);width:92px;height:24px;background:#0e1016;border-radius:15px;z-index:2;pointer-events:none;box-shadow:inset 0 1px 0 rgba(255,255,255,0.06)';
-            shell.appendChild(notch);
-        }
-        document.body.appendChild(shell);
-        // Paint new viewport drafts
-        const newDrafts = store[`${routeKey}@@${viewportMode}`] ?? {};
-        Object.entries(newDrafts).forEach(([path, draft]) => {
-            if (path === CANVAS_KEY || isFroamPersonaPath(path))
-                return;
-            const el = findElementByPath(appRoot, path);
-            if (el)
-                applyDraft(el, draft);
-        });
-        const cd = newDrafts[CANVAS_KEY];
-        applyCanvasDraftStyles(cd?.styles?.backgroundColor, cd?.styles?.color, cd?.styles);
-        currentSelectionRef.current?.removeAttribute('data-chef-selected');
-        currentSelectionRef.current = null;
-        setSelection(null);
-        return () => {
-            document.getElementById(DEVICE_SHELL_ID)?.remove();
-            appRoot.style.removeProperty('width');
-            appRoot.style.removeProperty('min-height');
-            appRoot.style.removeProperty('height');
-            appRoot.style.removeProperty('overflow-y');
-            appRoot.style.removeProperty('overflow-x');
-            appRoot.style.removeProperty('position');
-            appRoot.style.removeProperty('left');
-            appRoot.style.removeProperty('top');
-            appRoot.style.removeProperty('z-index');
-            appRoot.style.removeProperty('border-radius');
-            appRoot.style.removeProperty('box-shadow');
-            appRoot.style.removeProperty('background');
-            appRoot.style.removeProperty('transform');
-            appRoot.style.removeProperty('transform-origin');
-            appRoot.style.removeProperty('max-width');
-            appRoot.style.removeProperty('margin-inline');
-            appRoot.style.removeProperty('margin-left');
-            appRoot.style.removeProperty('margin-right');
-            appRoot.style.removeProperty('margin-top');
-            appRoot.style.removeProperty('margin');
-            appRoot.style.removeProperty('isolation');
-            document.body.style.removeProperty('background');
-            document.body.style.removeProperty('min-height');
-            document.body.style.removeProperty('overflow');
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [viewportMode, routeKey, zoom]);
+    const prevViewportRef = useDeviceShell({ routeKey, store, viewportMode, zoom, currentSelectionRef, setPanelPosition, setSelection });
     /* ─── Route change reset ─── */
+    // Only on an actual navigation. On mount this used to close the editor a
+    // frame later — undoing `initialOpen`, and swallowing a Ctrl+. pressed the
+    // moment the button appeared.
+    const resetForRouteRef = useRef(routeKey);
     useEffect(() => {
+        if (resetForRouteRef.current === routeKey)
+            return;
+        resetForRouteRef.current = routeKey;
         const frame = window.requestAnimationFrame(() => {
             setPanelOpen(false);
             setActive(false);
@@ -2734,45 +1271,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         return () => window.cancelAnimationFrame(frame);
     }, [routeKey]);
     /* ─── Paint drafts (re-apply on DOM mutations, e.g. React re-renders) ─── */
-    useEffect(() => {
-        if (!hasRouteDrafts)
-            return;
-        const root = getRoot();
-        if (!root)
-            return;
-        const rootElement = root;
-        function paintDrafts() {
-            try {
-                if (suspendDraftPaintingRef.current)
-                    return;
-                applySectionStructure(routeDrafts);
-                restoreInjectedBlocks(routeDrafts);
-                Object.entries(routeDrafts).forEach(([path, draft]) => {
-                    if (path === CANVAS_KEY || isInjectionPath(path) || isSectionStructurePath(path) || isFroamPersonaPath(path))
-                        return;
-                    const target = findElementByPath(rootElement, path);
-                    if (target)
-                        applyDraft(target, draft);
-                });
-                const canvasDraft = routeDrafts[CANVAS_KEY];
-                applyCanvasDraftStyles(canvasDraft?.styles?.backgroundColor, canvasDraft?.styles?.color, canvasDraft?.styles);
-            }
-            catch {
-                // Safe to ignore, element likely removed by React
-            }
-        }
-        // Defer initial paint to avoid running synchronously during React commit phase
-        let paintFrame = requestAnimationFrame(paintDrafts);
-        const observer = new MutationObserver(() => {
-            cancelAnimationFrame(paintFrame);
-            paintFrame = requestAnimationFrame(paintDrafts);
-        });
-        observer.observe(rootElement, { childList: true, subtree: true });
-        return () => {
-            cancelAnimationFrame(paintFrame);
-            observer.disconnect();
-        };
-    }, [hasRouteDrafts, routeDrafts, viewportStoreKey]);
+    useDraftPainter({ hasRouteDrafts, routeDrafts, viewportStoreKey, suspendDraftPaintingRef, applySectionStructure, restoreInjectedBlocks });
     useEffect(() => {
         if (!showPanel || studioMinimized)
             return;
@@ -2798,451 +1297,30 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         document.documentElement.setAttribute('data-froam-touch', 'true');
         return () => document.documentElement.removeAttribute('data-froam-touch');
     }, [showPanel, isTouchDevice]);
+    // Latest values for event handlers registered once per editing session.
+    const selectionRef = useRef(selection);
+    selectionRef.current = selection;
+    const selectionsRef = useRef(selections);
+    selectionsRef.current = selections;
+    const panelOpenRef = useRef(panelOpen);
+    panelOpenRef.current = panelOpen;
+    const activeToolRef = useRef(activeTool);
+    activeToolRef.current = activeTool;
+    // The selection's handles and floating bar stay on it through scrolls and reflows.
+    useSelectionTracking(showPanel, currentSelectionRef, setSelectionRect);
+    /* ─── Library patterns dragged onto the page ─── */
+    usePatternDrop({
+        enabled: showPanel,
+        getRoot,
+        onDrop: (componentId, target, placement) => insertLibraryComponent(componentId, placement, FROAM_FRAME_PRESETS.responsive, target),
+    });
     /* ─── Click / hover handlers ─── */
-    useEffect(() => {
-        if (!showPanel)
-            return;
-        const root = getRoot();
-        if (!root)
-            return;
-        const rootElement = root;
-        function clearHover() {
-            currentHoverRef.current?.removeAttribute('data-chef-hovered');
-            currentHoverRef.current?.removeAttribute('data-froam-boundary-label');
-            currentHoverRef.current?.removeAttribute('data-froam-static-boundary');
-            currentHoverRef.current = null;
-        }
-        /** The editable element for a raw event/hit target: SVG internals roll up
-         *  to their outermost <svg>; editor UI and skipped tags resolve to null. */
-        function resolveTarget(rawTarget) {
-            let element = rawTarget instanceof Element ? rawTarget : null;
-            if (element && element.namespaceURI === SVG_NS) {
-                let svgRoot = element.tagName.toLowerCase() === 'svg' ? element : element.closest('svg');
-                while (svgRoot?.parentElement?.namespaceURI === SVG_NS)
-                    svgRoot = svgRoot.parentElement.closest('svg');
-                element = svgRoot;
-            }
-            while (element && rootElement.contains(element)) {
-                if (element.closest('[data-chef-editor-root="true"]'))
-                    return null;
-                if (isPathElement(element) && !shouldSkipElement(element))
-                    return element;
-                element = element.parentElement;
-            }
-            return null;
-        }
-        /**
-         * Inside a text block, the caret position says which inline piece was
-         * clicked. Only ever refine *inward* (to the target or something inside
-         * it) — never out to an ancestor, never across to a neighbour.
-         */
-        function resolveTextTargetAtPoint(event, fallback) {
-            const range = document.caretRangeFromPoint?.(event.clientX, event.clientY);
-            const start = range?.startContainer;
-            let element = start instanceof HTMLElement ? start : start?.parentElement ?? null;
-            if (!element || !fallback.contains(element))
-                return fallback;
-            while (element && element !== fallback) {
-                if (isTextVisualLayer(element)) {
-                    const rect = element.getBoundingClientRect();
-                    if (event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom)
-                        return element;
-                }
-                element = element.parentElement;
-            }
-            return fallback;
-        }
-        function pushSelectionCandidate(candidates, element) {
-            if (!element || !rootElement.contains(element))
-                return;
-            if (element.closest('[data-chef-editor-root="true"]'))
-                return;
-            if (shouldSkipElement(element))
-                return;
-            if (!candidates.includes(element))
-                candidates.push(element);
-        }
-        function selectableAncestors(element) {
-            const ancestors = [];
-            let current = element;
-            while (current && current !== rootElement && rootElement.contains(current)) {
-                pushSelectionCandidate(ancestors, current);
-                current = current.parentElement;
-            }
-            return ancestors;
-        }
-        /* Click-through layers are found once (and again when the page changes),
-           and marked so visualStackAtPoint() can switch just those on. */
-        const PE_ATTR = 'data-froam-pe';
-        let clickThroughLayers = [];
-        function markClickThroughLayers() {
-            const found = [];
-            for (const el of Array.from(rootElement.querySelectorAll('*'))) {
-                if (el.closest('[data-chef-editor-root="true"]'))
-                    continue;
-                const none = window.getComputedStyle(el).pointerEvents === 'none';
-                if (none) {
-                    found.push(el);
-                    if (el.getAttribute(PE_ATTR) !== 'none')
-                        el.setAttribute(PE_ATTR, 'none');
-                }
-                else if (el.hasAttribute(PE_ATTR))
-                    el.removeAttribute(PE_ATTR);
-            }
-            clickThroughLayers = found;
-        }
-        markClickThroughLayers();
-        let peDebounce = 0;
-        const peObserver = new MutationObserver((records) => {
-            if (records.every((r) => r.type === 'attributes' && (r.attributeName === PE_ATTR || r.attributeName?.startsWith('data-chef') || r.attributeName?.startsWith('data-froam'))))
-                return;
-            window.clearTimeout(peDebounce);
-            peDebounce = window.setTimeout(markClickThroughLayers, 500);
-        });
-        peObserver.observe(rootElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
-        /**
-         * Everything under a point, in visual order — including layers the page
-         * made click-through with `pointer-events: none` (overlays, decorations,
-         * annotations), which the browser's own hit test skips. Hit-testing is
-         * briefly switched to "everything counts" for this one query.
-         */
-        function visualStackAtPoint(x, y) {
-            if (typeof document.elementsFromPoint !== 'function')
-                return [];
-            // Most points have no click-through layer over them: then the browser's
-            // own hit test is already the full answer, and nothing gets restyled.
-            const covered = clickThroughLayers.some((el) => {
-                const r = el.getBoundingClientRect();
-                return r.width > 0 && r.height > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-            });
-            let hits;
-            if (!covered) {
-                hits = document.elementsFromPoint(x, y);
-            }
-            else {
-                rootElement.setAttribute('data-froam-hittest', 'true');
-                try {
-                    hits = document.elementsFromPoint(x, y);
-                }
-                finally {
-                    rootElement.removeAttribute('data-froam-hittest');
-                }
-            }
-            const stack = [];
-            for (const hit of hits)
-                pushSelectionCandidate(stack, resolveTarget(hit));
-            return stack;
-        }
-        /**
-         * A click-through layer that's just atmosphere — no text of its own, and
-         * spanning most of the screen (background art, gradient washes, noise) —
-         * shouldn't swallow every click. It stays reachable with Alt+click and
-         * from Layers; the content beneath it is selected first.
-         */
-        function isAmbientOverlay(element) {
-            if (window.getComputedStyle(element).pointerEvents !== 'none')
-                return false;
-            if (element.innerText?.trim())
-                return false;
-            const rect = element.getBoundingClientRect();
-            return rect.width * rect.height >= window.innerWidth * window.innerHeight * 0.35;
-        }
-        function selectionStackAtPoint(event, primary, visual) {
-            const stack = [];
-            pushSelectionCandidate(stack, primary);
-            for (const element of visual)
-                pushSelectionCandidate(stack, element);
-            for (const ancestor of selectableAncestors(primary))
-                pushSelectionCandidate(stack, ancestor);
-            return stack;
-        }
-        /** What a click at this point should select, plus everything beneath it for Alt+click. */
-        function resolveClick(event) {
-            // A click on Froam's own UI is never also a click on the page beneath it.
-            if (event.target instanceof Element && event.target.closest('[data-chef-editor-root="true"]')) {
-                return { target: null, stack: [] };
-            }
-            // Keyboard-activated clicks (Enter/Space on a focused control) carry no
-            // position; fall back to the element the event was fired at.
-            const positioned = event.detail > 0 || event.clientX !== 0 || event.clientY !== 0;
-            let visual = positioned ? visualStackAtPoint(event.clientX, event.clientY) : [];
-            if (visual.length > 1 && isAmbientOverlay(visual[0])) {
-                const firstContent = visual.findIndex((element) => !isAmbientOverlay(element));
-                if (firstContent > 0)
-                    visual = [...visual.slice(firstContent), ...visual.slice(0, firstContent)];
-            }
-            const hit = visual[0] ?? resolveTarget(event.target);
-            if (!hit)
-                return { target: null, stack: [] };
-            const primary = resolveTextTargetAtPoint(event, hit);
-            const stack = selectionStackAtPoint(event, primary, visual);
-            return { target: chooseSelectionTarget(event, stack), stack };
-        }
-        function chooseSelectionTarget(event, stack) {
-            if (!event.altKey || stack.length < 2)
-                return stack[0] ?? null;
-            const selectedPath = selectionRef.current?.path;
-            const selectedIndex = selectedPath
-                ? stack.findIndex((candidate) => getElementPath(candidate, rootElement) === selectedPath)
-                : -1;
-            return stack[(selectedIndex + 1 + stack.length) % stack.length] ?? stack[0] ?? null;
-        }
-        let hoverFrame = 0;
-        function handlePointerOver(event) {
-            cancelAnimationFrame(hoverFrame);
-            hoverFrame = requestAnimationFrame(() => {
-                const { target } = resolveClick(event);
-                if (!target || target === currentSelectionRef.current)
-                    return;
-                if (currentHoverRef.current === target)
-                    return;
-                clearHover();
-                currentHoverRef.current = target;
-                target.setAttribute('data-chef-hovered', 'true');
-                syncStructureBoundaryLabel(target);
-            });
-        }
-        function handlePointerLeave() {
-            cancelAnimationFrame(hoverFrame);
-            hoverFrame = requestAnimationFrame(clearHover);
-        }
-        function handleClick(event) {
-            // Clicks inside copy that's being written move the caret — the browser's job.
-            const writing = currentSelectionRef.current;
-            if (writing?.isContentEditable && event.target instanceof Node && writing.contains(event.target))
-                return;
-            const { target, stack } = resolveClick(event);
-            if (!target) {
-                if (!(event.target instanceof HTMLElement) || event.target.closest('[data-chef-editor-root="true"]'))
-                    return;
-                if (panelOpenRef.current) {
-                    clearHover();
-                    return;
-                }
-                setPanelOpen(false);
-                setActive(false);
-                setCommandPaletteOpen(false);
-                return;
-            }
-            // Hand tool — suppress all selection; just let the page scroll/pan naturally
-            if (activeToolRef.current === 'hand') {
-                event.preventDefault();
-                event.stopPropagation();
-                return;
-            }
-            event.preventDefault();
-            event.stopPropagation();
-            // A second click on copy that's already selected means "let me write here".
-            if (event.detail === 1
-                && !event.shiftKey
-                && !event.altKey
-                && activeToolRef.current === 'pointer'
-                && target === currentSelectionRef.current
-                && isWritableElement(target)) {
-                lastClickPointRef.current = { x: event.clientX, y: event.clientY };
-                startWriting(target, { x: event.clientX, y: event.clientY });
-                return;
-            }
-            // Exit inline editing if clicking something else
-            if (inlineEditing && currentSelectionRef.current) {
-                currentSelectionRef.current.contentEditable = 'false';
-                setInlineEditing(false);
-            }
-            const path = getElementPath(target, rootElement);
-            setSelectionCandidates(stack.map((element) => buildLayerNode(element, rootElement)));
-            if (event.shiftKey) {
-                const currentSels = selectionsRef.current;
-                const isAlreadySelected = currentSels.some((sel) => sel.path === path);
-                let nextSels;
-                if (isAlreadySelected) {
-                    nextSels = currentSels.filter((sel) => sel.path !== path);
-                }
-                else {
-                    nextSels = [...currentSels, buildSelection(target, path)];
-                }
-                updateSelectionsState(nextSels);
-            }
-            else {
-                updateSelectionsState([buildSelection(target, path)]);
-            }
-            // Real pointer clicks only (keyboard activation has no position). Disabled
-            // controls arrive as pointerup, which reports detail 0.
-            if (event.detail > 0 || event.type === 'pointerup') {
-                setClickPulse({ key: window.performance.now(), x: event.clientX, y: event.clientY, rect: target.getBoundingClientRect() });
-                lastClickPointRef.current = { x: event.clientX, y: event.clientY };
-            }
-            setMeasureRect(null);
-            setContextMenuPos(null);
-            // Text tool — single click writes where you clicked (no double-click required)
-            if (activeToolRef.current === 'text' && isWritableElement(target)) {
-                startWriting(target, { x: event.clientX, y: event.clientY });
-                return;
-            }
-            // Left-click only selects. Quick Edit opens from an explicit user command.
-        }
-        function handleDblClick(event) {
-            // Edit what the clicks selected (Alt-cycling included), not a re-resolution.
-            const selected = currentSelectionRef.current;
-            const target = selected && rootElement.contains(selected) ? selected : resolveClick(event).target;
-            if (!target)
-                return;
-            const textTarget = target;
-            // Already writing here: a double-click is the browser selecting a word.
-            if (textTarget.isContentEditable)
-                return;
-            setQuickChatOpen(false);
-            event.preventDefault();
-            event.stopPropagation();
-            if (!isWritableElement(textTarget)) {
-                showToast('Select a text layer to edit copy');
-                return;
-            }
-            if (textTarget.dataset.froamShape === 'true') {
-                textTarget.querySelector('svg')?.setAttribute('aria-hidden', 'true');
-                textTarget.style.placeItems = 'center';
-                textTarget.style.textAlign = textTarget.style.textAlign || 'center';
-                textTarget.style.alignContent = 'center';
-                textTarget.style.justifyContent = 'center';
-                textTarget.style.cursor = 'text';
-            }
-            startWriting(textTarget, textTarget.innerText.trim() ? { x: event.clientX, y: event.clientY, word: true } : 'end');
-        }
-        function handleContextMenu(event) {
-            const { target } = resolveClick(event);
-            if (!target)
-                return;
-            event.preventDefault();
-            event.stopPropagation();
-            const path = getElementPath(target, rootElement);
-            const isAlreadySelected = selectionsRef.current.some((sel) => sel.path === path);
-            if (!isAlreadySelected) {
-                updateSelectionsState([buildSelection(target, path)]);
-            }
-            setContextMenuPos({ x: event.clientX, y: event.clientY });
-        }
-        /* ─── v4: long-press = right-click on touch ───
-           iOS Safari never fires contextmenu for touches; Android fires it but
-           we want consistent timing + haptics, so we recognize it ourselves.
-           A duplicate native contextmenu just re-sets the same state. */
-        const LONG_PRESS_MS = 450;
-        const LONG_PRESS_SLOP = 10;
-        let longPressTimer = 0;
-        let longPressOrigin = null;
-        let longPressFired = false;
-        function cancelLongPress() {
-            window.clearTimeout(longPressTimer);
-            longPressOrigin = null;
-        }
-        function handleTouchStart(event) {
-            if (event.touches.length !== 1) {
-                cancelLongPress();
-                return;
-            }
-            const touch = event.touches[0];
-            const target = resolveTarget(event.target);
-            if (!target)
-                return;
-            longPressOrigin = { x: touch.clientX, y: touch.clientY };
-            longPressFired = false;
-            window.clearTimeout(longPressTimer);
-            longPressTimer = window.setTimeout(() => {
-                longPressFired = true;
-                longPressOrigin = null;
-                const path = getElementPath(target, rootElement);
-                if (!selectionsRef.current.some((sel) => sel.path === path)) {
-                    updateSelectionsState([buildSelection(target, path)]);
-                }
-                setContextMenuPos({ x: touch.clientX, y: touch.clientY });
-                if ('vibrate' in navigator)
-                    navigator.vibrate?.(8);
-            }, LONG_PRESS_MS);
-        }
-        function handleTouchMove(event) {
-            if (!longPressOrigin)
-                return;
-            const touch = event.touches[0];
-            if (Math.hypot(touch.clientX - longPressOrigin.x, touch.clientY - longPressOrigin.y) > LONG_PRESS_SLOP) {
-                cancelLongPress();
-            }
-        }
-        function handleTouchEnd(event) {
-            cancelLongPress();
-            if (longPressFired) {
-                // Swallow the synthetic click so it can't immediately dismiss the menu
-                if (event.cancelable)
-                    event.preventDefault();
-                longPressFired = false;
-            }
-        }
-        /* ─── Page interaction guards while editing ───
-           Design mode edits the page instead of using it. Browsers act on some
-           controls before any click: inputs take focus and <select> opens its
-           menu on mousedown, links and images start native drags, middle-click
-           opens a link in a new tab. And a disabled control never receives a
-           click at all — only pointer events — so it's selected on pointerup. */
-        function isPageTarget(raw) {
-            return raw instanceof Element && rootElement.contains(raw) && !raw.closest('[data-chef-editor-root="true"]');
-        }
-        function handleMouseDown(event) {
-            if (activeToolRef.current === 'hand' || !isPageTarget(event.target))
-                return;
-            if (event.target.isContentEditable)
-                return; // caret placement while typing
-            if (event.target.closest('input, textarea, select, option, button, summary, label, video, audio, [contenteditable]')) {
-                event.preventDefault();
-            }
-        }
-        function handleDisabledPointerUp(event) {
-            if (event.button !== 0 || !isPageTarget(event.target))
-                return;
-            if (!event.target.closest(':disabled'))
-                return;
-            handleClick(event);
-        }
-        function handleDragStart(event) {
-            if (!isPageTarget(event.target) || event.target.isContentEditable)
-                return;
-            event.preventDefault();
-        }
-        function handleAuxClick(event) {
-            if (event.button === 1 && isPageTarget(event.target) && event.target.closest('a[href]'))
-                event.preventDefault();
-        }
-        document.addEventListener('mouseover', handlePointerOver, { capture: true, passive: true });
-        document.addEventListener('mouseout', handlePointerLeave, { capture: true, passive: true });
-        document.addEventListener('mousedown', handleMouseDown, true);
-        document.addEventListener('pointerup', handleDisabledPointerUp, true);
-        document.addEventListener('dragstart', handleDragStart, true);
-        document.addEventListener('auxclick', handleAuxClick, true);
-        document.addEventListener('click', handleClick, true);
-        document.addEventListener('dblclick', handleDblClick, true);
-        document.addEventListener('contextmenu', handleContextMenu, true);
-        document.addEventListener('touchstart', handleTouchStart, { capture: true, passive: true });
-        document.addEventListener('touchmove', handleTouchMove, { capture: true, passive: true });
-        document.addEventListener('touchend', handleTouchEnd, { capture: true, passive: false });
-        document.addEventListener('touchcancel', cancelLongPress, { capture: true, passive: true });
-        return () => {
-            cancelAnimationFrame(hoverFrame);
-            window.clearTimeout(peDebounce);
-            peObserver.disconnect();
-            rootElement.querySelectorAll('[data-froam-pe]').forEach((el) => el.removeAttribute('data-froam-pe'));
-            document.removeEventListener('mouseover', handlePointerOver, true);
-            document.removeEventListener('mouseout', handlePointerLeave, true);
-            document.removeEventListener('mousedown', handleMouseDown, true);
-            document.removeEventListener('pointerup', handleDisabledPointerUp, true);
-            document.removeEventListener('dragstart', handleDragStart, true);
-            document.removeEventListener('auxclick', handleAuxClick, true);
-            document.removeEventListener('click', handleClick, true);
-            document.removeEventListener('dblclick', handleDblClick, true);
-            document.removeEventListener('contextmenu', handleContextMenu, true);
-            document.removeEventListener('touchstart', handleTouchStart, true);
-            document.removeEventListener('touchmove', handleTouchMove, true);
-            document.removeEventListener('touchend', handleTouchEnd, true);
-            document.removeEventListener('touchcancel', cancelLongPress, true);
-            cancelLongPress();
-            clearHover();
-        };
-    }, [showPanel, routeKey, viewportStoreKey, inlineEditing, showToast]);
+    useCanvasPointer({
+        showPanel, routeKey, viewportStoreKey, inlineEditing, showToast, startWriting, updateSelectionsState,
+        activeToolRef, currentHoverRef, currentSelectionRef, lastClickPointRef, panelOpenRef, selectionRef, selectionsRef,
+        setActive, setClickPulse, setCommandPaletteOpen, setContextMenuPos, setInlineEditing, setMeasureRect, setPanelOpen,
+        setQuickChatOpen, setSelectionCandidates,
+    });
     /* ─── Drag-to-move ─── */
     useEffect(() => {
         if (!showPanel || !moveMode)
@@ -3892,6 +1970,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             node.removeAttribute('data-froam-switching');
             node.removeAttribute('data-froam-pin');
             node.removeAttribute('data-froam-pe');
+            node.removeAttribute(PSEUDO_HOST_ATTR);
+            // Writing mode's temporary contenteditable must never reach a live page.
+            node.removeAttribute('contenteditable');
             node.removeAttribute('data-froam-writable');
             node.removeAttribute('data-froam-moving');
         });
@@ -4200,6 +2281,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         }
         updateDraft((draft, target) => ({ ...draft, styles: { ...(draft.styles ?? {}), ...(isTextVisualLayer(target) ? projectTextLayerStyles(styles) : styles) } }), projectedSelection, label ?? `Style: ${Object.keys(styles).join(', ')}`);
     }
+    /**
+     * ::before / ::after of the selection. No text-layer projection: a badge's
+     * background is a background, not a glyph fill.
+     */
+    function applyPseudoStyle(pseudo, styles, label) {
+        const encoded = Object.fromEntries(Object.entries(styles).map(([property, value]) => [pseudoKey(pseudo, property), value]));
+        updateDraft((draft) => ({ ...draft, styles: { ...(draft.styles ?? {}), ...encoded } }), undefined, label);
+    }
     function previewEncodedStateStyles(styles) {
         const target = currentSelectionRef.current;
         if (!target)
@@ -4231,7 +2320,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     // Select an arbitrary element (used by the Health scanner to jump to an issue).
     function selectElementFromIntel(el) {
         const root = getRoot();
-        if (!root || !root.contains(el))
+        if (!root || !isInPageScope(el, root))
             return;
         const path = getElementPath(el, root);
         if (!path)
@@ -4243,7 +2332,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     // Apply styles to a specific element by path, independent of the async selection state.
     function fixElementFromIntel(el, styles, label) {
         const root = getRoot();
-        if (!root || !root.contains(el))
+        if (!root || !isInPageScope(el, root))
             return;
         const path = getElementPath(el, root);
         if (!path)
@@ -4559,10 +2648,67 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             showToast(message.includes('restricted') || message.includes('token') ? 'Saved locally. Admin sign-in needed to publish.' : 'Saved locally. Publish server unavailable.');
         }
     }
+    /**
+     * Copy edits into the project's own source, wherever the bridge finds the
+     * original words exactly once (lib/source-writeback.mjs). Written edits
+     * leave the design — the source says it now, and a stale override would
+     * later overrule the developer's own change to that string.
+     */
+    async function writeCopyToSource(drafts) {
+        const originals = originalsRef.current[viewportStoreKeyRef.current] ?? {};
+        const edits = [];
+        for (const [path, draft] of Object.entries(drafts)) {
+            if (typeof draft.text !== 'string' || !isSafeDraftPath(path))
+                continue;
+            // The fingerprint keeps the first 80 characters: complete for shorter copy.
+            const sample = draft.fingerprint?.text;
+            const from = originals[path]?.text ?? (sample && sample.length < 80 ? sample : undefined);
+            if (!from || from.trim() === draft.text.trim())
+                continue;
+            edits.push({ path, from, to: draft.text });
+        }
+        if (!edits.length)
+            return { drafts, note: '' };
+        try {
+            const response = await window.fetch(bridgeUrl('/__froam/source/text'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ edits: edits.map(({ from, to }) => ({ from, to })) }),
+            });
+            const data = await response.json().catch(() => null);
+            if (!response.ok || !data?.success || !Array.isArray(data.results))
+                return { drafts, note: '' };
+            const next = { ...drafts };
+            const files = new Set();
+            data.results.forEach((result, index) => {
+                const edit = edits[index];
+                if (!edit || result.status !== 'written')
+                    return;
+                const { text: _written, ...rest } = next[edit.path] ?? {};
+                if (rest.styles || rest.imageUrl !== undefined)
+                    next[edit.path] = rest;
+                else
+                    delete next[edit.path];
+                originals[edit.path] = { text: edit.to };
+                if (result.file)
+                    files.add(result.file);
+            });
+            originalsRef.current[viewportStoreKeyRef.current] = originals;
+            const written = data.results.filter((result) => result.status === 'written').length;
+            const kept = edits.length - written;
+            const note = written
+                ? ` · ${written} copy edit${written === 1 ? '' : 's'} written into ${[...files].join(', ')}${kept ? ` · ${kept} kept as Froam edit${kept === 1 ? '' : 's'}` : ''}`
+                : '';
+            return { drafts: next, note };
+        }
+        catch {
+            return { drafts, note: '' };
+        }
+    }
     async function saveToRepo() {
         keepStudioPinned();
         const routeSnapshot = collectVersionRouteDrafts();
-        const cleanDrafts = stripPersonaDrafts(routeSnapshot);
+        const { drafts: cleanDrafts, note: sourceNote } = await writeCopyToSource(stripPersonaDrafts(routeSnapshot));
         const nextStore = { ...store, [viewportStoreKey]: cleanDrafts };
         setStore(nextStore);
         saveStore(nextStore);
@@ -4570,12 +2716,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             const response = await window.fetch(bridgeUrl('/__froam/repo/save'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ routeKey, viewportMode, store: cleanDrafts, brandFonts }),
+                body: JSON.stringify({ routeKey, viewportMode, store: cleanDrafts, brandFonts, rootScope: getFroamStudioConfig().rootScope }),
             });
             const data = await response.json().catch(() => null);
             if (!response.ok || !data?.success)
                 throw new Error(data?.error || 'Repo bridge unavailable');
-            showToast('Saved to repo — commit & push to ship it');
+            showToast(`Saved to repo${sourceNote} — commit & push to ship it`);
         }
         catch {
             showToast('Repo bridge offline — run `froam dev` or add froamStudio() to vite.config');
@@ -4602,11 +2748,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         try {
             const root = getRoot();
             const previousElement = currentSelectionRef.current;
-            const previousPath = root && previousElement && root.contains(previousElement)
+            const previousPath = root && previousElement && isInPageScope(previousElement, root)
                 ? getElementPath(previousElement, root)
                 : '';
             if (root) {
-                root.querySelectorAll('[data-chef-selected="true"], [data-froam-writable]').forEach((el) => {
+                // Selection can be beside the root too (a portal), so clear marks page-wide.
+                document.querySelectorAll('[data-chef-selected="true"], [data-froam-writable]').forEach((el) => {
+                    if (!isInPageScope(el, root))
+                        return;
                     el.removeAttribute('data-chef-selected');
                     el.removeAttribute('data-froam-writable');
                     el.removeAttribute('data-froam-multi-selected');
@@ -4684,10 +2833,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             }
         };
         let next = step(current);
-        while (next && next !== root && root.contains(next) && (shouldSkipElement(next) || next.closest('[data-chef-editor-root="true"]'))) {
+        while (next && next !== root && isInPageScope(next, root) && (shouldSkipElement(next) || next.closest('[data-chef-editor-root="true"]'))) {
             next = step(next);
         }
-        if (!next || next === root || !root.contains(next)) {
+        if (!next || next === root || !isInPageScope(next, root)) {
             showToast(direction === 'parent' ? 'Top of the page' : direction === 'child' ? 'No children' : 'No sibling there');
             return;
         }
@@ -5106,12 +3255,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         return selected.closest('[data-froam-artboard="true"], [data-froam-component-id], [data-froam-block="true"]')
             ?? selected;
     }
-    function placeInsertedNode(node, placement) {
+    /** `target`: an explicit anchor (a drop on the page); otherwise the selection. */
+    function placeInsertedNode(node, placement, target) {
         const root = getRoot();
         if (!root)
             return false;
         const canvasTarget = root.querySelector('[data-froam-canvas], .kitchen-canvas') ?? root;
-        const selectedTarget = selectedPlacementTarget(root);
+        const selectedTarget = target ?? selectedPlacementTarget(root);
         if (placement === 'start') {
             canvasTarget.insertBefore(node, canvasTarget.firstChild);
             return true;
@@ -5130,8 +3280,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         }
         return true;
     }
-    function insertLibraryComponent(componentId, placement, frame) {
-        const component = createFroamLibraryComponent(componentId);
+    function insertLibraryComponent(componentId, placement, frame, target) {
+        // Sampled at insert time: the pattern arrives in the site's fonts, colours and radius.
+        const component = createFroamLibraryComponent(componentId, sampleSiteTheme(getRoot() ?? undefined));
         if (!component)
             return;
         applyInjectedBase(component);
@@ -5143,11 +3294,19 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             node.appendChild(component);
             assignFreshFroamNodeIds(node);
         }
-        if (!placeInsertedNode(node, placement))
+        if (!placeInsertedNode(node, placement, target))
             return;
         selectInsertedElement(node);
         persistLiveRouteSnapshot();
-        showToast(placement === 'new-frame' ? 'Component inserted on a new white page' : `Component inserted: ${placement}`);
+        announceArrival(node);
+        const title = FROAM_COMPONENTS.find((item) => item.id === componentId)?.title ?? 'Pattern';
+        showToast(placement === 'new-frame' ? `${title} inserted on a new white page` : `${title} inserted`);
+    }
+    /** A new section eases into place, so the eye finds it (skipped for reduced motion). */
+    function announceArrival(node) {
+        if (typeof node.animate !== 'function' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
+            return;
+        node.animate([{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.2,.8,.2,1)' });
     }
     function insertBlankFrame(placement, frame) {
         const artboard = createFroamArtboard(frame);
@@ -5171,11 +3330,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 component.remove();
         });
         let lastArtboard = null;
+        const theme = sampleSiteTheme(root);
         sections.forEach((section) => {
             const artboard = createFroamArtboard(section.frame, section.name);
             artboard.dataset.froamSectionId = section.id;
             if (section.componentId) {
-                const component = createFroamLibraryComponent(section.componentId);
+                const component = createFroamLibraryComponent(section.componentId, theme);
                 if (component) {
                     applyInjectedBase(component);
                     component.style.margin = '0';
@@ -5814,18 +3974,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const connectedPreviewStoreRef = useRef(null);
     const connectedPreviewOriginalStylesRef = useRef(null);
     storeRef.current = store;
-    const selectionRef = useRef(selection);
-    selectionRef.current = selection;
-    const selectionsRef = useRef(selections);
-    selectionsRef.current = selections;
-    const panelOpenRef = useRef(panelOpen);
-    panelOpenRef.current = panelOpen;
     const quickChatOpenRef = useRef(quickChatOpen);
     quickChatOpenRef.current = quickChatOpen;
     const contextMenuPosRef = useRef(contextMenuPos);
     contextMenuPosRef.current = contextMenuPos;
-    const activeToolRef = useRef(activeTool);
-    activeToolRef.current = activeTool;
     const moveModeRef = useRef(moveMode);
     moveModeRef.current = moveMode;
     const actionsRef = useRef({ saveToRunam, saveToRepo, undo, redo, clearSelectionDraft, applyStyle, openSelectedImageUpload, wrapInContainer });
@@ -6776,10 +4928,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                                     setPlannerRequestedTab(nextTab);
                                                     const section = nextTab === 'library' ? 'library' : 'plan';
                                                     setWorkspacePreference((current) => ({ ...current, mode: 'create', sections: { ...current.sections, create: section } }));
-                                                }, onInsertComponent: insertLibraryComponent, onInsertBlankFrame: insertBlankFrame, onInsertBlock: addStructureBlock, onInsertArchived: insertArchivedHtml, onBuildPage: buildLibraryPage, onPlanChange: syncSitePlanGraph, onToast: showToast }) }) })) : null, _jsx("div", { className: "froam-figma-left__view", hidden: leftWorkspaceMode !== 'reference', children: _jsx(FroamSectionBoundary, { name: "ReferenceWorkspace", children: _jsx(FroamReferenceWorkspace, { project: projectSession.project, routeKey: routeKey, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, reconstructing: ['preparing', 'requesting', 'plan-ready', 'creating-prototype', 'retrying'].includes(froamIntent.state.phase), onReconstruct: (understanding, target) => { void froamIntent.submitReference({ understanding, target }); }, onReferencesChanged: () => { if (froamIntent.state.session?.origin === 'reference')
+                                                }, onInsertComponent: insertLibraryComponent, onInsertBlankFrame: insertBlankFrame, onInsertBlock: addStructureBlock, onInsertArchived: insertArchivedHtml, onBuildPage: buildLibraryPage, onPlanChange: syncSitePlanGraph, onToast: showToast, sampleTheme: () => sampleSiteTheme(getRoot() ?? undefined) }) }) })) : null, _jsx("div", { className: "froam-figma-left__view", hidden: leftWorkspaceMode !== 'reference', children: _jsx(FroamSectionBoundary, { name: "ReferenceWorkspace", children: _jsx(FroamReferenceWorkspace, { project: projectSession.project, routeKey: routeKey, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, reconstructing: ['preparing', 'requesting', 'plan-ready', 'creating-prototype', 'retrying'].includes(froamIntent.state.phase), onReconstruct: (understanding, target) => { void froamIntent.submitReference({ understanding, target }); }, onReferencesChanged: () => { if (froamIntent.state.session?.origin === 'reference')
                                                     froamIntent.cancel(); }, onToast: showToast, onActivityChange: setWorkspaceActivity }) }) }), leftWorkspaceMode === 'layers' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "LayersPanel", children: _jsx(FroamLayersPanel, { layers: layers, selectedPath: selection?.path ?? null, selections: selections, selectionCandidates: selectionCandidates, onSelectLayer: selectLayerNode, onToggleVisibility: toggleLayerVisibility, onAddSection: addSectionRelative, onDuplicateSection: duplicateSection, onMoveSection: moveSection, canMoveSection: canMoveSection, onSetSectionVisibility: setSectionVisibility, onDeleteSection: deleteSection, onRefresh: () => { const root = getRoot(); if (root)
                                                     setLayers(collectLayers(root)); }, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, knowledgeByNodeId: layerKnowledge, onOpenKnowledge: (node, section) => { selectLayerNode(node); openWorkspaceSection(section); } }) }) })) : null] })] }), _jsx("div", { className: "froam-figma-layout__canvas", "data-chef-editor-root": "true" }), rightPanelOpen && workspaceMode === 'create' && (() => {
-                        const designPanel = (_jsx(FroamSectionBoundary, { name: "DesignPanel", children: _jsx(FroamDesignPanel, { projectKey: projectKey, selection: selection, selectionRect: selectionRect, onApplyStyle: applyStyle, onUpdateDraft: updateDraft, onOpenImageUpload: openSelectedImageUpload, onClearImage: clearAppliedImage, onClearSelectionDraft: actionsRef.current.clearSelectionDraft, marginLinked: marginLinked, paddingLinked: paddingLinked, radiusLinked: radiusLinked, onToggleMarginLinked: () => setMarginLinked((value) => !value), onTogglePaddingLinked: () => setPaddingLinked((value) => !value), onToggleRadiusLinked: () => setRadiusLinked((value) => !value), onApplySizePreset: applySizePreset, onBuildTransformString: buildTransformString, fontOptions: fontOptions, onAddBrandFont: addBrandFont, getRootEl: getRoot, onOpenBlueprint: () => setBlueprintOpen(true) }) }));
+                        const designPanel = (_jsx(FroamSectionBoundary, { name: "DesignPanel", children: _jsx(FroamDesignPanel, { projectKey: projectKey, selection: selection, selectionRect: selectionRect, onApplyStyle: applyStyle, onUpdateDraft: updateDraft, onOpenImageUpload: openSelectedImageUpload, onClearImage: clearAppliedImage, onClearSelectionDraft: actionsRef.current.clearSelectionDraft, marginLinked: marginLinked, paddingLinked: paddingLinked, radiusLinked: radiusLinked, onToggleMarginLinked: () => setMarginLinked((value) => !value), onTogglePaddingLinked: () => setPaddingLinked((value) => !value), onToggleRadiusLinked: () => setRadiusLinked((value) => !value), onApplySizePreset: applySizePreset, onBuildTransformString: buildTransformString, fontOptions: fontOptions, onAddBrandFont: addBrandFont, getRootEl: getRoot, onOpenBlueprint: () => setBlueprintOpen(true), draftStyles: selection ? store[viewportStoreKey]?.[selection.path]?.styles : undefined, onApplyPseudoStyle: applyPseudoStyle }) }));
                         if (!isMobileUI)
                             return designPanel;
                         return (_jsx(FroamBottomSheet, { detent: sheetDetent, onDetentChange: setSheetDetent, title: selection?.label ?? 'Design', subtitle: selection ? 'Tap for style controls' : 'Tap any element to start', children: designPanel }));

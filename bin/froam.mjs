@@ -535,11 +535,21 @@ async function dev(flags) {
     fail(error instanceof Error ? error.message : String(error))
   }
 
+  // Copy edits land in the project's source when Froam knows where that is:
+  // the served folder, or the project folder `froam dev` was started in.
+  // Never a home directory, never for a remote site.
+  const writeSource = !flags['no-write-source'] && config.writeSource !== false
+  const remoteApp = normalizedApp && !isLocalhost(normalizedApp)
+  const sourceRoot = !writeSource ? null
+    : serveDir ?? (!remoteApp && path.resolve(cwd) !== os.homedir() && looksLikeProjectDir(cwd) ? cwd : null)
+
   const { server, appTarget } = createBridgeServer({
     port,
     froamDir,
     app,
     serveDir,
+    sourceRoot,
+    allowOrigins: typeof flags['allow-origin'] === 'string' ? flags['allow-origin'] : undefined,
     log: (line) => log(`${dim(new Date().toLocaleTimeString())} ${OK} ${line}`),
   })
 
@@ -944,6 +954,8 @@ function help() {
   log(`      ${dim('--port <n>')}         bridge port (default 4600)`)
   log(`      ${dim('--open')}             open the browser once the bridge is up`)
   log(`      ${dim('--host [addr]')}      expose on your local network (phone testing)`)
+  log(`      ${dim('--allow-origin <o>')} let a custom dev domain use the bridge (comma-separated)`)
+  log(`      ${dim('--no-write-source')}  keep copy edits as Froam edits (default: written into your source)`)
   log(`  ${teal('build')}              recompile design.json → generated.css + runtime.js`)
   log(`  ${teal('status')}             design summary, artifact freshness, git state`)
   log(`  ${teal('check')}              find edits that no longer point at what they were made against`)
@@ -1028,9 +1040,37 @@ switch (resolvedCommand) {
     await dev({ app: url.href, open: true, probed: true, project })
     break
   }
-  default:
+  default: {
     log(`${BAD} unknown command: ${cmd}`)
+    const suggestion = closestCommand(cmd)
+    if (suggestion) log(`  did you mean ${teal(`froam ${suggestion}`)}?`)
     log()
     help()
     process.exit(1)
+  }
+}
+
+/** The command a typo most likely meant (`biuld` → `build`), if one is close. */
+function closestCommand(input) {
+  const commands = ['init', 'dev', 'build', 'status', 'check', 'doctor', 'migrate', 'version', 'help']
+  const distance = (a, b) => {
+    const row = Array.from({ length: b.length + 1 }, (_, i) => i)
+    for (let i = 1; i <= a.length; i += 1) {
+      let previous = row[0]
+      row[0] = i
+      for (let j = 1; j <= b.length; j += 1) {
+        const current = row[j]
+        row[j] = Math.min(row[j] + 1, row[j - 1] + 1, previous + (a[i - 1] === b[j - 1] ? 0 : 1))
+        previous = current
+      }
+    }
+    return row[b.length]
+  }
+  const word = String(input ?? '').toLowerCase()
+  let best = null
+  for (const command of commands) {
+    const d = distance(word, command)
+    if (d <= (command.length >= 5 ? 2 : 1) && (!best || d < best.d)) best = { command, d }
+  }
+  return best?.command ?? null
 }

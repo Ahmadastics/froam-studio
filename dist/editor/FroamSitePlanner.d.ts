@@ -1,3 +1,4 @@
+import { type SiteTheme } from './library/site-theme';
 import { type FroamFrameSpec, type FroamInsertPlacement, type FroamWireframeSection } from './FroamPlannerTypes';
 export type PlannerTab = 'blueprint' | 'sitemap' | 'wireframe' | 'library';
 type SitePage = {
@@ -40,7 +41,9 @@ type Props = {
     onBuildPage: (sections: FroamWireframeSection[]) => void;
     onPlanChange: (pages: SitePage[]) => void;
     onToast: (message: string) => void;
+    /** Reads the live site's look, so patterns (and their previews) match it. */
+    sampleTheme?: () => SiteTheme;
 };
-export default function FroamSitePlanner({ projectKey, routeKey, projectName, branchName, requestedTab, selection, archiveItems, assets, onRenameProject, onAddAsset, onApplyAsset, onRemoveAsset, onTabChange, onInsertComponent, onInsertBlankFrame, onInsertBlock, onInsertArchived, onBuildPage, onPlanChange, onToast }: Props): import("react").JSX.Element;
+export default function FroamSitePlanner({ projectKey, routeKey, projectName, branchName, requestedTab, selection, archiveItems, assets, onRenameProject, onAddAsset, onApplyAsset, onRemoveAsset, onTabChange, onInsertComponent, onInsertBlankFrame, onInsertBlock, onInsertArchived, onBuildPage, onPlanChange, onToast, sampleTheme }: Props): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=FroamSitePlanner.d.ts.map

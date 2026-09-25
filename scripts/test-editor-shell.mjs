@@ -9,6 +9,7 @@ import { animationPresetInteraction, FROAM_ANIMATION_PRESETS } from '../dist/edi
 import { DEFAULT_FROAM_UI_PREFERENCE, froamUIPanelWidth, readFroamUIPreference, sanitizeFroamUIPreference, writeFroamUIPreference } from '../dist/editor/froamUIPreferences.js'
 import { FROAM_REFERENCE_ACCEPTED_TYPES, FROAM_REFERENCE_CONSENT_KEY, readReferenceConsent, referenceQualityLabel, suggestReferenceLabel, validateReferenceDimensions, validateReferenceFile, writeReferenceConsent } from '../dist/editor/reference-workspace-model.js'
 import { projectTextLayerStyles } from '../dist/editor/text-style-projection.js'
+import { decodePseudoContent, encodePseudoContent } from '../dist/editor/chef/pseudo.js'
 import {
   FROAM_WORKSPACE_MODES,
   readWorkspacePreference,
@@ -23,6 +24,15 @@ import {
 
 let count = 0
 const test = (name, run) => { run(); count += 1; console.log(`✓ ${name}`) }
+
+// The editor is GlobalChefEditor.tsx plus the modules split out of it
+// (src/editor/chef); what these checks look for may live in either.
+function readEditorSource() {
+  const chef = new URL('../src/editor/chef/', import.meta.url)
+  const parts = [fs.readFileSync(new URL('../src/editor/GlobalChefEditor.tsx', import.meta.url), 'utf8')]
+  for (const name of fs.readdirSync(chef).sort()) parts.push(fs.readFileSync(new URL(name, chef), 'utf8'))
+  return parts.join('\n')
+}
 
 test('mode switching keeps the three user promises and remembered contexts', () => {
   assert.deepEqual(FROAM_WORKSPACE_MODES.map(({ id, promise }) => [id, promise]), [['create', 'Build it'], ['understand', 'Know it'], ['experiment', 'Challenge it']])
@@ -216,7 +226,7 @@ test('simple shell, quick chat, mobile, reduced-motion, and advanced surfaces st
   const toolbar = fs.readFileSync(new URL('../src/editor/FroamToolbar.tsx', import.meta.url), 'utf8')
   const toolbarCss = fs.readFileSync(new URL('../src/editor/styles/toolbar.css', import.meta.url), 'utf8')
   const labs = fs.readFileSync(new URL('../src/editor/FroamLabs.tsx', import.meta.url), 'utf8')
-  const editor = fs.readFileSync(new URL('../src/editor/GlobalChefEditor.tsx', import.meta.url), 'utf8')
+  const editor = readEditorSource()
   const css = fs.readFileSync(new URL('../src/editor/styles/workspace-shell.css', import.meta.url), 'utf8')
   assert.match(shell, /label: 'Design'/)
   assert.match(shell, /label: 'Pages'/)
@@ -261,7 +271,7 @@ test('simple shell, quick chat, mobile, reduced-motion, and advanced surfaces st
 test('Pages and Library use the connected project while Reference owns screenshot reconstruction', () => {
   const planner = fs.readFileSync(new URL('../src/editor/FroamSitePlanner.tsx', import.meta.url), 'utf8')
   const layers = fs.readFileSync(new URL('../src/editor/FroamLayersPanel.tsx', import.meta.url), 'utf8')
-  const editor = fs.readFileSync(new URL('../src/editor/GlobalChefEditor.tsx', import.meta.url), 'utf8')
+  const editor = readEditorSource()
   const reference = fs.readFileSync(new URL('../src/editor/FroamReferenceWorkspace.tsx', import.meta.url), 'utf8')
   const intelligence = fs.readFileSync(new URL('../src/editor/FroamIntelligence.tsx', import.meta.url), 'utf8')
   const blueprint = fs.readFileSync(new URL('../src/editor/FroamBlueprint.tsx', import.meta.url), 'utf8')
@@ -371,7 +381,7 @@ test('Task 6 race, focus, reference-limit, and adopted-history guards stay wired
   const reference = fs.readFileSync(new URL('../src/editor/FroamReferenceWorkspace.tsx', import.meta.url), 'utf8')
   const referenceModel = fs.readFileSync(new URL('../src/editor/reference-workspace-model.ts', import.meta.url), 'utf8')
   const result = fs.readFileSync(new URL('../src/editor/FroamIntentResult.tsx', import.meta.url), 'utf8')
-  const editor = fs.readFileSync(new URL('../src/editor/GlobalChefEditor.tsx', import.meta.url), 'utf8')
+  const editor = readEditorSource()
   assert.match(hook, /operationRef\.current === token/)
   assert.match(hook, /previewContextIsCurrent/)
   assert.match(hook, /The interface changed while Froam was preparing this\. Try again\./)
@@ -383,6 +393,20 @@ test('Task 6 race, focus, reference-limit, and adopted-history guards stay wired
   assert.match(result, /data-froam-intent-primary[^\n]+focus\(\)/)
   assert.match(editor, /trapCommandPaletteFocus/)
   assert.match(editor, /opPendingLabelRef\.current = 'Froam experiment'/)
+})
+
+test('::before / ::after content round-trips between text and CSS', () => {
+  for (const text of ['NEW', 'Top rated ', 'say "hi"', 'back\\slash', 'two\nlines', 'a {brace} and </style>', '★']) {
+    const css = encodePseudoContent(text)
+    assert.ok(!/[{}<]/.test(css), `encoded content can end a rule: ${css}`)
+    assert.equal(decodePseudoContent(css), text, `round trip of ${JSON.stringify(text)}`)
+  }
+  assert.equal(encodePseudoContent(''), '')
+  assert.equal(encodePseudoContent('none'), 'none')
+  assert.equal(encodePseudoContent('attr(data-label)'), 'attr(data-label)')
+  assert.equal(encodePseudoContent('"quoted"'), '"quoted"')
+  assert.equal(decodePseudoContent('"\\2605  "'), '\u2605 ')
+  assert.equal(decodePseudoContent('"a\\\\7B"'), 'a\\7B', 'an escaped backslash is not a hex escape')
 })
 
 console.log(`\n${count} editor-shell tests passed.`)

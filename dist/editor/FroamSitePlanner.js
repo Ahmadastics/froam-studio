@@ -1,7 +1,9 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Check, ChevronRight, Copy, FilePlus2, Frame, Grid2X2, Heart, ImagePlus, LayoutTemplate, ListTree, Network, Plus, RefreshCw, Search, Sparkles, Trash2, } from 'lucide-react';
-import { FROAM_CATEGORIES, FROAM_COMPONENTS, } from './FroamComponentCatalog.js';
+import { FROAM_CATEGORIES, FROAM_COMPONENTS, createFroamLibraryComponent, } from './FroamComponentCatalog.js';
+import { DEFAULT_SITE_THEME } from './library/site-theme.js';
+import { FROAM_PATTERN_MIME } from './library/pattern-drop.js';
 import { FROAM_FRAME_PRESETS, createFroamSection, } from './FroamPlannerTypes.js';
 import { froamStorageKey } from '../project/storage-scope.js';
 const DEFAULT_HOME_SECTIONS = [
@@ -342,12 +344,76 @@ function makePageId(name) {
 function componentById(id) {
     return FROAM_COMPONENTS.find((item) => item.id === id);
 }
+const PREVIEW_WIDTH = 1200;
+/**
+ * The pattern itself, drawn in the site's theme and scaled to the card: what
+ * you see is what Insert puts on the page. Built only once the card scrolls
+ * near view, and inert — a picture, never a second live copy.
+ */
+function LivePatternPreview({ componentId, theme }) {
+    const frameRef = useRef(null);
+    const stageRef = useRef(null);
+    const [near, setNear] = useState(false);
+    useEffect(() => {
+        const frame = frameRef.current;
+        if (!frame)
+            return;
+        if (typeof IntersectionObserver === 'undefined') {
+            setNear(true);
+            return;
+        }
+        const observer = new IntersectionObserver((entries) => {
+            if (entries.some((entry) => entry.isIntersecting)) {
+                setNear(true);
+                observer.disconnect();
+            }
+        }, { rootMargin: '240px' });
+        observer.observe(frame);
+        return () => observer.disconnect();
+    }, []);
+    useEffect(() => {
+        const frame = frameRef.current;
+        const stage = stageRef.current;
+        if (!near || !frame || !stage)
+            return;
+        const pattern = createFroamLibraryComponent(componentId, theme);
+        if (!pattern)
+            return;
+        for (const element of [pattern, ...Array.from(pattern.querySelectorAll('*'))]) {
+            for (const attribute of Array.from(element.attributes)) {
+                if (attribute.name.startsWith('data-froam'))
+                    element.removeAttribute(attribute.name);
+            }
+        }
+        pattern.setAttribute('inert', '');
+        stage.replaceChildren(pattern);
+        const fit = () => {
+            const scale = frame.clientWidth / PREVIEW_WIDTH;
+            stage.style.transform = `scale(${scale})`;
+            frame.style.height = `${Math.round(Math.min(pattern.offsetHeight * scale, frame.clientWidth * 0.72))}px`;
+        };
+        fit();
+        if (typeof ResizeObserver === 'undefined')
+            return;
+        const resize = new ResizeObserver(fit);
+        resize.observe(frame);
+        return () => resize.disconnect();
+    }, [near, componentId, theme]);
+    return (_jsx("div", { ref: frameRef, className: "fsp-live-preview", "aria-hidden": "true", children: _jsx("div", { ref: stageRef, className: "fsp-live-preview__stage", style: { width: PREVIEW_WIDTH } }) }));
+}
+function fontLabel(fontFamily) {
+    const first = fontFamily.split(',')[0]?.trim().replace(/^["']|["']$/g, '');
+    return !first || first === 'inherit' ? 'Site fonts' : first;
+}
+function placementLabel(placement) {
+    return { 'new-frame': 'On a new white page', start: 'At the page start', end: 'At the page end', before: 'Before the selection', after: 'After the selection', inside: 'Inside the selection' }[placement];
+}
 function ComponentPreview({ componentId }) {
     const definition = componentById(componentId);
     const rows = definition?.anatomy ?? ['component'];
     return (_jsx("div", { className: `fsp-preview fsp-preview--${definition?.category.toLowerCase().replace(/\s+/g, '-') ?? 'component'}`, children: rows.map((row, index) => (_jsx("span", { className: index === 0 ? 'is-strong' : index === rows.length - 1 ? 'is-short' : '', style: { width: `${Math.max(34, 94 - index * 12)}%` } }, `${row}-${index}`))) }));
 }
-export default function FroamSitePlanner({ projectKey, routeKey, projectName, branchName, requestedTab, selection, archiveItems, assets = [], onRenameProject, onAddAsset, onApplyAsset, onRemoveAsset, onTabChange, onInsertComponent, onInsertBlankFrame, onInsertBlock, onInsertArchived, onBuildPage, onPlanChange, onToast }) {
+export default function FroamSitePlanner({ projectKey, routeKey, projectName, branchName, requestedTab, selection, archiveItems, assets = [], onRenameProject, onAddAsset, onApplyAsset, onRemoveAsset, onTabChange, onInsertComponent, onInsertBlankFrame, onInsertBlock, onInsertArchived, onBuildPage, onPlanChange, onToast, sampleTheme }) {
     const [plan, setPlan] = useState(() => loadPlan(projectKey, routeKey));
     const [blueprintDraft, setBlueprintDraft] = useState(() => loadBlueprintDraft(projectKey, routeKey));
     const [planningPrompt, setPlanningPrompt] = useState('');
@@ -358,7 +424,10 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
     const [search, setSearch] = useState('');
     const [category, setCategory] = useState('All');
     const [favoritesOnly, setFavoritesOnly] = useState(false);
-    const [placement, setPlacement] = useState('new-frame');
+    // In the page's flow: after the selected section, or at the end when nothing is selected.
+    const [placement, setPlacement] = useState('after');
+    const effectivePlacement = !selection && (placement === 'before' || placement === 'after' || placement === 'inside') ? 'end' : placement;
+    const [siteTheme, setSiteTheme] = useState(DEFAULT_SITE_THEME);
     const [insertFrame, setInsertFrame] = useState({ ...FROAM_FRAME_PRESETS.responsive });
     useEffect(() => {
         setPlan(loadPlan(projectKey, routeKey));
@@ -366,6 +435,12 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
     }, [projectKey, routeKey]);
     useEffect(() => { if (requestedTab)
         setTab(requestedTab); }, [requestedTab]);
+    // Read the site's look each time the Library opens (the page may have changed).
+    useEffect(() => {
+        if (tab === 'library' && sampleTheme)
+            setSiteTheme(sampleTheme());
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tab]);
     useEffect(() => { setProjectNameDraft(projectName); }, [projectName]);
     useEffect(() => {
         try {
@@ -452,14 +527,27 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
         const section = createFroamSection(componentId, componentName(componentId), insertFrame);
         updatePage(selectedPage.id, (page) => ({ ...page, sections: [...page.sections, section], status: 'draft' }));
         if (insertNow)
-            onInsertComponent(componentId, placement, insertFrame);
-        onToast(insertNow ? 'Added to wireframe and canvas' : 'Added to wireframe');
+            onInsertComponent(componentId, effectivePlacement, insertFrame);
+        else
+            onToast(`${componentName(componentId)} added to the page plan`);
+    }
+    function startPatternDrag(event, componentId, title) {
+        event.dataTransfer.setData(FROAM_PATTERN_MIME, componentId);
+        event.dataTransfer.setData('text/plain', title);
+        event.dataTransfer.effectAllowed = 'copy';
+        const preview = event.currentTarget.querySelector('.fsp-live-preview');
+        if (preview)
+            event.dataTransfer.setDragImage(preview, 24, 24);
+    }
+    function resampleTheme() {
+        if (sampleTheme)
+            setSiteTheme(sampleTheme());
     }
     function addBlankPage(insertNow = false) {
         const section = createFroamSection(null, 'Blank white page', insertFrame);
         updatePage(selectedPage.id, (page) => ({ ...page, sections: [...page.sections, section], status: 'draft' }));
         if (insertNow)
-            onInsertBlankFrame(placement, insertFrame);
+            onInsertBlankFrame(effectivePlacement, insertFrame);
         onToast(insertNow ? 'Blank page added to wireframe and canvas' : 'Blank page added to wireframe');
     }
     function removeSection(index) {
@@ -631,7 +719,7 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
                                                 setProjectNameDraft(projectName);
                                                 event.currentTarget.blur();
                                             }
-                                        } }), _jsxs("small", { children: [branchName, " \u00B7 ", routeKey] })] }), _jsx("em", { children: "Graph synced" })] }), _jsxs("div", { className: `fsp-context__selection ${selection ? 'has-selection' : ''}`, children: [_jsx("span", { children: selection ? 'Insert relative to' : 'Canvas target' }), _jsx("strong", { children: selection?.label ?? 'Page end' }), selection?.nodeId && _jsx("small", { title: selection.nodeId, children: "stable ID" })] })] }), _jsxs("div", { className: "fsp-tabs", role: "tablist", "aria-label": "Froam planning tools", children: [_jsxs("button", { type: "button", className: tab === 'blueprint' ? 'is-active' : '', onClick: () => selectTab('blueprint'), children: [_jsx(Frame, { size: 14 }), " Draft"] }), _jsxs("button", { type: "button", className: tab === 'sitemap' ? 'is-active' : '', onClick: () => selectTab('sitemap'), children: [_jsx(ListTree, { size: 14 }), " Pages"] }), _jsxs("button", { type: "button", className: tab === 'wireframe' ? 'is-active' : '', onClick: () => selectTab('wireframe'), children: [_jsx(LayoutTemplate, { size: 14 }), " Compose"] }), _jsxs("button", { type: "button", className: tab === 'library' ? 'is-active' : '', onClick: () => selectTab('library'), children: [_jsx(Grid2X2, { size: 14 }), " Library"] })] }), tab === 'blueprint' && (_jsxs("div", { className: "fsp-pane", children: [_jsxs("div", { className: "fsp-prompt-planner", children: [_jsxs("div", { className: "fsp-flow-rail", "aria-label": "Froam planning flow", children: [_jsx("span", { className: "is-active", children: "1 Describe" }), _jsx("span", { children: "2 Organize" }), _jsx("span", { children: "3 Build" })] }), _jsxs("label", { className: "fsp-prompt-box", children: [_jsx("span", { children: "What are you trying to make?" }), _jsx("textarea", { value: planningPrompt, onChange: (event) => setPlanningPrompt(event.target.value), placeholder: "Example: A premium homepage that makes visitors trust the product in the first five seconds \u2014 clear promise, proof, and one obvious next step...", rows: 4 })] }), _jsx("div", { className: "fsp-preset-row", children: BLUEPRINT_PRESETS.map((preset) => (_jsx("button", { type: "button", onClick: () => {
+                                        } }), _jsxs("small", { children: [branchName, " \u00B7 ", routeKey] })] }), _jsx("em", { children: "Graph synced" })] }), _jsxs("div", { className: `fsp-context__selection ${selection ? 'has-selection' : ''}`, children: [_jsx("span", { children: selection ? 'Insert relative to' : 'Canvas target' }), _jsx("strong", { children: selection?.label ?? 'Page end' }), selection?.nodeId && _jsx("small", { title: selection.nodeId, children: "stable ID" })] })] }), tab !== 'library' && _jsxs("div", { className: "fsp-tabs", role: "tablist", "aria-label": "Froam planning tools", children: [_jsxs("button", { type: "button", className: tab === 'blueprint' ? 'is-active' : '', onClick: () => selectTab('blueprint'), children: [_jsx(Frame, { size: 14 }), " Draft"] }), _jsxs("button", { type: "button", className: tab === 'sitemap' ? 'is-active' : '', onClick: () => selectTab('sitemap'), children: [_jsx(ListTree, { size: 14 }), " Pages"] }), _jsxs("button", { type: "button", className: tab === 'wireframe' ? 'is-active' : '', onClick: () => selectTab('wireframe'), children: [_jsx(LayoutTemplate, { size: 14 }), " Compose"] })] }), tab === 'blueprint' && (_jsxs("div", { className: "fsp-pane", children: [_jsxs("div", { className: "fsp-prompt-planner", children: [_jsxs("div", { className: "fsp-flow-rail", "aria-label": "Froam planning flow", children: [_jsx("span", { className: "is-active", children: "1 Describe" }), _jsx("span", { children: "2 Organize" }), _jsx("span", { children: "3 Build" })] }), _jsxs("label", { className: "fsp-prompt-box", children: [_jsx("span", { children: "What are you trying to make?" }), _jsx("textarea", { value: planningPrompt, onChange: (event) => setPlanningPrompt(event.target.value), placeholder: "Example: A premium homepage that makes visitors trust the product in the first five seconds \u2014 clear promise, proof, and one obvious next step...", rows: 4 })] }), _jsx("div", { className: "fsp-preset-row", children: BLUEPRINT_PRESETS.map((preset) => (_jsx("button", { type: "button", onClick: () => {
                                         setPlanningPrompt(preset.prompt);
                                         draftFromPrompt(preset.prompt, false);
                                     }, children: preset.label }, preset.id))) }), _jsxs("div", { className: "fsp-prompt-actions", children: [_jsxs("button", { type: "button", onClick: () => draftFromPrompt(planningPrompt, false), children: [_jsx(Sparkles, { size: 14 }), " Draft structure"] }), _jsxs("button", { type: "button", className: "is-primary", onClick: () => draftFromPrompt(planningPrompt, true), children: [_jsx(Frame, { size: 14 }), " Draft + build"] })] })] }), _jsxs("div", { className: "fsp-blueprint-hero", children: [_jsx("span", { children: "Simple landing structure" }), _jsx("input", { className: "fsp-blueprint-title-input", value: blueprintDraft.title, onChange: (event) => updateBlueprintHeader({ title: event.target.value }), placeholder: "Name the planning goal..." }), _jsx("textarea", { className: "fsp-blueprint-summary-input", value: blueprintDraft.summary, onChange: (event) => updateBlueprintHeader({ summary: event.target.value }), placeholder: "Write how you want this page to flow...", rows: 3 })] }), _jsxs("div", { className: "fsp-blueprint-actions", children: [_jsxs("button", { type: "button", onClick: () => applySimpleLandingBlueprint(false), children: [_jsx(LayoutTemplate, { size: 14 }), " Use this order"] }), _jsxs("button", { type: "button", className: "is-primary", onClick: () => applySimpleLandingBlueprint(true), children: [_jsx(Frame, { size: 14 }), " Build on canvas"] })] }), _jsx("div", { className: "fsp-blueprint-flow", children: blueprintDraft.order.map((componentId, index) => {
@@ -644,19 +732,19 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
                                 return (_jsxs("article", { className: "fsp-wireframe-item", children: [definition ? _jsx(ComponentPreview, { componentId: definition.id }) : _jsx("div", { className: "fsp-preview fsp-preview--blank", children: _jsx(Frame, { size: 18 }) }), _jsxs("div", { className: "fsp-wireframe-item__meta", children: [_jsx("span", { children: definition?.category ?? 'Blank artboard' }), _jsx("strong", { children: section.name }), _jsxs("div", { className: "fsp-section-frame", children: [_jsxs("select", { value: section.frame.preset, onChange: (event) => applyFramePreset(section.id, event.target.value), children: [_jsx("option", { value: "responsive", children: "Responsive" }), _jsx("option", { value: "desktop", children: "Desktop" }), _jsx("option", { value: "tablet", children: "Tablet" }), _jsx("option", { value: "mobile", children: "Mobile" }), _jsx("option", { value: "custom", children: "Custom" })] }), _jsx("input", { "aria-label": `${section.name} width`, type: "number", min: "120", value: section.frame.width, onChange: (event) => updateSectionFrame(section.id, (frame) => ({ ...frame, preset: 'custom', width: Number(event.target.value) || 120 })) }), _jsx("span", { children: "\u00D7" }), _jsx("input", { "aria-label": `${section.name} height`, type: "number", min: "80", value: section.frame.height, onChange: (event) => updateSectionFrame(section.id, (frame) => ({ ...frame, preset: 'custom', height: Number(event.target.value) || 80 })) })] })] }), _jsxs("div", { className: "fsp-wireframe-item__actions", children: [_jsx("button", { type: "button", onClick: () => moveSection(index, -1), disabled: index === 0, title: "Move up", children: _jsx(ArrowUp, { size: 12 }) }), _jsx("button", { type: "button", onClick: () => moveSection(index, 1), disabled: index === selectedPage.sections.length - 1, title: "Move down", children: _jsx(ArrowDown, { size: 12 }) }), _jsx("button", { type: "button", onClick: () => shuffleSection(index), title: "Try another layout", children: _jsx(RefreshCw, { size: 12 }) }), _jsx("button", { type: "button", onClick: () => section.componentId
                                                         ? onInsertComponent(section.componentId, placement, section.frame)
                                                         : onInsertBlankFrame(placement, section.frame), title: "Insert this section", children: _jsx(Plus, { size: 12 }) }), _jsx("button", { type: "button", onClick: () => removeSection(index), title: "Remove", children: _jsx(Trash2, { size: 12 }) })] })] }, section.id));
-                            }), selectedPage.sections.length === 0 && (_jsxs("button", { type: "button", className: "fsp-empty", onClick: () => selectTab('library'), children: [_jsx(Grid2X2, { size: 22 }), "Add the first section from the library"] }))] }), _jsxs("div", { className: "fsp-build-bar", children: [_jsxs("button", { type: "button", className: "is-secondary", onClick: () => selectTab('library'), children: [_jsx(Plus, { size: 14 }), " Add section"] }), _jsxs("button", { type: "button", className: "is-primary", onClick: buildSelectedPage, disabled: selectedPage.sections.length === 0, children: [_jsx(LayoutTemplate, { size: 14 }), " Build page"] })] })] })), tab === 'library' && (_jsxs("div", { className: "fsp-pane", children: [_jsxs("section", { className: "fsp-media-shelf", "aria-label": "Project media", children: [_jsxs("div", { className: "fsp-shelf-heading", children: [_jsxs("span", { children: [_jsx("strong", { children: "Project media" }), _jsxs("small", { children: [assets.length, " reusable image", assets.length === 1 ? '' : 's'] })] }), _jsxs("button", { type: "button", onClick: () => mediaInputRef.current?.click(), disabled: !onAddAsset, children: [_jsx(ImagePlus, { size: 12 }), " Upload"] })] }), _jsxs("div", { className: "fsp-media-url", children: [_jsx("input", { value: assetUrlDraft, onChange: (event) => setAssetUrlDraft(event.target.value), onKeyDown: (event) => { if (event.key === 'Enter')
-                                            addMediaUrl(); }, placeholder: "Paste an image URL\u2026", "aria-label": "Image URL" }), _jsx("button", { type: "button", onClick: addMediaUrl, disabled: !assetUrlDraft.trim() || !onAddAsset, children: "Add" })] }), _jsx("input", { ref: mediaInputRef, className: "fsp-visually-hidden", type: "file", accept: "image/*", onChange: (event) => {
-                                    const file = event.target.files?.[0];
-                                    event.target.value = '';
-                                    if (!file || !onAddAsset)
-                                        return;
-                                    const reader = new FileReader();
-                                    reader.onload = () => { if (typeof reader.result === 'string')
-                                        onAddAsset(reader.result, file.name.replace(/\.[^.]+$/, '')); };
-                                    reader.readAsDataURL(file);
-                                } }), assets.length > 0 ? (_jsx("div", { className: "fsp-media-grid", children: assets.map((asset) => (_jsxs("article", { className: "fsp-media-card", children: [_jsxs("button", { type: "button", className: "fsp-media-card__use", onClick: () => onApplyAsset?.(asset.url), title: selection ? `Apply ${asset.name} to ${selection.label}` : `Insert ${asset.name}`, children: [_jsx("img", { src: asset.url, alt: "", loading: "lazy" }), _jsx("span", { children: asset.name })] }), _jsx("button", { type: "button", className: "fsp-media-card__remove", onClick: () => onRemoveAsset?.(asset.id), "aria-label": `Remove ${asset.name}`, children: _jsx(Trash2, { size: 11 }) })] }, asset.id))) })) : _jsx("p", { className: "fsp-shelf-empty", children: "Upload once, then reuse the image anywhere on the live site." })] }), _jsxs("section", { className: "fsp-quick-add", "aria-label": "Quick building blocks", children: [_jsxs("div", { children: [_jsx("span", { children: "Quick add" }), _jsx("small", { children: selection ? `to ${selection.label}` : 'to page end' })] }), _jsx("div", { className: "fsp-quick-add__grid", children: ['section', 'container', 'grid', 'text', 'image', 'button'].map((kind) => (_jsxs("button", { type: "button", onClick: () => onInsertBlock(kind, selection ? 'inside' : 'after'), children: [_jsx(Plus, { size: 11 }), " ", kind] }, kind))) })] }), frameControls, _jsxs("button", { type: "button", className: "fsp-blank-page-btn", onClick: () => addBlankPage(true), children: [_jsx(Frame, { size: 15 }), "Insert blank white page"] }), _jsxs("div", { className: "fsp-library-tools", children: [_jsxs("label", { className: "fsp-search", children: [_jsx(Search, { size: 14 }), _jsx("input", { value: search, onChange: (event) => setSearch(event.target.value), placeholder: "Search 36 components..." })] }), _jsx("button", { type: "button", className: `fsp-icon-btn ${favoritesOnly ? 'is-active' : ''}`, onClick: () => setFavoritesOnly((value) => !value), title: "Show favorites", children: _jsx(Heart, { size: 14, fill: favoritesOnly ? 'currentColor' : 'none' }) })] }), archiveItems.length > 0 && (_jsxs("section", { className: "fsp-archive-shelf", "aria-label": "Saved project artifacts", children: [_jsxs("div", { className: "fsp-library-count", children: [_jsx("strong", { children: "Saved in this project" }), _jsxs("span", { children: [archiveItems.length, " reusable"] })] }), _jsx("div", { className: "fsp-archive-shelf__items", children: archiveItems.slice(0, 8).map((item) => (_jsxs("button", { type: "button", disabled: !item.html, onClick: () => item.html && onInsertArchived(item.html, placement), children: [_jsx("span", { children: item.name }), _jsx("small", { children: item.html ? 'Insert archive' : 'DNA only' })] }, item.id))) })] })), _jsx("div", { className: "fsp-category-row", children: FROAM_CATEGORIES.map((item) => (_jsx("button", { type: "button", className: category === item ? 'is-active' : '', onClick: () => setCategory(item), children: item }, item))) }), _jsxs("div", { className: "fsp-library-count", children: [_jsxs("span", { children: [filteredComponents.length, " patterns"] }), _jsxs("span", { children: ["Adding to ", selectedPage.name] })] }), _jsx("div", { className: "fsp-library-grid", children: filteredComponents.map((component) => {
-                            const favorite = plan.favorites.includes(component.id);
-                            return (_jsxs("article", { className: "fsp-library-card", children: [_jsxs("div", { className: "fsp-library-card__preview", children: [_jsx(ComponentPreview, { componentId: component.id }), _jsx("button", { type: "button", className: `fsp-favorite ${favorite ? 'is-active' : ''}`, onClick: () => toggleFavorite(component.id), title: favorite ? 'Remove favorite' : 'Save favorite', children: _jsx(Heart, { size: 13, fill: favorite ? 'currentColor' : 'none' }) })] }), _jsxs("div", { className: "fsp-library-card__body", children: [_jsx("span", { children: component.category }), _jsx("strong", { children: component.title }), _jsx("p", { children: component.summary })] }), _jsxs("div", { className: "fsp-library-card__actions", children: [_jsxs("button", { type: "button", onClick: () => addSection(component.id), children: [_jsx(Plus, { size: 12 }), " Wireframe"] }), _jsx("button", { type: "button", className: "is-primary", onClick: () => addSection(component.id, true), children: "Insert" })] })] }, component.id));
-                        }) })] }))] }));
+                            }), selectedPage.sections.length === 0 && (_jsxs("button", { type: "button", className: "fsp-empty", onClick: () => selectTab('library'), children: [_jsx(Grid2X2, { size: 22 }), "Add the first section from the library"] }))] }), _jsxs("div", { className: "fsp-build-bar", children: [_jsxs("button", { type: "button", className: "is-secondary", onClick: () => selectTab('library'), children: [_jsx(Plus, { size: 14 }), " Add section"] }), _jsxs("button", { type: "button", className: "is-primary", onClick: buildSelectedPage, disabled: selectedPage.sections.length === 0, children: [_jsx(LayoutTemplate, { size: 14 }), " Build page"] })] })] })), tab === 'library' && (_jsxs("div", { className: "fsp-pane fsp-library", children: [_jsxs("div", { className: "fsp-library__head", children: [_jsxs("div", { className: "fsp-library-tools", children: [_jsxs("label", { className: "fsp-search", children: [_jsx(Search, { size: 14 }), _jsx("input", { value: search, onChange: (event) => setSearch(event.target.value), placeholder: `Search ${FROAM_COMPONENTS.length} patterns…`, "aria-label": "Search patterns" })] }), _jsx("button", { type: "button", className: `fsp-icon-btn ${favoritesOnly ? 'is-active' : ''}`, onClick: () => setFavoritesOnly((value) => !value), title: "Show favorites", "aria-pressed": favoritesOnly, children: _jsx(Heart, { size: 14, fill: favoritesOnly ? 'currentColor' : 'none' }) })] }), _jsx("div", { className: "fsp-category-row", role: "tablist", "aria-label": "Pattern categories", children: FROAM_CATEGORIES.map((item) => (_jsx("button", { type: "button", role: "tab", "aria-selected": category === item, className: category === item ? 'is-active' : '', onClick: () => setCategory(item), children: item }, item))) })] }), _jsxs("div", { className: "fsp-theme-chip", title: "Patterns are drawn with your site's own fonts, colours and corners", children: [_jsxs("span", { className: "fsp-theme-chip__swatches", "aria-hidden": "true", children: [_jsx("i", { style: { background: siteTheme.accent } }), _jsx("i", { style: { background: siteTheme.ink } }), _jsx("i", { style: { background: siteTheme.paper } })] }), _jsxs("span", { children: ["Styled like ", _jsx("strong", { children: siteTheme.brandName === DEFAULT_SITE_THEME.brandName ? 'your site' : siteTheme.brandName }), _jsxs("small", { children: [fontLabel(siteTheme.fontHeading), " \u00B7 ", siteTheme.radius, " corners"] })] }), _jsx("button", { type: "button", className: "fsp-icon-btn", onClick: resampleTheme, "aria-label": "Read the site's style again", title: "Read the site's style again", children: _jsx(RefreshCw, { size: 12 }) })] }), _jsxs("p", { className: "fsp-library__hint", children: ["Drag a pattern onto the page, or press ", _jsx("strong", { children: "Insert" }), " to add it ", selection ? _jsxs(_Fragment, { children: ["after ", _jsx("strong", { children: selection.label })] }) : 'at the end of the page', "."] }), archiveItems.length > 0 && (_jsxs("section", { className: "fsp-archive-shelf", "aria-label": "Saved project artifacts", children: [_jsxs("div", { className: "fsp-library-count", children: [_jsx("strong", { children: "Saved in this project" }), _jsxs("span", { children: [archiveItems.length, " reusable"] })] }), _jsx("div", { className: "fsp-archive-shelf__items", children: archiveItems.slice(0, 8).map((item) => (_jsxs("button", { type: "button", disabled: !item.html, onClick: () => item.html && onInsertArchived(item.html, effectivePlacement), children: [_jsx("span", { children: item.name }), _jsx("small", { children: item.html ? 'Insert archive' : 'DNA only' })] }, item.id))) })] })), _jsxs("div", { className: "fsp-library-count", children: [_jsxs("span", { children: [filteredComponents.length, " pattern", filteredComponents.length === 1 ? '' : 's'] }), _jsxs("span", { children: ["Page: ", selectedPage.name] })] }), _jsxs("div", { className: "fsp-pattern-list", children: [filteredComponents.map((component) => {
+                                const favorite = plan.favorites.includes(component.id);
+                                return (_jsxs("article", { className: "fsp-pattern", draggable: true, onDragStart: (event) => startPatternDrag(event, component.id, component.title), "aria-label": `${component.title} — ${component.summary}`, children: [_jsx("button", { type: "button", className: "fsp-pattern__preview", onClick: () => addSection(component.id, true), title: `Insert ${component.title}`, children: _jsx(LivePatternPreview, { componentId: component.id, theme: siteTheme }) }), _jsxs("div", { className: "fsp-pattern__meta", children: [_jsxs("div", { className: "fsp-pattern__text", children: [_jsx("span", { children: component.category }), _jsx("strong", { children: component.title }), _jsx("p", { children: component.summary })] }), _jsxs("div", { className: "fsp-pattern__actions", children: [_jsx("button", { type: "button", className: `fsp-favorite ${favorite ? 'is-active' : ''}`, onClick: () => toggleFavorite(component.id), title: favorite ? 'Remove favorite' : 'Save favorite', "aria-pressed": favorite, children: _jsx(Heart, { size: 13, fill: favorite ? 'currentColor' : 'none' }) }), _jsx("button", { type: "button", onClick: () => addSection(component.id), title: "Add to the page plan (Compose)", children: "Plan" }), _jsx("button", { type: "button", className: "is-primary", onClick: () => addSection(component.id, true), children: "Insert" })] })] })] }, component.id));
+                            }), filteredComponents.length === 0 && _jsxs("p", { className: "fsp-shelf-empty", children: ["No pattern matches \u201C", search, "\u201D."] })] }), _jsxs("section", { className: "fsp-quick-add", "aria-label": "Quick building blocks", children: [_jsxs("div", { children: [_jsx("span", { children: "Blocks" }), _jsx("small", { children: selection ? `into ${selection.label}` : 'at the page end' })] }), _jsx("div", { className: "fsp-quick-add__grid", children: ['section', 'container', 'grid', 'text', 'image', 'button'].map((kind) => (_jsxs("button", { type: "button", onClick: () => onInsertBlock(kind, selection ? 'inside' : 'after'), children: [_jsx(Plus, { size: 11 }), " ", kind] }, kind))) })] }), _jsxs("details", { className: "fsp-disclosure", children: [_jsxs("summary", { children: ["Project media ", _jsxs("small", { children: [assets.length, " image", assets.length === 1 ? '' : 's'] })] }), _jsxs("section", { className: "fsp-media-shelf", "aria-label": "Project media", children: [_jsxs("div", { className: "fsp-shelf-heading", children: [_jsx("span", { children: _jsx("strong", { children: "Upload once, reuse anywhere" }) }), _jsxs("button", { type: "button", onClick: () => mediaInputRef.current?.click(), disabled: !onAddAsset, children: [_jsx(ImagePlus, { size: 12 }), " Upload"] })] }), _jsxs("div", { className: "fsp-media-url", children: [_jsx("input", { value: assetUrlDraft, onChange: (event) => setAssetUrlDraft(event.target.value), onKeyDown: (event) => { if (event.key === 'Enter')
+                                                    addMediaUrl(); }, placeholder: "Paste an image URL\u2026", "aria-label": "Image URL" }), _jsx("button", { type: "button", onClick: addMediaUrl, disabled: !assetUrlDraft.trim() || !onAddAsset, children: "Add" })] }), _jsx("input", { ref: mediaInputRef, className: "fsp-visually-hidden", type: "file", accept: "image/*", onChange: (event) => {
+                                            const file = event.target.files?.[0];
+                                            event.target.value = '';
+                                            if (!file || !onAddAsset)
+                                                return;
+                                            const reader = new FileReader();
+                                            reader.onload = () => { if (typeof reader.result === 'string')
+                                                onAddAsset(reader.result, file.name.replace(/\.[^.]+$/, '')); };
+                                            reader.readAsDataURL(file);
+                                        } }), assets.length > 0 ? (_jsx("div", { className: "fsp-media-grid", children: assets.map((asset) => (_jsxs("article", { className: "fsp-media-card", children: [_jsxs("button", { type: "button", className: "fsp-media-card__use", onClick: () => onApplyAsset?.(asset.url), title: selection ? `Apply ${asset.name} to ${selection.label}` : `Insert ${asset.name}`, children: [_jsx("img", { src: asset.url, alt: "", loading: "lazy" }), _jsx("span", { children: asset.name })] }), _jsx("button", { type: "button", className: "fsp-media-card__remove", onClick: () => onRemoveAsset?.(asset.id), "aria-label": `Remove ${asset.name}`, children: _jsx(Trash2, { size: 11 }) })] }, asset.id))) })) : _jsx("p", { className: "fsp-shelf-empty", children: "No images yet." })] })] }), _jsxs("details", { className: "fsp-disclosure", children: [_jsxs("summary", { children: ["Placement & frames ", _jsx("small", { children: placementLabel(effectivePlacement) })] }), frameControls, _jsxs("button", { type: "button", className: "fsp-blank-page-btn", onClick: () => addBlankPage(true), children: [_jsx(Frame, { size: 15 }), "Insert blank white page"] })] })] }))] }));
 }
 //# sourceMappingURL=FroamSitePlanner.js.map

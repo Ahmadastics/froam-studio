@@ -34,3 +34,7 @@
 .froam-workspace__ask:hover,.froam-workspace__ask:focus-visible,.froam-workspace__commands:hover,.froam-workspace__commands:focus-visible{background:var(--fs-bg-active);color:var(--fs-text-primary)!important}
 @media(max-width:1100px){.froam-workspace--simple .froam-workspace__status{display:none}.froam-workspace--simple{grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"project rail ask commands"}.froam-workspace__commands span{display:none}.froam-workspace__commands{width:28px;padding:0;justify-content:center}}
 @media(max-width:768px){.froam-workspace--simple{display:none}}
+
+/* Quick Edit lives in the toolbar at every width (icon-only on phones); one
+   button, not two side by side. */
+.froam-workspace__ask{display:none}

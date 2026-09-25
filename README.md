@@ -113,9 +113,10 @@ the editor to verify the result.
 | --- | --- |
 | Unsaved editor preview | Browser DOM and local browser state only; it is not a source-code rewrite |
 | Color, typography, spacing, border, radius, shadow, layout, or supported state style | A rule in `froam.generated.css`, scoped by route and viewport |
-| Text replacement | Data in `froam.design.json`, applied in production by `froam.runtime.js` |
+| Text replacement | Written into your source file when the original words appear there exactly once (HTML, JSX/TSX, Vue, Svelte, Astro, translation JSON); otherwise data in `froam.design.json`, applied by `froam.runtime.js` |
 | Image replacement | Data in `froam.design.json`, applied in production by `froam.runtime.js` |
-| Inserted block | Serialized block data applied by `froam.runtime.js` |
+| Inserted block (Library pattern) | Serialized block, styled with the site's own theme variables, applied by `froam.runtime.js` |
+| `::before` / `::after` | A pseudo-element rule in `froam.generated.css` |
 | Save to Repo | Updates the design, generated CSS, and runtime; the editor may also save `froam.project.json` |
 
 Generated CSS is an override layer and uses `!important`. The runtime is
@@ -130,7 +131,7 @@ production artifacts, and is not required by a plain static production page.
 | `froam dev` or shorthand `froam <url-or-dir>` | Creates the Froam workspace; does not rewrite the host application's existing components or stylesheets |
 | `froam init` on static HTML | Changes `index.html` only to add the generated CSS/runtime tags and creates `index.html.bak` |
 | `froam init` on Vite | Creates Froam files and may edit `vite.config.*`, with a `.bak` file |
-| Visual editing and Save to Repo | Writes Froam-owned design/output files; does not translate edits back into original component source |
+| Visual editing and Save to Repo | Writes Froam-owned design/output files, and writes copy edits into the source file that holds the original words (only when they appear exactly once as a whole string; never in comments, `node_modules`, builds or dotfolders). Turn off with `--no-write-source` or `"writeSource": false` in `froam.config.json` |
 
 Review every `init` diff before committing it.
 
@@ -258,7 +259,10 @@ Local deterministic Quick Edit does not require remote AI.
   table foster-parenting and other HTML5 recovery rules are not implemented.
 - Previewing a production URL cannot change or deploy that website. Shipping
   requires a project or integration you control.
-- Generated CSS is an override layer, not a source-level refactor.
+- Generated CSS is an override layer, not a source-level refactor. Source
+  write-back covers copy (text) today; styles stay in `froam.generated.css`.
+- Content inside shadow roots (web components) and inside iframes is not
+  editable yet. Portals mounted on `<body>` beside `#root` are.
 - Immediate undo works in the active editor session. In this audit, undo was
   unavailable after Save to Repo followed by a full editor reload. Use version
   control and `index.html.bak` as the reliable recovery path.
@@ -280,6 +284,8 @@ froam dev                 start the universal development bridge
     --port <n>            bridge port (otherwise the first free port from 4600)
     --open                open the browser
     --host [addr]         expose on a trusted local network
+    --allow-origin <o>    let a custom dev domain (e.g. http://app.test) use the bridge
+    --no-write-source     keep copy edits as Froam edits instead of writing them to source
 froam build               rebuild CSS/runtime from the design file
 froam status              summarize the design and generated files
 froam check               report edits that no longer match the page
@@ -293,6 +299,10 @@ froam version             print the installed package version
 
 All commands accept `--dir <path>` for a custom Froam directory. Node 18 or
 newer is required.
+
+The bridge only answers to this machine: CORS is granted to local origins
+(and `--allow-origin`), writes from any other website are refused, the `Host`
+header must be local (DNS rebinding), and `--serve` never serves dotfiles.
 
 ## License
 

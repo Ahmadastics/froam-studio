@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import {
   ArrowDown,
   ArrowUp,
@@ -22,8 +22,11 @@ import {
 import {
   FROAM_CATEGORIES,
   FROAM_COMPONENTS,
+  createFroamLibraryComponent,
   type FroamComponentCategory,
 } from './FroamComponentCatalog'
+import { DEFAULT_SITE_THEME, type SiteTheme } from './library/site-theme'
+import { FROAM_PATTERN_MIME } from './library/pattern-drop'
 import {
   FROAM_FRAME_PRESETS,
   createFroamSection,
@@ -93,6 +96,8 @@ type Props = {
   onBuildPage: (sections: FroamWireframeSection[]) => void
   onPlanChange: (pages: SitePage[]) => void
   onToast: (message: string) => void
+  /** Reads the live site's look, so patterns (and their previews) match it. */
+  sampleTheme?: () => SiteTheme
 }
 
 const DEFAULT_HOME_SECTIONS = [
@@ -457,6 +462,70 @@ function componentById(id: string) {
   return FROAM_COMPONENTS.find((item) => item.id === id)
 }
 
+const PREVIEW_WIDTH = 1200
+
+/**
+ * The pattern itself, drawn in the site's theme and scaled to the card: what
+ * you see is what Insert puts on the page. Built only once the card scrolls
+ * near view, and inert — a picture, never a second live copy.
+ */
+function LivePatternPreview({ componentId, theme }: { componentId: string; theme: SiteTheme }) {
+  const frameRef = useRef<HTMLDivElement | null>(null)
+  const stageRef = useRef<HTMLDivElement | null>(null)
+  const [near, setNear] = useState(false)
+
+  useEffect(() => {
+    const frame = frameRef.current
+    if (!frame) return
+    if (typeof IntersectionObserver === 'undefined') { setNear(true); return }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) { setNear(true); observer.disconnect() }
+    }, { rootMargin: '240px' })
+    observer.observe(frame)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const frame = frameRef.current
+    const stage = stageRef.current
+    if (!near || !frame || !stage) return
+    const pattern = createFroamLibraryComponent(componentId, theme)
+    if (!pattern) return
+    for (const element of [pattern, ...Array.from(pattern.querySelectorAll('*'))]) {
+      for (const attribute of Array.from(element.attributes)) {
+        if (attribute.name.startsWith('data-froam')) element.removeAttribute(attribute.name)
+      }
+    }
+    pattern.setAttribute('inert', '')
+    stage.replaceChildren(pattern)
+    const fit = () => {
+      const scale = frame.clientWidth / PREVIEW_WIDTH
+      stage.style.transform = `scale(${scale})`
+      frame.style.height = `${Math.round(Math.min(pattern.offsetHeight * scale, frame.clientWidth * 0.72))}px`
+    }
+    fit()
+    if (typeof ResizeObserver === 'undefined') return
+    const resize = new ResizeObserver(fit)
+    resize.observe(frame)
+    return () => resize.disconnect()
+  }, [near, componentId, theme])
+
+  return (
+    <div ref={frameRef} className="fsp-live-preview" aria-hidden="true">
+      <div ref={stageRef} className="fsp-live-preview__stage" style={{ width: PREVIEW_WIDTH }} />
+    </div>
+  )
+}
+
+function fontLabel(fontFamily: string) {
+  const first = fontFamily.split(',')[0]?.trim().replace(/^["']|["']$/g, '')
+  return !first || first === 'inherit' ? 'Site fonts' : first
+}
+
+function placementLabel(placement: FroamInsertPlacement) {
+  return { 'new-frame': 'On a new white page', start: 'At the page start', end: 'At the page end', before: 'Before the selection', after: 'After the selection', inside: 'Inside the selection' }[placement]
+}
+
 function ComponentPreview({ componentId }: { componentId: string }) {
   const definition = componentById(componentId)
   const rows = definition?.anatomy ?? ['component']
@@ -473,7 +542,7 @@ function ComponentPreview({ componentId }: { componentId: string }) {
   )
 }
 
-export default function FroamSitePlanner({ projectKey, routeKey, projectName, branchName, requestedTab, selection, archiveItems, assets = [], onRenameProject, onAddAsset, onApplyAsset, onRemoveAsset, onTabChange, onInsertComponent, onInsertBlankFrame, onInsertBlock, onInsertArchived, onBuildPage, onPlanChange, onToast }: Props) {
+export default function FroamSitePlanner({ projectKey, routeKey, projectName, branchName, requestedTab, selection, archiveItems, assets = [], onRenameProject, onAddAsset, onApplyAsset, onRemoveAsset, onTabChange, onInsertComponent, onInsertBlankFrame, onInsertBlock, onInsertArchived, onBuildPage, onPlanChange, onToast, sampleTheme }: Props) {
   const [plan, setPlan] = useState<SitePlan>(() => loadPlan(projectKey, routeKey))
   const [blueprintDraft, setBlueprintDraft] = useState<BlueprintDraft>(() => loadBlueprintDraft(projectKey, routeKey))
   const [planningPrompt, setPlanningPrompt] = useState('')
@@ -484,7 +553,10 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<(typeof FROAM_CATEGORIES)[number]>('All')
   const [favoritesOnly, setFavoritesOnly] = useState(false)
-  const [placement, setPlacement] = useState<FroamInsertPlacement>('new-frame')
+  // In the page's flow: after the selected section, or at the end when nothing is selected.
+  const [placement, setPlacement] = useState<FroamInsertPlacement>('after')
+  const effectivePlacement: FroamInsertPlacement = !selection && (placement === 'before' || placement === 'after' || placement === 'inside') ? 'end' : placement
+  const [siteTheme, setSiteTheme] = useState<SiteTheme>(DEFAULT_SITE_THEME)
   const [insertFrame, setInsertFrame] = useState<FroamFrameSpec>({ ...FROAM_FRAME_PRESETS.responsive })
 
   useEffect(() => {
@@ -493,6 +565,11 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
   }, [projectKey, routeKey])
 
   useEffect(() => { if (requestedTab) setTab(requestedTab) }, [requestedTab])
+  // Read the site's look each time the Library opens (the page may have changed).
+  useEffect(() => {
+    if (tab === 'library' && sampleTheme) setSiteTheme(sampleTheme())
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
   useEffect(() => { setProjectNameDraft(projectName) }, [projectName])
 
   useEffect(() => {
@@ -581,14 +658,26 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
   function addSection(componentId: string, insertNow = false) {
     const section = createFroamSection(componentId, componentName(componentId), insertFrame)
     updatePage(selectedPage.id, (page) => ({ ...page, sections: [...page.sections, section], status: 'draft' }))
-    if (insertNow) onInsertComponent(componentId, placement, insertFrame)
-    onToast(insertNow ? 'Added to wireframe and canvas' : 'Added to wireframe')
+    if (insertNow) onInsertComponent(componentId, effectivePlacement, insertFrame)
+    else onToast(`${componentName(componentId)} added to the page plan`)
+  }
+
+  function startPatternDrag(event: DragEvent<HTMLElement>, componentId: string, title: string) {
+    event.dataTransfer.setData(FROAM_PATTERN_MIME, componentId)
+    event.dataTransfer.setData('text/plain', title)
+    event.dataTransfer.effectAllowed = 'copy'
+    const preview = event.currentTarget.querySelector<HTMLElement>('.fsp-live-preview')
+    if (preview) event.dataTransfer.setDragImage(preview, 24, 24)
+  }
+
+  function resampleTheme() {
+    if (sampleTheme) setSiteTheme(sampleTheme())
   }
 
   function addBlankPage(insertNow = false) {
     const section = createFroamSection(null, 'Blank white page', insertFrame)
     updatePage(selectedPage.id, (page) => ({ ...page, sections: [...page.sections, section], status: 'draft' }))
-    if (insertNow) onInsertBlankFrame(placement, insertFrame)
+    if (insertNow) onInsertBlankFrame(effectivePlacement, insertFrame)
     onToast(insertNow ? 'Blank page added to wireframe and canvas' : 'Blank page added to wireframe')
   }
 
@@ -852,7 +941,7 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
           {selection?.nodeId && <small title={selection.nodeId}>stable ID</small>}
         </div>
       </header>
-      <div className="fsp-tabs" role="tablist" aria-label="Froam planning tools">
+      {tab !== 'library' && <div className="fsp-tabs" role="tablist" aria-label="Froam planning tools">
         <button type="button" className={tab === 'blueprint' ? 'is-active' : ''} onClick={() => selectTab('blueprint')}>
           <Frame size={14} /> Draft
         </button>
@@ -862,10 +951,7 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
         <button type="button" className={tab === 'wireframe' ? 'is-active' : ''} onClick={() => selectTab('wireframe')}>
           <LayoutTemplate size={14} /> Compose
         </button>
-        <button type="button" className={tab === 'library' ? 'is-active' : ''} onClick={() => selectTab('library')}>
-          <Grid2X2 size={14} /> Library
-        </button>
-      </div>
+      </div>}
 
       {tab === 'blueprint' && (
         <div className="fsp-pane">
@@ -1141,46 +1227,118 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
       )}
 
       {tab === 'library' && (
-        <div className="fsp-pane">
-          <section className="fsp-media-shelf" aria-label="Project media">
-            <div className="fsp-shelf-heading">
-              <span><strong>Project media</strong><small>{assets.length} reusable image{assets.length === 1 ? '' : 's'}</small></span>
-              <button type="button" onClick={() => mediaInputRef.current?.click()} disabled={!onAddAsset}><ImagePlus size={12}/> Upload</button>
+        <div className="fsp-pane fsp-library">
+          <div className="fsp-library__head">
+            <div className="fsp-library-tools">
+              <label className="fsp-search">
+                <Search size={14} />
+                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Search ${FROAM_COMPONENTS.length} patterns…`} aria-label="Search patterns" />
+              </label>
+              <button
+                type="button"
+                className={`fsp-icon-btn ${favoritesOnly ? 'is-active' : ''}`}
+                onClick={() => setFavoritesOnly((value) => !value)}
+                title="Show favorites"
+                aria-pressed={favoritesOnly}
+              >
+                <Heart size={14} fill={favoritesOnly ? 'currentColor' : 'none'} />
+              </button>
             </div>
-            <div className="fsp-media-url">
-              <input value={assetUrlDraft} onChange={(event) => setAssetUrlDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') addMediaUrl() }} placeholder="Paste an image URL…" aria-label="Image URL" />
-              <button type="button" onClick={addMediaUrl} disabled={!assetUrlDraft.trim() || !onAddAsset}>Add</button>
+            <div className="fsp-category-row" role="tablist" aria-label="Pattern categories">
+              {FROAM_CATEGORIES.map((item) => (
+                <button
+                  type="button"
+                  key={item}
+                  role="tab"
+                  aria-selected={category === item}
+                  className={category === item ? 'is-active' : ''}
+                  onClick={() => setCategory(item as 'All' | FroamComponentCategory)}
+                >
+                  {item}
+                </button>
+              ))}
             </div>
-            <input
-              ref={mediaInputRef}
-              className="fsp-visually-hidden"
-              type="file"
-              accept="image/*"
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                event.target.value = ''
-                if (!file || !onAddAsset) return
-                const reader = new FileReader()
-                reader.onload = () => { if (typeof reader.result === 'string') onAddAsset(reader.result, file.name.replace(/\.[^.]+$/, '')) }
-                reader.readAsDataURL(file)
-              }}
-            />
-            {assets.length > 0 ? (
-              <div className="fsp-media-grid">
-                {assets.map((asset) => (
-                  <article key={asset.id} className="fsp-media-card">
-                    <button type="button" className="fsp-media-card__use" onClick={() => onApplyAsset?.(asset.url)} title={selection ? `Apply ${asset.name} to ${selection.label}` : `Insert ${asset.name}`}>
-                      <img src={asset.url} alt="" loading="lazy" />
-                      <span>{asset.name}</span>
-                    </button>
-                    <button type="button" className="fsp-media-card__remove" onClick={() => onRemoveAsset?.(asset.id)} aria-label={`Remove ${asset.name}`}><Trash2 size={11}/></button>
-                  </article>
+          </div>
+
+          <div className="fsp-theme-chip" title="Patterns are drawn with your site's own fonts, colours and corners">
+            <span className="fsp-theme-chip__swatches" aria-hidden="true">
+              <i style={{ background: siteTheme.accent }} />
+              <i style={{ background: siteTheme.ink }} />
+              <i style={{ background: siteTheme.paper }} />
+            </span>
+            <span>
+              Styled like <strong>{siteTheme.brandName === DEFAULT_SITE_THEME.brandName ? 'your site' : siteTheme.brandName}</strong>
+              <small>{fontLabel(siteTheme.fontHeading)} · {siteTheme.radius} corners</small>
+            </span>
+            <button type="button" className="fsp-icon-btn" onClick={resampleTheme} aria-label="Read the site's style again" title="Read the site's style again">
+              <RefreshCw size={12} />
+            </button>
+          </div>
+
+          <p className="fsp-library__hint">
+            Drag a pattern onto the page, or press <strong>Insert</strong> to add it {selection ? <>after <strong>{selection.label}</strong></> : 'at the end of the page'}.
+          </p>
+
+          {archiveItems.length > 0 && (
+            <section className="fsp-archive-shelf" aria-label="Saved project artifacts">
+              <div className="fsp-library-count"><strong>Saved in this project</strong><span>{archiveItems.length} reusable</span></div>
+              <div className="fsp-archive-shelf__items">
+                {archiveItems.slice(0, 8).map((item) => (
+                  <button type="button" key={item.id} disabled={!item.html} onClick={() => item.html && onInsertArchived(item.html, effectivePlacement)}>
+                    <span>{item.name}</span><small>{item.html ? 'Insert archive' : 'DNA only'}</small>
+                  </button>
                 ))}
               </div>
-            ) : <p className="fsp-shelf-empty">Upload once, then reuse the image anywhere on the live site.</p>}
-          </section>
+            </section>
+          )}
+
+          <div className="fsp-library-count">
+            <span>{filteredComponents.length} pattern{filteredComponents.length === 1 ? '' : 's'}</span>
+            <span>Page: {selectedPage.name}</span>
+          </div>
+
+          <div className="fsp-pattern-list">
+            {filteredComponents.map((component) => {
+              const favorite = plan.favorites.includes(component.id)
+              return (
+                <article
+                  className="fsp-pattern"
+                  key={component.id}
+                  draggable
+                  onDragStart={(event) => startPatternDrag(event, component.id, component.title)}
+                  aria-label={`${component.title} — ${component.summary}`}
+                >
+                  <button type="button" className="fsp-pattern__preview" onClick={() => addSection(component.id, true)} title={`Insert ${component.title}`}>
+                    <LivePatternPreview componentId={component.id} theme={siteTheme} />
+                  </button>
+                  <div className="fsp-pattern__meta">
+                    <div className="fsp-pattern__text">
+                      <span>{component.category}</span>
+                      <strong>{component.title}</strong>
+                      <p>{component.summary}</p>
+                    </div>
+                    <div className="fsp-pattern__actions">
+                      <button
+                        type="button"
+                        className={`fsp-favorite ${favorite ? 'is-active' : ''}`}
+                        onClick={() => toggleFavorite(component.id)}
+                        title={favorite ? 'Remove favorite' : 'Save favorite'}
+                        aria-pressed={favorite}
+                      >
+                        <Heart size={13} fill={favorite ? 'currentColor' : 'none'} />
+                      </button>
+                      <button type="button" onClick={() => addSection(component.id)} title="Add to the page plan (Compose)">Plan</button>
+                      <button type="button" className="is-primary" onClick={() => addSection(component.id, true)}>Insert</button>
+                    </div>
+                  </div>
+                </article>
+              )
+            })}
+            {filteredComponents.length === 0 && <p className="fsp-shelf-empty">No pattern matches “{search}”.</p>}
+          </div>
+
           <section className="fsp-quick-add" aria-label="Quick building blocks">
-            <div><span>Quick add</span><small>{selection ? `to ${selection.label}` : 'to page end'}</small></div>
+            <div><span>Blocks</span><small>{selection ? `into ${selection.label}` : 'at the page end'}</small></div>
             <div className="fsp-quick-add__grid">
               {(['section', 'container', 'grid', 'text', 'image', 'button'] as const).map((kind) => (
                 <button type="button" key={kind} onClick={() => onInsertBlock(kind, selection ? 'inside' : 'after')}>
@@ -1189,90 +1347,56 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
               ))}
             </div>
           </section>
-          {frameControls}
-          <button type="button" className="fsp-blank-page-btn" onClick={() => addBlankPage(true)}>
-            <Frame size={15} />
-            Insert blank white page
-          </button>
-          <div className="fsp-library-tools">
-            <label className="fsp-search">
-              <Search size={14} />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search 36 components..." />
-            </label>
-            <button
-              type="button"
-              className={`fsp-icon-btn ${favoritesOnly ? 'is-active' : ''}`}
-              onClick={() => setFavoritesOnly((value) => !value)}
-              title="Show favorites"
-            >
-              <Heart size={14} fill={favoritesOnly ? 'currentColor' : 'none'} />
-            </button>
-          </div>
 
-          {archiveItems.length > 0 && (
-            <section className="fsp-archive-shelf" aria-label="Saved project artifacts">
-              <div className="fsp-library-count"><strong>Saved in this project</strong><span>{archiveItems.length} reusable</span></div>
-              <div className="fsp-archive-shelf__items">
-                {archiveItems.slice(0, 8).map((item) => (
-                  <button type="button" key={item.id} disabled={!item.html} onClick={() => item.html && onInsertArchived(item.html, placement)}>
-                    <span>{item.name}</span><small>{item.html ? 'Insert archive' : 'DNA only'}</small>
-                  </button>
-                ))}
+          <details className="fsp-disclosure">
+            <summary>Project media <small>{assets.length} image{assets.length === 1 ? '' : 's'}</small></summary>
+            <section className="fsp-media-shelf" aria-label="Project media">
+              <div className="fsp-shelf-heading">
+                <span><strong>Upload once, reuse anywhere</strong></span>
+                <button type="button" onClick={() => mediaInputRef.current?.click()} disabled={!onAddAsset}><ImagePlus size={12}/> Upload</button>
               </div>
+              <div className="fsp-media-url">
+                <input value={assetUrlDraft} onChange={(event) => setAssetUrlDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') addMediaUrl() }} placeholder="Paste an image URL…" aria-label="Image URL" />
+                <button type="button" onClick={addMediaUrl} disabled={!assetUrlDraft.trim() || !onAddAsset}>Add</button>
+              </div>
+              <input
+                ref={mediaInputRef}
+                className="fsp-visually-hidden"
+                type="file"
+                accept="image/*"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  event.target.value = ''
+                  if (!file || !onAddAsset) return
+                  const reader = new FileReader()
+                  reader.onload = () => { if (typeof reader.result === 'string') onAddAsset(reader.result, file.name.replace(/\.[^.]+$/, '')) }
+                  reader.readAsDataURL(file)
+                }}
+              />
+              {assets.length > 0 ? (
+                <div className="fsp-media-grid">
+                  {assets.map((asset) => (
+                    <article key={asset.id} className="fsp-media-card">
+                      <button type="button" className="fsp-media-card__use" onClick={() => onApplyAsset?.(asset.url)} title={selection ? `Apply ${asset.name} to ${selection.label}` : `Insert ${asset.name}`}>
+                        <img src={asset.url} alt="" loading="lazy" />
+                        <span>{asset.name}</span>
+                      </button>
+                      <button type="button" className="fsp-media-card__remove" onClick={() => onRemoveAsset?.(asset.id)} aria-label={`Remove ${asset.name}`}><Trash2 size={11}/></button>
+                    </article>
+                  ))}
+                </div>
+              ) : <p className="fsp-shelf-empty">No images yet.</p>}
             </section>
-          )}
+          </details>
 
-          <div className="fsp-category-row">
-            {FROAM_CATEGORIES.map((item) => (
-              <button
-                type="button"
-                key={item}
-                className={category === item ? 'is-active' : ''}
-                onClick={() => setCategory(item as 'All' | FroamComponentCategory)}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-
-          <div className="fsp-library-count">
-            <span>{filteredComponents.length} patterns</span>
-            <span>Adding to {selectedPage.name}</span>
-          </div>
-
-          <div className="fsp-library-grid">
-            {filteredComponents.map((component) => {
-              const favorite = plan.favorites.includes(component.id)
-              return (
-                <article className="fsp-library-card" key={component.id}>
-                  <div className="fsp-library-card__preview">
-                    <ComponentPreview componentId={component.id} />
-                    <button
-                      type="button"
-                      className={`fsp-favorite ${favorite ? 'is-active' : ''}`}
-                      onClick={() => toggleFavorite(component.id)}
-                      title={favorite ? 'Remove favorite' : 'Save favorite'}
-                    >
-                      <Heart size={13} fill={favorite ? 'currentColor' : 'none'} />
-                    </button>
-                  </div>
-                  <div className="fsp-library-card__body">
-                    <span>{component.category}</span>
-                    <strong>{component.title}</strong>
-                    <p>{component.summary}</p>
-                  </div>
-                  <div className="fsp-library-card__actions">
-                    <button type="button" onClick={() => addSection(component.id)}>
-                      <Plus size={12} /> Wireframe
-                    </button>
-                    <button type="button" className="is-primary" onClick={() => addSection(component.id, true)}>
-                      Insert
-                    </button>
-                  </div>
-                </article>
-              )
-            })}
-          </div>
+          <details className="fsp-disclosure">
+            <summary>Placement &amp; frames <small>{placementLabel(effectivePlacement)}</small></summary>
+            {frameControls}
+            <button type="button" className="fsp-blank-page-btn" onClick={() => addBlankPage(true)}>
+              <Frame size={15} />
+              Insert blank white page
+            </button>
+          </details>
         </div>
       )}
     </div>

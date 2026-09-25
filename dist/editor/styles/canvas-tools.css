@@ -1395,3 +1395,39 @@ body.froam-drag-active * {
     height: 38px;
   }
 }
+
+/* ── Library drop line: where a dragged pattern will land ── */
+#froam-drop-indicator {
+  position: fixed;
+  z-index: 2147483000;
+  height: 0;
+  pointer-events: none;
+  border-top: 3px solid var(--fs-accent-control, #10b981);
+  filter: drop-shadow(0 0 6px rgba(16, 185, 129, .55));
+  transition: top 90ms ease, left 90ms ease, width 90ms ease;
+}
+#froam-drop-indicator::before,
+#froam-drop-indicator::after {
+  content: "";
+  position: absolute;
+  top: -7px;
+  width: 11px;
+  height: 11px;
+  border: 3px solid var(--fs-accent-control, #10b981);
+  border-radius: 50%;
+  background: #fff;
+}
+#froam-drop-indicator::before { left: -6px; }
+#froam-drop-indicator::after { right: -6px; }
+#froam-drop-indicator > span {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--fs-accent-control, #10b981);
+  color: #06110d;
+  font: 700 11px/1.4 system-ui, sans-serif;
+  white-space: nowrap;
+}

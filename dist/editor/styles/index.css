@@ -4,6 +4,7 @@
    mobile.css is last on purpose: phone-first overrides win.
    =============================================================== */
 @import './tokens.css';
+@import './isolation.css';
 @import './trigger-button.css';
 @import './panel.css';
 @import './controls.css';

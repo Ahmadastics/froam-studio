@@ -10,7 +10,7 @@ import { resolveFroamProjectKey } from '../project/storage-scope'
 
 const GlobalChefEditor = lazy(() => import('./GlobalChefEditor'))
 
-export type FroamGateProps = Pick<FroamStudioConfig, 'apiBaseUrl' | 'authProvider' | 'fetch' | 'rootSelector'> & {
+export type FroamGateProps = Pick<FroamStudioConfig, 'apiBaseUrl' | 'authProvider' | 'fetch' | 'rootSelector' | 'rootScope'> & {
   enabled?: boolean
   initialOpen?: boolean
   routeKey?: string
@@ -76,6 +76,7 @@ export default function FroamGate({
   lockedFallback = null,
   ownerEmails,
   rootSelector,
+  rootScope,
   routeKey: explicitRouteKey,
   projectKey: explicitProjectKey,
   allowLocalhost = true,
@@ -98,8 +99,9 @@ export default function FroamGate({
       fetch,
       ownerEmails: resolvedOwnerEmails,
       rootSelector,
+      rootScope,
     })
-  }, [apiBaseUrl, authProvider, enabled, fetch, resolvedOwnerEmails, rootSelector])
+  }, [apiBaseUrl, authProvider, enabled, fetch, resolvedOwnerEmails, rootSelector, rootScope])
 
   useEffect(() => {
     let cancelled = false

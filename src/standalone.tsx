@@ -47,22 +47,88 @@ function resolveScriptConfig() {
   }
 }
 
-function markFroamRoot() {
-  if (document.querySelector('[data-froam-root]') || document.getElementById('root') || document.getElementById('__next')) {
+type RootScope = 'page' | 'auto'
+
+function designHasDrafts(design: FroamLocalDesign | null | undefined) {
+  const routes = (design as { routes?: Record<string, Record<string, Record<string, unknown> | undefined>> } | null)?.routes ?? {}
+  return Object.values(routes).some((viewports) => Object.values(viewports ?? {}).some((store) => store && Object.keys(store).length > 0))
+}
+
+/**
+ * Which element paths are relative to (lib/codegen.mjs designRootScope).
+ * A design that already has edits keeps the scope it was made in — its
+ * paths depend on it. A fresh design on a plain page edits the whole page:
+ * 'auto' would pick <main> and leave the header and footer unreachable.
+ * App roots (#root, #__next) keep their own root.
+ */
+function chooseRootScope(design: FroamLocalDesign | null | undefined): RootScope {
+  if ((design as { rootScope?: string } | null)?.rootScope === 'page') return 'page'
+  if (designHasDrafts(design)) return 'auto'
+  if (document.querySelector('[data-froam-root], #root, #__next')) return 'auto'
+  return 'page'
+}
+
+function isFroamOwned(el: Element, wrapper: Element) {
+  return el === wrapper
+    || el.id === HOST_ID
+    || el.id.startsWith('froam-')
+    || el.hasAttribute('data-chef-editor-root')
+    || ['SCRIPT', 'STYLE', 'LINK', 'TEMPLATE', 'NOSCRIPT'].includes(el.tagName)
+}
+
+/**
+ * A node React owns. React removes a portal's children from the container it
+ * rendered them into (`createPortal(…, document.body)` → `body.removeChild`),
+ * which throws once the node has been moved — so those are never adopted.
+ */
+function isReactManaged(node: Node) {
+  return Object.keys(node).some((key) => key.startsWith('__reactFiber$') || key.startsWith('__reactContainer$') || key === '_reactRootContainer')
+}
+
+/**
+ * The editor frames and re-parents the root for device simulation, which
+ * <body> itself cannot survive — so the page content is wrapped in a root
+ * div that mirrors <body> (same children, same order: the paths match what
+ * the production runtime resolves from <body>). `data-froam-root="page"`
+ * says so: nothing outside it is page content (see isInPageScope).
+ */
+function wrapBodyAsRoot(adoptLateNodes: boolean) {
+  const wrapper = document.createElement('div')
+  wrapper.setAttribute('data-froam-root', 'page')
+  // Froam's own host is already in <body> by now; it stays out of the page.
+  for (const node of Array.from(document.body.childNodes)) {
+    if (node instanceof Element && isFroamOwned(node, wrapper)) continue
+    wrapper.appendChild(node)
+  }
+  document.body.prepend(wrapper)
+  if (!adoptLateNodes) return
+  // Modals, banners and portals a page appends to <body> after load are part
+  // of the page: keep them inside the root so they're editable too (and in
+  // the same order the production runtime sees them).
+  new MutationObserver((records) => {
+    for (const record of records) {
+      record.addedNodes.forEach((node) => {
+        if (node instanceof HTMLElement && node.parentElement === document.body && !isFroamOwned(node, wrapper) && !isReactManaged(node)) {
+          wrapper.appendChild(node)
+        }
+      })
+    }
+  }).observe(document.body, { childList: true })
+}
+
+function markFroamRoot(scope: RootScope) {
+  if (document.querySelector('[data-froam-root]')) return
+  if (scope === 'page') {
+    wrapBodyAsRoot(true)
     return
   }
+  if (document.getElementById('root') || document.getElementById('__next')) return
   const main = document.querySelector<HTMLElement>('main')
   if (main) {
     main.setAttribute('data-froam-root', '')
     return
   }
-  // Plain page with no <main>/#root: the editor frames and re-parents the
-  // root for device simulation, which <body> itself cannot survive — so
-  // wrap the page content in a root div instead of tagging <body>.
-  const wrapper = document.createElement('div')
-  wrapper.setAttribute('data-froam-root', '')
-  while (document.body.firstChild) wrapper.appendChild(document.body.firstChild)
-  document.body.appendChild(wrapper)
+  wrapBodyAsRoot(false)
 }
 
 function injectEditorStyles(origin: string) {
@@ -78,6 +144,7 @@ function StandaloneApp({ origin, initialOpen, initialProjectKey }: { origin: str
   const [design, setDesign] = useState<FroamLocalDesign | null>(null)
   const [projectKey, setProjectKey] = useState<string | null>(initialProjectKey)
   const [loaded, setLoaded] = useState(false)
+  const [rootScope, setRootScope] = useState<RootScope>('auto')
 
   useEffect(() => {
     let cancelled = false
@@ -87,6 +154,9 @@ function StandaloneApp({ origin, initialOpen, initialProjectKey }: { origin: str
     ])
       .then(([designData, configData]: [{ success?: boolean; design?: FroamLocalDesign } | null, BridgeConfig | null]) => {
         if (cancelled) return
+        const scope = chooseRootScope(designData?.success ? designData.design : null)
+        markFroamRoot(scope)
+        setRootScope(scope)
         if (designData?.success && designData.design) setDesign(designData.design)
         if (configData?.success && configData.projectKey) setProjectKey(configData.projectKey)
       })
@@ -94,7 +164,14 @@ function StandaloneApp({ origin, initialOpen, initialProjectKey }: { origin: str
         /* bridge offline — editor still opens, cloud/local drafts only */
       })
       .finally(() => {
-        if (!cancelled) setLoaded(true)
+        if (cancelled) return
+        // Bridge offline: nothing saved to protect, so mark as a fresh design would.
+        if (!document.querySelector('[data-froam-root]')) {
+          const scope = chooseRootScope(null)
+          markFroamRoot(scope)
+          setRootScope(scope)
+        }
+        setLoaded(true)
       })
     return () => {
       cancelled = true
@@ -108,7 +185,7 @@ function StandaloneApp({ origin, initialOpen, initialProjectKey }: { origin: str
       {/* apiBaseUrl = bridge origin so publish + published-designs hit the
           bridge's /api/froam/published even in script-tag mode. */}
       <FroamRuntime apiBaseUrl={origin} design={design} routes="*" />
-      <FroamGate apiBaseUrl={origin} enabled initialOpen={initialOpen} localRoutes="*" projectKey={projectKey ?? origin} />
+      <FroamGate apiBaseUrl={origin} enabled initialOpen={initialOpen} localRoutes="*" projectKey={projectKey ?? origin} rootScope={rootScope} />
     </StrictMode>
   )
 }
@@ -122,7 +199,8 @@ function boot() {
   win.__FROAM_BRIDGE_ORIGIN__ = origin
 
   const mount = () => {
-    markFroamRoot()
+    // The root is marked once the saved design is known (StandaloneApp): its
+    // scope decides which element paths are relative to.
     injectEditorStyles(origin)
     let host = document.getElementById(HOST_ID)
     if (!host) {

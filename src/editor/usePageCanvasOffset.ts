@@ -1,17 +1,22 @@
 import { useEffect, useRef } from 'react'
+import { isInPageScope } from '../collab/paths'
 
 /**
  * Keeps the page clear of Froam's own chrome while editing.
  *
- * The studio toolbar is a fixed layer over the page. Without this, the top of
- * every site — usually its header, logo and navigation — sits permanently
- * underneath it: visible to nobody, clickable by nobody. So while the chrome
- * is showing, the page is moved into the space that's left:
+ * The studio toolbar and the side panels are fixed layers over the page.
+ * Without this, the top of every site — usually its header, logo and
+ * navigation — sits permanently under the toolbar, and whatever you're
+ * editing slides under a panel the moment you open one. So while the chrome
+ * is showing, the page is moved into the canvas: the space the editor's
+ * layout leaves between toolbar and panels (`.froam-figma-layout__canvas`).
  *
- * - normal flow: padding on <html> (never part of a saved path);
+ * - normal flow: padding on <html> (never part of a saved path) — the page
+ *   reflows to the canvas width, the way it would in a narrower window;
  * - sticky elements: their stick point moves down by the chrome height;
- * - fixed elements overlapping the chrome: nudged down visually (`translate`,
- *   so their size and anchoring are untouched).
+ * - fixed elements under the chrome or a panel: nudged into the canvas
+ *   (`translate`, so their size and anchoring are untouched); a full-width
+ *   bar is narrowed to the canvas instead.
  *
  * Nothing is written to inline styles — readLiveElementDraft() saves inline
  * styles as design edits. Rules live in one editor-owned <style>, keyed by a
@@ -20,6 +25,7 @@ import { useEffect, useRef } from 'react'
 const STYLE_ID = 'froam-canvas-offset'
 const PIN_ATTR = 'data-froam-pin'
 const CHROME_SELECTOR = '#froam-editor-portal .froam-chrome'
+const CANVAS_SELECTOR = '#froam-editor-portal .froam-figma-layout__canvas'
 
 export function usePageCanvasOffset(active: boolean, getRoot: () => HTMLElement | null) {
   const getRootRef = useRef(getRoot)
@@ -46,14 +52,30 @@ export function usePageCanvasOffset(active: boolean, getRoot: () => HTMLElement 
         else if (shown) bottom = Math.max(0, Math.round(window.innerHeight - rect.top))
       }
 
+      // Side panels: the canvas cell's edges. On phones the panels are sheets
+      // over the page, not docks beside it, so the page keeps its full width.
+      let left = 0
+      let right = 0
+      const canvas = document.querySelector<HTMLElement>(CANVAS_SELECTOR)
+      if (canvas && !canvas.closest('.froam-figma-layout.is-mobile')) {
+        const rect = canvas.getBoundingClientRect()
+        if (rect.width >= 320) {
+          left = Math.max(0, Math.round(rect.left))
+          right = Math.max(0, Math.round(window.innerWidth - rect.right))
+        }
+      }
+
       // Read pinned elements with our own rules switched off, so each one's
       // real (authored) position is what gets offset.
       style.textContent = ''
       const rules: string[] = []
       const root = getRootRef.current()
-      if (root && (top || bottom)) {
-        for (const el of Array.from(root.querySelectorAll<HTMLElement>('*'))) {
+      if (root && (top || bottom || left || right)) {
+        // Page content beside the root too (a portal's modal on <body>).
+        const base = root === document.body ? root : document.body
+        for (const el of Array.from(base.querySelectorAll<HTMLElement>('*'))) {
           if (el.closest('[data-chef-editor-root="true"]')) continue
+          if (base !== root && !isInPageScope(el, root)) continue
           const cs = window.getComputedStyle(el)
           if (cs.position !== 'sticky' && cs.position !== 'fixed') continue
           let id = el.getAttribute(PIN_ATTR)
@@ -67,12 +89,22 @@ export function usePageCanvasOffset(active: boolean, getRoot: () => HTMLElement 
             if (bottom && cs.bottom !== 'auto') rules.push(`${sel}{bottom:calc(${cs.bottom} + ${bottom}px)!important}`)
           } else {
             const rect = el.getBoundingClientRect()
-            if (top && rect.top < top) rules.push(`${sel}{translate:0 ${top}px!important}`)
-            else if (bottom && rect.bottom > window.innerHeight - bottom) rules.push(`${sel}{translate:0 -${bottom}px!important}`)
+            let dx = 0
+            let dy = 0
+            if (top && rect.top < top) dy = top
+            else if (bottom && rect.bottom > window.innerHeight - bottom) dy = -bottom
+            const underLeft = left > 0 && rect.left < left
+            const underRight = right > 0 && rect.right > window.innerWidth - right
+            if (underLeft && underRight) {
+              // A full-width bar (cookie banner, backdrop): narrow it to the canvas.
+              rules.push(`${sel}{left:${left}px!important;right:auto!important;width:${window.innerWidth - left - right}px!important;max-width:none!important}`)
+            } else if (underLeft) dx = left
+            else if (underRight) dx = -right
+            if (dx || dy) rules.push(`${sel}{translate:${dx}px ${dy}px!important}`)
           }
         }
       }
-      rules.unshift(`html[data-chef-editing]{padding-top:${top}px!important;padding-bottom:${bottom}px!important;scroll-padding-top:${top}px}`)
+      rules.unshift(`html[data-chef-editing]{padding:${top}px ${right}px ${bottom}px ${left}px!important;scroll-padding-top:${top}px}`)
       style.textContent = rules.join('\n')
     }
 
@@ -86,6 +118,9 @@ export function usePageCanvasOffset(active: boolean, getRoot: () => HTMLElement 
     const resize = new ResizeObserver(schedule)
     const chrome = document.querySelector(CHROME_SELECTOR)
     if (chrome) resize.observe(chrome)
+    // Panels opening, closing and resizing change the canvas cell's size.
+    const canvasCell = document.querySelector(CANVAS_SELECTOR)
+    if (canvasCell) resize.observe(canvasCell)
     const layout = new MutationObserver(schedule)
     const portal = document.getElementById('froam-editor-portal')
     if (portal) layout.observe(portal, { attributes: true, subtree: true, attributeFilter: ['class', 'hidden'] })

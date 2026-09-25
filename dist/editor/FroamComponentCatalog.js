@@ -1,3 +1,4 @@
+import { DEFAULT_SITE_THEME, themeVariables } from './library/site-theme.js';
 const define = (category, id, title, summary, anatomy, keywords = []) => ({
     id,
     category,
@@ -45,12 +46,37 @@ export const FROAM_COMPONENTS = [
     define('Blog', 'blog-03', 'Resource list', 'A compact list for guides, reports, or updates.', ['resource', 'resource', 'resource'], ['content']),
 ];
 export const FROAM_CATEGORIES = ['All', ...Array.from(new Set(FROAM_COMPONENTS.map((item) => item.category)))];
-const editable = 'contenteditable="true"';
+/*
+ * Patterns are written against the site's own theme (library/site-theme.ts):
+ * every colour, font and radius is a --fx-* custom property set on the
+ * section itself, so a hero dropped into a navy, serif, square-cornered site
+ * arrives navy, serif and square-cornered — and stays that way in production.
+ *
+ * Copy is plain markup. Froam's writing mode makes any text editable while
+ * editing; nothing is left `contenteditable` for a site's visitors.
+ */
+const editable = '';
+/** Literal colours in the pattern markup below, and the theme token each one stands for. */
+const THEME_TOKENS = [
+    [/#10b981/gi, 'var(--fx-accent)'],
+    [/#0f172a/gi, 'var(--fx-ink)'],
+    [/#475569|#64748b/gi, 'var(--fx-muted)'],
+    [/background:\s*#fff(?:fff)?(?![0-9a-f])/gi, 'background:var(--fx-surface)'],
+    [/#f8fafc/gi, 'var(--fx-paper)'],
+    [/#f0fdf4|#f1f5f9/gi, 'var(--fx-tint)'],
+    [/#e2e8f0/gi, 'var(--fx-line)'],
+    [/rgba\(\s*15\s*,\s*23\s*,\s*42\s*,\s*0?\.\d+\s*\)/gi, 'var(--fx-line)'],
+    [/border-radius:\s*8px/gi, 'border-radius:var(--fx-radius)'],
+];
+export function themed(markup) {
+    return THEME_TOKENS.reduce((html, [pattern, token]) => html.replace(pattern, token), markup);
+}
+const escapeHtml = (value) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character);
 function variantFromId(id) {
     const value = Number(id.split('-').at(-1));
     return Number.isFinite(value) ? value : 1;
 }
-function makeShell(definition) {
+function makeShell(definition, theme) {
     const tag = definition.category === 'Navigation' ? 'header' : definition.category === 'Footer' ? 'footer' : 'section';
     const element = document.createElement(tag);
     const variant = variantFromId(definition.id);
@@ -58,37 +84,65 @@ function makeShell(definition) {
     element.dataset.froamBlock = 'true';
     element.dataset.froamComponentId = definition.id;
     element.dataset.froamComponentCategory = definition.category;
+    for (const [name, value] of Object.entries(themeVariables(theme)))
+        element.style.setProperty(name, value);
+    const isNav = definition.category === 'Navigation';
+    const isFooter = definition.category === 'Footer';
+    // Full-bleed band; the content keeps to the site's own column width.
+    const gutter = 'max(clamp(20px, 5vw, 64px), calc((100% - var(--fx-max-width)) / 2))';
     Object.assign(element.style, {
         boxSizing: 'border-box',
         width: '100%',
-        minHeight: definition.category === 'Navigation' ? '76px' : definition.category === 'Footer' ? '240px' : '360px',
-        padding: definition.category === 'Navigation' ? '20px 28px' : 'clamp(28px, 6vw, 72px)',
-        border: '1px solid rgba(15, 23, 42, 0.12)',
-        borderRadius: variant === 3 ? '8px' : '24px',
-        background: variant === 2 ? '#f0fdf4' : variant === 3 ? '#0f172a' : '#ffffff',
-        color: variant === 3 ? '#f8fafc' : '#0f172a',
+        minHeight: isNav ? '72px' : isFooter ? '220px' : '320px',
+        padding: `${isNav ? '16px' : 'clamp(56px, 8vw, 112px)'} ${gutter}`,
+        background: variant === 2 ? 'var(--fx-tint)' : variant === 3 ? 'var(--fx-ink)' : 'var(--fx-paper)',
+        color: variant === 3 ? 'var(--fx-paper)' : 'var(--fx-ink)',
+        fontFamily: 'var(--fx-font-body)',
         overflow: 'hidden',
         position: 'relative',
     });
+    if (isNav)
+        element.style.borderBottom = '1px solid var(--fx-line)';
+    if (isFooter)
+        element.style.borderTop = '1px solid var(--fx-line)';
     return element;
 }
-function action(label, dark = true) {
-    return `<button type="button" ${editable} style="min-height:44px;padding:0 16px;border:1px solid ${dark ? '#0f172a' : 'rgba(15,23,42,.16)'};border-radius:8px;background:${dark ? '#0f172a' : '#fff'};color:${dark ? '#fff' : '#0f172a'};font-weight:800;">${label}</button>`;
+function action(label, primary = true) {
+    return `<a href="#" style="display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:0 20px;border:1px solid ${primary ? 'var(--fx-accent)' : 'var(--fx-line)'};border-radius:var(--fx-button-radius);background:${primary ? 'var(--fx-accent)' : 'transparent'};color:${primary ? 'var(--fx-accent-ink)' : 'inherit'};font-weight:700;text-decoration:none;white-space:nowrap;">${label}</a>`;
 }
 function media(label = 'Media') {
-    return `<div data-froam-media-slot="true" style="min-height:240px;display:grid;place-items:center;border:1px solid rgba(15,23,42,.14);border-radius:8px;background:repeating-linear-gradient(135deg,#f1f5f9,#f1f5f9 10px,#e2e8f0 10px,#e2e8f0 20px);color:#64748b;font-size:.78rem;font-weight:800;text-transform:uppercase;">${label}</div>`;
+    return `<div data-froam-media-slot="true" style="min-height:260px;display:grid;place-items:center;border-radius:var(--fx-radius);background:linear-gradient(135deg, var(--fx-tint), color-mix(in srgb, var(--fx-accent) 22%, var(--fx-surface)));color:var(--fx-muted);font-size:.74rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">${label}</div>`;
 }
 function card(index, dark = false) {
-    return `<article style="min-height:160px;padding:22px;border:1px solid ${dark ? 'rgba(255,255,255,.15)' : 'rgba(15,23,42,.1)'};border-radius:8px;background:${dark ? 'rgba(255,255,255,.06)' : '#fff'};"><span style="font-size:.72rem;font-weight:900;color:#10b981;">0${index}</span><h3 ${editable} style="margin:32px 0 8px;font-size:1.2rem;">Editable feature</h3><p ${editable} style="margin:0;opacity:.68;line-height:1.6;">Short supporting copy for this component.</p></article>`;
+    return `<article style="min-height:180px;padding:28px;border:1px solid ${dark ? 'rgba(255,255,255,.14)' : 'var(--fx-line)'};border-radius:var(--fx-radius);background:${dark ? 'rgba(255,255,255,.05)' : 'var(--fx-surface)'};"><span style="display:inline-grid;place-items:center;width:36px;height:36px;border-radius:calc(var(--fx-radius) * .6);background:${dark ? 'rgba(255,255,255,.08)' : 'var(--fx-tint)'};color:var(--fx-accent);font-size:.8rem;font-weight:800;">0${index}</span><h3 style="margin:28px 0 8px;font-size:1.2rem;">A clear benefit</h3><p style="margin:0;opacity:.72;line-height:1.65;">One sentence on why this matters to the people you serve.</p></article>`;
 }
 function sectionHeading(label, centered = false) {
-    return `<div style="max-width:720px;${centered ? 'margin:0 auto;text-align:center;' : ''}"><span ${editable} style="font-size:.72rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#10b981;">${label}</span><h2 ${editable} style="margin:12px 0 0;font-size:clamp(2rem,5vw,4rem);line-height:1;">Build the message around what matters.</h2></div>`;
+    return `<div style="max-width:760px;${centered ? 'margin:0 auto;text-align:center;' : ''}"><span style="display:inline-block;font-size:.75rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--fx-accent);">${label}</span><h2 style="margin:14px 0 0;font-size:clamp(2rem,4.5vw,3.5rem);line-height:1.04;letter-spacing:-.02em;">Build the message around what matters.</h2></div>`;
 }
-export function createFroamLibraryComponent(componentId) {
+/**
+ * The site's brand and navigation in place of placeholders, headings in the
+ * site's display face, and every remaining literal colour on a theme token.
+ */
+function finishPattern(root, definition, theme) {
+    const brand = escapeHtml(theme.brandName);
+    root.innerHTML = themed(root.innerHTML)
+        .replace(/Your brand|Your product/g, () => brand)
+        .replace(/\b2026\b/g, `© ${new Date().getFullYear()}`);
+    if (definition.category === 'Navigation' || definition.category === 'Footer') {
+        root.querySelectorAll('nav a').forEach((link, index) => {
+            if (theme.navLinks[index])
+                link.textContent = theme.navLinks[index];
+        });
+    }
+    root.querySelectorAll('h1, h2, h3, blockquote').forEach((heading) => {
+        heading.style.fontFamily = 'var(--fx-font-heading)';
+    });
+}
+export function createFroamLibraryComponent(componentId, theme = DEFAULT_SITE_THEME) {
     const definition = FROAM_COMPONENTS.find((item) => item.id === componentId);
     if (!definition)
         return null;
-    const root = makeShell(definition);
+    const root = makeShell(definition, theme);
     const variant = variantFromId(definition.id);
     const dark = variant === 3;
     switch (definition.category) {
@@ -222,6 +276,7 @@ export function createFroamLibraryComponent(componentId) {
                     : `${sectionHeading('Resources')}<div style="display:grid;gap:0;">${['Guide', 'Report', 'Update'].map((label) => `<article style="display:grid;grid-template-columns:100px 1fr auto;gap:18px;align-items:center;padding:18px 0;border-top:1px solid rgba(255,255,255,.14);"><span ${editable}>${label}</span><strong ${editable}>Resource title</strong><span>Open</span></article>`).join('')}</div>`;
             break;
     }
+    finishPattern(root, definition, theme);
     return root;
 }
 //# sourceMappingURL=FroamComponentCatalog.js.map

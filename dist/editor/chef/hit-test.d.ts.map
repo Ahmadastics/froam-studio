@@ -1,0 +1,1 @@
+{"version":3,"file":"hit-test.d.ts","sourceRoot":"","sources":["../../../src/editor/chef/hit-test.ts"],"names":[],"mappings":"AAIA;;;;;;;;;;;GAWG;AACH,wBAAgB,eAAe,CAAC,WAAW,EAAE,WAAW,EAAE,eAAe,EAAE,MAAM,MAAM,GAAG,SAAS;+BAG/D,WAAW,GAAG,IAAI;0BAgJvB,UAAU;;eAGC,WAAW,EAAE;;;;;;EAiCtD;AAED,MAAM,MAAM,SAAS,GAAG,UAAU,CAAC,OAAO,eAAe,CAAC,CAAA"}

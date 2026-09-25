@@ -13,7 +13,7 @@
  * JavaScript. These do.
  */
 import assert from 'node:assert/strict'
-import { generateCss, generateRuntimeJs } from '../lib/codegen.mjs'
+import { designRootScope, generateCss, generateRuntimeJs, mergeSave, migrateDesign } from '../lib/codegen.mjs'
 
 const tests = []
 const test = (name, fn) => tests.push([name, fn])
@@ -110,6 +110,95 @@ test('CSS and runtime agree on the route attribute', () => {
   const attribute = 'data-froam-route'
   assert.ok(css.includes(attribute) && js.includes(attribute),
     'the CSS selects on an attribute the runtime does not set')
+})
+
+/* Root scope — which element paths are relative to (see designRootScope). */
+
+const runtimeDesign = (js) => {
+  const match = js.match(/var DESIGN = (\{.*\})\n/)
+  assert.ok(match, 'runtime does not embed its design as `var DESIGN = {...}`')
+  return JSON.parse(match[1])
+}
+
+test('a design with no rootScope keeps the historic root', () => {
+  assert.equal(designRootScope(design()), 'auto')
+  const css = generateCss(design())
+  assert.ok(css.includes(':where([data-froam-root], #root, #__next) > section:nth-of-type(1)'), 'auto-scope selector changed')
+  assert.equal(runtimeDesign(generateRuntimeJs(design())).rootScope, undefined)
+})
+
+test('a page-scoped design selects from <body> in CSS and the runtime', () => {
+  const page = design({ rootScope: 'page' })
+  assert.equal(designRootScope(page), 'page')
+  assert.ok(generateCss(page).includes('body > section:nth-of-type(1) > h1:nth-of-type(1)'), 'page-scope selector missing')
+  // The production runtime must resolve paths from the same root the CSS does.
+  assert.equal(runtimeDesign(generateRuntimeJs(page)).rootScope, 'page')
+})
+
+test('migrateDesign keeps rootScope: page and drops anything else', () => {
+  assert.equal(migrateDesign(design({ rootScope: 'page' })).rootScope, 'page')
+  assert.equal('rootScope' in migrateDesign(design({ rootScope: 'nonsense' })), false)
+  assert.equal('rootScope' in migrateDesign(design({ rootScope: 'auto' })), false)
+})
+
+test('a fresh design adopts the page scope the editor saved from', () => {
+  const store = { 'header:1/a:1': { text: 'About us' } }
+  const saved = mergeSave({ version: 3, routes: {} }, { routeKey: '/', viewportMode: 'desktop', store, rootScope: 'page' })
+  assert.equal(saved.rootScope, 'page')
+  assert.equal(saved.routes['/'].desktop['header:1/a:1'].text, 'About us')
+})
+
+test('a design that already has edits never switches scope (its paths would shift)', () => {
+  const store = { 'section:1/h1:1': { text: 'New copy' } }
+  const saved = mergeSave(design(), { routeKey: '/', viewportMode: 'desktop', store, rootScope: 'page' })
+  assert.equal(designRootScope(saved), 'auto')
+})
+
+test('once page-scoped, a design stays page-scoped', () => {
+  const store = { 'main:1/h1:1': { text: 'Again' } }
+  const saved = mergeSave(design({ rootScope: 'page' }), { routeKey: '/', viewportMode: 'desktop', store })
+  assert.equal(saved.rootScope, 'page')
+})
+
+test('an @body path (content beside the root) selects from <body> in either scope', () => {
+  const portal = { routes: { '/': { desktop: { '@body/div:2/h2:1': { styles: { color: 'red' } } } } } }
+  assert.ok(generateCss(design(portal)).includes('body > div:nth-of-type(2) > h2:nth-of-type(1)'), 'auto scope')
+  assert.ok(generateCss(design({ ...portal, rootScope: 'page' })).includes('body > div:nth-of-type(2) > h2:nth-of-type(1)'), 'page scope')
+})
+
+test('the runtime resolves @body paths and watches <body> for them', () => {
+  const js = generateRuntimeJs(design())
+  parses(js, 'runtime')
+  assert.ok(js.includes("var BODY_PREFIX = '@body/'"), 'runtime does not know the @body prefix')
+  assert.ok(js.includes('hasBodyPaths() && root !== document.body ? document.body : root'), 'runtime never watches <body> for a portal')
+})
+
+test('::before and ::after edits compile to pseudo-element rules', () => {
+  const badge = { routes: { '/': { desktop: { 'main:1/span:1': { styles: { '__froamState:before:content': '"NEW "', '__froamState:after:color': '#f00' } } } } } }
+  const css = generateCss(design(badge))
+  assert.ok(/span:nth-of-type\(1\)::before \{\n\s+content: "NEW " !important;/.test(css), 'no ::before rule')
+  assert.ok(/span:nth-of-type\(1\)::after \{\n\s+color: #f00 !important;/.test(css), 'no ::after rule')
+})
+
+test('a declaration that could close its rule is dropped, not written', () => {
+  const hostile = { routes: { '/': { desktop: { 'main:1/h1:1': { styles: {
+    color: 'red} body{display:none',
+    'font-size;x': '10px',
+    '__froamState:before:content': '"a"}html{display:none}',
+    backgroundColor: 'blue',
+  } } } } } }
+  const css = generateCss(design(hostile))
+  assert.ok(!css.includes('display:none'), 'a value broke out of its rule')
+  assert.ok(!css.includes('font-size;x'), 'a property name carried a semicolon')
+  assert.ok(css.includes('background-color: blue !important;'), 'a safe declaration was lost')
+})
+
+test('the runtime ignores its own writes (no repaint loop)', () => {
+  // apply() re-injects blocks and rewrites text; if its own mutation records
+  // stay queued, the observer schedules the next apply — every frame.
+  const js = generateRuntimeJs(design())
+  assert.ok(/apply\(\)\s*\n\s*if \(observer\) observer\.takeRecords\(\)/.test(js), 'apply is not followed by observer.takeRecords()')
+  assert.ok(js.includes('requestAnimationFrame(applyOwnChanges)'), 'scheduled applies bypass the own-writes filter')
 })
 
 test('codegen is deterministic', () => {

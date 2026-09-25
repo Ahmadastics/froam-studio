@@ -73,7 +73,7 @@ export declare function workspacePresenceSummary<T extends {
     accessibleLabel: string;
 };
 export declare function workspaceTemporalSurface(owner: FroamTemporalOwner): {
-    owner: "replay" | "animator" | "breakpoint-cinema" | "trailer" | "sampling";
+    owner: "breakpoint-cinema" | "trailer" | "sampling" | "animator" | "replay";
     label: string;
 } | null;
 export declare const FROAM_WORKSPACE_PREFERENCE_KEY = "froam-workspace-shell-v1";

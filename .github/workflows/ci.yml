@@ -18,6 +18,8 @@ jobs:
       - run: npm run build
       - name: Op log tests
         run: npm test
+      - name: Editor end-to-end (real Chrome against the real CLI)
+        run: npm run test:e2e
       - name: Verify packed contents include the built editor
         run: |
           npm pack --dry-run 2>&1 | tee pack.log

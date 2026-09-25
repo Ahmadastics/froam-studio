@@ -9,6 +9,8 @@ export type FroamStudioConfig = {
     fetch?: typeof globalThis.fetch;
     ownerEmails?: readonly string[];
     rootSelector?: string | (() => HTMLElement | null);
+    /** 'page' when the whole <body> is the editable root (see designRootScope in lib/codegen.mjs). */
+    rootScope?: 'page' | 'auto';
     runtimeRoutes?: readonly string[] | '*';
 };
 export declare function configureFroamStudio(next?: FroamStudioConfig): FroamStudioConfig;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { RoomMemberView } from '../collab/room'
 import type { FroamViewport } from '../collab/types'
+import { findElementByPath as findByPath } from '../collab/paths'
 
 type Props = {
   members: readonly RoomMemberView[]
@@ -9,20 +10,6 @@ type Props = {
   root: HTMLElement | null
 }
 
-function findByPath(root: HTMLElement, path: string) {
-  const segments = path.split('/').filter(Boolean)
-  let current: HTMLElement | null = root
-  for (const segment of segments) {
-    const [tag, rawIndex] = segment.split(':')
-    const index = Number(rawIndex) - 1
-    if (!tag || !Number.isInteger(index) || index < 0) return null
-    current = Array.from(current.children).filter(
-      (child): child is HTMLElement => child instanceof HTMLElement && child.tagName.toLowerCase() === tag,
-    )[index] ?? null
-    if (!current) return null
-  }
-  return current
-}
 
 function findMemberElement(root: HTMLElement, nodeId: string | null, path: string | null) {
   if (nodeId) {

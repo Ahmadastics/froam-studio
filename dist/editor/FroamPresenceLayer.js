@@ -1,19 +1,6 @@
 import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useMemo, useState } from 'react';
-function findByPath(root, path) {
-    const segments = path.split('/').filter(Boolean);
-    let current = root;
-    for (const segment of segments) {
-        const [tag, rawIndex] = segment.split(':');
-        const index = Number(rawIndex) - 1;
-        if (!tag || !Number.isInteger(index) || index < 0)
-            return null;
-        current = Array.from(current.children).filter((child) => child instanceof HTMLElement && child.tagName.toLowerCase() === tag)[index] ?? null;
-        if (!current)
-            return null;
-    }
-    return current;
-}
+import { findElementByPath as findByPath } from '../collab/paths.js';
 function findMemberElement(root, nodeId, path) {
     if (nodeId) {
         const byId = root.querySelector(`[data-froam-id="${CSS.escape(nodeId)}"]`);

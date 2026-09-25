@@ -9,7 +9,8 @@ import { normalizeFroamRouteKey, useFroamRouteKey } from '../routing.js';
 import { isFroamPersonaPath } from './froamPersona.js';
 import { SECTION_STRUCTURE_KEY } from './section-structure.js';
 import { resolveAnchor } from '../collab/anchor.js';
-import { isPathElement } from '../collab/paths.js';
+import { isBodyScopedPath, isFroamOwnedNode, isPathElement } from '../collab/paths.js';
+import { applyDraftText } from './draft-text.js';
 const CANVAS_KEY = '__froam_canvas__';
 const INJECTION_KEY = '__froam_injection__';
 const ROOT_PARENT_KEY = '__froam_root__';
@@ -51,17 +52,27 @@ function isInjectionPath(path) {
 function camelToKebab(value) {
     return value.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
 }
+function isInsideFroamUi(node) {
+    for (let element = node instanceof Element ? node : node.parentElement; element; element = element.parentElement) {
+        if (isFroamOwnedNode(element))
+            return true;
+    }
+    return false;
+}
 function findElementByPath(root, path) {
     if (!isSafeDraftPath(path))
         return null;
-    const segments = path.split('/').filter(Boolean);
-    let current = root;
+    // "@body/…" is content beside the root — a portal's modal (src/collab/paths.ts).
+    const fromBody = isBodyScopedPath(path);
+    const segments = (fromBody ? path.slice(path.indexOf('/') + 1) : path).split('/').filter(Boolean);
+    let current = fromBody ? document.body : root;
     for (const segment of segments) {
         const [tag, indexRaw] = segment.split(':');
         const index = Number(indexRaw) - 1;
         if (!tag || Number.isNaN(index) || index < 0)
             return null;
-        const siblings = Array.from(current.children).filter((child) => isPathElement(child) && child.tagName.toLowerCase() === tag);
+        const onBody = current === document.body;
+        const siblings = Array.from(current.children).filter((child) => isPathElement(child) && child.tagName.toLowerCase() === tag && !(onBody && isFroamOwnedNode(child)));
         current = siblings[index] ?? null;
         if (!current)
             return null;
@@ -77,9 +88,8 @@ function canApplyTextDraft(element) {
     return ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'small', 'strong', 'em', 'b', 'i', 'label', 'button', 'a', 'li'].includes(tag);
 }
 function applyDraft(element, draft) {
-    if (draft.text !== undefined && canApplyTextDraft(element) && element.innerText !== draft.text) {
-        element.innerText = draft.text;
-    }
+    if (draft.text !== undefined && canApplyTextDraft(element))
+        applyDraftText(element, draft.text);
     if (element instanceof HTMLImageElement && draft.imageUrl !== undefined) {
         if (draft.imageUrl && element.getAttribute('src') !== draft.imageUrl)
             element.src = draft.imageUrl;
@@ -311,6 +321,9 @@ function restoreInjectedBlocks(store) {
         node.setAttribute('data-froam-runtime-injected', 'true');
         node.removeAttribute('data-chef-selected');
         node.removeAttribute('data-chef-hovered');
+        // Blocks saved before 8.5 carried contenteditable — never live for visitors.
+        for (const editable of [node, ...Array.from(node.querySelectorAll('[contenteditable]'))])
+            editable.removeAttribute('contenteditable');
         parent.insertBefore(node, parent.children.item(injection.order));
     });
 }
@@ -514,13 +527,24 @@ export default function FroamRuntime({ apiBaseUrl, design = null, enabled = true
                 // DOM may be mid-render — safe to skip this paint frame
             }
         }
-        paint();
         let paintFrame = 0;
-        const observer = new MutationObserver(() => {
+        const observer = new MutationObserver((records) => {
+            // Froam's own UI on the page (the gate, a review bar) isn't page content.
+            if (records.every((record) => isInsideFroamUi(record.target)))
+                return;
             cancelAnimationFrame(paintFrame);
-            paintFrame = requestAnimationFrame(paint);
+            paintFrame = requestAnimationFrame(paintOwnChanges);
         });
-        observer.observe(root, { childList: true, subtree: true });
+        // A paint restores and re-applies, which mutates the root; dropping those
+        // records keeps it from scheduling itself again on every frame.
+        function paintOwnChanges() {
+            paint();
+            observer.takeRecords();
+        }
+        paintOwnChanges();
+        // A portal's modal mounts on <body>, long after load: watch it too.
+        const watchBody = root !== document.body && Object.keys(storeToPaint).some(isBodyScopedPath);
+        observer.observe(watchBody ? document.body : root, { childList: true, subtree: true });
         return () => {
             cancelAnimationFrame(paintFrame);
             observer.disconnect();

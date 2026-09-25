@@ -678,6 +678,8 @@
   .froam-tb__viewport-group{display:flex}
   .froam-tb__zoom-group,.froam-tb__git-chip,.froam-tb__draft-count{display:none}
   .froam-tb__right>.froam-tb__desktop-only{display:grid}
+  /* Groups are rows of buttons, not single icons: grid would stack them. */
+  .froam-tb__right>.froam-tb__viewport-group,.froam-tb__right>.froam-tb__zoom-group{display:flex}
   .froam-tb__right>.froam-tb__sep{display:block}
   .froam-tb__panel-controls button:nth-child(-n+2){display:grid}
   .froam-tb__right{min-width:0;margin-left:0}

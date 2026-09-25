@@ -1,0 +1,59 @@
+/* ===============================================================
+   Isolation — Froam's UI lives in the host page's DOM, so the page's
+   own element rules (`button { … }`, `input { … }`, `h2 { … }`) reach it.
+   These baselines sit at the same weight as such rules (a type selector;
+   :where() adds nothing) and load after the page's CSS, so they win over
+   them — while every Froam class rule (a class outweighs a type) still
+   styles the control on top.
+
+   Only properties whose baseline matches what Froam's controls were built
+   against are pinned: font/colour inheritance (components already ask for
+   `font: inherit` one by one), no borders or backgrounds of the page's.
+   Padding, margins and sizes are left to the browser and the components.
+   =============================================================== */
+:where(#froam-editor-portal, [data-chef-editor-root="true"]) :where(button, input, textarea) {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+:where(#froam-editor-portal, [data-chef-editor-root="true"]) :where(button, input, select, textarea) {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+  text-shadow: none;
+  box-shadow: none;
+  box-sizing: border-box;
+}
+
+:where(#froam-editor-portal, [data-chef-editor-root="true"]) :where(button) {
+  cursor: pointer;
+}
+
+/* Checkboxes, radios, ranges, colour wells and file pickers keep their own rendering. */
+:where(#froam-editor-portal, [data-chef-editor-root="true"]) :where(input[type="checkbox"], input[type="radio"], input[type="range"], input[type="color"], input[type="file"]) {
+  appearance: auto;
+  -webkit-appearance: auto;
+}
+
+:where(#froam-editor-portal, [data-chef-editor-root="true"]) :where(a) {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Text elements inherit these anyway; pinning them keeps the page's type
+   rules (a site-wide `h2 { font-family: … }`) out of Froam's panels. */
+:where(#froam-editor-portal, [data-chef-editor-root="true"]) :where(h1, h2, h3, h4, h5, h6, p, li, label, span, small, strong) {
+  font-family: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+
+:where(#froam-editor-portal, [data-chef-editor-root="true"]) :where(img, svg, video, canvas) {
+  max-width: none;
+}

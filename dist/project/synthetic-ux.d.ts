@@ -57,6 +57,6 @@ export declare function syntheticReplay(run: FroamSyntheticRun): {
     atMs: number;
     label: string;
     nodeId: string | undefined;
-    status: "success" | "uncertain" | "advanced" | "backtrack" | "dead-end";
+    status: "success" | "advanced" | "backtrack" | "dead-end" | "uncertain";
 }[];
 //# sourceMappingURL=synthetic-ux.d.ts.map

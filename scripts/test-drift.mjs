@@ -324,6 +324,32 @@ test('a legacy edit whose path stops resolving is missing', () => {
   assert.equal(report.drift, true)
 })
 
+/* ─── scope: the whole page, and content beside the root ─── */
+
+const APP_WITH_DIALOG = BEFORE.replace('</body>', '<div class="dialog"><h2>Invite your team</h2></div></body>')
+
+test('a page-scoped design resolves its paths from <body>', () => {
+  const design = { version: 3, rootScope: 'page', routes: { '/': { desktop: { 'div:1/header:1/nav:1/a:2': { styles: { color: 'red' } } } } } }
+  const report = checkDesign(design, { '/': BEFORE })
+  assert.equal(only(report)[0].status, 'unverified', 'page-scoped path did not resolve from <body>')
+  assert.equal(report.routes[0].rootVia, 'page')
+})
+
+test('an @body path resolves beside the root (a portal on <body>)', () => {
+  const design = { version: 3, routes: { '/': { desktop: { '@body/div:2/h2:1': { styles: { color: 'red' } } } } } }
+  assert.equal(only(checkDesign(design, { '/': APP_WITH_DIALOG }))[0].status, 'unverified')
+  assert.equal(only(checkDesign(design, { '/': BEFORE }))[0].status, 'missing', 'resolved with no dialog on the page')
+})
+
+test('an element beside the root gets an @body path that round-trips', () => {
+  const document = parseHtml(APP_WITH_DIALOG)
+  const root = resolveFroamRoot(document).element
+  const dialogTitle = findElementByPath(root, '@body/div:2/h2:1')
+  assert.ok(dialogTitle, '@body path did not resolve')
+  assert.equal(textContent(dialogTitle), 'Invite your team')
+  assert.equal(getElementPath(dialogTitle, root), '@body/div:2/h2:1')
+})
+
 test('a route with no page supplied is unchecked, not assumed healthy', () => {
   const design = designFrom(BEFORE, [HERO_PATH])
   const report = checkDesign(design, {})

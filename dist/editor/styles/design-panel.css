@@ -27,6 +27,11 @@
 
 .froam-dp__tab {
   flex: 1;
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -627,3 +632,12 @@
     animation-duration: 1ms !important;
   }
 }
+
+/* Inputs keep an intrinsic minimum width, so in a flex row `flex: 1` alone
+   can't shrink them and the last field ran off the panel's edge. */
+.froam-dp__fill-row > input,
+.froam-dp__radius-row > input { min-width: 0; }
+.froam-dp__fill-row > .froam-dp__compact-input { flex: 0 0 58px; width: 58px; }
+/* Grid items default to min-width:auto, which let a row of inputs push past
+   the section's right padding (and get clipped). Rows shrink to fit instead. */
+.froam-dp__section-body > * { min-width: 0; }

@@ -1,5 +1,119 @@
 # Changelog
 
+## 8.5.0 - 2026-09-25
+
+**Copy edits land in your source. A Library that looks like your site. Every
+part of the page is reachable, and the local bridge only answers to you.**
+
+### New
+
+- **Copy edits are written into your source.** On Save to Repo, each text edit
+  whose original words appear exactly once in the project — as a whole text
+  node or string, in `.html`, `.jsx/.tsx/.js/.ts`, `.vue`, `.svelte`, `.astro`
+  or a translation `.json` — is rewritten there, escaped for where it lands
+  (HTML entities, JSX braces, JS quotes, JSON). The design stops carrying it,
+  so a later developer change to that string is never overruled. Text that is
+  ambiguous, missing or split across elements stays an ordinary Froam edit, and
+  the save toast says which is which. Comments, object keys, `node_modules`,
+  builds and dotfolders are never touched. On by default when Froam knows the
+  project folder (`--serve`, or `froam dev` started in a project); off with
+  `--no-write-source` or `"writeSource": false`.
+- **The Library, rebuilt.** Patterns are drawn in the site's own theme — its
+  fonts, ink and paper, brand colour (read from its buttons, logo and gradient
+  accents), corner radius and content width — carried as `--fx-*` custom
+  properties on the section itself, so they survive saving and production.
+  Navbars and footers use the site's real brand name and navigation. Cards show
+  a live, scaled preview of the actual pattern. Drag a card onto the page and a
+  line shows where it will land between sections; Insert places it after the
+  selected section, or at the end. Search and categories stay pinned at the top;
+  media and placement options fold away.
+- **Editing outside the root.** A React app's portals — modals, drawers, toasts
+  mounted on `<body>` beside `#root` — are selectable and editable. Their paths
+  start with `@body/` and count from `<body>`, skipping Froam's own UI so the
+  editor numbers `<body>` exactly as production does. Nothing is moved: React
+  closes a portal with `body.removeChild`, which would throw. The runtimes, the
+  generated CSS and `froam check` all understand `@body/` paths.
+- **`::before` / `::after`.** A new Design panel section shows and edits a
+  pseudo-element's content, colour, background and size — or adds one. Edits
+  compile to `selector::before { … }` in the generated CSS.
+
+### Security
+
+- **The bridge no longer answers every website.** `froam dev` sent
+  `Access-Control-Allow-Origin: *`, so any page open in the developer's browser
+  could rewrite `froam.design.json` (and through it the runtime that ships to
+  production), read the project, or spend the AI key behind the intelligence
+  endpoint. Now: CORS only for local origins and `--allow-origin`; browser
+  writes from any other origin are refused; the `Host` header must be this
+  machine (DNS rebinding); `--serve` never serves dotfiles (`.env`, `.git`) or
+  follows a symlink out of the folder; oversized bodies are cut off.
+  `scripts/test-bridge-security.mjs` runs each attack against the real bridge.
+- **Inserted sections were editable by visitors.** Library patterns carried
+  `contenteditable="true"` into production. They no longer do, the serializer
+  strips it, and both runtimes remove it from blocks saved by older versions.
+- **Generated CSS drops declarations that could close their rule** (`}` in a
+  value, `;` in a property name) instead of writing them.
+
+### Editor
+
+- **The page moves out from under the panels.** Opening the pages, library or
+  design panel reflows the page into the canvas beside it, the way a narrower
+  window would, instead of hiding what you're editing; fixed elements are
+  nudged into view.
+- **Selection handles follow the element** through scrolling and reflow; they
+  used to stay where the element had been.
+- **Froam's UI is shielded from the site's CSS** (`button {}`, `h2 {}` rules on
+  the host page no longer restyle the editor). This fixed the Design panel's
+  tabs, which rendered as blank grey boxes.
+- **Toolbar:** the device and zoom groups no longer stack vertically; one Quick
+  Edit button instead of two.
+- **Opening straight after load works.** A route-reset on mount closed the
+  editor a frame after Ctrl+. (and undid `initialOpen`).
+- Design panel sections announce their state (`aria-expanded`).
+- `froam <typo>` suggests the command you meant.
+
+### Fixes and internals
+
+- **Page scope for plain sites.** On a static page without `#root`/`#__next`,
+  Froam used `<main>` as its root, so the header, the footer and anything a page
+  appends to `<body>` later (modals, banners, cookie bars) couldn't be edited.
+  A clicked `target="_blank"` link in the header even opened a real tab. New
+  designs on such pages are now `rootScope: 'page'`: paths are relative to
+  `<body>`, and late `<body>` children join the editable root as they arrive.
+  The generated CSS (`body > …`) and `froam.runtime.js` resolve from the same
+  root. A design that already has edits keeps its scope, so no saved path
+  moves. App roots (`#root`, `#__next`, `[data-froam-root]`) are unchanged.
+- **Drafts were repainted every frame.** The painters (editor, `<FroamRuntime/>`
+  and the zero-dependency `froam.runtime.js`) re-apply drafts from a
+  MutationObserver, and applying a draft is itself a mutation, so each paint
+  scheduled the next. Edited copy had its text node replaced about 60 times a
+  second, which wiped any selection or caret in it (double-click to select a
+  word selected nothing). In production, every injected block was torn down
+  and rebuilt on every frame, which restarted its animations and media and
+  dropped focus from forms inside it. The painters now drop the records their
+  own writes produce, skip text that's already on screen (including copy the
+  browser normalises on read, like a trailing space), and never repaint the
+  element being typed into.
+- **End-to-end tests.** `npm run test:e2e` drives real Chrome against the real
+  CLI (`froam dev --serve`) on a fixture site. It covers:
+  - selection of every element, SVG icons, click-through layers, disabled
+    buttons and form controls
+  - auto text mode: typing, shortcut keys, a second click, double-click and
+    paste
+  - late modals, nudging and Save to Repo
+  - the production output with no editor loaded, including that an idle page
+    doesn't churn the DOM
+  - the Library (live previews, drag-and-drop, the site's theme), portals,
+    `::before`, panels, selection tracking, and source write-back
+
+  The suite runs in CI and in `check:release`.
+- **`GlobalChefEditor.tsx` split up.** Its module-level helpers moved into
+  `src/editor/chef/` (types, storage, DOM reading, writing, draft painting,
+  layers, canvas, change report, overlays), and the click/hover engine, device
+  shell, draft painter and selection tracking became hooks — the pure
+  hit-testing in `chef/hit-test.ts`. The file went from 9,456 to about 7,300
+  lines with no behaviour change.
+
 ## 8.4.0 - 2026-09-25
 
 **Everything on the page is selectable.** Measured by clicking the centre of

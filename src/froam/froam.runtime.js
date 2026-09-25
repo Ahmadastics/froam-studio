@@ -10,10 +10,12 @@
   var DESIGN = {"version":3,"routes":{}}
   var CANVAS_KEY = '__froam_canvas__'
   var INJECTION_PREFIX = '__froam_injection__:'
+  var SECTION_STRUCTURE_KEY = '__froam_structure__:sections'
   var ROOT_PARENT_KEY = '__froam_root__'
   var TEXT_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'small', 'strong', 'em', 'b', 'i', 'label', 'button', 'a', 'li']
 
   function getRoot() {
+    if (DESIGN.rootScope === 'page') return document.body
     return (
       document.querySelector('[data-froam-root]') ||
       document.getElementById('root') ||
@@ -54,9 +56,67 @@
     return TEXT_TAGS.indexOf(tag) !== -1
   }
 
+  // innerText reads back normalised ("Hello " → "Hello"), so what the element
+  // showed right after the last write is remembered: still showing exactly
+  // that means the draft is on screen, and rewriting would only churn the DOM.
+  var shownAfterWrite = typeof WeakMap === 'function' ? new WeakMap() : null
+  function applyText(element, text) {
+    var shown = element.innerText
+    if (shown === text) return
+    var last = shownAfterWrite && shownAfterWrite.get(element)
+    if (last && last.text === text && last.shown === shown) return
+    element.innerText = text
+    if (shownAfterWrite) shownAfterWrite.set(element, { text: text, shown: element.innerText })
+  }
+
   function clearInjected(root) {
     var injected = root.querySelectorAll('[data-froam-runtime-injected="true"]')
     for (var i = 0; i < injected.length; i += 1) injected[i].parentNode.removeChild(injected[i])
+  }
+
+  function ensureRuntimeVisibilityStyle() {
+    var style = document.getElementById('froam-runtime-visibility')
+    if (!style) {
+      style = document.createElement('style')
+      style.id = 'froam-runtime-visibility'
+      document.head.appendChild(style)
+    }
+    style.textContent = 'html:not([data-chef-editing]) [data-froam-export-hidden="true"],html:not([data-chef-editing]) [data-froam-structure-deleted="true"]{display:none!important}'
+  }
+
+  function applySectionStructure(root, store) {
+    var draft = store[SECTION_STRUCTURE_KEY]
+    if (!draft || !draft.text) return
+    var manifest
+    try { manifest = JSON.parse(draft.text) } catch (e) { return }
+    if (!manifest || !Array.isArray(manifest.sections)) return
+    var resolved = []
+    for (var i = 0; i < manifest.sections.length; i += 1) {
+      var entry = manifest.sections[i]
+      if (!entry || typeof entry.sourcePath !== 'string' || typeof entry.nodeId !== 'string') continue
+      var element = root.querySelector('[data-froam-id="' + entry.nodeId.replace(/["\\]/g, '\\$&') + '"]') || findByPath(root, entry.sourcePath)
+      if (!element || element.getAttribute('data-froam-runtime-injected') === 'true') continue
+      element.setAttribute('data-froam-id', entry.nodeId)
+      element.setAttribute('data-froam-structure-source', entry.sourcePath)
+      resolved.push({ entry: entry, element: element })
+    }
+    resolved.filter(function (item) { return !item.entry.deleted }).sort(function (a, b) { return a.entry.order - b.entry.order }).forEach(function (item) {
+      var parent = item.entry.parentPath === ROOT_PARENT_KEY ? root : findByPath(root, item.entry.parentPath)
+      if (parent) {
+        var current = Array.prototype.indexOf.call(parent.children, item.element)
+        if (current !== item.entry.order) {
+          item.element.remove()
+          parent.insertBefore(item.element, parent.children.item(item.entry.order))
+        }
+      }
+      item.element.hidden = !!item.entry.exportHidden
+      if (item.entry.exportHidden) item.element.setAttribute('data-froam-export-hidden', 'true')
+      else item.element.removeAttribute('data-froam-export-hidden')
+    })
+    resolved.filter(function (item) { return !!item.entry.deleted }).forEach(function (item) {
+      item.element.hidden = true
+      item.element.setAttribute('data-froam-structure-deleted', 'true')
+    })
   }
 
   function applyInjections(root, store) {
@@ -66,13 +126,13 @@
       try {
         var parsed = JSON.parse(store[key].text)
         if (typeof parsed.html === 'string' && typeof parsed.parentPath === 'string') {
-          blocks.push({ html: parsed.html, parentPath: parsed.parentPath, order: typeof parsed.order === 'number' ? parsed.order : 0 })
+          blocks.push({ html: parsed.html, parentPath: parsed.parentPath, parentId: typeof parsed.parentId === 'string' ? parsed.parentId : '', order: typeof parsed.order === 'number' ? parsed.order : 0 })
         }
       } catch (e) { /* skip malformed */ }
     }
     blocks.sort(function (a, b) { return a.order - b.order })
     for (var i = 0; i < blocks.length; i += 1) {
-      var parent = blocks[i].parentPath === ROOT_PARENT_KEY ? root : findByPath(root, blocks[i].parentPath)
+      var parent = blocks[i].parentId ? root.querySelector('[data-froam-id="' + blocks[i].parentId.replace(/["\\]/g, '\\$&') + '"]') : blocks[i].parentPath === ROOT_PARENT_KEY ? root : findByPath(root, blocks[i].parentPath)
       if (!parent) continue
       var template = document.createElement('template')
       template.innerHTML = blocks[i].html.trim()
@@ -81,7 +141,7 @@
       node.setAttribute('data-froam-runtime-injected', 'true')
       node.removeAttribute('data-chef-selected')
       node.removeAttribute('data-chef-hovered')
-      parent.appendChild(node)
+      parent.insertBefore(node, parent.children.item(blocks[i].order))
     }
   }
 
@@ -120,6 +180,7 @@
     var store = route && route[viewportMode()]
     if (!store) { applyCustomCss(''); return }
 
+    applySectionStructure(root, store)
     applyInjections(root, store)
 
     for (var key in store) {
@@ -128,9 +189,7 @@
       var target = findByPath(root, key)
       if (!target) continue
       var draft = store[key]
-      if (draft.text !== undefined && canApplyText(target) && target.innerText !== draft.text) {
-        target.innerText = draft.text
-      }
+      if (draft.text !== undefined && canApplyText(target)) applyText(target, draft.text)
       if (draft.imageUrl !== undefined && target.tagName.toLowerCase() === 'img') {
         if (draft.imageUrl && target.getAttribute('src') !== draft.imageUrl) target.src = draft.imageUrl
         if (!draft.imageUrl && target.hasAttribute('src')) target.removeAttribute('src')
@@ -139,9 +198,17 @@
   }
 
   var frame = 0
+  var observer = null
+  // apply() re-injects blocks and rewrites text, which mutates the root; those
+  // records are the runtime's own — left queued, they'd schedule the next
+  // apply and rebuild every injected block on every frame.
+  function applyOwnChanges() {
+    apply()
+    if (observer) observer.takeRecords()
+  }
   function scheduleApply() {
     cancelAnimationFrame(frame)
-    frame = requestAnimationFrame(apply)
+    frame = requestAnimationFrame(applyOwnChanges)
   }
 
   function patchHistory(method) {
@@ -154,6 +221,7 @@
   }
 
   function start() {
+    ensureRuntimeVisibilityStyle()
     apply()
     patchHistory('pushState')
     patchHistory('replaceState')
@@ -161,7 +229,7 @@
     window.addEventListener('resize', scheduleApply)
     var root = getRoot()
     if (root && typeof MutationObserver !== 'undefined') {
-      var observer = new MutationObserver(function (mutations) {
+      observer = new MutationObserver(function (mutations) {
         for (var i = 0; i < mutations.length; i += 1) {
           var node = mutations[i].target
           if (node && node.closest && node.closest('[data-froam-runtime-injected="true"], [data-chef-editor-root]')) continue

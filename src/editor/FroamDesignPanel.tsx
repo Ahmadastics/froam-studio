@@ -13,6 +13,7 @@ import {
   Link,
   Maximize2,
   Palette,
+  Quote,
   PencilLine,
   RotateCw,
   Sparkles,
@@ -26,6 +27,9 @@ import {
 } from 'lucide-react'
 import { computeBlueprintData, BlueprintSheet, BLUEPRINT_CATEGORY_COLOR, BLUEPRINT_CATEGORY_LABEL } from './FroamBlueprint'
 import { froamStorageKey } from '../project/storage-scope'
+import { findElementByPath } from '../collab/paths'
+import { PseudoElementsSection } from './chef/PseudoElementsSection'
+import type { PseudoElement } from './chef/pseudo'
 
 /* ═══════════════════════════════════════════════════════════════
    Types
@@ -123,6 +127,9 @@ type Props = {
   // v4.5 Blueprint (Prototype tab)
   getRootEl: () => HTMLElement | null
   onOpenBlueprint: () => void
+  /** The selection's saved draft styles (for its ::before / ::after edits). */
+  draftStyles?: Record<string, string>
+  onApplyPseudoStyle?: (pseudo: PseudoElement, styles: Record<string, string>, label: string) => void
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -147,6 +154,7 @@ function SectionHeader({
         type="button"
         className="froam-dp__section-header"
         onClick={onToggle}
+        aria-expanded={isOpen}
         data-chef-editor-root="true"
       >
         <span className="froam-dp__section-title">
@@ -275,6 +283,8 @@ export default function FroamDesignPanel({
   onAddBrandFont,
   getRootEl,
   onOpenBlueprint,
+  draftStyles,
+  onApplyPseudoStyle,
 }: Props) {
   const [tab, setTab] = useState<'design' | 'prototype'>('design')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -284,6 +294,7 @@ export default function FroamDesignPanel({
     stroke: true,
     typography: true,
     effects: false,
+    pseudo: false,
     spacing: false,
     transform: false,
   })
@@ -927,6 +938,17 @@ export default function FroamDesignPanel({
             </label>
           </div>
         </SectionHeader>
+
+        {/* ═══ ::BEFORE / ::AFTER ═══ */}
+        {onApplyPseudoStyle && (
+          <SectionHeader title="Before & after" icon={<Quote size={12} />} isOpen={openSections.pseudo} onToggle={() => toggle('pseudo')}>
+            <PseudoElementsSection
+              element={openSections.pseudo && selection ? (() => { const root = getRootEl(); return root ? findElementByPath(root, selection.path) : null })() : null}
+              styles={draftStyles}
+              onChange={onApplyPseudoStyle}
+            />
+          </SectionHeader>
+        )}
 
         {/* ═══ TRANSFORM ═══ */}
         <SectionHeader title="Transform" icon={<RotateCw size={12} />} isOpen={openSections.transform} onToggle={() => toggle('transform')}>
