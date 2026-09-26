@@ -20,6 +20,7 @@ import {
   inviteLink,
   ROOM_BEAT_MS,
   type OwnedRoom,
+  type RoomProfile,
   type RoomClient,
   type RoomTransport,
   type RoomView,
@@ -66,7 +67,7 @@ export function useFroamRoom(options: {
    */
   autoJoinAs?: string
   /** Member profile is persisted on join, not repeated on every heartbeat. */
-  autoJoinProfile?: { avatarUrl?: string | null }
+  autoJoinProfile?: RoomProfile
   transport?: RoomTransport
   everyMs?: number
   href?: string
@@ -163,12 +164,12 @@ export function useFroamRoom(options: {
     }
   }, [client, enabled, everyMs, autoJoinAs])
 
-  const join = useCallback(async (name: string) => {
+  const join = useCallback(async (name: string, profile: RoomProfile = profileRef.current ?? {}) => {
     if (!client) return null
     setJoining(true)
     setError(null)
     try {
-      const you = await client.join(name)
+      const you = await client.join(name, profile)
       // Announce immediately rather than waiting out the first interval —
       // otherwise the other side sees an empty room for fifteen seconds.
       await client.beat(whereRef.current)
@@ -189,8 +190,8 @@ export function useFroamRoom(options: {
    * This is the front door: without it a designer would have to POST to the
    * API by hand to get a link, which is the same as the feature not existing.
    */
-  const openRoom = useCallback(async (name: string) => {
-    const payload = await transport.post('/api/froam/rooms', { name }) as {
+  const openRoom = useCallback(async (name: string, profile: RoomProfile = profileRef.current ?? {}) => {
+    const payload = await transport.post('/api/froam/rooms', { name, ...profile }) as {
       room?: { id: string }
       invites?: Record<string, string>
       you?: { actor: string; name: string; role: FroamRole; session: string }

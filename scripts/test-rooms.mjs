@@ -771,6 +771,89 @@ test('if publishing fails, the request stays pending and says why', async () => 
   assert.equal((await list(owner)).requests[0].status, 'pending')
 })
 
+/* ── profiles and request conversations (8.7) ── */
+
+const PHOTO = 'data:image/png;base64,iVBORw0KGgo='
+
+test('joining carries a profile: photo, what you do, your colour', async () => {
+  const { api } = await freshApi()
+  const { room, invites } = await open(api)
+  const joined = await call(api, 'POST', `/api/froam/rooms/${room.id}/join`, {
+    token: invites.contributor, name: 'Maya', avatarUrl: PHOTO, title: '  Marketing   lead ', color: '#A78BFA',
+  })
+  const maya = joined.room.members.find((m) => m.actor === joined.you.actor)
+  assert.equal(maya.avatarUrl, PHOTO)
+  assert.equal(maya.title, 'Marketing lead')
+  assert.equal(maya.color, '#a78bfa')
+  assert.equal(typeof maya.joinedAt, 'number')
+})
+
+test('the owner’s profile is set when the room opens', async () => {
+  const { api } = await freshApi()
+  const created = await call(api, 'POST', '/api/froam/rooms', { name: 'Ahmad', avatarUrl: PHOTO, title: 'Founder' })
+  const owner = created.room.members[0]
+  assert.equal(owner.avatarUrl, PHOTO)
+  assert.equal(owner.title, 'Founder')
+})
+
+test('a profile colour must be plain hex — it lands in style attributes', async () => {
+  const { api } = await freshApi()
+  const { room, invites } = await open(api)
+  const joined = await call(api, 'POST', `/api/froam/rooms/${room.id}/join`, {
+    token: invites.commenter, name: 'Eve', color: 'red;background:url(x)', title: 'x'.repeat(200),
+  })
+  const eve = joined.room.members.find((m) => m.actor === joined.you.actor)
+  assert.match(eve.color, /^#[0-9a-f]{6}$/)
+  assert.equal(eve.title.length, 40)
+})
+
+test('rejoining updates your profile, keeps your role, and can clear the photo', async () => {
+  const { api } = await freshApi()
+  const created = await call(api, 'POST', '/api/froam/rooms', { name: 'Ahmad', avatarUrl: PHOTO, title: 'Founder' })
+  const again = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, {
+    token: created.invites.commenter, name: 'Ahmad M', actor: created.you.actor, session: created.you.session, avatarUrl: null, title: 'CEO',
+  })
+  assert.equal(again.you.role, 'owner')
+  const me = again.room.members.find((m) => m.actor === created.you.actor)
+  assert.equal(me.name, 'Ahmad M')
+  assert.equal(me.avatarUrl, null)
+  assert.equal(me.title, 'CEO')
+})
+
+test('rejoining without profile fields keeps the ones you had', async () => {
+  const { api } = await freshApi()
+  const created = await call(api, 'POST', '/api/froam/rooms', { name: 'Ahmad', avatarUrl: PHOTO, title: 'Founder', color: '#ff6c4f' })
+  const again = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, {
+    token: created.invites.owner, name: 'Ahmad', actor: created.you.actor, session: created.you.session,
+  })
+  const me = again.room.members.find((m) => m.actor === created.you.actor)
+  assert.equal(me.avatarUrl, PHOTO)
+  assert.equal(me.title, 'Founder')
+  assert.equal(me.color, '#ff6c4f')
+})
+
+test('a message can be about a request, and only a real one', async () => {
+  const { api, created, owner, maya, submit } = await requestRoom()
+  const { request } = await submit(maya)
+  const chat = `/api/froam/rooms/${created.room.id}/chat`
+  const about = await call(api, 'POST', chat, { ...owner, body: 'Can the headline be shorter?', requestId: request.id })
+  assert.equal(about.message.requestId, request.id)
+  const stray = await call(api, 'POST', chat, { ...maya, body: 'Sure', requestId: 'not-a-request' })
+  assert.equal(stray.status, 200)
+  assert.equal(stray.message.requestId, undefined)
+  const read = await call(api, 'GET', `${chat}?token=${maya.token}&actor=${maya.actor}&session=${maya.session}`)
+  assert.deepEqual(read.messages.map((m) => m.body), ['Can the headline be shorter?', 'Sure'])
+})
+
+test('chat events carry the message, so clients need no extra read', async () => {
+  const { api, created, owner, maya } = await requestRoom()
+  await call(api, 'POST', `/api/froam/rooms/${created.room.id}/chat`, { ...maya, body: 'Hi!' })
+  const events = await call(api, 'GET', `/api/froam/rooms/${created.room.id}/events?token=${owner.token}&after=0&actor=${owner.actor}&session=${owner.session}`)
+  const chat = events.events.find((event) => event.type === 'chat')
+  assert.equal(chat.message.body, 'Hi!')
+  assert.equal(chat.message.name, 'Maya')
+})
+
 let failed = 0
 for (const [name, fn] of tests) {
   try {

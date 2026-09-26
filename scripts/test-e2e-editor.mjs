@@ -763,6 +763,9 @@ collabTest('the owner creates invite links from Share, one per role', async ({ p
   collab.link = `${url}?froam-room=${owned.roomId}&froam-token=${owned.invites.contributor}`
 })
 
+/** A 1×1 PNG: enough for the join card to crop, shrink and show as a face. */
+const TINY_PHOTO = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
+
 collabTest('a contributor joins by link, says their name, and edits privately', async ({ page, context }) => {
   collab.contributorContext = await context.browser().newContext({ viewport: { width: 1440, height: 900 } })
   const maya = await collab.contributorContext.newPage()
@@ -773,6 +776,9 @@ collabTest('a contributor joins by link, says their name, and edits privately', 
   if (!(await maya.locator('#froam-editor-portal .froam-chrome').count())) await maya.keyboard.press('Control+.')
   await maya.waitForSelector('input[aria-label="Your name"]', { timeout: 10000 })
   await maya.fill('input[aria-label="Your name"]', 'Maya')
+  await maya.fill('input[aria-label="What you do"]', 'Marketing')
+  await maya.setInputFiles('.froam-collab__join input[type="file"]', { name: 'maya.png', mimeType: 'image/png', buffer: TINY_PHOTO })
+  await maya.locator('.froam-collab__join .froam-collab__photo img').waitFor({ timeout: 5000 })
   await maya.click('button:has-text("Join")')
   await maya.waitForSelector('.froam-collab__trigger:has-text("Submit")', { timeout: 8000 })
   await maya.waitForTimeout(600)
@@ -804,7 +810,8 @@ collabTest('the contributor submits; the owner sees what changed, previews it, a
   const request = page.locator('.froam-collab__request.is-pending')
   await request.waitFor({ timeout: 5000 })
   const text = await request.innerText()
-  assert(text.includes('Maya') && text.includes('For Monday'), `request reads: ${text.slice(0, 120)}`)
+  assert(text.includes('Maya') && text.includes('Marketing') && text.includes('For Monday'), `request reads: ${text.slice(0, 120)}`)
+  assert(await request.locator('.froam-collab__who img').count() === 1, 'the request does not show the sender\'s photo')
   assert(await request.locator('del').count() === 1 && await request.locator('ins').count() === 1, 'no before → after shown')
   await request.locator('button:has-text("Preview")').click()
   await page.waitForTimeout(400)
@@ -825,6 +832,65 @@ collabTest('the contributor sees it approved, and their change list is clear', a
   const remaining = await maya.locator('.froam-collab__changes li').count()
   await closeShare(maya)
   assert(remaining === 0, `${remaining} changes still listed after approval`)
+})
+
+collabTest('a request carries the sender\'s profile, one click away', async ({ page }) => {
+  await openShare(page)
+  await page.click('.froam-collab__tabs button:has-text("Requests")')
+  await page.locator('.froam-collab__request .froam-collab__who').first().click()
+  const profile = page.locator('.froam-collab__profile')
+  await profile.waitFor({ timeout: 5000 })
+  const text = await profile.innerText()
+  await profile.locator('button:has-text("Message")').click()
+  const draft = await page.inputValue('textarea[aria-label="Message the room"]')
+  await closeShare(page)
+  assert(text.includes('Maya') && text.includes('Marketing') && text.includes('Suggesting'), `profile reads: ${text.slice(0, 160)}`)
+  assert(/Changes sent\s+1 · 1 approved/.test(text), `profile counts: ${text.slice(0, 200)}`)
+  assert(draft.startsWith('@Maya'), `Message prefilled "${draft}"`)
+})
+
+collabTest('people talk in Share → Chat: a peek and a badge for whoever is not looking', async ({ page }) => {
+  const maya = collab.contributor
+  await openShare(maya)
+  await maya.click('.froam-collab__tabs button:has-text("Chat")')
+  await maya.fill('textarea[aria-label="Message the room"]', 'Is the headline OK?')
+  await maya.keyboard.press('Enter')
+  await maya.locator('.froam-chat__msg.is-mine:not(.is-sending):not(.is-failed)').waitFor({ timeout: 8000 })
+  await closeShare(maya)
+
+  const peek = page.locator('.froam-collab__peek')
+  await peek.waitFor({ timeout: 12000 })
+  const peeked = await peek.innerText()
+  const unread = await page.locator('.froam-collab__trigger .froam-collab__badge.is-chat').innerText()
+  await peek.click()
+  await page.locator('.froam-chat__msg').first().waitFor({ timeout: 5000 })
+  const thread = await page.locator('.froam-chat__list').innerText()
+  await page.waitForTimeout(300)
+  const badgeAfter = await page.locator('.froam-collab__trigger .froam-collab__badge.is-chat').count()
+
+  // Replying about a request threads the message to it.
+  await page.click('.froam-collab__tabs button:has-text("Requests")')
+  await page.locator('.froam-collab__request.is-approved button:has-text("Discuss")').click()
+  await page.locator('.froam-chat__context').waitFor({ timeout: 3000 })
+  await page.fill('textarea[aria-label="Message the room"]', 'Looks great, it is live')
+  await page.keyboard.press('Enter')
+  await page.locator('.froam-chat__msg.is-mine .froam-chat__about').waitFor({ timeout: 8000 })
+  await closeShare(page)
+
+  await maya.locator('.froam-collab__trigger .froam-collab__badge.is-chat').waitFor({ timeout: 12000 })
+  await openShare(maya)
+  await maya.click('.froam-collab__tabs button:has-text("Chat")')
+  const reply = maya.locator('.froam-chat__msg:not(.is-mine)').last()
+  await reply.waitFor({ timeout: 5000 })
+  const replyText = await reply.innerText()
+  await closeShare(maya)
+
+  assert(peeked.includes('Maya') && peeked.includes('Is the headline OK?'), `peek reads: ${peeked}`)
+  assert(unread.trim() === '1', `unread badge reads "${unread}"`)
+  assert(thread.includes('Is the headline OK?'), 'the message is not in the owner\'s chat')
+  assert(/sent Spring sale copy for approval/.test(thread) && /approved and published Spring sale copy/.test(thread), `the timeline misses request activity: ${thread.slice(0, 300)}`)
+  assert(badgeAfter === 0, 'reading the chat did not clear the badge')
+  assert(replyText.includes('Looks great, it is live') && replyText.includes('Spring sale copy'), `reply reads: ${replyText}`)
 })
 
 collabTest('sending back: the note reaches the contributor, and the change counts again', async ({ page }) => {

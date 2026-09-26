@@ -828,6 +828,7 @@ var MAX_COMMENT_LENGTH = 4e3;
 var MAX_COMMENTS = 500;
 var MAX_BODY_BYTES = 2e5;
 var MAX_NAME_LENGTH = 60;
+var MAX_PROFILE_TITLE_LENGTH = 40;
 var MAX_PRESENCE_LABEL_LENGTH = 80;
 var MAX_AVATAR_LENGTH = 12e4;
 var MAX_MEMBERS = 50;
@@ -897,6 +898,21 @@ function cleanName(value) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim().replace(/\s+/g, " ").slice(0, MAX_NAME_LENGTH);
   return trimmed || null;
+}
+function cleanTitle(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().replace(/\s+/g, " ").slice(0, MAX_PROFILE_TITLE_LENGTH);
+  return trimmed || null;
+}
+function cleanColor(value) {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim().toLowerCase() : null;
+}
+function profileFrom(body, previous = {}) {
+  return {
+    avatarUrl: cleanAvatarUrl(body?.avatarUrl) ?? (body?.avatarUrl === null ? null : previous.avatarUrl ?? null),
+    title: body && "title" in body ? cleanTitle(body.title) : previous.title ?? null,
+    color: cleanColor(body?.color) ?? previous.color ?? null
+  };
 }
 function cleanCursor(value) {
   if (!value || typeof value !== "object") return null;
@@ -1008,6 +1024,8 @@ function publicMember(member, now) {
     role: member.role,
     color: member.color ?? colorForActor(member.actor),
     avatarUrl: member.avatarUrl ?? null,
+    title: member.title ?? null,
+    joinedAt: member.joinedAt ?? null,
     here: isHere(member, now),
     routeKey: member.routeKey ?? null,
     viewport: member.viewport ?? null,
@@ -1103,7 +1121,10 @@ data: ${JSON.stringify({ sequence })}
         proposals: {},
         tokens,
         members: {
-          [ownerActor]: { actor: ownerActor, session: mintToken(), name: ownerName, role: "owner", color: colorForActor(ownerActor), joinedAt: stamp, seenAt: stamp }
+          [ownerActor]: (() => {
+            const profile = profileFrom(body);
+            return { actor: ownerActor, session: mintToken(), name: ownerName, role: "owner", ...profile, color: profile.color ?? colorForActor(ownerActor), joinedAt: stamp, seenAt: stamp };
+          })()
         }
       };
       await persist(room2);
@@ -1199,8 +1220,10 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
         // A token cannot promote you past what it grants, and rejoining on a
         // guest link must never quietly demote the owner.
         role: returning ? room.members[actor].role : role,
-        color: room.members[actor]?.color ?? colorForActor(actor),
-        avatarUrl: cleanAvatarUrl(body.avatarUrl) ?? room.members[actor]?.avatarUrl ?? null,
+        ...(() => {
+          const profile = profileFrom(body, room.members[actor] ?? {});
+          return { ...profile, color: profile.color ?? colorForActor(actor) };
+        })(),
         joinedAt: room.members[actor]?.joinedAt ?? stamp,
         seenAt: stamp
       };
@@ -1377,7 +1400,8 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
           sendJson(res, 400, { success: false, error: "Say something" });
           return true;
         }
-        const message = { id: (0, import_node_crypto.randomUUID)(), actor: member.actor, name: member.name, body, createdAt: now() };
+        const requestId = typeof req.body.requestId === "string" && room.requests?.[req.body.requestId] ? req.body.requestId : null;
+        const message = { id: (0, import_node_crypto.randomUUID)(), actor: member.actor, name: member.name, body, createdAt: now(), ...requestId ? { requestId } : {} };
         room.chat.push(message);
         if (room.chat.length > MAX_CHAT_MESSAGES) room.chat.splice(0, room.chat.length - MAX_CHAT_MESSAGES);
         appendEvent(room, { type: "chat", createdAt: message.createdAt, actor: member.actor, message });

@@ -1,5 +1,57 @@
 # Changelog
 
+## 8.7.0 - 2026-09-26
+
+**Everything about working together, in your room — with faces, and a real conversation.**
+
+- **Chat moved into Share.** The old "Room chat" section at the bottom of the
+  inspector is gone; talking now happens in **Share → Chat**, next to the
+  people and the requests it is about. Contributors get it too, beside
+  *Your changes*, and clients in the review bar see the same conversation.
+- **Messages that read like messages.** Faces and names, what each person
+  does, times and day dividers, your own messages on the right, runs from
+  one person grouped, links clickable. Enter sends, Shift+Enter adds a line;
+  a message that fails to send says so and offers *Try again*. If you've
+  scrolled up to read, new messages don't yank you down — a pill offers the
+  way back.
+- **The room's story in one timeline.** "Maya sent *Spring sale copy* for
+  approval", "You approved and published it" appear in the chat where they
+  happened, each with *View*.
+- **Talk about a request.** *Discuss* on any request starts a message about it;
+  the message carries the request's title, and clicking it opens the request.
+- **Never miss a message.** An unread count on the Share button and the Chat
+  tab, and a new message peeks out under Share for a few seconds when the
+  panel is closed — click it to reply. Opening Share lands on what's new:
+  unread messages, then waiting requests.
+- **Your studio profile is who you are in the room.** Name, photo, *what you
+  do* and your colour travel with you: on your cursor, your messages and every
+  change you send. Edit it and everyone in the room sees the update. The
+  profile editor now shows exactly what teammates see — your request in their
+  inbox and your message in their chat — and takes any photo (dropped on the
+  circle or picked), cropping it to a small square so it always fits the room.
+- **Requests arrive with the sender's profile.** The owner's inbox shows each
+  sender's face, name and what they do. Click it for their profile: here or
+  away and on which page, when they joined, how many changes they've sent and
+  how many were approved, and **Message**.
+- **Joining by link asks who you are, properly.** Name, an optional photo and
+  what you do, with a preview of how the owner will see you. It becomes your
+  studio profile.
+- **Owners are nudged to be a person.** If you still appear as "Froam", Share
+  offers to add your name and photo before you send links.
+- **Room API.** Members carry `title` and `joinedAt`; create and join accept
+  `avatarUrl` (`null` clears it), `title` and `color` (plain hex only).
+  A chat message may carry `requestId` for a request in the room.
+- Fixed: a large profile photo was silently refused by the room, so teammates
+  saw initials instead.
+- Fixed: Escape in a Share field now closes the panel.
+- Teammates' cursors no longer draw over the Share panel.
+- Share on a page with nothing serving rooms now says why, in the panel, with
+  the one command that fixes it — instead of a toast that blamed the bridge.
+- A message that fails to send (a busy room, a network blip) quietly tries
+  once more before asking you. Hosting rooms on storage with conditional
+  writes? Retry the request on a precondition failure — every attempt re-reads
+  the room, and the body is kept on `req` after the first read.
+
 ## 8.6.0 - 2026-09-25
 
 **Publishing without a developer, and collaboration you can find.**

@@ -52,7 +52,6 @@ import { appendProjectEvents, createProjectEvent, deriveBranchState, switchProje
 import { validateReferenceBuildCandidate } from '../project/reference-build.js';
 import { sitePlanGraphRecords } from '../project/adapters.js';
 import { useFroamProjectDocument } from './useFroamProjectDocument.js';
-import FroamRoomChat from './FroamRoomChat.js';
 import { diffStores } from '../collab/oplog.js';
 import { loadOpLog, saveOpLog } from '../collab/persist.js';
 import { findElementByPath, getElementPath, isInPageScope, isPathElement, isSafeDraftPath } from '../collab/paths.js';
@@ -74,11 +73,13 @@ import { useSelectionTracking } from './chef/useSelectionTracking.js';
 import { sampleSiteTheme } from './library/site-theme.js';
 import { usePatternDrop } from './library/pattern-drop.js';
 import { FroamCollaborate } from './collaborate/FroamCollaborate.js';
+import { useRoomMessages } from './collaborate/useRoomMessages.js';
+import { shrinkAvatar } from './collaborate/avatar-image.js';
 import { buildChangeRequest } from './collaborate/request-builder.js';
 import { PSEUDO_HOST_ATTR, pseudoKey } from './chef/pseudo.js';
 import { useDraftPainter } from './chef/useDraftPainter.js';
 import { useDeviceShell } from './chef/useDeviceShell.js';
-import { readFroamPersonaDraft, sanitizeFroamPersona, isFroamPersonaPath, } from './froamPersona.js';
+import { DEFAULT_FROAM_PERSONA, readFroamPersonaDraft, sanitizeFroamPersona, isFroamPersonaPath, } from './froamPersona.js';
 import { intelligenceTabs, labTabs, CHEF_BUTTON_START, CANVAS_KEY, INJECTION_KEY, ROOT_PARENT_KEY, INJECTED_BLOCK_SELECTOR, VIEWPORT_MODES, DEVICE_SHELL_ID, } from './chef/types.js';
 import { cursorOptions, displayOptions, flexDirectionOptions, justifyOptions, alignOptions, positionOptions, overflowOptions, borderStyleOptions, blendModeOptions, textTransformOptions, persistedStyleKeys, } from './chef/style-options.js';
 import { MAX_PERSONA_IMAGE_BYTES, SAVE_META_KEY, BRAND_FONT_MAX_BYTES, loadBrandFonts, saveBrandFontsForProject, loadStore, saveStoreForProject, loadNodeRegistry, saveNodeRegistryForProject, loadPersonaPreference, savePersonaPreference, personasEqual, stripPersonaDrafts, withPersonaDraft, countRenderableDrafts, } from './chef/storage.js';
@@ -89,6 +90,17 @@ import { sanitizeDraftForElement, applyDraft, isInjectionPath, isSectionStructur
 import { ensureFroamNodeId, isStructuralLayerElement, syncStructureBoundaryLabel, buildLayerNode, collectLayers, } from './chef/layers.js';
 import { collectCSSVars, readCanvasState, capturePageThumb, syncFroamArtboardMetadata, buildGradientCSS, } from './chef/canvas.js';
 import { AccordionSection, Toast, FroamWelcomeTips, SCAN_DONE_KEY, BLUEPRINT_SEEN_KEY, FroamScan, MeasurementOverlay, ClickPulseOverlay, SelectionHandoffOverlay, } from './chef/overlays.js';
+/**
+ * What the room sees of your studio profile. The colour is sent only once you
+ * have picked one, so everyone keeping the default still gets a distinct one.
+ */
+function roomProfileOf(persona) {
+    return {
+        avatarUrl: persona.imageUrl || null,
+        title: persona.role || null,
+        color: persona.accentColor && persona.accentColor !== DEFAULT_FROAM_PERSONA.accentColor ? persona.accentColor : null,
+    };
+}
 export default function GlobalChefEditor({ initialOpen = false, routeKey: explicitRouteKey, projectKey: explicitProjectKey }) {
     const routeKey = useFroamRouteKey(explicitRouteKey);
     const projectKey = useMemo(() => resolveFroamProjectKey(explicitProjectKey), [explicitProjectKey]);
@@ -398,9 +410,68 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             action: roomLockedPath ? 'Transforming selection' : selection ? 'Editing selection' : null,
         },
         autoJoinAs: invitedByLink ? undefined : persona.name || 'Designer',
-        autoJoinProfile: { avatarUrl: persona.imageUrl || null },
+        autoJoinProfile: roomProfileOf(persona),
     });
     const roomPresence = room.present;
+    const roomJoined = Boolean(room.client?.joined && room.identity);
+    // You, as the room lists you — or, in the moment before the room has been
+    // read back after joining, as your own profile says you are.
+    const roomMe = useMemo(() => {
+        const listed = room.room?.members.find((member) => member.actor === room.identity?.actor);
+        if (listed || !roomJoined || !room.identity)
+            return listed ?? null;
+        const profile = roomProfileOf(persona);
+        return {
+            actor: room.identity.actor,
+            name: room.identity.name,
+            role: room.identity.role,
+            color: profile.color ?? persona.accentColor,
+            avatarUrl: profile.avatarUrl,
+            title: profile.title,
+            joinedAt: null,
+            here: true,
+            routeKey,
+            viewport: viewportMode,
+            selectedPath: null,
+            selectedNodeId: null,
+            lockedPath: null,
+            lockedNodeId: null,
+            cursor: null,
+            tool: null,
+            action: null,
+            seenAt: null,
+        };
+    }, [room.room, room.identity, roomJoined, persona, routeKey, viewportMode]);
+    const roomMessaging = useRoomMessages({
+        client: room.client,
+        events: room.events,
+        roomId: room.roomId,
+        role: room.role,
+        me: roomJoined ? room.identity?.actor ?? null : null,
+    });
+    // Your studio profile is who you are in the room: change it and everyone
+    // sees the new name and face on your cursor, messages and requests.
+    const syncedProfileRef = useRef(null);
+    useEffect(() => {
+        if (!roomJoined || !room.client) {
+            syncedProfileRef.current = null;
+            return;
+        }
+        const profile = roomProfileOf(persona);
+        const signature = JSON.stringify([persona.name, profile]);
+        if (syncedProfileRef.current === null) {
+            syncedProfileRef.current = signature;
+            return;
+        }
+        if (syncedProfileRef.current === signature)
+            return;
+        const client = room.client;
+        const timer = window.setTimeout(() => {
+            syncedProfileRef.current = signature;
+            void client.join(persona.name || 'Designer', profile).catch(() => { syncedProfileRef.current = null; });
+        }, 500);
+        return () => window.clearTimeout(timer);
+    }, [roomJoined, room.client, persona]);
     const froamProjectId = createFroamProjectId(projectKey);
     const projectSession = useFroamProjectDocument({ projectId: froamProjectId, actorId: room.identity?.actor ?? LOCAL_ACTOR, ops: opLog.all(), store, revision: logVersion });
     const activeProjectState = useMemo(() => deriveBranchState(projectSession.project), [projectSession.project]);
@@ -598,12 +669,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [previewingRequestId, setPreviewingRequestId] = useState(null);
     const isContributor = room.role === 'contributor';
     const [sharing, setSharing] = useState(false);
+    /** Set when invite links couldn't be made — there's no room server behind this page. */
+    const [shareUnavailable, setShareUnavailable] = useState(false);
     const [copied, setCopied] = useState(false);
     /** The link to hand over — a commenter one, since that is what a client is. */
     const shareLink = room.owned ? room.inviteLink(room.owned, 'commenter') : null;
     const editorLink = room.owned ? room.inviteLink(room.owned, 'editor') : null;
     const startSharing = useCallback(async (fresh = false) => {
         setSharing(true);
+        setShareUnavailable(false);
         try {
             // "New link" opens a new room, which is how you cut off an old one:
             // the tokens that were sent stop working because the room they name is
@@ -613,7 +687,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             showToast(fresh ? 'New link — the old one no longer works' : 'Review link ready');
         }
         catch {
-            showToast('Could not open a room — is the bridge running?');
+            // No room server here (a static preview, a site without Froam's
+            // backend). Say so where the person is looking, with the way forward.
+            setShareUnavailable(true);
         }
         finally {
             setSharing(false);
@@ -1178,40 +1254,42 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         setPersona(nextPersona);
         setPersonaDraft(nextPersona);
         setPersonaEditorOpen(false);
-        showToast('Froam profile updated');
+        showToast(roomJoined ? 'Profile updated — everyone in the room sees it' : 'Profile updated');
     }
     function clearPersonaImage() {
-        setPersonaDraft((current) => {
-            const nextPersona = sanitizeFroamPersona({ ...current, imageUrl: '' });
-            setPersona(nextPersona);
-            return nextPersona;
-        });
+        setPersonaDraft((current) => sanitizeFroamPersona({ ...current, imageUrl: '' }));
     }
     function handlePersonaImageUpload(event) {
         const file = event.target.files?.[0];
         event.target.value = '';
-        if (!file)
-            return;
-        if (!file.type.startsWith('image/')) {
-            showToast('Use an image file for the Froam avatar');
+        if (file)
+            void applyPersonaImage(file);
+    }
+    /** Any photo becomes a small square first: it travels with you into rooms. */
+    async function applyPersonaImage(file) {
+        if (file.size > MAX_PERSONA_IMAGE_BYTES * 25) {
+            showToast('That photo is too large — pick one under 10 MB');
             return;
         }
-        if (file.size > MAX_PERSONA_IMAGE_BYTES) {
-            showToast('Avatar is too large. Keep it under 400 KB.');
-            return;
+        try {
+            const imageUrl = await shrinkAvatar(file);
+            setPersonaDraft((current) => sanitizeFroamPersona({ ...current, imageUrl }));
         }
-        const reader = new FileReader();
-        reader.onload = () => {
-            const imageUrl = typeof reader.result === 'string' ? reader.result : '';
-            if (!imageUrl)
-                return;
-            setPersonaDraft((current) => {
-                const nextPersona = sanitizeFroamPersona({ ...current, imageUrl });
-                setPersona(nextPersona);
-                return nextPersona;
-            });
-        };
-        reader.readAsDataURL(file);
+        catch (error) {
+            showToast(error instanceof Error ? error.message : 'That image could not be used');
+        }
+    }
+    /** Joining by link: who you are becomes your studio profile, then the room hears it. */
+    async function joinRoomAs(name, profile) {
+        const next = sanitizeFroamPersona({
+            ...persona,
+            name,
+            imageUrl: profile.avatarUrl ?? '',
+            role: profile.title || persona.role,
+        });
+        setPersona(next);
+        setPersonaDraft(next);
+        await room.join(name, { ...roomProfileOf(next), title: profile.title || null });
     }
     /**
      * Start writing into a page element: remember its original copy, make it
@@ -5102,7 +5180,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 }
                                 setActiveTool(tool);
                                 setMoveMode(tool === 'move');
-                            }, canUndo: canUndo, canRedo: canRedo, onSave: actionsRef.current.saveToRunam, onSaveRepo: isContributor ? undefined : () => { void actionsRef.current.saveToRepo(); }, collaborate: (_jsx(FroamCollaborate, { role: room.role, isOwner: room.role === 'owner', inRoom: room.inRoom, myName: room.identity?.name ?? persona.name ?? 'You', people: room.others, links: inviteLinks, opening: sharing, onOpenRoom: (fresh) => { void startSharing(fresh); }, onCopyLink: (link) => { void copyInviteLink(link); }, requests: requests, pendingChanges: contributorRequest?.changes ?? [], onSubmit: submitChangeRequest, onWithdraw: (request) => { void withdrawChangeRequest(request); }, previewingId: previewingRequestId, onPreview: previewChangeRequest, onDecide: decideChangeRequest, onEditName: openPersonaEditor, needsName: room.needsName && invitedByLink, onJoin: async (name) => { await room.join(name); } })), repoStatus: repoStatus, repoDirtyCount: repoDirtyCount, onAskFroam: () => setQuickChatOpen(true), onUndo: actionsRef.current.undo, onRedo: actionsRef.current.redo, onCommandPalette: openCommandPalette, onShortcutsOverlay: () => setShowShortcutOverlay(true), routeKey: routeKey, persona: persona, onOpenPersonaEditor: openPersonaEditor, draftCount: draftCount, moveMode: moveMode, onToggleMoveMode: () => setMoveMode((value) => !value), zoom: zoom, setZoom: setZoom, leftPanelOpen: leftPanelOpen, rightPanelOpen: (workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen, onToggleLeftPanel: () => {
+                            }, canUndo: canUndo, canRedo: canRedo, onSave: actionsRef.current.saveToRunam, onSaveRepo: isContributor ? undefined : () => { void actionsRef.current.saveToRepo(); }, collaborate: (_jsx(FroamCollaborate, { role: room.role, isOwner: room.role === 'owner', inRoom: room.inRoom, joined: roomJoined, myName: room.identity?.name ?? persona.name ?? 'You', me: roomMe, people: room.others, links: inviteLinks, opening: sharing, shareUnavailable: shareUnavailable, onOpenRoom: (fresh) => { void startSharing(fresh); }, onCopyLink: (link) => { void copyInviteLink(link); }, requests: requests, pendingChanges: contributorRequest?.changes ?? [], onSubmit: submitChangeRequest, onWithdraw: (request) => { void withdrawChangeRequest(request); }, previewingId: previewingRequestId, onPreview: previewChangeRequest, onDecide: decideChangeRequest, messaging: roomMessaging, onEditProfile: openPersonaEditor, needsName: room.needsName && invitedByLink, knownProfile: persona.name && persona.name !== DEFAULT_FROAM_PERSONA.name
+                                    ? { name: persona.name, avatarUrl: persona.imageUrl || null, title: persona.role }
+                                    : null, onJoin: joinRoomAs })), repoStatus: repoStatus, repoDirtyCount: repoDirtyCount, onAskFroam: () => setQuickChatOpen(true), onUndo: actionsRef.current.undo, onRedo: actionsRef.current.redo, onCommandPalette: openCommandPalette, onShortcutsOverlay: () => setShowShortcutOverlay(true), routeKey: routeKey, persona: persona, onOpenPersonaEditor: openPersonaEditor, draftCount: draftCount, moveMode: moveMode, onToggleMoveMode: () => setMoveMode((value) => !value), zoom: zoom, setZoom: setZoom, leftPanelOpen: leftPanelOpen, rightPanelOpen: (workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen, onToggleLeftPanel: () => {
                                 if (workspaceMode !== 'create' && leftWorkspaceMode !== 'reference' && leftWorkspaceMode !== 'layers') {
                                     setWorkspaceMode('create');
                                     setLeftPanelOpen(true);
@@ -5280,7 +5360,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                             ? resolveAnchor(note.anchor, root).status === 'orphaned'
                                             : false;
                                         return (_jsxs("div", { className: `froam-note${note.resolved ? ' is-resolved' : ''}${orphaned ? ' is-orphaned' : ''}`, "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-note__head", children: [_jsx("span", { className: "froam-note__num", children: i + 1 }), _jsx("span", { className: "froam-note__who", children: note.name }), _jsx("span", { className: "froam-note__when", children: note.viewport === viewportMode ? relativeTime(note.createdAt) : `on ${note.viewport} · ${relativeTime(note.createdAt)}` })] }), note.quoted && _jsxs("div", { className: "froam-note__quote", children: ["\u201C", note.quoted, "\u201D"] }), _jsx("div", { className: "froam-note__body", children: note.body }), orphaned && (_jsx("div", { className: "froam-note__flag", children: "The element this was about is gone \u2014 kept, not deleted" })), _jsxs("div", { className: "froam-note__row", children: [!orphaned && (_jsx("button", { type: "button", className: "fs-pill", onClick: () => goToNote(note), children: "Show me" })), _jsx("button", { type: "button", className: note.resolved ? 'fs-pill' : 'fs-pill is-accent', onClick: () => void resolveNote(note), children: note.resolved ? 'Reopen' : 'Resolve' })] })] }, note.id));
-                                    }) }))] })), room.inRoom && (_jsx(AccordionSection, { id: "roomChat", icon: _jsx(MessageSquare, { size: 14 }), title: roomPresence.length ? `Room chat · ${roomPresence.length + 1} here` : 'Room chat', isOpen: openSections.roomChat, onToggle: () => toggleSection('roomChat'), children: _jsx(FroamRoomChat, { client: room.client, events: room.events, role: room.role }) })), _jsx(AccordionSection, { id: "inspiration", icon: _jsx(ImagePlus, { size: 14 }), title: "Inspiration Board", isOpen: openSections.inspiration, onToggle: () => toggleSection('inspiration'), children: _jsx(FroamInspirationPanel, { projectKey: projectKey, onToast: showToast }) }), _jsx(AccordionSection, { id: "tokens", icon: _jsx(Coins, { size: 14 }), title: "Design Tokens", isOpen: openSections.tokens, onToggle: () => toggleSection('tokens'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Named values you can apply instantly to any element. Also injected as CSS variables." }), tokens.length > 0 && (_jsx("div", { className: "fs-tokens-grid", children: tokens.map((token) => (_jsxs("div", { className: "fs-token", "data-chef-editor-root": "true", children: [token.category === 'color' && (_jsx("span", { className: "fs-token__swatch", style: { background: token.value } })), _jsx("span", { className: "fs-token__name", title: `--${token.name.replace(/\s+/g, '-').toLowerCase()}`, children: token.name }), _jsx("span", { className: "fs-token__value", children: token.value }), _jsx("button", { type: "button", className: "fs-pill fs-token__apply", onClick: () => applyTokenToSelection(token), children: "Apply" }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", onClick: () => removeToken(token.id), children: _jsx(X, { size: 10 }) })] }, token.id))) })), _jsxs("div", { className: "fs-grid-2", style: { gap: 6 }, children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Category" }), _jsxs("select", { className: "fs-select", value: newTokenCategory, onChange: (e) => setNewTokenCategory(e.target.value), children: [_jsx("option", { value: "color", children: "Color" }), _jsx("option", { value: "spacing", children: "Spacing" }), _jsx("option", { value: "font-size", children: "Font size" }), _jsx("option", { value: "radius", children: "Radius" }), _jsx("option", { value: "shadow", children: "Shadow" }), _jsx("option", { value: "other", children: "Other" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Name" }), _jsx("input", { type: "text", className: "fs-input", value: newTokenName, onChange: (e) => setNewTokenName(e.target.value), placeholder: "brand-primary" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Value" }), _jsxs("div", { style: { display: 'flex', gap: 6 }, children: [newTokenCategory === 'color' && _jsx("input", { type: "color", className: "fs-color-input", value: newTokenValue || '#000000', onChange: (e) => setNewTokenValue(e.target.value), style: { width: 36 } }), _jsx("input", { type: "text", className: "fs-input", value: newTokenValue, onChange: (e) => setNewTokenValue(e.target.value), placeholder: newTokenCategory === 'color' ? '#5eead4' : newTokenCategory === 'spacing' ? '16px' : newTokenCategory === 'radius' ? '8px' : 'value', style: { flex: 1 } })] })] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: addToken, children: [_jsx(Plus, { size: 12 }), " Add token"] })] }) }), _jsx(AccordionSection, { id: "designSystem", icon: _jsx(Variable, { size: 14 }), title: "Design System", isOpen: openSections.designSystem, onToggle: () => toggleSection('designSystem'), children: _jsx(FroamDesignSystemPanel, { system: activeProjectState.designSystem, onChange: replaceDesignSystem, onToast: showToast, onApplyStyle: (states, name) => {
+                                    }) }))] })), _jsx(AccordionSection, { id: "inspiration", icon: _jsx(ImagePlus, { size: 14 }), title: "Inspiration Board", isOpen: openSections.inspiration, onToggle: () => toggleSection('inspiration'), children: _jsx(FroamInspirationPanel, { projectKey: projectKey, onToast: showToast }) }), _jsx(AccordionSection, { id: "tokens", icon: _jsx(Coins, { size: 14 }), title: "Design Tokens", isOpen: openSections.tokens, onToggle: () => toggleSection('tokens'), children: _jsxs("div", { className: "fs-stack", children: [_jsx("p", { className: "fs-helper-text", children: "Named values you can apply instantly to any element. Also injected as CSS variables." }), tokens.length > 0 && (_jsx("div", { className: "fs-tokens-grid", children: tokens.map((token) => (_jsxs("div", { className: "fs-token", "data-chef-editor-root": "true", children: [token.category === 'color' && (_jsx("span", { className: "fs-token__swatch", style: { background: token.value } })), _jsx("span", { className: "fs-token__name", title: `--${token.name.replace(/\s+/g, '-').toLowerCase()}`, children: token.name }), _jsx("span", { className: "fs-token__value", children: token.value }), _jsx("button", { type: "button", className: "fs-pill fs-token__apply", onClick: () => applyTokenToSelection(token), children: "Apply" }), _jsx("button", { type: "button", className: "froam-floating-bar__btn", onClick: () => removeToken(token.id), children: _jsx(X, { size: 10 }) })] }, token.id))) })), _jsxs("div", { className: "fs-grid-2", style: { gap: 6 }, children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Category" }), _jsxs("select", { className: "fs-select", value: newTokenCategory, onChange: (e) => setNewTokenCategory(e.target.value), children: [_jsx("option", { value: "color", children: "Color" }), _jsx("option", { value: "spacing", children: "Spacing" }), _jsx("option", { value: "font-size", children: "Font size" }), _jsx("option", { value: "radius", children: "Radius" }), _jsx("option", { value: "shadow", children: "Shadow" }), _jsx("option", { value: "other", children: "Other" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Name" }), _jsx("input", { type: "text", className: "fs-input", value: newTokenName, onChange: (e) => setNewTokenName(e.target.value), placeholder: "brand-primary" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Value" }), _jsxs("div", { style: { display: 'flex', gap: 6 }, children: [newTokenCategory === 'color' && _jsx("input", { type: "color", className: "fs-color-input", value: newTokenValue || '#000000', onChange: (e) => setNewTokenValue(e.target.value), style: { width: 36 } }), _jsx("input", { type: "text", className: "fs-input", value: newTokenValue, onChange: (e) => setNewTokenValue(e.target.value), placeholder: newTokenCategory === 'color' ? '#5eead4' : newTokenCategory === 'spacing' ? '16px' : newTokenCategory === 'radius' ? '8px' : 'value', style: { flex: 1 } })] })] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: addToken, children: [_jsx(Plus, { size: 12 }), " Add token"] })] }) }), _jsx(AccordionSection, { id: "designSystem", icon: _jsx(Variable, { size: 14 }), title: "Design System", isOpen: openSections.designSystem, onToggle: () => toggleSection('designSystem'), children: _jsx(FroamDesignSystemPanel, { system: activeProjectState.designSystem, onChange: replaceDesignSystem, onToast: showToast, onApplyStyle: (states, name) => {
                                     const combined = { ...(states.base ?? {}) };
                                     for (const state of ['hover', 'focus', 'active'])
                                         for (const [property, value] of Object.entries(states[state] ?? {}))
@@ -5464,7 +5544,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         applyStyle(finalStyles, nextSelection, 'Resized element');
                     }
                     setSelectionRect(target.getBoundingClientRect());
-                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && !quickChatOpen && froamIntent.state.phase !== 'previewing' && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: canUndo, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, opacity: selection.opacity, isHidden: selection.display === 'none', mixBlendMode: selection.mixBlendMode, zIndex: selection.zIndex, fontOptions: fontOptions, selectionCount: selections.length, isTextLayer: currentSelectionRef.current ? isTextVisualLayer(currentSelectionRef.current) : false, onSaveLook: ({ name, states }) => {
+                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, inRoom: roomJoined, roomRole: room.role, onImageFile: (file) => { void applyPersonaImage(file); }, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && !quickChatOpen && froamIntent.state.phase !== 'previewing' && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: canUndo, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, opacity: selection.opacity, isHidden: selection.display === 'none', mixBlendMode: selection.mixBlendMode, zIndex: selection.zIndex, fontOptions: fontOptions, selectionCount: selections.length, isTextLayer: currentSelectionRef.current ? isTextVisualLayer(currentSelectionRef.current) : false, onSaveLook: ({ name, states }) => {
                     const style = createReusableStyle({ id: `style:look:${Date.now().toString(36)}`, name: `${name} custom`, states });
                     replaceDesignSystem(saveReusableStyle(activeProjectState.designSystem, style), `Saved reusable style: ${style.name}`);
                     showToast(`${style.name} saved to Design System`);

@@ -27,6 +27,9 @@ export type RoomMemberView = {
   role: FroamRole
   color: string
   avatarUrl: string | null
+  /** What they do, in their words ("Marketing"). From their studio profile. */
+  title: string | null
+  joinedAt: number | null
   here: boolean
   routeKey: string | null
   viewport: FroamViewport | null
@@ -49,6 +52,9 @@ export type RoomView = {
   sequence: number
   you: { actor: string; role: FroamRole; name: string } | null
 }
+
+/** What a person tells the room about themselves. `avatarUrl: null` clears the photo. */
+export type RoomProfile = { avatarUrl?: string | null; title?: string | null; color?: string | null }
 
 export type RoomIdentity = { actor: string; name: string; role: FroamRole; session: string }
 
@@ -338,13 +344,13 @@ export function createRoomClient(options: {
      * one, so a refresh keeps your comments yours instead of minting a
      * stranger who happens to have the same name.
      */
-    async join(name: string, profile: { avatarUrl?: string | null } = {}) {
+    async join(name: string, profile: RoomProfile = {}) {
       const payload = await post(`/api/froam/rooms/${roomId}/join`, {
         token,
         name,
         actor: identity?.actor,
         session: identity?.session,
-        avatarUrl: profile.avatarUrl,
+        ...profile,
       }) as { you?: RoomIdentity }
       if (!payload?.you?.actor) throw new Error('Could not join the room')
       remember(payload.you)
@@ -577,9 +583,9 @@ export function createRoomClient(options: {
       return payload.messages ?? []
     },
 
-    async sendChat(body: string) {
+    async sendChat(body: string, requestId?: string | null) {
       const payload = await post(`/api/froam/rooms/${roomId}/chat`, {
-        token, ...credentials(), body,
+        token, ...credentials(), body, ...(requestId ? { requestId } : {}),
       }) as { message?: FroamChatMessage }
       return payload.message ?? null
     },

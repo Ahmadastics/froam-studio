@@ -343,7 +343,7 @@ export default function FroamReview({ routeKey, viewport }: Props) {
             <strong className="froam-review__label">Room chat</strong>
             <button type="button" className="froam-review__ghost" onClick={() => setChatting(false)}>Close</button>
           </div>
-          <FroamRoomChat client={room.client} events={room.events} role={room.role} />
+          <FroamRoomChat client={room.client} events={room.events} role={room.role} roomId={room.roomId} members={room.room?.members ?? []} />
         </div>
       </div>
     )

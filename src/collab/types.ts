@@ -288,6 +288,8 @@ export type FroamChatMessage = {
   name: string
   body: string
   createdAt: number
+  /** Set when the message is about a change request. */
+  requestId?: string
 }
 
 export type FroamRevertProposal = {

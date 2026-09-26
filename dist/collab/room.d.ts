@@ -19,6 +19,9 @@ export type RoomMemberView = {
     role: FroamRole;
     color: string;
     avatarUrl: string | null;
+    /** What they do, in their words ("Marketing"). From their studio profile. */
+    title: string | null;
+    joinedAt: number | null;
     here: boolean;
     routeKey: string | null;
     viewport: FroamViewport | null;
@@ -46,6 +49,12 @@ export type RoomView = {
         role: FroamRole;
         name: string;
     } | null;
+};
+/** What a person tells the room about themselves. `avatarUrl: null` clears the photo. */
+export type RoomProfile = {
+    avatarUrl?: string | null;
+    title?: string | null;
+    color?: string | null;
 };
 export type RoomIdentity = {
     actor: string;
@@ -199,9 +208,7 @@ export declare function createRoomClient(options: {
      * one, so a refresh keeps your comments yours instead of minting a
      * stranger who happens to have the same name.
      */
-    join(name: string, profile?: {
-        avatarUrl?: string | null;
-    }): Promise<RoomIdentity>;
+    join(name: string, profile?: RoomProfile): Promise<RoomIdentity>;
     /** Read the room without changing anything. */
     refresh(): Promise<RoomView | null>;
     /**
@@ -285,7 +292,7 @@ export declare function createRoomClient(options: {
     decideRequest(requestId: string, decision: "approved" | "changes-requested", note?: string): Promise<RoomRequest | null>;
     resolveComment(commentId: string, resolved?: boolean): Promise<RoomComment | null>;
     chat(): Promise<FroamChatMessage[]>;
-    sendChat(body: string): Promise<FroamChatMessage | null>;
+    sendChat(body: string, requestId?: string | null): Promise<FroamChatMessage | null>;
     signalDesign(routeKey: string, viewport: FroamViewport): Promise<void>;
     proposals(): Promise<FroamRevertProposal[]>;
     decideProposal(proposalId: string, decision: "approved" | "declined"): Promise<{

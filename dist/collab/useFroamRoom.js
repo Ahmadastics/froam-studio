@@ -113,13 +113,13 @@ export function useFroamRoom(options) {
             window.removeEventListener('focus', wake);
         };
     }, [client, enabled, everyMs, autoJoinAs]);
-    const join = useCallback(async (name) => {
+    const join = useCallback(async (name, profile = profileRef.current ?? {}) => {
         if (!client)
             return null;
         setJoining(true);
         setError(null);
         try {
-            const you = await client.join(name);
+            const you = await client.join(name, profile);
             // Announce immediately rather than waiting out the first interval —
             // otherwise the other side sees an empty room for fifteen seconds.
             await client.beat(whereRef.current);
@@ -141,8 +141,8 @@ export function useFroamRoom(options) {
      * This is the front door: without it a designer would have to POST to the
      * API by hand to get a link, which is the same as the feature not existing.
      */
-    const openRoom = useCallback(async (name) => {
-        const payload = await transport.post('/api/froam/rooms', { name });
+    const openRoom = useCallback(async (name, profile = profileRef.current ?? {}) => {
+        const payload = await transport.post('/api/froam/rooms', { name, ...profile });
         if (!payload?.room?.id || !payload.invites)
             throw new Error('Could not open a room');
         const owned = {

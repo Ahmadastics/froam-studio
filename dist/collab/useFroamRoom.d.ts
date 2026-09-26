@@ -1,4 +1,4 @@
-import { inviteLink, type OwnedRoom, type RoomTransport, type RoomView } from './room';
+import { inviteLink, type OwnedRoom, type RoomProfile, type RoomTransport, type RoomView } from './room';
 import type { FroamRole, FroamViewport } from './types';
 import type { FroamRoomEvent } from './types';
 export type RoomWhere = {
@@ -30,9 +30,7 @@ export declare function useFroamRoom(options: {
      */
     autoJoinAs?: string;
     /** Member profile is persisted on join, not repeated on every heartbeat. */
-    autoJoinProfile?: {
-        avatarUrl?: string | null;
-    };
+    autoJoinProfile?: RoomProfile;
     transport?: RoomTransport;
     everyMs?: number;
     href?: string;
@@ -46,9 +44,7 @@ export declare function useFroamRoom(options: {
         readonly joined: boolean;
         on(listener: (room: RoomView | null) => void): () => boolean;
         onEvents(listener: (events: readonly FroamRoomEvent[]) => void): () => boolean;
-        join(name: string, profile?: {
-            avatarUrl?: string | null;
-        }): Promise<import("./room").RoomIdentity>;
+        join(name: string, profile?: RoomProfile): Promise<import("./room").RoomIdentity>;
         refresh(): Promise<RoomView | null>;
         beat(where?: {
             routeKey?: string;
@@ -121,7 +117,7 @@ export declare function useFroamRoom(options: {
         decideRequest(requestId: string, decision: "approved" | "changes-requested", note?: string): Promise<import("./room").RoomRequest | null>;
         resolveComment(commentId: string, resolved?: boolean): Promise<import("./room").RoomComment | null>;
         chat(): Promise<import("./types").FroamChatMessage[]>;
-        sendChat(body: string): Promise<import("./types").FroamChatMessage | null>;
+        sendChat(body: string, requestId?: string | null): Promise<import("./types").FroamChatMessage | null>;
         signalDesign(routeKey: string, viewport: FroamViewport): Promise<void>;
         proposals(): Promise<import("./types").FroamRevertProposal[]>;
         decideProposal(proposalId: string, decision: "approved" | "declined"): Promise<{
@@ -130,7 +126,7 @@ export declare function useFroamRoom(options: {
             cursor?: number;
         }>;
     } | null;
-    openRoom: (name: string) => Promise<{
+    openRoom: (name: string, profile?: RoomProfile) => Promise<{
         roomId: string;
         invites: OwnedRoom["invites"];
         createdAt: number;
@@ -146,7 +142,7 @@ export declare function useFroamRoom(options: {
     needsName: boolean;
     joining: boolean;
     error: string | null;
-    join: (name: string) => Promise<import("./room").RoomIdentity | null>;
+    join: (name: string, profile?: RoomProfile) => Promise<import("./room").RoomIdentity | null>;
     others: import("./room").RoomMemberView[];
     present: import("./room").RoomMemberView[];
     presenter: import("./room").RoomMemberView | null;

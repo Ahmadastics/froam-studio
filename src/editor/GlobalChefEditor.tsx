@@ -110,7 +110,7 @@ import { getFroamStudioConfig } from '../config'
 import { createOpLogSession, type OpLogSession } from '../collab/session'
 import { useFroamRoom } from '../collab/useFroamRoom'
 import { readRoomFromLocation } from '../collab/room'
-import type { RoomComment, RoomRequest, RoomRevision } from '../collab/room'
+import type { RoomComment, RoomMemberView, RoomRequest, RoomRevision } from '../collab/room'
 import FroamNotePins from './FroamNotePins'
 import FroamPresenceLayer from './FroamPresenceLayer'
 import FroamConnectedCanvas, { type FroamConnectedCanvasTab } from './FroamConnectedCanvas'
@@ -140,7 +140,6 @@ import { appendProjectEvents, createProjectEvent, deriveBranchState, switchProje
 import { validateReferenceBuildCandidate, type FroamReferenceBuildPlan, type FroamReferenceCandidateObservation } from '../project/reference-build'
 import { sitePlanGraphRecords, type LegacySitePage } from '../project/adapters'
 import { useFroamProjectDocument } from './useFroamProjectDocument'
-import FroamRoomChat from './FroamRoomChat'
 import { diffStores, type FroamChange } from '../collab/oplog'
 import { loadOpLog, saveOpLog } from '../collab/persist'
 import { findElementByPath, getElementPath, isInPageScope, isPathElement, isSafeDraftPath } from '../collab/paths'
@@ -169,12 +168,15 @@ import { useCanvasPointer } from './chef/useCanvasPointer'
 import { useSelectionTracking } from './chef/useSelectionTracking'
 import { sampleSiteTheme } from './library/site-theme'
 import { usePatternDrop } from './library/pattern-drop'
-import { FroamCollaborate } from './collaborate/FroamCollaborate'
+import { FroamCollaborate, type JoinProfile } from './collaborate/FroamCollaborate'
+import { useRoomMessages } from './collaborate/useRoomMessages'
+import { shrinkAvatar } from './collaborate/avatar-image'
 import { buildChangeRequest } from './collaborate/request-builder'
 import { PSEUDO_HOST_ATTR, pseudoKey, type PseudoElement } from './chef/pseudo'
 import { useDraftPainter } from './chef/useDraftPainter'
 import { useDeviceShell } from './chef/useDeviceShell'
 import {
+  DEFAULT_FROAM_PERSONA,
   readFroamPersonaDraft,
   sanitizeFroamPersona,
   type FroamPersona,
@@ -298,6 +300,18 @@ export type GlobalChefEditorProps = {
   initialOpen?: boolean
   routeKey?: string
   projectKey?: string
+}
+
+/**
+ * What the room sees of your studio profile. The colour is sent only once you
+ * have picked one, so everyone keeping the default still gets a distinct one.
+ */
+function roomProfileOf(persona: FroamPersona) {
+  return {
+    avatarUrl: persona.imageUrl || null,
+    title: persona.role || null,
+    color: persona.accentColor && persona.accentColor !== DEFAULT_FROAM_PERSONA.accentColor ? persona.accentColor : null,
+  }
 }
 
 export default function GlobalChefEditor({ initialOpen = false, routeKey: explicitRouteKey, projectKey: explicitProjectKey }: GlobalChefEditorProps) {
@@ -624,9 +638,61 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       action: roomLockedPath ? 'Transforming selection' : selection ? 'Editing selection' : null,
     },
     autoJoinAs: invitedByLink ? undefined : persona.name || 'Designer',
-    autoJoinProfile: { avatarUrl: persona.imageUrl || null },
+    autoJoinProfile: roomProfileOf(persona),
   })
   const roomPresence = room.present
+  const roomJoined = Boolean(room.client?.joined && room.identity)
+  // You, as the room lists you — or, in the moment before the room has been
+  // read back after joining, as your own profile says you are.
+  const roomMe = useMemo<RoomMemberView | null>(() => {
+    const listed = room.room?.members.find((member) => member.actor === room.identity?.actor)
+    if (listed || !roomJoined || !room.identity) return listed ?? null
+    const profile = roomProfileOf(persona)
+    return {
+      actor: room.identity.actor,
+      name: room.identity.name,
+      role: room.identity.role,
+      color: profile.color ?? persona.accentColor,
+      avatarUrl: profile.avatarUrl,
+      title: profile.title,
+      joinedAt: null,
+      here: true,
+      routeKey,
+      viewport: viewportMode,
+      selectedPath: null,
+      selectedNodeId: null,
+      lockedPath: null,
+      lockedNodeId: null,
+      cursor: null,
+      tool: null,
+      action: null,
+      seenAt: null,
+    }
+  }, [room.room, room.identity, roomJoined, persona, routeKey, viewportMode])
+  const roomMessaging = useRoomMessages({
+    client: room.client,
+    events: room.events,
+    roomId: room.roomId,
+    role: room.role,
+    me: roomJoined ? room.identity?.actor ?? null : null,
+  })
+
+  // Your studio profile is who you are in the room: change it and everyone
+  // sees the new name and face on your cursor, messages and requests.
+  const syncedProfileRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!roomJoined || !room.client) { syncedProfileRef.current = null; return }
+    const profile = roomProfileOf(persona)
+    const signature = JSON.stringify([persona.name, profile])
+    if (syncedProfileRef.current === null) { syncedProfileRef.current = signature; return }
+    if (syncedProfileRef.current === signature) return
+    const client = room.client
+    const timer = window.setTimeout(() => {
+      syncedProfileRef.current = signature
+      void client.join(persona.name || 'Designer', profile).catch(() => { syncedProfileRef.current = null })
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [roomJoined, room.client, persona])
   const froamProjectId = createFroamProjectId(projectKey)
   const projectSession = useFroamProjectDocument({ projectId: froamProjectId, actorId: room.identity?.actor ?? LOCAL_ACTOR, ops: opLog.all(), store, revision: logVersion })
   const activeProjectState = useMemo(
@@ -818,6 +884,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [previewingRequestId, setPreviewingRequestId] = useState<string | null>(null)
   const isContributor = room.role === 'contributor'
   const [sharing, setSharing] = useState(false)
+  /** Set when invite links couldn't be made — there's no room server behind this page. */
+  const [shareUnavailable, setShareUnavailable] = useState(false)
   const [copied, setCopied] = useState(false)
 
   /** The link to hand over — a commenter one, since that is what a client is. */
@@ -826,6 +894,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   const startSharing = useCallback(async (fresh = false) => {
     setSharing(true)
+    setShareUnavailable(false)
     try {
       // "New link" opens a new room, which is how you cut off an old one:
       // the tokens that were sent stop working because the room they name is
@@ -833,7 +902,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       if (fresh || !room.owned) await room.openRoom(persona.name || 'Designer')
       showToast(fresh ? 'New link — the old one no longer works' : 'Review link ready')
     } catch {
-      showToast('Could not open a room — is the bridge running?')
+      // No room server here (a static preview, a site without Froam's
+      // backend). Say so where the person is looking, with the way forward.
+      setShareUnavailable(true)
     } finally {
       setSharing(false)
     }
@@ -1318,41 +1389,44 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     setPersona(nextPersona)
     setPersonaDraft(nextPersona)
     setPersonaEditorOpen(false)
-    showToast('Froam profile updated')
+    showToast(roomJoined ? 'Profile updated — everyone in the room sees it' : 'Profile updated')
   }
 
   function clearPersonaImage() {
-    setPersonaDraft((current) => {
-      const nextPersona = sanitizeFroamPersona({ ...current, imageUrl: '' })
-      setPersona(nextPersona)
-      return nextPersona
-    })
+    setPersonaDraft((current) => sanitizeFroamPersona({ ...current, imageUrl: '' }))
   }
 
   function handlePersonaImageUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file) return
-    if (!file.type.startsWith('image/')) {
-      showToast('Use an image file for the Froam avatar')
-      return
-    }
-    if (file.size > MAX_PERSONA_IMAGE_BYTES) {
-      showToast('Avatar is too large. Keep it under 400 KB.')
-      return
-    }
+    if (file) void applyPersonaImage(file)
+  }
 
-    const reader = new FileReader()
-    reader.onload = () => {
-      const imageUrl = typeof reader.result === 'string' ? reader.result : ''
-      if (!imageUrl) return
-      setPersonaDraft((current) => {
-        const nextPersona = sanitizeFroamPersona({ ...current, imageUrl })
-        setPersona(nextPersona)
-        return nextPersona
-      })
+  /** Any photo becomes a small square first: it travels with you into rooms. */
+  async function applyPersonaImage(file: File) {
+    if (file.size > MAX_PERSONA_IMAGE_BYTES * 25) {
+      showToast('That photo is too large — pick one under 10 MB')
+      return
     }
-    reader.readAsDataURL(file)
+    try {
+      const imageUrl = await shrinkAvatar(file)
+      setPersonaDraft((current) => sanitizeFroamPersona({ ...current, imageUrl }))
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'That image could not be used')
+    }
+  }
+
+  /** Joining by link: who you are becomes your studio profile, then the room hears it. */
+  async function joinRoomAs(name: string, profile: JoinProfile) {
+    const next = sanitizeFroamPersona({
+      ...persona,
+      name,
+      imageUrl: profile.avatarUrl ?? '',
+      role: profile.title || persona.role,
+    })
+    setPersona(next)
+    setPersonaDraft(next)
+    await room.join(name, { ...roomProfileOf(next), title: profile.title || null })
   }
 
   /**
@@ -5320,10 +5394,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   role={room.role}
                   isOwner={room.role === 'owner'}
                   inRoom={room.inRoom}
+                  joined={roomJoined}
                   myName={room.identity?.name ?? persona.name ?? 'You'}
+                  me={roomMe}
                   people={room.others}
                   links={inviteLinks}
                   opening={sharing}
+                  shareUnavailable={shareUnavailable}
                   onOpenRoom={(fresh) => { void startSharing(fresh) }}
                   onCopyLink={(link) => { void copyInviteLink(link) }}
                   requests={requests}
@@ -5333,9 +5410,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   previewingId={previewingRequestId}
                   onPreview={previewChangeRequest}
                   onDecide={decideChangeRequest}
-                  onEditName={openPersonaEditor}
+                  messaging={roomMessaging}
+                  onEditProfile={openPersonaEditor}
                   needsName={room.needsName && invitedByLink}
-                  onJoin={async (name) => { await room.join(name) }}
+                  knownProfile={persona.name && persona.name !== DEFAULT_FROAM_PERSONA.name
+                    ? { name: persona.name, avatarUrl: persona.imageUrl || null, title: persona.role }
+                    : null}
+                  onJoin={joinRoomAs}
                 />
               )}
               repoStatus={repoStatus}
@@ -6827,18 +6908,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             )}
 
             {/* ─── Inspiration Board ─── */}
-            {room.inRoom && (
-              <AccordionSection
-                id="roomChat"
-                icon={<MessageSquare size={14} />}
-                title={roomPresence.length ? `Room chat · ${roomPresence.length + 1} here` : 'Room chat'}
-                isOpen={openSections.roomChat}
-                onToggle={() => toggleSection('roomChat')}
-              >
-                <FroamRoomChat client={room.client} events={room.events} role={room.role} />
-              </AccordionSection>
-            )}
-
             <AccordionSection
               id="inspiration"
               icon={<ImagePlus size={14} />}
@@ -7339,6 +7408,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       <FroamPersonaEditor
         open={personaEditorOpen}
         persona={personaDraft}
+        inRoom={roomJoined}
+        roomRole={room.role}
+        onImageFile={(file) => { void applyPersonaImage(file) }}
         onChange={setPersonaDraft}
         onClose={closePersonaEditor}
         onSave={savePersonaProfile}

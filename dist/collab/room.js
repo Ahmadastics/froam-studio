@@ -209,7 +209,7 @@ export function createRoomClient(options) {
                 name,
                 actor: identity?.actor,
                 session: identity?.session,
-                avatarUrl: profile.avatarUrl,
+                ...profile,
             });
             if (!payload?.you?.actor)
                 throw new Error('Could not join the room');
@@ -416,9 +416,9 @@ export function createRoomClient(options) {
             const payload = await transport.get(`/api/froam/rooms/${roomId}/chat?${params}`);
             return payload.messages ?? [];
         },
-        async sendChat(body) {
+        async sendChat(body, requestId) {
             const payload = await post(`/api/froam/rooms/${roomId}/chat`, {
-                token, ...credentials(), body,
+                token, ...credentials(), body, ...(requestId ? { requestId } : {}),
             });
             return payload.message ?? null;
         },
