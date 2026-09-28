@@ -45,10 +45,18 @@ export default {
 export class FroamShare {
   constructor(state) {
     this.state = state
-    this.hub = createShareHub({ hostSocket: () => this.state.getWebSockets('host')[0] ?? null })
+    this.ready = this.state.storage.get('site').then((site) => {
+      this.hub = createShareHub({
+        hostSocket: () => this.state.getWebSockets('host')[0] ?? null,
+        cache: caches.default,
+        site: site ?? null,
+        onHello: (next) => { this.state.storage.put('site', next).catch(() => {}) },
+      })
+    })
   }
 
   async fetch(request) {
+    await this.ready
     const url = new URL(request.url)
     const host = HOST_PATH.exec(url.pathname)
     if (host) {
@@ -68,10 +76,11 @@ export class FroamShare {
     return this.hub.forward(request)
   }
 
-  webSocketMessage(_socket, message) {
+  async webSocketMessage(_socket, message) {
+    await this.ready
     this.hub.fromHost(typeof message === 'string' ? message : new TextDecoder().decode(message))
   }
 
-  webSocketClose() { this.hub.hostGone() }
-  webSocketError() { this.hub.hostGone() }
+  async webSocketClose() { await this.ready; this.hub.hostGone() }
+  async webSocketError() { await this.ready; this.hub.hostGone() }
 }

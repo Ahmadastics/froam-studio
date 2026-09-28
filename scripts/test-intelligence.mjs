@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import http from 'node:http'
@@ -239,7 +239,7 @@ test('conflict-safe adoption remains intact', () => { const base = makeProject('
 // Packaging/security compatibility.
 test('browser client is provider-neutral and injectable', async () => { let request; const response = await requestFroamIntelligence(makeAnalysisRequest('understand'), async (url, init) => { request = { url, init }; return new Response(JSON.stringify({ schemaVersion: 1, purpose: 'understand', provider: 'local', findings: [] }), { status: 200 }) }); assert.equal(request.url, '/__froam/intelligence/plan'); assert.ok(!request.init.body.includes('apiKey')); assert.equal(response.purpose, 'understand') })
 test('project schema version remains 2', async () => { const { FROAM_PROJECT_SCHEMA_VERSION } = await import('../dist/project/types.js'); assert.equal(FROAM_PROJECT_SCHEMA_VERSION, 2) })
-test('server implementation and environment secret names are absent from browser bundle', () => { const bundle = readFileSync(new URL('../dist/standalone/froam-editor.js', import.meta.url), 'utf8'); for (const forbidden of ['FROAM_AI_API_KEY', 'FROAM_AI_MODEL', 'FROAM_AI_BASE_URL', '/chat/completions', 'Authorization: `Bearer']) assert.ok(!bundle.includes(forbidden), `browser bundle contains ${forbidden}`) })
+test('server implementation and environment secret names are absent from browser bundle', () => { const dir = new URL('../dist/standalone/', import.meta.url); const files = ['froam-editor.js']; const walk = (rel) => { for (const entry of readdirSync(new URL(rel, dir), { withFileTypes: true })) { if (entry.isDirectory()) walk(`${rel}${entry.name}/`); else if (entry.name.endsWith('.mjs')) files.push(`${rel}${entry.name}`) } }; walk('modules/'); const bundle = files.map((file) => readFileSync(new URL(file, dir), 'utf8')).join('\n'); for (const forbidden of ['FROAM_AI_API_KEY', 'FROAM_AI_MODEL', 'FROAM_AI_BASE_URL', '/chat/completions', 'Authorization: `Bearer']) assert.ok(!bundle.includes(forbidden), `browser bundle contains ${forbidden}`) })
 
 let passed = 0
 for (const [name, fn] of tests) {

@@ -11,8 +11,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { createBridgeServer } from '../lib/dev-server.mjs'
-import { SHARE_COOKIE, createShareHub, isShareId, sha256Hex, shareFromCookie } from '../templates/cloudflare-share/share.js'
+import { createBridgeServer, isSameSite, keepLinksInside } from '../lib/dev-server.mjs'
+import { SHARE_COOKIE, createShareHub, editorFromCdn, isShareId, sha256Hex, shareFromCookie } from '../templates/cloudflare-share/share.js'
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const require = createRequire(import.meta.url)
@@ -23,7 +23,8 @@ const shares = new Map()
 const shareFor = (id) => {
   if (!shares.has(id)) {
     const entry = { socket: null, keyHash: null }
-    entry.hub = createShareHub({ hostSocket: () => entry.socket })
+    // As for a version not on the CDN yet: the editor comes through the tunnel.
+    entry.hub = createShareHub({ hostSocket: () => entry.socket, fetchImpl: (url, init) => (String(url).startsWith('https://cdn.jsdelivr.net/') ? Promise.resolve(new Response('not found', { status: 404 })) : fetch(url, init)) })
     shares.set(id, entry)
   }
   return shares.get(id)
@@ -101,6 +102,34 @@ const local = (pathname, init = {}) => fetch(`${LOCAL}${pathname}`, init)
 const json = (body) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 const state = {}
 
+test('a live site that moves to its www twin is followed, and its links stay in Froam', () => {
+  assert.equal(isSameSite('dominos.ng', 'www.dominos.ng'), true)
+  assert.equal(isSameSite('www.shop.com', 'shop.com'), true)
+  assert.equal(isSameSite('shop.com', 'othershop.com'), false)
+  const html = keepLinksInside(
+    '<a href="https://www.shop.com/menu?x=1">m</a><a class=a href="https://www.shop.com">h</a>'
+      + "<form action='https://www.shop.com/s'></form><img src=\"https://www.shop.com/a.png\">"
+      + '<a href="https://www.shop.com.example.org/">x</a>',
+    new Set(['https://www.shop.com']),
+  )
+  assert.equal(html,
+    '<a href="/menu?x=1">m</a><a class=a href="/">h</a>'
+      + "<form action='/s'></form><img src=\"https://www.shop.com/a.png\">"
+      + '<a href="https://www.shop.com.example.org/">x</a>')
+})
+
+test('the editor and its modules come from the CDN, for the exact version', async () => {
+  const asked = []
+  const fake = async (url) => { asked.push(url); return new Response('ok', { status: 200 }) }
+  for (const path of ['/froam.js', '/froam.css', '/froam-modules/froam-editor.mjs', '/froam-modules/chunks/GlobalChefEditor-ABC123.mjs']) assert.ok(await editorFromCdn(path, '8.8.1', fake), path)
+  assert.deepEqual(asked.map((u) => u.replace('https://cdn.jsdelivr.net/npm/@ahmadastic/froam@8.8.1/dist/standalone/', '')), ['froam-editor.js', 'froam-editor.css', 'modules/froam-editor.mjs', 'modules/chunks/GlobalChefEditor-ABC123.mjs'])
+  const chunk = await editorFromCdn('/froam-modules/chunks/x-1.mjs', '8.8.1', fake)
+  assert.match(chunk.headers.get('cache-control'), /immutable/)
+  assert.match(chunk.headers.get('content-type'), /javascript/)
+  assert.equal(await editorFromCdn('/froam-modules/../../etc.mjs', '8.8.1', fake), null)
+  assert.equal(await editorFromCdn('/froam.js', 'latest; rm -rf', fake), null)
+})
+
 test('the owner starts sharing from the editor; the link is stable', async () => {
   const started = await local('/__froam/share/start', json({})).then((r) => r.json())
   assert.equal(started.success, true)
@@ -122,9 +151,13 @@ test('someone elsewhere opens the link and gets the site, with the editor', asyn
   assert.equal(page.status, 200)
   assert.match(html, /Discover/)
   assert.match(html, /<script src="\/froam\.js"/)
-  const editor = await remote('/froam.js')
-  assert.equal(editor.status, 200)
-  assert.ok((await editor.arrayBuffer()).byteLength > 500_000, 'the editor bundle came through short')
+  const loader = await remote('/froam.js')
+  assert.equal(loader.status, 200)
+  assert.match(await loader.text(), /froam-modules\/froam-editor\.mjs/)
+  const boot = await remote('/froam-modules/froam-editor.mjs')
+  assert.equal(boot.status, 200)
+  assert.match(boot.headers.get('content-type') ?? '', /javascript/)
+  assert.ok((await boot.arrayBuffer()).byteLength > 100_000, 'the editor came through short')
 })
 
 test('through the link, this machine’s files can’t be written', async () => {

@@ -31,7 +31,13 @@ type BridgeConfig = {
   projectKey?: string
 }
 
+type BootConfig = { origin: string; open: boolean; routes: string; projectKey: string | null }
+
 function resolveScriptConfig() {
+  // Loaded as a module by /froam.js (scripts/build-standalone.mjs): the loader
+  // read the script tag, because a module has no document.currentScript.
+  const boot = (window as Window & { __FROAM_BOOT__?: BootConfig }).__FROAM_BOOT__
+  if (boot?.origin) return { origin: boot.origin, initialOpen: boot.open, routes: boot.routes, projectKey: boot.projectKey }
   const script = document.currentScript as HTMLScriptElement | null
   let origin = window.location.origin
   try {
@@ -140,6 +146,9 @@ function injectEditorStyles(origin: string) {
   document.head.appendChild(link)
 }
 
+/** How long the editor waits for the bridge before opening anyway. */
+const BRIDGE_PATIENCE_MS = 3_500
+
 function StandaloneApp({ origin, initialOpen, initialProjectKey }: { origin: string; initialOpen: boolean; initialProjectKey: string | null }) {
   const [design, setDesign] = useState<FroamLocalDesign | null>(null)
   const [projectKey, setProjectKey] = useState<string | null>(initialProjectKey)
@@ -148,6 +157,22 @@ function StandaloneApp({ origin, initialOpen, initialProjectKey }: { origin: str
 
   useEffect(() => {
     let cancelled = false
+    const markFresh = () => {
+      // Nothing saved known yet: mark as a fresh design would.
+      if (!document.querySelector('[data-froam-root]')) {
+        const scope = chooseRootScope(null)
+        markFroamRoot(scope)
+        setRootScope(scope)
+      }
+    }
+    // The editor never waits long on the bridge: through a share link it sits
+    // on someone else's computer, and a slow answer must not hide the editor.
+    // The saved design still applies the moment it arrives.
+    const patience = window.setTimeout(() => {
+      if (cancelled) return
+      markFresh()
+      setLoaded(true)
+    }, BRIDGE_PATIENCE_MS)
     Promise.all([
       window.fetch(`${origin}/__froam/repo/load`, { cache: 'no-store' }).then((res) => (res.ok ? res.json() : null)),
       window.fetch(`${origin}/__froam/config`, { cache: 'no-store' }).then((res) => (res.ok ? res.json() : null)),
@@ -164,17 +189,14 @@ function StandaloneApp({ origin, initialOpen, initialProjectKey }: { origin: str
         /* bridge offline — editor still opens, cloud/local drafts only */
       })
       .finally(() => {
+        window.clearTimeout(patience)
         if (cancelled) return
-        // Bridge offline: nothing saved to protect, so mark as a fresh design would.
-        if (!document.querySelector('[data-froam-root]')) {
-          const scope = chooseRootScope(null)
-          markFroamRoot(scope)
-          setRootScope(scope)
-        }
+        markFresh()
         setLoaded(true)
       })
     return () => {
       cancelled = true
+      window.clearTimeout(patience)
     }
   }, [origin])
 
@@ -210,6 +232,11 @@ function boot() {
       document.body.appendChild(host)
     }
     createRoot(host).render(<StandaloneApp origin={origin} initialOpen={initialOpen} initialProjectKey={projectKey} />)
+    // The button is up; fetch the full editor behind it, so opening it is instant.
+    const warm = () => { void import('./editor/GlobalChefEditor').catch(() => {}) }
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, options?: { timeout: number }) => number }).requestIdleCallback
+    if (idle) idle(warm, { timeout: 2500 })
+    else window.setTimeout(warm, 1200)
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount)

@@ -1,5 +1,36 @@
 # Changelog
 
+## 8.8.1 - 2026-09-28
+
+**Fast on real sites, and fast on share links — every time.**
+
+- **Live sites that redirect keep the editor.** Most sites send `example.com`
+  to `www.example.com`; Froam passed that redirect to the browser, which left
+  Froam for the real site — no editor, and the site's own slow servers.
+  Froam now follows a redirect to the site's www (or bare) twin itself, keeps
+  you in the editor, and keeps the site's own links inside Froam.
+- **The proxy is much quicker.** Connections to the site are reused (a secure
+  handshake per file was most of a slow load), responses come compressed, and
+  a live site's own static files keep the site's caching. A local dev server is
+  still never cached, so every change to your code shows.
+- **The editor appears in a fraction of the time.** It's now split: a small
+  first piece (about 96 KB compressed, down from 400 KB) shows the Froam
+  button, and the full editor loads behind it, ready before you open it. The
+  editor's script no longer holds up the page (`async`, not `defer`), and it
+  never waits more than a few seconds for the bridge — saved edits apply the
+  moment they arrive. `<script src=".../froam.js">` still works everywhere.
+- **Share links send as little as possible through your computer.** For a
+  public site, the share service fetches the site's pages itself, from
+  Cloudflare near the site, and keeps its static files at the edge; only
+  Froam's own requests (the room, the bridge) reach your machine. The editor
+  comes from a global CDN for the exact version you run. A local site's
+  never-changing files are kept at the edge too.
+- **Share links ride out blips.** The connection comes back within a second
+  (never more than five), and a request made during a reconnect waits for it
+  instead of failing.
+- On dominos.ng, measured on a phone over a share link: the Froam button now
+  appears in about 5–7 seconds, down from over 40.
+
 ## 8.8.0 - 2026-09-28
 
 **The whole loop: a teammate's change becomes a pull request, the owner hears about it wherever they are, and anything approved can be taken back.**
