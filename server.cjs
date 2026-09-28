@@ -33,19 +33,26 @@ __export(publish_store_exports, {
   FroamStaleRevisionError: () => FroamStaleRevisionError,
   PRESENCE_TTL_MS: () => PRESENCE_TTL_MS,
   applyChangeRequest: () => applyChangeRequest,
+  approveChangeRequest: () => approveChangeRequest,
   createFileProjectDocumentStore: () => createFileProjectDocumentStore,
   createFroamIntelligenceApi: () => createFroamIntelligenceApi,
+  createFroamNotifier: () => createFroamNotifier,
   createFroamProjectSyncApi: () => createFroamProjectSyncApi,
   createFroamPublishApi: () => createFroamPublishApi,
   createFroamRoomApi: () => createFroamRoomApi,
   createGitHubCommitter: () => createGitHubCommitter,
+  createGitHubPublisher: () => createGitHubPublisher,
   createMemoryProjectDocumentStore: () => createMemoryProjectDocumentStore,
   createOpenAICompatibleProvider: () => createOpenAICompatibleProvider,
-  loadPublished: () => loadPublished
+  createRealtimeRelayClient: () => createRealtimeRelayClient,
+  loadPublished: () => loadPublished,
+  revertChangeRequest: () => revertChangeRequest,
+  signRealtimeTicket: () => signRealtimeTicket,
+  verifyRealtimeTicket: () => verifyRealtimeTicket
 });
 module.exports = __toCommonJS(publish_store_exports);
 var import_node_fs3 = __toESM(require("node:fs"), 1);
-var import_node_path3 = __toESM(require("node:path"), 1);
+var import_node_path4 = __toESM(require("node:path"), 1);
 
 // lib/codegen.mjs
 var DESIGN_VERSION = 3;
@@ -680,19 +687,67 @@ function buildDesignArtifacts(design) {
   };
 }
 function applyChangeRequest(design, request, { writtenText = [] } = {}) {
+  return approveChangeRequest(design, request, { writtenText }).design;
+}
+function requestScopes(request) {
+  const scopes = Array.isArray(request?.scopes) && request.scopes.length ? request.scopes : [{ routeKey: request?.routeKey, viewport: request?.viewport, store: request?.store, removed: request?.removed }];
+  return scopes.map((scope) => ({
+    routeKey: normalizeRouteKey(scope?.routeKey ?? "/"),
+    viewport: VIEWPORTS.includes(scope?.viewport) ? scope.viewport : "desktop",
+    store: scope?.store && typeof scope.store === "object" ? scope.store : {},
+    removed: Array.isArray(scope?.removed) ? scope.removed : []
+  }));
+}
+var sameDraft = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+function approveChangeRequest(design, request, { writtenText = [] } = {}) {
   const written = new Set(writtenText.map((text) => String(text).trim()));
-  const next = migrateDesign(design);
-  const routeKey = normalizeRouteKey(request.routeKey);
-  const viewport = VIEWPORTS.includes(request.viewport) ? request.viewport : "desktop";
-  const current = { ...next.routes?.[routeKey]?.[viewport] ?? {} };
-  for (const [key, draft] of Object.entries(request.store ?? {})) {
-    const value = { ...draft };
-    if (typeof value.text === "string" && written.has(value.text.trim())) delete value.text;
-    if (Object.keys(value).some((field) => field !== "fingerprint")) current[key] = value;
-    else delete current[key];
+  let next = migrateDesign(design);
+  const undo = { scopes: [], textEdits: [] };
+  for (const scope of requestScopes(request)) {
+    const before = next.routes?.[scope.routeKey]?.[scope.viewport] ?? {};
+    const current = { ...before };
+    for (const [key, draft] of Object.entries(scope.store)) {
+      const value = { ...draft };
+      if (typeof value.text === "string" && written.has(value.text.trim())) delete value.text;
+      if (value.styles && typeof value.styles === "object" && !Object.keys(value.styles).length) delete value.styles;
+      if (Object.keys(value).some((field) => field !== "fingerprint")) current[key] = value;
+      else delete current[key];
+    }
+    for (const key of scope.removed) delete current[key];
+    const touched = [.../* @__PURE__ */ new Set([...Object.keys(scope.store), ...scope.removed])];
+    undo.scopes.push({
+      routeKey: scope.routeKey,
+      viewport: scope.viewport,
+      store: Object.fromEntries(touched.filter((key) => before[key]).map((key) => [key, before[key]])),
+      removed: touched.filter((key) => !before[key]),
+      expect: Object.fromEntries(touched.map((key) => [key, current[key] ?? null]))
+    });
+    next = mergeSave(next, { routeKey: scope.routeKey, viewportMode: scope.viewport, store: current });
   }
-  for (const key of request.removed ?? []) delete current[key];
-  return mergeSave(next, { routeKey, viewportMode: viewport, store: current });
+  for (const edit of request.textEdits ?? []) {
+    if (written.has(String(edit.to).trim())) undo.textEdits.push({ from: edit.to, to: edit.from });
+  }
+  return { design: next, undo };
+}
+function revertChangeRequest(design, undo) {
+  let next = migrateDesign(design);
+  const skipped = [];
+  for (const scope of undo?.scopes ?? []) {
+    const routeKey = normalizeRouteKey(scope.routeKey);
+    const viewport = VIEWPORTS.includes(scope.viewport) ? scope.viewport : "desktop";
+    const current = { ...next.routes?.[routeKey]?.[viewport] ?? {} };
+    const keys = Object.keys(scope.expect ?? {});
+    for (const key of keys) {
+      if (!sameDraft(current[key], scope.expect[key])) {
+        skipped.push({ routeKey, viewport, path: key });
+        continue;
+      }
+      if (scope.store?.[key]) current[key] = scope.store[key];
+      else delete current[key];
+    }
+    next = mergeSave(next, { routeKey, viewportMode: viewport, store: current });
+  }
+  return { design: next, skipped };
 }
 function sanitizeBrandFonts(value) {
   if (!Array.isArray(value)) return [];
@@ -748,8 +803,8 @@ function createGitHubCommitter(options = {}) {
   assert(token, "createGitHubCommitter needs a token with contents:write");
   assert(repo && repo.includes("/"), 'createGitHubCommitter needs repo as "owner/name"');
   assert(fetchImpl, "createGitHubCommitter needs a fetch implementation (Node 18+)");
-  async function gh(path4, init = {}) {
-    const response = await fetchImpl(`${API}${path4}`, {
+  async function gh(path5, init = {}) {
+    const response = await fetchImpl(`${API}${path5}`, {
       ...init,
       headers: {
         Accept: "application/vnd.github+json",
@@ -764,22 +819,22 @@ function createGitHubCommitter(options = {}) {
     const body = text ? JSON.parse(text) : null;
     if (!response.ok) {
       const detail = body?.message ? `: ${body.message}` : "";
-      throw new Error(`[froam] GitHub ${init.method ?? "GET"} ${path4} failed (${response.status})${detail}`);
+      throw new Error(`[froam] GitHub ${init.method ?? "GET"} ${path5} failed (${response.status})${detail}`);
     }
     return body;
   }
-  async function currentSha(path4) {
+  async function currentSha(path5) {
     try {
-      const existing = await gh(`/repos/${repo}/contents/${encodeURI(path4)}?ref=${encodeURIComponent(branch)}`);
+      const existing = await gh(`/repos/${repo}/contents/${encodeURI(path5)}?ref=${encodeURIComponent(branch)}`);
       return Array.isArray(existing) ? null : existing?.sha ?? null;
     } catch (error) {
       if (String(error.message).includes("(404)")) return null;
       throw error;
     }
   }
-  async function putFile(path4, content, message) {
-    const sha = await currentSha(path4);
-    return gh(`/repos/${repo}/contents/${encodeURI(path4)}`, {
+  async function putFile(path5, content, message) {
+    const sha = await currentSha(path5);
+    return gh(`/repos/${repo}/contents/${encodeURI(path5)}`, {
       method: "PUT",
       body: JSON.stringify({
         message,
@@ -801,11 +856,11 @@ function createGitHubCommitter(options = {}) {
     };
     const subject = message || "Design update from Froam";
     const written = [];
-    for (const [key, path4] of Object.entries(targets)) {
+    for (const [key, path5] of Object.entries(targets)) {
       const content = artifacts[key];
       if (typeof content !== "string") continue;
-      const result = await putFile(path4, content, subject);
-      written.push({ path: path4, commit: result?.commit?.sha ?? null });
+      const result = await putFile(path5, content, subject);
+      written.push({ path: path5, commit: result?.commit?.sha ?? null });
     }
     assert(written.length, "commitDesign wrote nothing \u2014 check `paths`");
     return { repo, branch, written };
@@ -837,6 +892,8 @@ var MAX_CHAT_LENGTH = 2e3;
 var MAX_OPS_PER_PUSH = 500;
 var MAX_ROOM_EVENTS = 2e4;
 var MAX_EVENT_PAGE = 500;
+var MAX_REQUEST_SCOPES = 24;
+var MAX_MENTIONS = 20;
 var MEMBER_COLORS = ["#5eead4", "#ff8a65", "#93c5fd", "#c4b5fd", "#f9a8d4", "#fde047", "#86efac", "#67e8f9"];
 var PRESENCE_TTL_MS = 9e4;
 function emptyRooms() {
@@ -1049,15 +1106,21 @@ function publicRoom(room, now, you) {
     /** Who is driving: the highest-ranked editor currently present. */
     presenter: members.find((m) => m.here && (m.role === "owner" || m.role === "editor"))?.actor ?? null,
     sequence: Number(room.sequence) || 0,
+    /** When a host keeps rooms for a limited time (the public demo does). */
+    expiresAt: Number(room.expiresAt) || null,
     you: you ?? null
   };
 }
-function createFroamRoomApi({ file, storage, authorize = null, onApproveRequest = null, log = () => {
+function createFroamRoomApi({ file, storage, authorize = null, onApproveRequest = null, onRevertRequest = null, notify = null, roomTtlMs = null, realtime = null, presenceWriteMs = 0, mintRoomId = () => (0, import_node_crypto.randomUUID)(), log = () => {
 }, now = () => Date.now() }) {
   if (!storage && !file) throw new Error("[froam] createFroamRoomApi needs a file or a storage");
   const store = storage ?? fileStorage(file);
   const writeRoom = store.put.bind(store);
   const subscribers = /* @__PURE__ */ new Map();
+  function tell(event) {
+    if (!notify) return;
+    Promise.resolve().then(() => notify({ ...event, room: { id: event.room.id }, actor: event.actor ? { actor: event.actor.actor, name: event.actor.name, role: event.actor.role, title: event.actor.title ?? null } : null })).catch((error) => log(`notify failed: ${error instanceof Error ? error.message : error}`));
+  }
   function signal(roomId, sequence) {
     const listeners = subscribers.get(roomId);
     if (!listeners) return;
@@ -1074,10 +1137,17 @@ data: ${JSON.stringify({ sequence })}
     }
     if (!listeners.size) subscribers.delete(roomId);
   }
+  const published = /* @__PURE__ */ new Map();
   async function persist(room) {
     await writeRoom(room);
-    signal(room.id, Number(room.sequence) || 0);
+    const sequence = Number(room.sequence) || 0;
+    signal(room.id, sequence);
+    if (realtime && published.get(room.id) !== sequence) {
+      published.set(room.id, sequence);
+      Promise.resolve(realtime.publish(room.id, sequence)).catch((error) => log(`realtime publish failed: ${error instanceof Error ? error.message : error}`));
+    }
   }
+  const connectionFor = (roomId, actor) => realtime && actor ? realtime.connection(roomId, actor) : null;
   return async function handleRoomRequest(req, res) {
     const url = new URL(req.url ?? "/", "http://froam.local");
     const at = url.pathname.indexOf("/rooms");
@@ -1100,26 +1170,27 @@ data: ${JSON.stringify({ sequence })}
       }
       const ownerName = cleanName(body?.name) ?? "Owner";
       const routes = Array.isArray(body?.routes) && body.routes.length ? body.routes.map((r) => normalizeRouteKey(r)).filter(Boolean) : "*";
-      const id = (0, import_node_crypto.randomUUID)();
+      const id = mintRoomId();
       const ownerActor = `a_${(0, import_node_crypto.randomBytes)(9).toString("base64url")}`;
       const stamp = now();
-      const tokens = {};
+      const tokens2 = {};
       const invites = {};
       for (const role2 of INVITE_ROLES) {
         const token2 = mintToken();
-        tokens[token2] = role2;
+        tokens2[token2] = role2;
         invites[role2] = token2;
       }
       const room2 = {
         id,
         createdAt: stamp,
+        ...roomTtlMs ? { expiresAt: stamp + roomTtlMs } : {},
         routes,
         ownerActor,
         sequence: 0,
         events: [],
         chat: [],
         proposals: {},
-        tokens,
+        tokens: tokens2,
         members: {
           [ownerActor]: (() => {
             const profile = profileFrom(body);
@@ -1145,6 +1216,10 @@ data: ${JSON.stringify({ sequence })}
     const room = await store.get(roomId);
     if (!room) {
       sendJson(res, 404, { success: false, error: "No such room" });
+      return true;
+    }
+    if (room.endedAt) {
+      sendJson(res, 410, { success: false, ended: true, endedAt: room.endedAt, error: `${room.endedBy ?? "The owner"} ended this session` });
       return true;
     }
     const tokenFrom = async () => {
@@ -1195,7 +1270,7 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
       const actor = url.searchParams.get("actor");
       const member = memberFor(room, actor, url.searchParams.get("session"));
       const you = member ? { actor: member.actor, role: member.role, name: member.name } : null;
-      sendJson(res, 200, { success: true, room: publicRoom(room, now(), you) });
+      sendJson(res, 200, { success: true, room: publicRoom(room, now(), you), invite: role, realtime: connectionFor(room.id, member?.actor) });
       return true;
     }
     if (action === "join" && method === "POST") {
@@ -1232,8 +1307,25 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
       sendJson(res, 200, {
         success: true,
         you: { actor, role: room.members[actor].role, name, session: room.members[actor].session },
-        room: publicRoom(room, stamp, { actor, role: room.members[actor].role, name })
+        room: publicRoom(room, stamp, { actor, role: room.members[actor].role, name }),
+        realtime: connectionFor(room.id, actor)
       });
+      return true;
+    }
+    if (action === "end" && method === "POST") {
+      const member = memberFor(room, req.body?.actor, req.body?.session);
+      if (!member || member.role !== "owner") {
+        sendJson(res, 403, { success: false, error: "Only the owner can end the session" });
+        return true;
+      }
+      const stamp = now();
+      room.endedAt = stamp;
+      room.endedBy = member.name;
+      room.tokens = {};
+      appendEvent(room, { type: "ended", createdAt: stamp, actor: member.actor });
+      await persist(room);
+      log(`${member.name} ended room ${roomId}`);
+      sendJson(res, 200, { success: true, ended: true, endedAt: stamp });
       return true;
     }
     if (action === "presence" && method === "POST") {
@@ -1248,6 +1340,8 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
         return true;
       }
       const stamp = now();
+      const doing = (m) => [m.routeKey, m.viewport, m.selectedPath, m.lockedPath, m.action].join("|");
+      const was = doing(member);
       member.seenAt = stamp;
       if (typeof body.routeKey === "string") member.routeKey = normalizeRouteKey(body.routeKey);
       if (VIEWPORTS.includes(body.viewport)) member.viewport = body.viewport;
@@ -1258,7 +1352,11 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
       member.cursor = cleanCursor(body.cursor);
       member.tool = cleanPresenceLabel(body.tool);
       member.action = cleanPresenceLabel(body.action);
-      await persist(room);
+      const quiet = presenceWriteMs > 0 && doing(member) === was && stamp - (member.presenceWrittenAt ?? 0) < presenceWriteMs;
+      if (!quiet) {
+        member.presenceWrittenAt = stamp;
+        await persist(room);
+      }
       sendJson(res, 200, {
         success: true,
         room: publicRoom(room, stamp, { actor: member.actor, role: member.role, name: member.name })
@@ -1401,11 +1499,31 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
           return true;
         }
         const requestId = typeof req.body.requestId === "string" && room.requests?.[req.body.requestId] ? req.body.requestId : null;
-        const message = { id: (0, import_node_crypto.randomUUID)(), actor: member.actor, name: member.name, body, createdAt: now(), ...requestId ? { requestId } : {} };
+        const anchor = cleanMessageAnchor(req.body.anchor, room);
+        const mentions = mentionedIn(body, room, member.actor);
+        const message = {
+          id: (0, import_node_crypto.randomUUID)(),
+          actor: member.actor,
+          name: member.name,
+          body,
+          createdAt: now(),
+          ...requestId ? { requestId } : {},
+          ...anchor ? { anchor } : {},
+          ...mentions.length ? { mentions } : {}
+        };
         room.chat.push(message);
         if (room.chat.length > MAX_CHAT_MESSAGES) room.chat.splice(0, room.chat.length - MAX_CHAT_MESSAGES);
         appendEvent(room, { type: "chat", createdAt: message.createdAt, actor: member.actor, message });
         await persist(room);
+        if (mentions.length) {
+          tell({
+            type: "chat.mention",
+            room,
+            message,
+            actor: member,
+            mentioned: mentions.map((actor) => room.members[actor]).filter(Boolean).map((m) => ({ actor: m.actor, name: m.name, role: m.role }))
+          });
+        }
         sendJson(res, 200, { success: true, message });
         return true;
       }
@@ -1634,30 +1752,32 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
       }
       if (!commentId && method === "POST") {
         const body = req.body ?? {};
-        if (!routeAllowed(room, body.routeKey)) {
+        const scopes = cleanRequestScopes(body);
+        if (scopes.some((scope) => !routeAllowed(room, scope.routeKey))) {
           sendJson(res, 403, { success: false, error: "That page is outside this room" });
           return true;
         }
-        const store2 = cleanRequestStore(body.store);
-        const removed = Array.isArray(body.removed) ? body.removed.filter(isRequestPath).slice(0, MAX_REQUEST_PATHS) : [];
-        if (!store2 || !Object.keys(store2).length && !removed.length) {
+        if (!scopes.length) {
           sendJson(res, 400, { success: false, error: "There are no changes to submit" });
           return true;
         }
+        const [{ store: store2, removed }] = scopes;
         if (Object.keys(room.requests).length >= MAX_REQUESTS) {
           sendJson(res, 409, { success: false, error: "This room has too many requests \u2014 ask the owner to open a new one" });
           return true;
         }
         const request2 = {
           id: (0, import_node_crypto.randomUUID)(),
-          routeKey: normalizeRouteKey(body.routeKey ?? "/"),
-          viewport: VIEWPORTS.includes(body.viewport) ? body.viewport : "desktop",
+          routeKey: scopes[0].routeKey,
+          viewport: scopes[0].viewport,
+          scopes,
           title: cleanText(body.title, MAX_TITLE_LENGTH) || "Changes",
           note: cleanText(body.note, MAX_COMMENT_LENGTH),
           store: store2,
           removed,
           changes: cleanChanges(body.changes),
           textEdits: cleanTextEdits(body.textEdits),
+          styleEdits: cleanStyleEdits(body.styleEdits),
           actor: member.actor,
           createdBy: member.name,
           createdAt: now(),
@@ -1665,11 +1785,14 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
           decidedBy: null,
           decidedAt: null,
           decisionNote: null,
-          published: null
+          published: null,
+          undo: null,
+          reverted: null
         };
         room.requests[request2.id] = request2;
         appendEvent(room, { type: "request", createdAt: request2.createdAt, actor: member.actor, requestId: request2.id });
         await persist(room);
+        tell({ type: "request.submitted", room, request: request2, actor: member });
         log(`${member.name} submitted "${request2.title}" on ${request2.routeKey} for approval`);
         sendJson(res, 200, { success: true, request: request2 });
         return true;
@@ -1708,7 +1831,14 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
         if (decision === "approved") {
           try {
             const result = onApproveRequest ? await onApproveRequest({ room, request }) : null;
-            request.published = { ok: Boolean(onApproveRequest), detail: result?.detail ?? (onApproveRequest ? "Published" : "Approved \u2014 applied in the owner\u2019s editor") };
+            request.published = {
+              ok: Boolean(onApproveRequest),
+              detail: result?.detail ?? (onApproveRequest ? "Published" : "Approved \u2014 applied in the owner\u2019s editor"),
+              link: typeof result?.link === "string" ? result.link : null,
+              number: Number.isFinite(result?.number) ? result.number : null,
+              branch: typeof result?.branch === "string" ? result.branch : null
+            };
+            request.undo = result?.undo ?? null;
           } catch (error) {
             sendJson(res, 502, { success: false, error: `Could not publish: ${error instanceof Error ? error.message : "unknown error"}` });
             return true;
@@ -1721,6 +1851,43 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
         appendEvent(room, { type: "request", createdAt: request.decidedAt, actor: member.actor, requestId: request.id });
         await persist(room);
         log(`${member.name} ${decision === "approved" ? "approved and published" : "sent back"} "${request.title}"`);
+        tell({ type: "request.decided", room, request, actor: member });
+        sendJson(res, 200, { success: true, request });
+        return true;
+      }
+      if (commentAction === "revert" && method === "POST") {
+        if (member.role !== "owner") {
+          sendJson(res, 403, { success: false, error: "Only the owner can revert a change" });
+          return true;
+        }
+        if (request.status !== "approved") {
+          sendJson(res, 409, { success: false, error: "Only an approved change can be reverted" });
+          return true;
+        }
+        if (!onRevertRequest) {
+          sendJson(res, 501, { success: false, error: "This room can\u2019t revert changes" });
+          return true;
+        }
+        let result;
+        try {
+          result = await onRevertRequest({ room, request, undo: request.undo });
+        } catch (error) {
+          sendJson(res, 502, { success: false, error: `Could not revert: ${error instanceof Error ? error.message : "unknown error"}` });
+          return true;
+        }
+        request.status = "reverted";
+        request.reverted = {
+          by: member.name,
+          at: now(),
+          detail: result?.detail ?? "Reverted",
+          link: typeof result?.link === "string" ? result.link : null,
+          skipped: Array.isArray(result?.skipped) ? result.skipped.length : 0,
+          note: cleanText(req.body?.note, MAX_COMMENT_LENGTH)
+        };
+        appendEvent(room, { type: "request", createdAt: request.reverted.at, actor: member.actor, requestId: request.id });
+        await persist(room);
+        log(`${member.name} reverted "${request.title}"`);
+        tell({ type: "request.reverted", room, request, actor: member });
         sendJson(res, 200, { success: true, request });
         return true;
       }
@@ -1744,22 +1911,866 @@ function cleanRequestStore(value) {
   }
   return out;
 }
+function cleanRequestScopes(body) {
+  const raw = Array.isArray(body?.scopes) && body.scopes.length ? body.scopes.slice(0, MAX_REQUEST_SCOPES) : [{ routeKey: body?.routeKey, viewport: body?.viewport, store: body?.store, removed: body?.removed }];
+  const scopes = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const scope of raw) {
+    const store = cleanRequestStore(scope?.store) ?? {};
+    const removed = Array.isArray(scope?.removed) ? scope.removed.filter(isRequestPath).slice(0, MAX_REQUEST_PATHS) : [];
+    if (!Object.keys(store).length && !removed.length) continue;
+    const routeKey = normalizeRouteKey(scope?.routeKey ?? "/");
+    const viewport = VIEWPORTS.includes(scope?.viewport) ? scope.viewport : "desktop";
+    const key = `${routeKey}@@${viewport}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    scopes.push({ routeKey, viewport, store, removed });
+  }
+  return scopes;
+}
+function cleanMessageAnchor(value, room) {
+  if (!value || typeof value !== "object" || typeof value.path !== "string" || !value.path || value.path.length > 400 || /[<>]/.test(value.path)) return null;
+  const routeKey = normalizeRouteKey(value.routeKey ?? "/");
+  if (!routeAllowed(room, routeKey)) return null;
+  const fingerprint = value.fingerprint && typeof value.fingerprint === "object" ? value.fingerprint : {};
+  return {
+    path: value.path,
+    nodeId: cleanNodeId(value.nodeId) ?? void 0,
+    routeKey,
+    viewport: VIEWPORTS.includes(value.viewport) ? value.viewport : "desktop",
+    // Enough of what the element was to find it again after the page changes.
+    fingerprint: {
+      tag: typeof fingerprint.tag === "string" ? fingerprint.tag.slice(0, 40) : "",
+      ...typeof fingerprint.text === "string" ? { text: fingerprint.text.slice(0, 120) } : {},
+      ...typeof fingerprint.id === "string" ? { id: fingerprint.id.slice(0, 120) } : {},
+      ...typeof fingerprint.anchorId === "string" ? { anchorId: fingerprint.anchorId.slice(0, 120) } : {},
+      ...typeof fingerprint.anchorPath === "string" && !/[<>]/.test(fingerprint.anchorPath) ? { anchorPath: fingerprint.anchorPath.slice(0, 400) } : {},
+      ...Number.isInteger(fingerprint.ordinal) && fingerprint.ordinal >= 0 ? { ordinal: Math.min(fingerprint.ordinal, 1e4) } : {},
+      ...typeof fingerprint.className === "string" ? { className: fingerprint.className.slice(0, 300) } : {}
+    },
+    label: cleanText(value.label, 120)
+  };
+}
+function mentionedIn(body, room, from) {
+  if (!body.includes("@")) return [];
+  const members = Object.values(room.members).filter((m) => m.actor !== from && m.name);
+  const lower = body.toLowerCase();
+  const found = /* @__PURE__ */ new Set();
+  for (const member of members) {
+    const full = member.name.toLowerCase();
+    const first = full.split(/\s+/)[0];
+    const sharesFirst = members.filter((m) => m.name.toLowerCase().split(/\s+/)[0] === first).length > 1;
+    const candidates = sharesFirst ? [full] : [full, first];
+    for (const name of candidates) {
+      const at = lower.indexOf(`@${name}`);
+      if (at === -1) continue;
+      const next = lower[at + name.length + 1];
+      if (next === void 0 || !/[\p{L}\p{N}_]/u.test(next)) {
+        found.add(member.actor);
+        break;
+      }
+    }
+    if (found.size >= MAX_MENTIONS) break;
+  }
+  return [...found];
+}
 function cleanChanges(value) {
   if (!Array.isArray(value)) return [];
   return value.slice(0, MAX_REQUEST_CHANGES).map((change) => ({
     label: cleanText(change?.label, MAX_CHANGE_TEXT) ?? "Change",
     before: cleanText(change?.before, MAX_CHANGE_TEXT),
-    after: cleanText(change?.after, MAX_CHANGE_TEXT)
+    after: cleanText(change?.after, MAX_CHANGE_TEXT),
+    ...typeof change?.routeKey === "string" ? { routeKey: normalizeRouteKey(change.routeKey) } : {},
+    ...VIEWPORTS.includes(change?.viewport) ? { viewport: change.viewport } : {}
   }));
+}
+function cleanStyleEdits(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const edit of value.slice(0, MAX_REQUEST_PATHS)) {
+    if (!edit || !isRequestPath(edit.path) || typeof edit.className !== "string" || /[<>{}`\\]/.test(edit.className)) continue;
+    if (typeof edit.tag !== "string" || !/^[a-z][a-z0-9-]{0,39}$/i.test(edit.tag)) continue;
+    const styles = {};
+    for (const [property, raw] of Object.entries(edit.styles ?? {}).slice(0, 40)) {
+      if (/^[a-zA-Z-]{1,40}$/.test(property) && typeof raw === "string" && raw.length <= 200) styles[property] = raw;
+    }
+    if (!Object.keys(styles).length) continue;
+    out.push({ routeKey: normalizeRouteKey(edit.routeKey ?? "/"), viewport: "desktop", path: edit.path, tag: edit.tag, className: edit.className.slice(0, 1e3), styles });
+  }
+  return out;
 }
 function cleanTextEdits(value) {
   if (!Array.isArray(value)) return [];
   return value.slice(0, MAX_REQUEST_PATHS).filter((edit) => typeof edit?.from === "string" && typeof edit?.to === "string").map((edit) => ({ from: edit.from.slice(0, 4e3), to: edit.to.slice(0, 4e3) }));
 }
 
+// lib/source-writeback.mjs
+var import_node_path2 = __toESM(require("node:path"), 1);
+var SOURCE_EXTENSIONS = /* @__PURE__ */ new Set([".html", ".htm", ".jsx", ".tsx", ".js", ".ts", ".mjs", ".cjs", ".vue", ".svelte", ".astro", ".json"]);
+var MARKUP_EXTENSIONS = /* @__PURE__ */ new Set([".html", ".htm", ".vue", ".svelte", ".astro"]);
+var SKIP_DIRS = /* @__PURE__ */ new Set(["node_modules", ".git", "dist", "build", "out", ".next", ".nuxt", ".svelte-kit", ".astro", ".output", "coverage", ".vercel", ".netlify", ".turbo", ".cache", "froam", "vendor", ".venv"]);
+var SKIP_FILES = /* @__PURE__ */ new Set(["package.json", "package-lock.json", "tsconfig.json", "froam.config.json", "vercel.json", "netlify.json"]);
+var escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function characterPattern(character) {
+  switch (character) {
+    case "&":
+      return "(?:&amp;|&#38;|&)";
+    case "<":
+      return "(?:&lt;|&#60;|<)";
+    case ">":
+      return "(?:&gt;|&#62;|>)";
+    case '"':
+      return '(?:&quot;|&#34;|\\\\"|")';
+    case "'":
+      return "(?:&#39;|&apos;|\\\\'|')";
+    case "\u2019":
+      return "(?:&rsquo;|&#8217;|\u2019)";
+    case "\xA0":
+      return "(?:&nbsp;|&#160;|\xA0| )";
+    default:
+      return escapeRegex(character);
+  }
+}
+function sourcePattern(text) {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  return words.map((word) => Array.from(word).map(characterPattern).join("")).join("\\s+");
+}
+var WHITESPACE = /\s/;
+function significantBefore(source, index) {
+  let i = index - 1;
+  while (i >= 0 && WHITESPACE.test(source[i])) i -= 1;
+  return source[i] ?? "";
+}
+function significantAfter(source, index) {
+  let i = index;
+  while (i < source.length && WHITESPACE.test(source[i])) i += 1;
+  return source[i] ?? "";
+}
+var QUOTES = /* @__PURE__ */ new Set(['"', "'", "`"]);
+function matchContext(source, start, end) {
+  if (isInComment(source, start)) return null;
+  const before = significantBefore(source, start);
+  const after = significantAfter(source, end);
+  if (QUOTES.has(before) && before === after && source[start - 1] === before && source[end] === after) {
+    if (significantAfter(source, end + 1) === ":") return null;
+    return { kind: "string", quote: before };
+  }
+  if ((before === ">" || before === "}") && (after === "<" || after === "{")) return { kind: "markup" };
+  return null;
+}
+function isInComment(source, index) {
+  const lastOpen = (open, close) => source.lastIndexOf(open, index) > source.lastIndexOf(close, index);
+  if (lastOpen("<!--", "-->")) return true;
+  if (lastOpen("/*", "*/")) return true;
+  const lineStart = source.lastIndexOf("\n", index - 1) + 1;
+  const line = source.slice(lineStart, index);
+  const slashes = line.search(/(^|[^:"'`/])\/\//);
+  return slashes !== -1;
+}
+function findTextOccurrences(source, text) {
+  const pattern = sourcePattern(text);
+  if (!pattern) return [];
+  const regex = new RegExp(pattern, "g");
+  const out = [];
+  for (let match = regex.exec(source); match; match = regex.exec(source)) {
+    const start = match.index;
+    const end = start + match[0].length;
+    const context = matchContext(source, start, end);
+    if (context) out.push({ start, end, context });
+    if (match[0].length === 0) regex.lastIndex += 1;
+  }
+  return out;
+}
+var escapeHtml = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function encodeForContext(text, context, extension) {
+  if (context.kind === "string") {
+    if (extension === ".json") return JSON.stringify(text).slice(1, -1);
+    const quote = context.quote;
+    let out = text.replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n");
+    if (quote === "`") out = out.replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
+    else out = out.split(quote).join(`\\${quote}`);
+    return out;
+  }
+  const jsx = !MARKUP_EXTENSIONS.has(extension);
+  const lines = text.split(/\r?\n/).map((line) => {
+    const html = escapeHtml(line);
+    return jsx ? html.replace(/[{}]/g, (brace) => `{'${brace}'}`) : html;
+  });
+  return lines.join(jsx ? "<br />" : "<br>");
+}
+var lineOf = (source, index) => source.slice(0, index).split("\n").length;
+function applyTextEdits(files, edits, { read: readFile, name = (file) => file } = {}) {
+  const contents = /* @__PURE__ */ new Map();
+  const read = (file) => {
+    if (!contents.has(file)) contents.set(file, readFile(file));
+    return contents.get(file);
+  };
+  const changed = /* @__PURE__ */ new Set();
+  const results = [];
+  for (const edit of edits) {
+    const from = typeof edit?.from === "string" ? edit.from : "";
+    const to = typeof edit?.to === "string" ? edit.to : "";
+    if (from.trim().length < 3) {
+      results.push({ status: "skipped", reason: "too short to find safely" });
+      continue;
+    }
+    if (from.trim() === to.trim()) {
+      results.push({ status: "skipped", reason: "unchanged" });
+      continue;
+    }
+    const hits = [];
+    for (const file of files) {
+      const source2 = read(file);
+      if (!source2) continue;
+      for (const occurrence of findTextOccurrences(source2, from)) hits.push({ file, ...occurrence });
+      if (hits.length > 1) break;
+    }
+    if (hits.length === 0) {
+      results.push({ status: "not-found" });
+      continue;
+    }
+    if (hits.length > 1) {
+      results.push({ status: "ambiguous", count: hits.length, files: [...new Set(hits.map((hit2) => name(hit2.file)))] });
+      continue;
+    }
+    const [hit] = hits;
+    const source = read(hit.file);
+    const replacement = encodeForContext(to.trim(), hit.context, import_node_path2.default.extname(hit.file).toLowerCase());
+    contents.set(hit.file, source.slice(0, hit.start) + replacement + source.slice(hit.end));
+    changed.add(hit.file);
+    results.push({ status: "written", file: name(hit.file), line: lineOf(source, hit.start) });
+  }
+  return { results, changed: new Map([...changed].map((file) => [file, contents.get(file)])) };
+}
+function isSourcePath(relativePath) {
+  const parts = relativePath.split("/");
+  const fileName = parts[parts.length - 1];
+  if (parts.slice(0, -1).some((dir) => SKIP_DIRS.has(dir) || dir.startsWith("."))) return false;
+  if (SKIP_FILES.has(fileName) || /\.min\.(js|css)$/.test(fileName)) return false;
+  return SOURCE_EXTENSIONS.has(import_node_path2.default.extname(fileName).toLowerCase());
+}
+
+// lib/style-writeback.mjs
+var kebab = (name) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+var COLOR = String.raw`(?:\[(?:#|rgb|hsl|oklch|color:|var\()[^\]]*\]|inherit|current|transparent|black|white|[a-z]+-\d{2,3}(?:\/\d+)?)`;
+var LENGTH = String.raw`(?:\[[^\]]+\]|\d+\/\d+|[\d.]+|px|auto|full|screen|min|max|fit)`;
+var GROUPS = {
+  color: new RegExp(`^text-${COLOR}$`),
+  "font-size": /^text-(?:xs|sm|base|lg|xl|[2-9]xl|\[(?:length:)?[\d.]+(?:px|rem|em|vw|%)?\])$/,
+  "background-color": new RegExp(`^bg-${COLOR}$`),
+  "font-weight": /^font-(?:thin|extralight|light|normal|medium|semibold|bold|extrabold|black|\[\d+\])$/,
+  "text-align": /^text-(?:left|center|right|justify|start|end)$/,
+  "letter-spacing": /^tracking-(?:tighter|tight|normal|wide|wider|widest|\[[^\]]+\])$/,
+  "line-height": /^leading-(?:none|tight|snug|normal|relaxed|loose|\d+|\[[^\]]+\])$/,
+  "border-radius": /^rounded(?:-(?:none|sm|md|lg|xl|2xl|3xl|full|\[[^\]]+\]))?$/,
+  opacity: /^opacity-(?:\d+|\[[^\]]+\])$/,
+  width: new RegExp(`^w-${LENGTH}$`),
+  height: new RegExp(`^h-${LENGTH}$`),
+  "max-width": /^max-w-(?:\S+)$/,
+  gap: new RegExp(`^gap-${LENGTH}$`)
+};
+for (const [side, prefix] of [["", "p"], ["-top", "pt"], ["-right", "pr"], ["-bottom", "pb"], ["-left", "pl"]]) {
+  GROUPS[`padding${side}`] = new RegExp(`^${prefix}-${LENGTH}$`);
+  GROUPS[`margin${side}`] = new RegExp(`^-?${prefix.replace("p", "m")}-${LENGTH}$`);
+}
+var ALSO_REPLACES = {
+  padding: [/^p[xytrbl]?-/],
+  margin: [/^-?m[xytrbl]?-/]
+};
+var WEIGHTS = { 100: "thin", 200: "extralight", 300: "light", 400: "normal", 500: "medium", 600: "semibold", 700: "bold", 800: "extrabold", 900: "black" };
+var ALIGN = /* @__PURE__ */ new Set(["left", "center", "right", "justify", "start", "end"]);
+function arbitrary(value) {
+  const clean = String(value).trim();
+  if (!clean || /[[\]"'`<>{}]/.test(clean) || clean.includes("!important")) return null;
+  return `[${clean.replace(/\s+/g, "_")}]`;
+}
+function utilityFor(property, value) {
+  const prop = kebab(property);
+  const v = String(value ?? "").trim();
+  if (!v) return null;
+  const a = arbitrary(v);
+  switch (prop) {
+    case "color":
+      return a && `text-${a.replace("[", "[color:")}`;
+    case "font-size":
+      return a && `text-${a.replace("[", "[length:")}`;
+    case "background-color":
+      return a && `bg-${a}`;
+    case "font-weight":
+      return WEIGHTS[v] ? `font-${WEIGHTS[v]}` : a && `font-${a}`;
+    case "text-align":
+      return ALIGN.has(v) ? `text-${v}` : null;
+    case "letter-spacing":
+      return a && `tracking-${a}`;
+    case "line-height":
+      return a && `leading-${a}`;
+    case "border-radius":
+      return a && `rounded-${a}`;
+    case "opacity":
+      return a && `opacity-${a}`;
+    case "width":
+      return a && `w-${a}`;
+    case "height":
+      return a && `h-${a}`;
+    case "max-width":
+      return a && `max-w-${a}`;
+    case "gap":
+      return a && `gap-${a}`;
+    default: {
+      const box = /^(padding|margin)(?:-(top|right|bottom|left))?$/.exec(prop);
+      if (!box) return null;
+      const letter = box[1] === "padding" ? "p" : "m";
+      const side = box[2] ? box[2][0] : "";
+      if (v.includes(" ")) return null;
+      return a && `${letter}${side}-${a}`;
+    }
+  }
+}
+var SCREEN_VARIANTS = /* @__PURE__ */ new Set(["sm", "md", "lg", "xl", "2xl", "dark", "print", "portrait", "landscape"]);
+function overriddenBy(name) {
+  if (!name.includes(":")) return false;
+  const variants = name.split(":").slice(0, -1);
+  return variants.some((variant) => SCREEN_VARIANTS.has(variant) || /^(?:min|max)-/.test(variant) || variant.startsWith("@"));
+}
+function groupOf(prop) {
+  return GROUPS[prop] ?? null;
+}
+function rewriteClassList(classList, styles) {
+  let classes = classList.split(/\s+/).filter(Boolean);
+  const written = [];
+  for (const [property, value] of Object.entries(styles ?? {})) {
+    if (property.startsWith("__froamState")) continue;
+    const prop = kebab(property);
+    const group = groupOf(prop);
+    const utility = group ? utilityFor(prop, value) : null;
+    if (!utility) continue;
+    const replaced = [group, ...ALSO_REPLACES[prop] ?? []];
+    const matches = (name) => replaced.some((pattern) => pattern.test(name));
+    if (classes.some((name) => overriddenBy(name) && matches(name.slice(name.lastIndexOf(":") + 1)))) continue;
+    classes = classes.filter((name) => !matches(name));
+    classes.push(utility);
+    written.push(property);
+  }
+  return { classList: classes.join(" "), written };
+}
+var CLASS_ATTR = /\b(class|className)\s*=\s*(?:(["'])([^"'\n]*)\2|\{\s*(["'`])([^"'`\n$]*)\4\s*\})/g;
+var tokens = (value) => value.split(/\s+/).filter(Boolean).sort().join(" ");
+function findClassAttributes(source, tag, classList) {
+  const wanted = tokens(classList);
+  const hits = [];
+  CLASS_ATTR.lastIndex = 0;
+  for (let match = CLASS_ATTR.exec(source); match; match = CLASS_ATTR.exec(source)) {
+    const value = match[3] ?? match[5] ?? "";
+    if (tokens(value) !== wanted) continue;
+    const open = source.lastIndexOf("<", match.index);
+    const close = source.lastIndexOf(">", match.index);
+    if (open < 0 || close > open) continue;
+    const tagName = /^<([A-Za-z][\w.-]*)/.exec(source.slice(open))?.[1];
+    if (!tagName || tag && tagName.toLowerCase() !== tag.toLowerCase()) continue;
+    const valueStart = match.index + match[0].indexOf(value, match[1].length);
+    hits.push({ start: valueStart, end: valueStart + value.length });
+  }
+  return hits;
+}
+function applyStyleEdits(files, edits, { read: readFile, name = (file) => file } = {}) {
+  const contents = /* @__PURE__ */ new Map();
+  const read = (file) => {
+    if (!contents.has(file)) contents.set(file, readFile(file));
+    return contents.get(file);
+  };
+  const changed = /* @__PURE__ */ new Set();
+  const results = [];
+  for (const edit of edits) {
+    const classList = typeof edit?.className === "string" ? edit.className.trim() : "";
+    if (tokens(classList).split(" ").length < 2) {
+      results.push({ status: "skipped", reason: "too few classes to find safely" });
+      continue;
+    }
+    const hits = [];
+    for (const file of files) {
+      const source2 = read(file);
+      if (!source2) continue;
+      for (const hit2 of findClassAttributes(source2, edit.tag, classList)) hits.push({ file, ...hit2 });
+      if (hits.length > 1) break;
+    }
+    if (!hits.length) {
+      results.push({ status: "not-found" });
+      continue;
+    }
+    if (hits.length > 1) {
+      results.push({ status: "ambiguous" });
+      continue;
+    }
+    const [hit] = hits;
+    const source = read(hit.file);
+    const rewrite = rewriteClassList(source.slice(hit.start, hit.end), edit.styles);
+    if (!rewrite.written.length) {
+      results.push({ status: "skipped", reason: "no property with a clean utility" });
+      continue;
+    }
+    contents.set(hit.file, source.slice(0, hit.start) + rewrite.classList + source.slice(hit.end));
+    changed.add(hit.file);
+    results.push({ status: "written", file: name(hit.file), line: source.slice(0, hit.start).split("\n").length, written: rewrite.written, from: source.slice(hit.start, hit.end), to: rewrite.classList, tag: edit.tag ?? null });
+  }
+  return { results, changed: new Map([...changed].map((file) => [file, contents.get(file)])) };
+}
+function revertClassLists(files, reverts, { read: readFile, name = (file) => file } = {}) {
+  const contents = /* @__PURE__ */ new Map();
+  const read = (file) => {
+    if (!contents.has(file)) contents.set(file, readFile(file));
+    return contents.get(file);
+  };
+  const changed = /* @__PURE__ */ new Set();
+  const results = [];
+  for (const revert of reverts) {
+    let done = false;
+    for (const file of files) {
+      const source = read(file);
+      if (!source) continue;
+      const hits = findClassAttributes(source, revert.tag, revert.to);
+      if (hits.length !== 1) continue;
+      const [hit] = hits;
+      contents.set(file, source.slice(0, hit.start) + revert.from + source.slice(hit.end));
+      changed.add(file);
+      results.push({ status: "reverted", file: name(file) });
+      done = true;
+      break;
+    }
+    if (!done) results.push({ status: "changed-since" });
+  }
+  return { results, changed: new Map([...changed].map((file) => [file, contents.get(file)])) };
+}
+
+// lib/github-publisher.mjs
+var API2 = "https://api.github.com";
+var MAX_SOURCE_BYTES = 1e6;
+function assert2(value, message) {
+  if (!value) throw new Error(`[froam] ${message}`);
+}
+var slug = (text) => String(text ?? "changes").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "changes";
+var where = (scope) => `${scope.routeKey === "/" ? "Home" : scope.routeKey}${scope.viewport === "desktop" ? "" : ` (${scope.viewport})`}`;
+var cell = (text) => String(text ?? "\u2014").replace(/\|/g, "\\|").replace(/\r?\n/g, " ").slice(0, 200) || "\u2014";
+function pullRequestBody({ request, room, siteUrl, files = [], skippedCopy = 0 }) {
+  const author = room?.members?.[request.actor];
+  const lines = [
+    `**${request.createdBy}**${author?.title ? ` (${author.title})` : ""} suggested this in Froam; **${request.decidedBy ?? "the owner"}** approved it.`,
+    ""
+  ];
+  if (request.note) lines.push(`> ${request.note.replace(/\n/g, "\n> ")}`, "");
+  const scopes = requestScopes(request);
+  lines.push(`**Where:** ${scopes.map(where).join(", ")}`, "");
+  if (request.changes?.length) {
+    lines.push("| Change | Before | After |", "| --- | --- | --- |");
+    for (const change of request.changes.slice(0, 50)) lines.push(`| ${cell(change.label)} | ${cell(change.before)} | ${cell(change.after)} |`);
+    if (request.changes.length > 50) lines.push(`| \u2026and ${request.changes.length - 50} more | | |`);
+    lines.push("");
+  }
+  if (files.length) lines.push(`**Written into the source:** ${files.map((file) => `\`${file}\``).join(", ")}`, "");
+  if (skippedCopy) lines.push(`${skippedCopy} copy edit${skippedCopy === 1 ? "" : "s"} couldn\u2019t be placed in the source safely and stay${skippedCopy === 1 ? "s" : ""} in the Froam design.`, "");
+  if (siteUrl && room?.id) {
+    const open = new URL(siteUrl);
+    open.searchParams.set("froam-room-id", room.id);
+    open.searchParams.set("froam-open", `request:${request.id}`);
+    lines.push(`[Open in Froam](${open})`, "");
+  }
+  lines.push("<sub>Opened by Froam</sub>");
+  return lines.join("\n");
+}
+function createGitHubPublisher(options = {}) {
+  const {
+    token,
+    repo,
+    base = "main",
+    dir = "froam",
+    sourceDir = "",
+    mode = "pull-request",
+    autoMerge = false,
+    siteUrl = null,
+    tailwind = false,
+    maxSourceFiles = 1500,
+    committer,
+    fetchImpl = globalThis.fetch
+  } = options;
+  assert2(token, "createGitHubPublisher needs a token (contents and pull requests: write)");
+  assert2(repo && repo.includes("/"), 'createGitHubPublisher needs repo as "owner/name"');
+  assert2(mode === "pull-request" || mode === "commit", 'mode is "pull-request" or "commit"');
+  const designDir = dir.replace(/^\/+|\/+$/g, "");
+  const sourceRoot = sourceDir.replace(/^\/+|\/+$/g, "");
+  async function gh(apiPath, init = {}) {
+    const response = await fetchImpl(`${API2}${apiPath}`, {
+      ...init,
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "froam-studio",
+        ...init.body ? { "Content-Type": "application/json" } : {}
+      }
+    });
+    const text = await response.text();
+    const body = text ? JSON.parse(text) : null;
+    if (!response.ok) throw new Error(`GitHub ${init.method ?? "GET"} ${apiPath} failed (${response.status})${body?.message ? `: ${body.message}` : ""}`);
+    return body;
+  }
+  const readBlob = async (sha) => {
+    const blob = await gh(`/repos/${repo}/git/blobs/${sha}`);
+    return Buffer.from(blob.content ?? "", blob.encoding === "base64" ? "base64" : "utf8").toString("utf8");
+  };
+  async function snapshot() {
+    const ref = await gh(`/repos/${repo}/git/ref/heads/${encodeURIComponent(base)}`);
+    const commitSha = ref.object.sha;
+    const commit = await gh(`/repos/${repo}/git/commits/${commitSha}`);
+    const tree = await gh(`/repos/${repo}/git/trees/${commit.tree.sha}?recursive=1`);
+    const blobs = new Map((tree.tree ?? []).filter((entry) => entry.type === "blob").map((entry) => [entry.path, entry]));
+    return { commitSha, treeSha: commit.tree.sha, blobs };
+  }
+  async function readDesign(snap) {
+    const entry = snap.blobs.get(`${designDir ? `${designDir}/` : ""}froam.design.json`);
+    if (!entry) return {};
+    try {
+      return JSON.parse(await readBlob(entry.sha));
+    } catch {
+      return {};
+    }
+  }
+  async function readSources(snap) {
+    const prefix = sourceRoot ? `${sourceRoot}/` : "";
+    const candidates = [...snap.blobs.values()].filter((entry) => entry.path.startsWith(prefix) && (entry.size ?? 0) <= MAX_SOURCE_BYTES).filter((entry) => isSourcePath(entry.path.slice(prefix.length))).filter((entry) => !entry.path.startsWith(`${designDir}/`)).slice(0, maxSourceFiles);
+    const contents = /* @__PURE__ */ new Map();
+    for (let i = 0; i < candidates.length; i += 8) {
+      await Promise.all(candidates.slice(i, i + 8).map(async (entry) => {
+        try {
+          contents.set(entry.path, await readBlob(entry.sha));
+        } catch {
+          contents.set(entry.path, null);
+        }
+      }));
+    }
+    return contents;
+  }
+  async function commitFiles(snap, files, message) {
+    const tree = await gh(`/repos/${repo}/git/trees`, {
+      method: "POST",
+      body: JSON.stringify({
+        base_tree: snap.treeSha,
+        tree: [...files].map(([filePath, content]) => ({ path: filePath, mode: "100644", type: "blob", content }))
+      })
+    });
+    return gh(`/repos/${repo}/git/commits`, {
+      method: "POST",
+      body: JSON.stringify({ message, tree: tree.sha, parents: [snap.commitSha], ...committer ? { committer, author: committer } : {} })
+    });
+  }
+  async function ship(snap, commit, { branchName, title, body }) {
+    if (mode === "commit") {
+      await gh(`/repos/${repo}/git/refs/heads/${encodeURIComponent(base)}`, { method: "PATCH", body: JSON.stringify({ sha: commit.sha, force: false }) });
+      return { detail: `Committed to ${base}`, link: commit.html_url ?? `https://github.com/${repo}/commit/${commit.sha}`, number: null, branch: base };
+    }
+    await gh(`/repos/${repo}/git/refs`, { method: "POST", body: JSON.stringify({ ref: `refs/heads/${branchName}`, sha: commit.sha }) });
+    const pull = await gh(`/repos/${repo}/pulls`, { method: "POST", body: JSON.stringify({ title, head: branchName, base, body }) });
+    let merged = false;
+    if (autoMerge) {
+      try {
+        await gh(`/repos/${repo}/pulls/${pull.number}/merge`, { method: "PUT", body: JSON.stringify({ merge_method: "squash" }) });
+        merged = true;
+      } catch {
+      }
+    }
+    return {
+      detail: merged ? `Merged pull request #${pull.number}` : `Opened pull request #${pull.number} \u2014 merging it publishes`,
+      link: pull.html_url,
+      number: pull.number,
+      branch: branchName
+    };
+  }
+  function writeSource(sources, request) {
+    const files = [...sources.keys()];
+    const read = (file) => sources.get(file) ?? null;
+    const changed = /* @__PURE__ */ new Map();
+    const text = applyTextEdits(files, request.textEdits ?? [], { read });
+    for (const [file, content] of text.changed) {
+      changed.set(file, content);
+      sources.set(file, content);
+    }
+    const writtenText = text.results.map((result, index) => result.status === "written" ? request.textEdits[index].to : null).filter(Boolean);
+    const skippedCopy = text.results.filter((result) => result.status !== "written" && result.status !== "skipped").length;
+    let writtenStyles = [];
+    if (tailwind && Array.isArray(request.styleEdits) && request.styleEdits.length) {
+      const styles = applyStyleEdits(files.filter((file) => !file.endsWith(".json")), request.styleEdits, { read });
+      for (const [file, content] of styles.changed) {
+        changed.set(file, content);
+        sources.set(file, content);
+      }
+      writtenStyles = styles.results;
+    }
+    return { changed, writtenText, writtenStyles, skippedCopy };
+  }
+  function withoutWrittenStyles(request, writtenStyles) {
+    if (!writtenStyles.length) return request;
+    const bySpot = /* @__PURE__ */ new Map();
+    request.styleEdits.forEach((edit, index) => {
+      const result = writtenStyles[index];
+      if (result?.status === "written") bySpot.set(`${edit.routeKey ?? request.routeKey}@@${edit.viewport ?? "desktop"}@@${edit.path}`, result.written);
+    });
+    const scopes = requestScopes(request).map((scope) => ({
+      ...scope,
+      store: Object.fromEntries(Object.entries(scope.store).map(([key, draft]) => {
+        const written = bySpot.get(`${scope.routeKey}@@${scope.viewport}@@${key}`);
+        if (!written || !draft?.styles) return [key, draft];
+        const styles = { ...draft.styles };
+        for (const property of written) delete styles[property];
+        return [key, { ...draft, styles }];
+      }))
+    }));
+    return { ...request, scopes };
+  }
+  async function onApproveRequest({ room, request }) {
+    const snap = await snapshot();
+    const design = await readDesign(snap);
+    const needsSource = (request.textEdits?.length ?? 0) > 0 || tailwind && (request.styleEdits?.length ?? 0) > 0;
+    const sources = needsSource ? await readSources(snap) : /* @__PURE__ */ new Map();
+    const { changed, writtenText, writtenStyles, skippedCopy } = writeSource(sources, request);
+    const { design: next, undo } = approveChangeRequest(design, withoutWrittenStyles(request, writtenStyles), { writtenText });
+    const artifacts = buildDesignArtifacts(next);
+    const files = new Map(changed);
+    const at = (name) => `${designDir ? `${designDir}/` : ""}${name}`;
+    files.set(at("froam.design.json"), artifacts.design);
+    files.set(at("froam.generated.css"), artifacts.css);
+    files.set(at("froam.runtime.js"), artifacts.runtime);
+    const title = `${request.title}`;
+    const commit = await commitFiles(snap, files, `${title}
+
+Suggested by ${request.createdBy} in Froam.`);
+    const shipped = await ship(snap, commit, {
+      branchName: `froam/${slug(request.title)}-${String(request.id).slice(0, 6)}`,
+      title,
+      body: pullRequestBody({ request, room, siteUrl, files: [...changed.keys()], skippedCopy })
+    });
+    const classLists = writtenStyles.filter((result) => result.status === "written").map(({ tag, from, to }) => ({ tag, from, to }));
+    return { ...shipped, undo: { ...undo, classLists } };
+  }
+  async function onRevertRequest({ room, request, undo }) {
+    const number = request.published?.number;
+    if (mode === "pull-request" && number) {
+      const pull = await gh(`/repos/${repo}/pulls/${number}`);
+      if (pull.state === "open") {
+        await gh(`/repos/${repo}/pulls/${number}`, { method: "PATCH", body: JSON.stringify({ state: "closed" }) });
+        if (pull.head?.ref?.startsWith("froam/")) {
+          try {
+            await gh(`/repos/${repo}/git/refs/heads/${encodeURIComponent(pull.head.ref)}`, { method: "DELETE" });
+          } catch {
+          }
+        }
+        return { detail: `Closed pull request #${number} before it merged`, link: pull.html_url, skipped: [] };
+      }
+      if (!pull.merged_at) return { detail: `Pull request #${number} was closed without merging \u2014 nothing to take back`, link: pull.html_url, skipped: [] };
+    }
+    assert2(undo, "This change was approved before Froam could revert \u2014 revert its commit in git instead");
+    const snap = await snapshot();
+    const design = await readDesign(snap);
+    const sources = undo.textEdits?.length || undo.classLists?.length ? await readSources(snap) : /* @__PURE__ */ new Map();
+    const read = (file) => sources.get(file) ?? null;
+    const text = applyTextEdits([...sources.keys()], undo.textEdits ?? [], { read });
+    for (const [file, content] of text.changed) sources.set(file, content);
+    const classes = revertClassLists([...sources.keys()], undo.classLists ?? [], { read });
+    for (const [file, content] of classes.changed) text.changed.set(file, content);
+    const { design: next, skipped } = revertChangeRequest(design, undo);
+    const artifacts = buildDesignArtifacts(next);
+    const files = new Map(text.changed);
+    const at = (name) => `${designDir ? `${designDir}/` : ""}${name}`;
+    files.set(at("froam.design.json"), artifacts.design);
+    files.set(at("froam.generated.css"), artifacts.css);
+    files.set(at("froam.runtime.js"), artifacts.runtime);
+    const title = `Revert \u201C${request.title}\u201D`;
+    const commit = await commitFiles(snap, files, `${title}
+
+Reverted in Froam.`);
+    const body = [
+      `Takes back **${request.title}** (suggested by ${request.createdBy}${request.published?.number ? `, #${request.published.number}` : ""}).`,
+      skipped.length ? `
+${skipped.length} spot${skipped.length === 1 ? " was" : "s were"} changed again since and ${skipped.length === 1 ? "is" : "are"} left as they are now.` : "",
+      "\n<sub>Opened by Froam</sub>"
+    ].join("\n");
+    const shipped = await ship(snap, commit, { branchName: `froam/revert-${slug(request.title)}-${String(request.id).slice(0, 6)}`, title, body });
+    return { ...shipped, skipped };
+  }
+  return { onApproveRequest, onRevertRequest };
+}
+
+// lib/notifier.mjs
+var RESEND_API = "https://api.resend.com/emails";
+var DEFAULT_EVENTS = ["request.submitted", "request.decided", "request.reverted", "chat.mention"];
+function formatFor(url) {
+  if (/hooks\.slack\.com\//.test(url)) return "slack";
+  if (/discord(?:app)?\.com\/api\/webhooks\//.test(url)) return "discord";
+  return "json";
+}
+function openLink(siteUrl, event) {
+  if (!siteUrl) return null;
+  const url = new URL(siteUrl);
+  url.searchParams.set("froam-room-id", event.room.id);
+  if (event.request) url.searchParams.set("froam-open", `request:${event.request.id}`);
+  else if (event.message) url.searchParams.set("froam-open", `message:${event.message.id}`);
+  return url.toString();
+}
+var pages = (request) => {
+  const scopes = Array.isArray(request.scopes) && request.scopes.length ? request.scopes : [{ routeKey: request.routeKey, viewport: request.viewport }];
+  return [...new Set(scopes.map((scope) => scope.routeKey === "/" ? "home page" : scope.routeKey))].join(", ");
+};
+function describe(event) {
+  const who = event.actor?.name ?? "Someone";
+  const request = event.request;
+  switch (event.type) {
+    case "request.submitted": {
+      const count = request.changes?.length ?? 0;
+      return {
+        subject: `${who} sent \u201C${request.title}\u201D for approval`,
+        text: `${who}${event.actor?.title ? ` (${event.actor.title})` : ""} changed ${count} thing${count === 1 ? "" : "s"} on the ${pages(request)}${request.note ? ` \u2014 \u201C${request.note}\u201D` : ""}.`,
+        changes: (request.changes ?? []).slice(0, 5),
+        action: "Review"
+      };
+    }
+    case "request.decided": {
+      const approved = request.status === "approved";
+      return {
+        subject: approved ? `\u201C${request.title}\u201D is live` : `Changes requested on \u201C${request.title}\u201D`,
+        text: approved ? `${who} approved ${request.createdBy}\u2019s change. ${request.published?.detail ?? ""}`.trim() : `${who} sent it back to ${request.createdBy}${request.decisionNote ? `: \u201C${request.decisionNote}\u201D` : "."}`,
+        link: request.published?.link ?? null,
+        action: approved && request.published?.link ? "See the pull request" : "Open"
+      };
+    }
+    case "request.reverted":
+      return {
+        subject: `\u201C${request.title}\u201D was reverted`,
+        text: `${who} took back ${request.createdBy}\u2019s change. ${request.reverted?.detail ?? ""}`.trim(),
+        link: request.reverted?.link ?? null,
+        action: "Open"
+      };
+    case "chat.mention":
+      return {
+        subject: `${who} mentioned ${event.mentioned?.map((m) => m.name).join(", ") || "you"} in Froam`,
+        text: `\u201C${event.message.body.length > 280 ? `${event.message.body.slice(0, 279)}\u2026` : event.message.body}\u201D`,
+        action: "Reply"
+      };
+    default:
+      return null;
+  }
+}
+function slackPayload(summary, link) {
+  const lines = summary.changes?.map((change) => `\u2022 *${change.label}*${change.before || change.after ? `: ~${change.before ?? ""}~ \u2192 ${change.after ?? ""}` : ""}`) ?? [];
+  return {
+    text: summary.subject,
+    blocks: [
+      { type: "section", text: { type: "mrkdwn", text: `*${summary.subject}*
+${summary.text}${lines.length ? `
+${lines.join("\n")}` : ""}` } },
+      ...link ? [{ type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: summary.action }, url: link, style: "primary" }] }] : []
+    ]
+  };
+}
+function discordPayload(summary, link) {
+  return {
+    content: summary.subject,
+    embeds: [{
+      title: summary.subject.slice(0, 256),
+      description: `${summary.text}${summary.changes?.length ? `
+${summary.changes.map((c) => `\u2022 **${c.label}**${c.after ? ` \u2192 ${c.after}` : ""}`).join("\n")}` : ""}`.slice(0, 4e3),
+      ...link ? { url: link } : {},
+      color: 6220500
+    }]
+  };
+}
+var escapeHtml2 = (text) => String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+function emailHtml(summary, link) {
+  const rows = (summary.changes ?? []).map((change) => `<li><strong>${escapeHtml2(change.label)}</strong>${change.before ? ` <s style="color:#b91c1c">${escapeHtml2(change.before)}</s>` : ""}${change.after ? ` \u2192 <span style="color:#15803d">${escapeHtml2(change.after)}</span>` : ""}</li>`).join("");
+  return `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#0f172a">
+<h2 style="font-size:18px;margin:0 0 8px">${escapeHtml2(summary.subject)}</h2>
+<p style="margin:0 0 12px">${escapeHtml2(summary.text)}</p>
+${rows ? `<ul style="padding-left:18px;margin:0 0 16px">${rows}</ul>` : ""}
+${link ? `<a href="${escapeHtml2(link)}" style="display:inline-block;padding:10px 16px;border-radius:8px;background:#0f172a;color:#fff;text-decoration:none;font-weight:600">${escapeHtml2(summary.action)}</a>` : ""}
+<p style="margin:20px 0 0;color:#64748b;font-size:12px">Sent by Froam</p></div>`;
+}
+function createFroamNotifier(options = {}) {
+  const { siteUrl = null, email = null, events = DEFAULT_EVENTS, fetchImpl = globalThis.fetch } = options;
+  const hooks = (options.webhooks ?? []).filter(Boolean).map((hook) => typeof hook === "string" ? { url: hook, format: formatFor(hook) } : { format: formatFor(hook.url), ...hook });
+  const wanted = new Set(events);
+  return async function notify(event) {
+    if (!wanted.has(event?.type)) return [];
+    const summary = describe(event);
+    if (!summary) return [];
+    const open = openLink(siteUrl, event);
+    const link = summary.link ?? open;
+    const sends = hooks.map(async (hook) => {
+      const body = hook.format === "slack" ? slackPayload(summary, link) : hook.format === "discord" ? discordPayload(summary, link) : { type: event.type, subject: summary.subject, text: summary.text, link, open, roomId: event.room.id, requestId: event.request?.id ?? null, messageId: event.message?.id ?? null };
+      const response = await fetchImpl(hook.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (!response.ok) throw new Error(`webhook answered ${response.status}`);
+      return { to: hook.format, ok: true };
+    });
+    if (email?.resendApiKey && email.from && email.to?.length) {
+      sends.push((async () => {
+        const response = await fetchImpl(RESEND_API, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${email.resendApiKey}` },
+          body: JSON.stringify({ from: email.from, to: email.to, subject: summary.subject, html: emailHtml(summary, link), text: `${summary.text}${link ? `
+
+${summary.action}: ${link}` : ""}` })
+        });
+        if (!response.ok) throw new Error(`email answered ${response.status}`);
+        return { to: "email", ok: true };
+      })());
+    }
+    const settled = await Promise.allSettled(sends);
+    const failed = settled.filter((result) => result.status === "rejected");
+    if (failed.length === settled.length && failed.length) throw failed[0].reason;
+    return settled.map((result) => result.status === "fulfilled" ? result.value : { ok: false, error: String(result.reason?.message ?? result.reason) });
+  };
+}
+
+// lib/realtime.mjs
+var import_node_crypto2 = require("node:crypto");
+var TICKET_TTL_MS = 12 * 60 * 60 * 1e3;
+var b64url = (buffer) => Buffer.from(buffer).toString("base64url");
+function signRealtimeTicket(secret, { roomId, actor, ttlMs = TICKET_TTL_MS, now = Date.now() }) {
+  const payload = b64url(JSON.stringify({ r: roomId, a: actor, exp: now + ttlMs }));
+  const signature = b64url((0, import_node_crypto2.createHmac)("sha256", secret).update(payload).digest());
+  return `${payload}.${signature}`;
+}
+function verifyRealtimeTicket(secret, ticket, { now = Date.now() } = {}) {
+  if (typeof ticket !== "string" || !ticket.includes(".")) return null;
+  const [payload, signature] = ticket.split(".");
+  const expected = (0, import_node_crypto2.createHmac)("sha256", secret).update(payload).digest();
+  const given = Buffer.from(signature ?? "", "base64url");
+  if (given.length !== expected.length || !(0, import_node_crypto2.timingSafeEqual)(given, expected)) return null;
+  try {
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    return claims && claims.exp > now ? { roomId: claims.r, actor: claims.a, exp: claims.exp } : null;
+  } catch {
+    return null;
+  }
+}
+function createRealtimeRelayClient({ url, secret, fetchImpl = globalThis.fetch }) {
+  if (!url || !secret) throw new Error("[froam] realtime needs the relay url and its shared secret");
+  const base = url.replace(/\/+$/, "");
+  const socketBase = base.replace(/^http/, "ws");
+  return {
+    /** What a member needs to connect: the socket URL for their room and a ticket. */
+    connection(roomId, actor) {
+      return { url: `${socketBase}/rooms/${encodeURIComponent(roomId)}`, ticket: signRealtimeTicket(secret, { roomId, actor }) };
+    },
+    /** Tell everyone in the room to read now. Best effort: polling still catches up. */
+    async publish(roomId, sequence) {
+      await fetchImpl(`${base}/rooms/${encodeURIComponent(roomId)}/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+        body: JSON.stringify({ type: "wake", sequence })
+      });
+    }
+  };
+}
+
 // lib/project-document-store.mjs
 var import_node_fs2 = __toESM(require("node:fs"), 1);
-var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_path3 = __toESM(require("node:path"), 1);
 var FroamStaleRevisionError = class extends Error {
   constructor(expected, actual) {
     super(`Stale project revision: expected ${expected}, current ${actual}`);
@@ -1814,7 +2825,7 @@ function createFileProjectDocumentStore(file) {
     }
   };
   const writeAll = (all) => {
-    import_node_fs2.default.mkdirSync(import_node_path2.default.dirname(file), { recursive: true });
+    import_node_fs2.default.mkdirSync(import_node_path3.default.dirname(file), { recursive: true });
     const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
     import_node_fs2.default.writeFileSync(temporary, JSON.stringify(all) + "\n");
     import_node_fs2.default.renameSync(temporary, file);
@@ -2619,7 +3630,7 @@ function loadPublished(file) {
   return emptyPublished();
 }
 function savePublished(file, published) {
-  import_node_fs3.default.mkdirSync(import_node_path3.default.dirname(file), { recursive: true });
+  import_node_fs3.default.mkdirSync(import_node_path4.default.dirname(file), { recursive: true });
   import_node_fs3.default.writeFileSync(file, JSON.stringify(published, null, 2) + "\n");
 }
 function sendJson4(res, status, payload) {
@@ -2705,7 +3716,7 @@ function createFroamPublishApi({ file, authorize = null, log = () => {
       published.routes[routeKey][viewportMode] = { store, publishedAt };
       published.updatedAt = publishedAt;
       savePublished(file, published);
-      log(`published ${routeKey} (${viewportMode}) \u2192 ${import_node_path3.default.basename(file)}`);
+      log(`published ${routeKey} (${viewportMode}) \u2192 ${import_node_path4.default.basename(file)}`);
       let committed = null;
       if (commit) {
         try {
@@ -2731,13 +3742,20 @@ function createFroamPublishApi({ file, authorize = null, log = () => {
   FroamStaleRevisionError,
   PRESENCE_TTL_MS,
   applyChangeRequest,
+  approveChangeRequest,
   createFileProjectDocumentStore,
   createFroamIntelligenceApi,
+  createFroamNotifier,
   createFroamProjectSyncApi,
   createFroamPublishApi,
   createFroamRoomApi,
   createGitHubCommitter,
+  createGitHubPublisher,
   createMemoryProjectDocumentStore,
   createOpenAICompatibleProvider,
-  loadPublished
+  createRealtimeRelayClient,
+  loadPublished,
+  revertChangeRequest,
+  signRealtimeTicket,
+  verifyRealtimeTicket
 });

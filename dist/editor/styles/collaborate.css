@@ -369,3 +369,75 @@
 .froam-persona-modal__photo.is-dragging .froam-avatar { outline: 2px dashed var(--fs-accent-control); outline-offset: 3px; }
 .froam-persona-modal__avatar-row { display: flex; align-items: center; gap: 12px; }
 .froam-persona-modal__avatar-row p { flex-basis: 100%; margin: 0; color: var(--fs-text-tertiary); font-size: .66rem; line-height: 1.45; }
+
+/* ── 8.8: pages, revert, checks, expiry ── */
+.froam-collab__where { display: inline-block; margin-right: 6px; padding: 0 5px; border-radius: 4px; background: rgba(96, 165, 250, .14); color: #93c5fd; font-size: .58rem; font-weight: 700; vertical-align: 1px; }
+.froam-collab__scopes { display: flex; flex-wrap: wrap; gap: 4px; }
+.froam-collab__scopes span { padding: 1px 7px; border: 1px solid var(--fs-border); border-radius: 999px; color: var(--fs-text-secondary); font-size: .6rem; font-weight: 650; }
+.froam-collab__request.is-reverted { opacity: .75; }
+.is-reverted .froam-collab__status { color: #c4b5fd; }
+.froam-collab__request .froam-collab__muted svg { vertical-align: -1px; }
+.froam-collab__danger { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; padding: 0 11px; border-radius: 8px; background: #f87171; color: #1f0606; font-size: .7rem; font-weight: 700; }
+.froam-collab__danger:disabled { opacity: .5; cursor: not-allowed; }
+.froam-collab__checks { display: grid; gap: 6px; margin: 0; padding: 8px 9px; border: 1px solid rgba(250, 204, 21, .3); border-radius: 8px; background: rgba(250, 204, 21, .06); font-size: .68rem; }
+.froam-collab__checks > strong { display: flex; align-items: center; gap: 5px; color: #fde047; font-size: .68rem; }
+.froam-collab__checks ul { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.froam-collab__checks li { display: grid; gap: 1px; padding-left: 9px; border-left: 2px solid #facc15; }
+.froam-collab__checks li.is-fail { border-left-color: #f87171; }
+.froam-collab__checks li small { color: var(--fs-text-tertiary); font-size: .6rem; }
+.froam-collab__checks.is-clear { display: flex; align-items: center; gap: 6px; border-color: rgba(34, 197, 94, .3); background: rgba(34, 197, 94, .06); color: #86efac; }
+.froam-collab__expiry { display: flex; align-items: center; gap: 6px; margin: 0; padding: 8px 12px 0; color: var(--fs-text-tertiary); font-size: .66rem; }
+.froam-collab__peek em { margin-left: 4px; color: #fdba74; font-style: normal; font-weight: 700; }
+
+/* ── 8.8: mentions, pins, typing ── */
+.froam-chat__mention { padding: 0 2px; border-radius: 4px; background: rgba(96, 165, 250, .18); color: #bfdbfe; font-weight: 700; }
+.froam-chat__msg.is-mine .froam-chat__mention { background: rgba(0, 0, 0, .14); color: inherit; }
+.froam-chat__msg.is-mentioning-me .froam-chat__bubble { box-shadow: inset 3px 0 0 #fdba74; }
+.froam-chat__msg.is-focused .froam-chat__bubble { outline: 2px solid var(--fs-accent-control); outline-offset: 2px; }
+.froam-chat__pin { display: inline-flex; align-items: center; gap: 4px; justify-self: start; max-width: 100%; padding: 2px 7px; border-radius: 6px; background: rgba(94, 234, 212, .12); color: #5eead4; font-size: .62rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.froam-chat__msg.is-mine .froam-chat__pin { justify-self: end; }
+.froam-chat__pin:hover { background: rgba(94, 234, 212, .2); }
+.froam-chat__context.is-pin { background: rgba(94, 234, 212, .1); color: #5eead4; }
+.froam-chat__pin-button { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border: 1px solid var(--fs-border); border-radius: 9px; color: var(--fs-text-tertiary); }
+.froam-chat__pin-button:hover:not(:disabled) { color: var(--fs-text-primary); border-color: var(--fs-border-hover); }
+.froam-chat__pin-button.is-active { border-color: #5eead4; color: #5eead4; background: rgba(94, 234, 212, .1); }
+.froam-chat__pin-button:disabled { opacity: .35; cursor: not-allowed; }
+.froam-chat__mentions { display: grid; gap: 2px; margin: 0; padding: 4px; border: 1px solid var(--fs-border); border-radius: 10px; background: #232428; list-style: none; box-shadow: 0 10px 30px rgba(0, 0, 0, .4); }
+.froam-chat__mentions button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 7px; border-radius: 7px; color: var(--fs-text-primary); font-size: .72rem; text-align: left; }
+.froam-chat__mentions button.is-active, .froam-chat__mentions button:hover { background: var(--fs-bg-active); }
+.froam-chat__mentions small { margin-left: auto; color: var(--fs-text-tertiary); font-size: .6rem; }
+.froam-chat__typing { display: flex; align-items: center; gap: 6px; padding: 0 14px 6px; color: var(--fs-text-tertiary); font-size: .64rem; }
+.froam-chat__dots { display: inline-flex; gap: 2px; }
+.froam-chat__dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: froamTyping 1.2s infinite ease-in-out; }
+.froam-chat__dots i:nth-child(2) { animation-delay: .15s; }
+.froam-chat__dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes froamTyping { 0%, 60%, 100% { opacity: .3; transform: none; } 30% { opacity: 1; transform: translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) { .froam-chat__dots i { animation: none; } }
+
+/* Messages pinned to things on the page. */
+.froam-pins { position: fixed; inset: 0; z-index: 2147483637; pointer-events: none; }
+.froam-pin { position: fixed; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border-radius: 50% 50% 50% 4px; background: var(--froam-avatar-color); box-shadow: 0 0 0 2px #fff, 0 6px 18px rgba(0, 0, 0, .35); pointer-events: auto; cursor: pointer; transition: transform .12s ease; }
+.froam-pin:hover { transform: scale(1.08); }
+.froam-pin .froam-avatar { box-shadow: none; }
+.froam-pin__count { position: absolute; top: -6px; right: -6px; display: grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: #0f172a; color: #fff; font: 800 9px/1 Inter, system-ui, sans-serif; }
+
+/* Ending a session: said plainly, confirmed once. */
+.froam-collab__ghost.is-danger { color: #fca5a5; }
+.froam-collab__ghost.is-danger:hover { color: #f87171; }
+.froam-collab__end { display: grid; gap: 6px; padding: 10px; border: 1px solid rgba(248, 113, 113, .35); border-radius: 10px; background: rgba(248, 113, 113, .06); }
+.froam-collab__end strong { font-size: .74rem; }
+.froam-collab__end p { margin: 0; color: var(--fs-text-secondary); font-size: .68rem; line-height: 1.45; }
+.froam-collab__end .froam-collab__notice { padding: 0; }
+
+/* A site on this computer, and whether its links open anywhere. */
+.froam-collab__reach { display: flex; gap: 9px; margin: 10px 12px 0; padding: 10px; border: 1px solid rgba(96, 165, 250, .3); border-radius: 10px; background: rgba(96, 165, 250, .06); text-align: left; }
+.froam-collab__empty .froam-collab__reach { margin: 4px 0; width: 100%; }
+.froam-collab__reach > svg { flex: none; margin-top: 2px; color: #93c5fd; }
+.froam-collab__reach > div { display: grid; gap: 6px; min-width: 0; }
+.froam-collab__reach strong { font-size: .74rem; }
+.froam-collab__reach p { margin: 0; color: var(--fs-text-secondary); font-size: .68rem; line-height: 1.45; }
+.froam-collab__reach .froam-collab__primary { justify-self: start; }
+.froam-collab__reach .froam-collab__link { justify-self: start; font-size: .66rem; }
+.froam-collab__reach.is-on { border-color: rgba(34, 197, 94, .35); background: rgba(34, 197, 94, .06); }
+.froam-collab__reach.is-on > svg { color: #86efac; }
+.froam-collab__reach.is-connecting > svg { color: #fde047; }

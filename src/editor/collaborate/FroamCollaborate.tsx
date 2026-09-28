@@ -1,15 +1,22 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowLeft, Camera, Check, Copy, Eye, EyeOff, Link2, MessageSquare, Pencil, RefreshCw, Send, Users, X } from 'lucide-react'
-import type { RoomMemberView, RoomRequest } from '../../collab/room'
-import type { FroamRole } from '../../collab/types'
+import { AlertTriangle, ArrowLeft, Camera, Check, Clock, Copy, ExternalLink, Eye, EyeOff, Globe, Laptop, Link2, LogOut, MessageSquare, Pencil, RefreshCw, Send, ShieldCheck, Undo2, Users, X } from 'lucide-react'
+import { scopesOf, type RoomMemberView, type RoomRequest } from '../../collab/room'
+import type { FroamMessageAnchor, FroamRole, FroamViewport } from '../../collab/types'
+import type { RequestCheck } from './request-checks'
 import { relativeTime } from '../chef/change-report'
 import { shrinkAvatar } from './avatar-image'
 import { PersonAvatar } from './PersonAvatar'
 import { RoomMessages } from './RoomMessages'
 import type { RoomMessaging } from './useRoomMessages'
 
-export type PendingChange = { label: string; before: string | null; after: string | null }
+export type PendingChange = { label: string; before: string | null; after: string | null; routeKey?: string; viewport?: FroamViewport }
+
+/** "Home", "/pricing (mobile)" — a page and screen size, as a person says it. */
+export function whereLabel(routeKey?: string, viewport?: string) {
+  const page = !routeKey || routeKey === '/' ? 'Home' : routeKey
+  return viewport && viewport !== 'desktop' ? `${page} (${viewport})` : page
+}
 
 /** What someone tells the room about themselves when they join by link. */
 export type JoinProfile = { avatarUrl: string | null; title: string }
@@ -37,6 +44,7 @@ const STATUS_LABEL: Record<RoomRequest['status'], string> = {
   approved: 'Approved · live',
   'changes-requested': 'Changes requested',
   withdrawn: 'Withdrawn',
+  reverted: 'Reverted',
 }
 
 /** A new message peeks out under the button for this long when the panel is closed. */
@@ -83,6 +91,29 @@ type Props = {
   /** Prefills the join card from a studio profile this browser already has. */
   knownProfile?: { name: string; avatarUrl: string | null; title: string } | null
   onJoin: (name: string, profile: JoinProfile) => Promise<void>
+  /** Owner: take an approved change back. Absent where the room can't revert. */
+  onRevert?: (request: RoomRequest, note: string) => Promise<void>
+  /** What the checks found on the request being previewed. */
+  checks?: { requestId: string; items: readonly RequestCheck[] } | null
+  /** When the room ends (the public demo keeps rooms for a week). */
+  expiresAt?: number | null
+  /** Open the panel on this — from a notification link or a pin on the page. */
+  openTarget?: { kind: 'request' | 'message'; id: string; nonce: number } | null
+  /** The panel is open on the target; the editor can stop holding it. */
+  onOpenedTarget?: () => void
+  /** The element selected on the page, for pinning a message to it. */
+  pinTarget?: FroamMessageAnchor | null
+  /** Show a pinned message's element on the page. */
+  onShowAnchor?: (anchor: FroamMessageAnchor) => void
+  /** Typing a message (shown to others as "… is typing"). */
+  onTyping?: (typing: boolean) => void
+  /** Owner: done collaborating — every link stops working, everyone is told. */
+  onEndRoom?: () => Promise<void>
+  /** The owner ended this session (for everyone else who was in it). */
+  ended?: { at: number; by: string | null } | null
+  /** A site on this computer: whether links open anywhere, through the share service. */
+  reach?: { active: boolean; online: boolean; url: string | null; starting: boolean } | null
+  onReach?: (on: boolean) => void
 }
 
 const ROLE_WELCOME: Partial<Record<FroamRole, string>> = {
@@ -172,11 +203,13 @@ function JoinPrompt({ role, known, onJoin }: {
 
 function ChangeList({ changes }: { changes: readonly PendingChange[] }) {
   if (!changes.length) return <p className="froam-collab__muted">No changes yet — edit the page and they’ll appear here.</p>
+  // Say where only when it isn't all one place.
+  const places = new Set(changes.map((change) => whereLabel(change.routeKey, change.viewport)))
   return (
     <ul className="froam-collab__changes">
       {changes.slice(0, 12).map((change, index) => (
         <li key={`${change.label}-${index}`}>
-          <strong>{change.label}</strong>
+          <strong>{places.size > 1 && <span className="froam-collab__where">{whereLabel(change.routeKey, change.viewport)}</span>}{change.label}</strong>
           {(change.before || change.after) && (
             <span>
               {change.before && <del>{change.before}</del>}
@@ -189,6 +222,63 @@ function ChangeList({ changes }: { changes: readonly PendingChange[] }) {
       {changes.length > 12 && <li className="froam-collab__muted">and {changes.length - 12} more</li>}
     </ul>
   )
+}
+
+/**
+ * The site is running on this computer. Links to localhost only open here;
+ * sharing sends them through the Froam share service so they open anywhere.
+ */
+function ReachNotice({ reach, onReach }: { reach: NonNullable<Props['reach']>; onReach?: (on: boolean) => void }) {
+  if (!reach.active) {
+    return (
+      <div className="froam-collab__reach">
+        <Laptop size={14} />
+        <div>
+          <strong>This site is on your computer</strong>
+          <p>Links only open here. Make it reachable and they’ll open on any computer or phone, while froam dev is running.</p>
+          <button type="button" className="froam-collab__primary" disabled={reach.starting} onClick={() => onReach?.(true)}>
+            <Globe size={13} /> {reach.starting ? 'Connecting…' : 'Make it reachable from anywhere'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className={`froam-collab__reach is-on${reach.online ? '' : ' is-connecting'}`}>
+      <Globe size={14} />
+      <div>
+        <strong>{reach.online ? 'Reachable from anywhere' : 'Connecting…'}</strong>
+        <p>{reach.online ? 'Links open on any computer while froam dev runs. People can look, talk and suggest — only you save changes.' : 'Links will open anywhere in a moment.'}</p>
+        <button type="button" className="froam-collab__link" onClick={() => onReach?.(false)}>Stop sharing</button>
+      </div>
+    </div>
+  )
+}
+
+/** What the checks found, worst first. */
+function CheckList({ items }: { items: readonly RequestCheck[] }) {
+  if (!items.length) {
+    return <p className="froam-collab__checks is-clear"><ShieldCheck size={12} /> Checks passed — readable, fits the screen, images and links work</p>
+  }
+  const sorted = [...items].sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'fail' ? -1 : 1))
+  return (
+    <div className="froam-collab__checks">
+      <strong><AlertTriangle size={12} /> {items.length} thing{items.length === 1 ? '' : 's'} to look at</strong>
+      <ul>
+        {sorted.slice(0, 8).map((item, index) => (
+          <li key={`${item.path}-${item.kind}-${index}`} className={`is-${item.severity}`}>
+            <span>{item.message}</span>
+            <small>{item.label}</small>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+const inDays = (at: number) => {
+  const days = Math.ceil((at - Date.now()) / 86_400_000)
+  return days <= 1 ? 'today' : `in ${days} days`
 }
 
 /** Name, face and what they do — the head of every request and person row. */
@@ -288,6 +378,11 @@ export function FroamCollaborate(props: Props) {
   const [replyFor, setReplyFor] = useState<string | null>(null)
   const [reply, setReply] = useState('')
   const [deciding, setDeciding] = useState<string | null>(null)
+  const [revertFor, setRevertFor] = useState<string | null>(null)
+  const [confirmEnd, setConfirmEnd] = useState(false)
+  const [ending, setEnding] = useState(false)
+  const [revertNote, setRevertNote] = useState('')
+  const [focusMessage, setFocusMessage] = useState<string | null>(null)
   const [viewing, setViewing] = useState<string | null>(null)
   const [chatAbout, setChatAbout] = useState<RoomRequest | null>(null)
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null)
@@ -345,8 +440,9 @@ export function FroamCollaborate(props: Props) {
   const toggle = () => {
     if (open) { setOpen(false); return }
     setViewing(null)
-    if (messaging.unread > 0 && props.joined) setTab('chat')
-    else if (isOwner && pending.length) setTab('requests')
+    // A change waiting on the owner outranks conversation; then unread messages.
+    if (isOwner && pending.length) setTab('requests')
+    else if (messaging.unread > 0 && props.joined) setTab('chat')
     else if (isContributor) setTab('changes')
     else if (tab === 'chat' && !props.joined) setTab('share')
     setOpen(true)
@@ -365,14 +461,34 @@ export function FroamCollaborate(props: Props) {
 
   useEffect(() => { if (open && tab === 'chat') setPeek(null) }, [open, tab])
 
-  // Scroll a request into view when something (the chat, a profile) points at it.
+  // A notification link or a pin on the page asked for something specific.
+  useEffect(() => {
+    const target = props.openTarget
+    if (!target) return
+    setViewing(null)
+    setOpen(true)
+    if (target.kind === 'message') {
+      setTab('chat')
+      setFocusMessage(target.id)
+    } else {
+      setTab(isContributor ? 'changes' : 'requests')
+      setFocusRequest(target.id)
+    }
+    props.onOpenedTarget?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.openTarget?.nonce])
+
+  // Scroll a request into view when something (the chat, a profile, a
+  // notification link) points at it. Opened from a link, the list may still be
+  // loading: wait for the request to be there before counting the highlight.
   useEffect(() => {
     if (!focusRequest || (tab !== 'requests' && tab !== 'changes')) return
     const node = panelRef.current?.querySelector(`[data-request-id="${CSS.escape(focusRequest)}"]`)
-    node?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    const timer = window.setTimeout(() => setFocusRequest(null), 1600)
+    if (!node) return
+    node.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    const timer = window.setTimeout(() => setFocusRequest(null), 2400)
     return () => window.clearTimeout(timer)
-  }, [focusRequest, tab])
+  }, [focusRequest, tab, requests])
 
   const copy = (link: string, inviteRole: InviteRole) => {
     props.onCopyLink(link, inviteRole)
@@ -393,6 +509,29 @@ export function FroamCollaborate(props: Props) {
       await props.onDecide(request, decision, decision === 'changes-requested' ? reply.trim() : '')
       setReplyFor(null)
       setReply('')
+    } finally {
+      setDeciding(null)
+    }
+  }
+
+  const endRoom = async () => {
+    if (!props.onEndRoom) return
+    setEnding(true)
+    try {
+      await props.onEndRoom()
+      setConfirmEnd(false)
+    } finally {
+      setEnding(false)
+    }
+  }
+
+  const revert = async (request: RoomRequest) => {
+    if (!props.onRevert) return
+    setDeciding(request.id)
+    try {
+      await props.onRevert(request, revertNote.trim())
+      setRevertFor(null)
+      setRevertNote('')
     } finally {
       setDeciding(null)
     }
@@ -453,12 +592,31 @@ export function FroamCollaborate(props: Props) {
           <strong>{request.title}</strong>
           <span className="froam-collab__status">{STATUS_LABEL[request.status]}</span>
         </div>
+        {scopesOf(request).length > 1 && (
+          <div className="froam-collab__scopes" aria-label="Where">
+            {scopesOf(request).map((scope) => <span key={`${scope.routeKey}@@${scope.viewport}`}>{whereLabel(scope.routeKey, scope.viewport)}</span>)}
+          </div>
+        )}
         {mode === 'sender' && (
           <small>{relativeTime(request.decidedAt ?? request.createdAt)}{request.decidedBy ? ` · ${request.decidedBy}` : ''}</small>
         )}
         {request.note && mode === 'owner' && <blockquote>“{request.note}”</blockquote>}
         {mode === 'owner' && <ChangeList changes={request.changes} />}
-        {request.published?.detail && request.status === 'approved' && mode === 'owner' && <p className="froam-collab__muted">{request.published.detail}</p>}
+        {request.published?.detail && (request.status === 'approved' || request.status === 'reverted') && (
+          <p className="froam-collab__muted">
+            {request.published.detail}
+            {request.published.link && (
+              <> · <a className="froam-collab__link" href={request.published.link} target="_blank" rel="noopener noreferrer">{request.published.number ? `Pull request #${request.published.number}` : 'View'} <ExternalLink size={10} /></a></>
+            )}
+          </p>
+        )}
+        {request.status === 'reverted' && request.reverted && (
+          <p className="froam-collab__muted">
+            <Undo2 size={11} /> {request.reverted.by} reverted it · {request.reverted.detail}
+            {request.reverted.link && <> · <a className="froam-collab__link" href={request.reverted.link} target="_blank" rel="noopener noreferrer">View <ExternalLink size={10} /></a></>}
+          </p>
+        )}
+        {mode === 'owner' && previewing && props.checks?.requestId === request.id && <CheckList items={props.checks.items} />}
         {request.decisionNote && request.status !== 'pending' && (
           <blockquote>{mode === 'owner' ? 'You' : request.decidedBy ?? 'Owner'}: “{request.decisionNote}”</blockquote>
         )}
@@ -493,10 +651,35 @@ export function FroamCollaborate(props: Props) {
             </div>
           )
         )}
-        {mode === 'owner' && request.status !== 'pending' && props.joined && (
-          <div className="froam-collab__actions">
-            <button type="button" className="froam-collab__ghost" onClick={() => discuss(request)}><MessageSquare size={12} /> Discuss</button>
-          </div>
+        {mode === 'owner' && request.status !== 'pending' && (
+          revertFor === request.id ? (
+            <div className="froam-collab__reply">
+              <p className="froam-collab__muted">Take “{request.title}” back? Anything changed again since stays as it is.</p>
+              <textarea
+                className="froam-collab__input"
+                value={revertNote}
+                onChange={(event) => setRevertNote(event.target.value)}
+                onKeyDown={keepTyping}
+                placeholder="Why (optional) — the team sees this"
+                aria-label="Why revert"
+                rows={2}
+                autoFocus
+              />
+              <div className="froam-collab__actions">
+                <button type="button" className="froam-collab__ghost" onClick={() => { setRevertFor(null); setRevertNote('') }}>Cancel</button>
+                <button type="button" className="froam-collab__danger" disabled={deciding === request.id} onClick={() => void revert(request)}>
+                  <Undo2 size={12} /> {deciding === request.id ? 'Reverting…' : 'Revert'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="froam-collab__actions">
+              {props.joined && <button type="button" className="froam-collab__ghost" onClick={() => discuss(request)}><MessageSquare size={12} /> Discuss</button>}
+              {request.status === 'approved' && props.onRevert && (
+                <button type="button" className="froam-collab__secondary" onClick={() => setRevertFor(request.id)}><Undo2 size={12} /> Revert</button>
+              )}
+            </div>
+          )
         )}
         {mode === 'sender' && (
           <div className="froam-collab__actions">
@@ -510,7 +693,7 @@ export function FroamCollaborate(props: Props) {
 
   return (
     <div className="froam-collab" ref={rootRef} data-chef-editor-root="true">
-      {props.needsName && portal && createPortal(<JoinPrompt role={role} known={props.knownProfile} onJoin={props.onJoin} />, portal)}
+      {props.needsName && !props.ended && portal && createPortal(<JoinPrompt role={role} known={props.knownProfile} onJoin={props.onJoin} />, portal)}
       <button
         type="button"
         className={`froam-collab__trigger${open ? ' is-open' : ''}`}
@@ -527,7 +710,7 @@ export function FroamCollaborate(props: Props) {
           </span>
         )}
         {isContributor ? <Send size={13} /> : <Users size={13} />}
-        <span>{isContributor ? 'Submit' : 'Share'}</span>
+        <span>{props.ended ? 'Ended' : isContributor ? 'Submit' : 'Share'}</span>
         {badge > 0 && (
           <span className="froam-collab__badge" aria-label={isOwner ? `${pending.length} waiting for approval` : `${props.pendingChanges.length} changes`}>{badge}</span>
         )}
@@ -540,7 +723,7 @@ export function FroamCollaborate(props: Props) {
         <button type="button" className="froam-collab__peek" style={place} onClick={openChatFromPeek} data-chef-editor-root="true">
           <PersonAvatar name={peekAuthor?.name ?? peekMessage.name} color={peekAuthor?.color} avatarUrl={peekAuthor?.avatarUrl} size={28} />
           <span>
-            <strong>{peekAuthor?.name ?? peekMessage.name}</strong>
+            <strong>{peekAuthor?.name ?? peekMessage.name}{props.me && peekMessage.mentions?.includes(props.me.actor) ? <em> mentioned you</em> : null}</strong>
             <span>{peekMessage.body}</span>
           </span>
           <span className="froam-collab__peek-reply">Reply</span>
@@ -550,7 +733,22 @@ export function FroamCollaborate(props: Props) {
 
       {open && portal && createPortal(
         <div className="froam-collab__panel" ref={panelRef} style={place} role="dialog" aria-label={isContributor ? 'Your changes and chat' : 'Share, chat and review'} data-chef-editor-root="true">
-          {viewingMember ? (
+          {props.ended && !isOwner ? (
+            <>
+              <header className="froam-collab__head">
+                <strong>Session ended</strong>
+                <button type="button" className="froam-collab__icon" onClick={() => setOpen(false)} aria-label="Close"><X size={14} /></button>
+              </header>
+              <section className="froam-collab__section froam-collab__empty">
+                <LogOut size={22} />
+                <strong>{props.ended.by ?? 'The owner'} ended this session</strong>
+                <p>The link you were sent no longer works{requests.some((request) => request.status === 'approved') ? '. What was approved stays live' : ''}.</p>
+                {isContributor && props.pendingChanges.length > 0 && (
+                  <p className="froam-collab__notice">{props.pendingChanges.length} change{props.pendingChanges.length === 1 ? '' : 's'} you hadn’t sent weren’t sent — ask the owner for a new link to try again.</p>
+                )}
+              </section>
+            </>
+          ) : viewingMember ? (
             <ProfileSheet
               member={viewingMember}
               isMe={viewingMember.actor === props.me?.actor}
@@ -633,6 +831,11 @@ export function FroamCollaborate(props: Props) {
                   prefill={prefill}
                   canModerate={isOwner || role === 'editor'}
                   joined={props.joined}
+                  people={[...everyone.values()].filter((member) => member.actor !== props.me?.actor)}
+                  pinTarget={props.pinTarget ?? null}
+                  onShowAnchor={props.onShowAnchor}
+                  onTyping={props.onTyping}
+                  focusMessageId={focusMessage}
                 />
               )}
 
@@ -642,6 +845,7 @@ export function FroamCollaborate(props: Props) {
                     <Link2 size={22} />
                     <strong>Bring people in</strong>
                     <p>Anyone with a link can join — no account needed. You choose what each link can do, and everyone can talk here in Chat.</p>
+                    {props.reach && <ReachNotice reach={props.reach} onReach={props.onReach} />}
                     {props.shareUnavailable ? (
                       <div className="froam-collab__unavailable" role="status">
                         <strong>Sharing needs Froam running with your site</strong>
@@ -662,6 +866,10 @@ export function FroamCollaborate(props: Props) {
                         People see you as “{UNNAMED}”.{' '}
                         <button type="button" className="froam-collab__link" onClick={() => { setOpen(false); props.onEditProfile() }}>Add your name and photo</button>
                       </p>
+                    )}
+                    {isOwner && props.reach && <ReachNotice reach={props.reach} onReach={props.onReach} />}
+                    {props.expiresAt && (
+                      <p className="froam-collab__expiry"><Clock size={11} /> This room ends {inDays(props.expiresAt)} — a demo room, kept for a week</p>
                     )}
                     {needsFreshLinks && (
                       <p className="froam-collab__notice">
@@ -694,6 +902,25 @@ export function FroamCollaborate(props: Props) {
                         <button type="button" className="froam-collab__ghost" onClick={() => props.onOpenRoom(true)}>
                           <RefreshCw size={12} /> Reset links (old ones stop working)
                         </button>
+                        {props.onEndRoom && (confirmEnd ? (
+                          <div className="froam-collab__end" role="alertdialog" aria-label="End collaboration">
+                            <strong>End this session for everyone?</strong>
+                            <p>Every invite link stops working and everyone is signed out of the room. What you approved stays live.</p>
+                            {pending.length > 0 && (
+                              <p className="froam-collab__notice">{pending.length} request{pending.length === 1 ? ' is' : 's are'} still waiting — approve {pending.length === 1 ? 'it' : 'them'} first if you want {pending.length === 1 ? 'it' : 'them'}.</p>
+                            )}
+                            <div className="froam-collab__actions">
+                              <button type="button" className="froam-collab__ghost" onClick={() => setConfirmEnd(false)}>Keep going</button>
+                              <button type="button" className="froam-collab__danger" disabled={ending} onClick={() => void endRoom()}>
+                                <LogOut size={12} /> {ending ? 'Ending…' : 'End session'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button type="button" className="froam-collab__ghost is-danger" onClick={() => setConfirmEnd(true)}>
+                            <LogOut size={12} /> End collaboration
+                          </button>
+                        ))}
                       </section>
                     )}
                     <section className="froam-collab__section">

@@ -110,7 +110,7 @@ import { getFroamStudioConfig } from '../config'
 import { createOpLogSession, type OpLogSession } from '../collab/session'
 import { useFroamRoom } from '../collab/useFroamRoom'
 import { readRoomFromLocation } from '../collab/room'
-import type { RoomComment, RoomMemberView, RoomRequest, RoomRevision } from '../collab/room'
+import { scopesOf, type RoomComment, type RoomMemberView, type RoomRequest, type RoomRevision } from '../collab/room'
 import FroamNotePins from './FroamNotePins'
 import FroamPresenceLayer from './FroamPresenceLayer'
 import FroamConnectedCanvas, { type FroamConnectedCanvasTab } from './FroamConnectedCanvas'
@@ -170,8 +170,13 @@ import { sampleSiteTheme } from './library/site-theme'
 import { usePatternDrop } from './library/pattern-drop'
 import { FroamCollaborate, type JoinProfile } from './collaborate/FroamCollaborate'
 import { useRoomMessages } from './collaborate/useRoomMessages'
+import { findPinned, RoomPins } from './collaborate/RoomPins'
+import { applyDraftText, pageTextOf } from './draft-text'
+import { TYPING } from './collaborate/RoomMessages'
+import { elementLabel, sourceClasses } from './collaborate/request-builder'
 import { shrinkAvatar } from './collaborate/avatar-image'
 import { buildChangeRequest } from './collaborate/request-builder'
+import { checkRequestOnPage, type RequestCheck } from './collaborate/request-checks'
 import { PSEUDO_HOST_ATTR, pseudoKey, type PseudoElement } from './chef/pseudo'
 import { useDraftPainter } from './chef/useDraftPainter'
 import { useDeviceShell } from './chef/useDeviceShell'
@@ -622,6 +627,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
    */
   const [roomLockedPath, setRoomLockedPath] = useState<string | null>(null)
   const [roomCursor, setRoomCursor] = useState<{ x: number; y: number } | null>(null)
+  const [composingMessage, setComposingMessage] = useState(false)
+  // What the bridge knows about this machine: who's here (git), and whether the project uses Tailwind.
+  const [bridgeInfo, setBridgeInfo] = useState<{ name: string | null; tailwind: boolean }>({ name: null, tailwind: false })
+  // A notification link: ?froam-room-id=…&froam-open=request:… (never a token).
+  const [pendingOpen, setPendingOpen] = useState(() => {
+    if (typeof window === 'undefined') return null
+    const params = new URLSearchParams(window.location.search)
+    const target = /^(request|message):(.+)$/.exec(params.get('froam-open') ?? '')
+    return target ? { kind: target[1] as 'request' | 'message', id: target[2], roomId: params.get('froam-room-id') } : null
+  })
+  const [openTarget, setOpenTarget] = useState<{ kind: 'request' | 'message'; id: string; nonce: number } | null>(null)
   // Someone who arrived by an invite link is asked their name — it's what the
   // owner sees on their changes. The owner, in their own room, is just in it.
   const [invitedByLink] = useState(() => readRoomFromLocation() !== null)
@@ -635,7 +651,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       lockedNodeId: roomLockedPath === selection?.path ? selection?.nodeId ?? null : null,
       cursor: roomCursor,
       tool: activeTool,
-      action: roomLockedPath ? 'Transforming selection' : selection ? 'Editing selection' : null,
+      action: composingMessage ? TYPING : roomLockedPath ? 'Transforming selection' : selection ? 'Editing selection' : null,
     },
     autoJoinAs: invitedByLink ? undefined : persona.name || 'Designer',
     autoJoinProfile: roomProfileOf(persona),
@@ -882,6 +898,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   /* Change requests: a contributor's submissions, and the owner's inbox. */
   const [requests, setRequests] = useState<RoomRequest[]>([])
   const [previewingRequestId, setPreviewingRequestId] = useState<string | null>(null)
+  const [requestChecks, setRequestChecks] = useState<{ requestId: string; items: RequestCheck[] } | null>(null)
   const isContributor = room.role === 'contributor'
   const [sharing, setSharing] = useState(false)
   /** Set when invite links couldn't be made — there's no room server behind this page. */
@@ -1004,15 +1021,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     return buildChangeRequest({
       ops: opLog.all(),
       isMine: (actor) => actor === mine || actor === LOCAL_ACTOR,
-      routeKey,
-      viewport: viewportMode,
-      drafts: stripPersonaDrafts(store[viewportStoreKey] ?? {}),
-      root: getRoot(),
+      current: { routeKey, viewport: viewportMode, root: getRoot() },
+      draftsFor: (route, viewport) => stripPersonaDrafts(store[`${route}@@${viewport}`] ?? {}),
       excludedOpIds: excludedRequestOps,
-      originalText: (path) => {
-        const original = originalsRef.current[viewportStoreKey]?.[path]?.text
+      originalText: (route, viewport, path) => {
+        const key = `${route}@@${viewport}`
+        const original = originalsRef.current[key]?.[path]?.text
         if (original !== undefined) return original
-        const sample = store[viewportStoreKey]?.[path]?.fingerprint?.text
+        const sample = store[key]?.[path]?.fingerprint?.text
         return sample && sample.length < 80 ? sample : undefined
       },
     })
@@ -1023,14 +1039,16 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     if (!room.client || !contributorRequest || !contributorRequest.changes.length) return false
     try {
       const request = await room.client.submitRequest({
-        routeKey,
-        viewport: viewportMode,
+        routeKey: contributorRequest.scopes[0]?.routeKey ?? routeKey,
+        viewport: contributorRequest.scopes[0]?.viewport ?? viewportMode,
         title: title || `Changes to ${routeKey === '/' ? 'the home page' : routeKey}`,
         note,
         store: contributorRequest.store,
         removed: contributorRequest.removed,
+        scopes: contributorRequest.scopes,
         changes: contributorRequest.changes,
         textEdits: contributorRequest.textEdits,
+        styleEdits: contributorRequest.styleEdits,
       })
       if (request && requestOpsKey) {
         try { window.localStorage.setItem(requestOpsKey, JSON.stringify({ ...readRequestOps(), [request.id]: contributorRequest.opIds })) } catch { /* private mode */ }
@@ -1059,11 +1077,42 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   /** The request's changes over the current page, without touching the design. */
   const applyRequestToStore = (base: EditorStore, request: RoomRequest): EditorStore => {
-    const key = `${request.routeKey}@@${request.viewport}`
-    const route = { ...(base[key] ?? {}) } as Record<string, ElementDraft>
-    for (const [path, draft] of Object.entries(request.store)) route[path] = draft as ElementDraft
-    for (const path of request.removed) delete route[path]
-    return { ...base, [key]: route }
+    let next = base
+    for (const scope of scopesOf(request)) {
+      const key = `${scope.routeKey}@@${scope.viewport}`
+      const route = { ...(next[key] ?? {}) } as Record<string, ElementDraft>
+      for (const [path, draft] of Object.entries(scope.store)) route[path] = draft as ElementDraft
+      for (const path of scope.removed) delete route[path]
+      next = { ...next, [key]: route }
+    }
+    return next
+  }
+
+  /** An approved request taken back in this editor: each path returns to what it was, unless it changed since. */
+  const revertRequestInStore = (base: EditorStore, undo: NonNullable<RoomRequest['undo']>): EditorStore => {
+    let next = base
+    for (const scope of undo.scopes) {
+      const key = `${scope.routeKey}@@${scope.viewport}`
+      const route = { ...(next[key] ?? {}) } as Record<string, ElementDraft>
+      // What a draft says, not how it's filed: the fingerprint is bookkeeping
+      // this editor may have refreshed since, and must not block a revert.
+      const canonical = (value: unknown): unknown => (value && typeof value === 'object' && !Array.isArray(value)
+        ? Object.fromEntries(Object.keys(value as Record<string, unknown>).sort().map((k) => [k, canonical((value as Record<string, unknown>)[k])]))
+        : value)
+      const said = (draft: unknown) => {
+        if (!draft || typeof draft !== 'object') return 'null'
+        const { fingerprint: _fingerprint, ...rest } = draft as Record<string, unknown>
+        return JSON.stringify(canonical(rest))
+      }
+      for (const [path, expected] of Object.entries(scope.expect)) {
+        if (said(route[path]) !== said(expected)) continue
+        const previous = scope.store[path]
+        if (previous) route[path] = previous as ElementDraft
+        else delete route[path]
+      }
+      next = { ...next, [key]: route }
+    }
+    return next
   }
 
   const previewChangeRequest = useCallback((request: RoomRequest | null) => {
@@ -1072,12 +1121,22 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       setPreviewingRequestId(null)
       return
     }
-    if (request.routeKey !== routeKey || request.viewport !== viewportMode) {
-      showToast(`Open ${request.routeKey} on ${request.viewport} to preview this`)
+    setRequestChecks(null)
+    const here = scopesOf(request).some((scope) => scope.routeKey === routeKey && scope.viewport === viewportMode)
+    if (!here) {
+      const first = scopesOf(request)[0]
+      showToast(`This changes ${first.routeKey === '/' ? 'the home page' : first.routeKey}${first.viewport === 'desktop' ? '' : ` on ${first.viewport}`} — open it there to preview`)
       return
     }
     previewConnectedCanvas(applyRequestToStore(storeRef.current, request))
     setPreviewingRequestId(request.id)
+    // Look for problems once the preview has painted (see request-checks.ts).
+    window.setTimeout(() => {
+      const root = getRoot()
+      if (!root) return
+      const scope = scopesOf(request).find((item) => item.routeKey === routeKey && item.viewport === viewportMode)
+      if (scope) setRequestChecks({ requestId: request.id, items: checkRequestOnPage(root, [...Object.keys(scope.store), ...scope.removed], { viewport: viewportMode }) })
+    }, 250)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeKey, viewportMode])
 
@@ -1091,19 +1150,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         // must include it, not overwrite it. Where the bridge published, read
         // back exactly what it wrote (copy placed in source is not a draft).
         let next = applyRequestToStore(storeRef.current, decided)
-        try {
-          const loaded = await window.fetch(bridgeUrl('/__froam/repo/load')).then((response) => response.json()) as { design?: { routes?: Record<string, Record<string, Record<string, ElementDraft>>> } }
-          const written = loaded?.design?.routes?.[decided.routeKey]?.[decided.viewport]
-          if (written) {
-            const key = `${decided.routeKey}@@${decided.viewport}`
-            const route = { ...(next[key] ?? {}) }
-            for (const path of [...Object.keys(decided.store), ...decided.removed]) {
-              if (written[path]) route[path] = written[path]
-              else delete route[path]
-            }
-            next = { ...next, [key]: route }
-          }
-        } catch { /* hosted, no bridge: the request's own changes stand */ }
+        next = await readBackFromBridge(next, decided)
         opPendingLabelRef.current = `Approved: ${decided.title}`
         storeRef.current = next
         setStore(next)
@@ -1119,12 +1166,227 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.client, previewingRequestId, refreshNotes])
 
+  /**
+   * Where the bridge wrote the result (`froam dev`), take exactly what it
+   * wrote for the request's paths — copy and classes placed in the source are
+   * no longer drafts. Hosted, there is no bridge and the request stands.
+   */
+  async function readBackFromBridge(base: EditorStore, request: RoomRequest): Promise<EditorStore> {
+    try {
+      const loaded = await window.fetch(bridgeUrl('/__froam/repo/load')).then((response) => response.json()) as { design?: { routes?: Record<string, Record<string, Record<string, ElementDraft>>> } }
+      if (!loaded?.design?.routes) return base
+      let next = base
+      for (const scope of scopesOf(request)) {
+        const written = loaded.design.routes[scope.routeKey]?.[scope.viewport] ?? {}
+        const key = `${scope.routeKey}@@${scope.viewport}`
+        const route = { ...(next[key] ?? {}) }
+        for (const path of [...Object.keys(scope.store), ...scope.removed]) {
+          if (written[path]) route[path] = written[path]
+          else delete route[path]
+        }
+        next = { ...next, [key]: route }
+      }
+      return next
+    } catch {
+      return base
+    }
+  }
+
+  const revertApprovedRequest = useCallback(async (request: RoomRequest, note: string) => {
+    if (!room.client) return
+    try {
+      const reverted = await room.client.revertRequest(request.id, note || undefined)
+      if (reverted?.undo) {
+        let next = revertRequestInStore(storeRef.current, reverted.undo)
+        next = await readBackFromBridge(next, reverted)
+        opPendingLabelRef.current = `Reverted: ${reverted.title}`
+        storeRef.current = next
+        setStore(next)
+        saveStore(next)
+        // A removed draft doesn't unpaint itself: put what the page said back.
+        const root = getRoot()
+        const key = viewportStoreKeyRef.current
+        const scope = reverted.undo.scopes.find((item) => `${item.routeKey}@@${item.viewport}` === key)
+        if (root && scope) {
+          for (const path of Object.keys(scope.expect)) {
+            const target = findElementByPath(root, path)
+            if (!target) continue
+            const kept = next[key]?.[path]
+            if (kept) { applyDraft(target, kept); continue }
+            // Back to the page's own words. What the painter saw before it first
+            // wrote wins over the editor's snapshot, which a reload can take
+            // after the approved text was already on screen.
+            target.removeAttribute('style')
+            const words = pageTextOf(target) ?? originalsRef.current[key]?.[path]?.text
+            if (words !== undefined) applyDraftText(target, words)
+          }
+        }
+      }
+      showToast(reverted?.reverted?.detail ? `${request.title} — ${reverted.reverted.detail}` : `${request.title} reverted`)
+      await refreshNotes()
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not reach the room')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.client, refreshNotes])
+
+  // Arrived from a notification: open the editor on what it was about.
+  useEffect(() => {
+    if (!pendingOpen || !roomJoined) return
+    const clear = () => {
+      setPendingOpen(null)
+      try {
+        const url = new URL(window.location.href)
+        url.searchParams.delete('froam-open')
+        url.searchParams.delete('froam-room-id')
+        window.history.replaceState(window.history.state, '', url)
+      } catch { /* keep the URL */ }
+    }
+    if (pendingOpen.roomId && room.roomId && pendingOpen.roomId !== room.roomId) {
+      showToast('That link is for a different room than the one open here')
+      clear()
+      return
+    }
+    // A minimized studio hides the toolbar the panel lives in: bring it back.
+    setPanelOpen(true)
+    setStudioMinimized(false)
+    setOpenTarget({ kind: pendingOpen.kind, id: pendingOpen.id, nonce: Date.now() })
+    clear()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingOpen, roomJoined, room.roomId])
+
+  // Until the panel has opened on it, keep the studio up: something (a demo's
+  // guided tour, a keyboard toggle) may minimize it between here and there.
+  useEffect(() => {
+    if (openTarget && studioMinimized) setStudioMinimized(false)
+  }, [openTarget, studioMinimized])
+
+  /** The selected element, as something a message can be pinned to. */
+  const pinTarget = useMemo(() => {
+    if (!selection?.path || !roomJoined) return null
+    const anchor = selectionAnchorRef.current
+    const root = getRoot()
+    return {
+      path: selection.path,
+      nodeId: anchor?.path === selection.path ? anchor.nodeId : undefined,
+      routeKey,
+      viewport: viewportMode,
+      fingerprint: anchor?.path === selection.path && anchor.fingerprint
+        ? anchor.fingerprint
+        : { tag: selection.path.split('/').pop()?.split(':')[0] ?? '' },
+      label: elementLabel(selection.path, root),
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection?.path, roomJoined, routeKey, viewportMode])
+
+  /** Take someone to the thing a message is pinned to. */
+  const showMessageAnchor = useCallback((anchor: { path: string; nodeId?: string; routeKey: string; viewport: string; fingerprint: { tag: string; text?: string; id?: string } }) => {
+    if (anchor.routeKey !== routeKey) {
+      showToast(`That’s on ${anchor.routeKey === '/' ? 'the home page' : anchor.routeKey} — open it there to see it`)
+      return
+    }
+    const switching = anchor.viewport !== viewportMode
+    if (switching) setViewportMode(anchor.viewport as ViewportMode)
+    window.setTimeout(() => {
+      const root = getRoot()
+      if (!root) return
+      const element = findPinned(anchor as Parameters<typeof findPinned>[0], root)
+      if (!element) {
+        showToast('That element isn’t on the page any more — the message is kept')
+        return
+      }
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      selectInsertedElement(element)
+    }, switching ? 450 : 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeKey, viewportMode])
+
+  useEffect(() => {
+    let cancelled = false
+    window.fetch(bridgeUrl('/__froam/whoami'))
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { name?: string | null; tailwind?: boolean } | null) => {
+        if (cancelled || !data) return
+        setBridgeInfo({ name: data.name ?? null, tailwind: Boolean(data.tailwind) })
+        // Nobody is called "Froam": the person at this machine is who git says.
+        if (data.name) {
+          setPersona((current) => (current.name === DEFAULT_FROAM_PERSONA.name ? sanitizeFroamPersona({ ...current, name: data.name as string }) : current))
+        }
+      })
+      .catch(() => { /* hosted: no bridge */ })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /** The owner is done: every link stops working and Share starts fresh. */
+  const endCollaboration = useCallback(async () => {
+    try {
+      if (previewingRequestId) { previewConnectedCanvas(null); setPreviewingRequestId(null) }
+      const done = await room.endRoom()
+      if (done) showToast('Session ended — the invite links no longer work')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not reach the room')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.endRoom, previewingRequestId])
+
+  // Everyone else hears it once.
+  const endedToldRef = useRef(false)
+  useEffect(() => {
+    if (!room.ended || endedToldRef.current || room.role === 'owner') return
+    endedToldRef.current = true
+    showToast(`${room.ended.by ?? 'The owner'} ended this session`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.ended, room.role])
+
+  /**
+   * A site running on this computer (`froam dev`) can be shared with anyone:
+   * the bridge opens a tunnel to the Froam share service, and invite links use
+   * its address instead of localhost (lib/share-tunnel.mjs).
+   */
+  const [reach, setReach] = useState<{ available: boolean; active: boolean; online: boolean; url: string | null; starting: boolean } | null>(null)
+  const pageIsLocal = typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1|\[::1\]|.+\.localhost|.+\.local)$/i.test(window.location.hostname)
+  const readReach = useCallback(async () => {
+    try {
+      const response = await window.fetch(bridgeUrl('/__froam/share'), { cache: 'no-store' })
+      const data = response.ok ? await response.json() as { active?: boolean; online?: boolean; url?: string | null; viewer?: string } : null
+      if (!data || data.viewer === 'remote') { setReach(null); return }
+      setReach((current) => ({ available: true, active: Boolean(data.active), online: Boolean(data.online), url: data.url ?? null, starting: current?.starting ?? false }))
+    } catch {
+      setReach(null)
+    }
+  }, [])
+  useEffect(() => { if (pageIsLocal) void readReach() }, [pageIsLocal, readReach])
+  // While the share is connecting, look again until it's up.
+  useEffect(() => {
+    if (!reach?.active || reach.online) return
+    const timer = window.setInterval(() => { void readReach() }, 1500)
+    return () => window.clearInterval(timer)
+  }, [reach?.active, reach?.online, readReach])
+  const setReachable = useCallback(async (on: boolean) => {
+    setReach((current) => (current ? { ...current, starting: on } : current))
+    try {
+      const response = await window.fetch(bridgeUrl(on ? '/__froam/share/start' : '/__froam/share/stop'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      const data = await response.json().catch(() => null) as { success?: boolean; error?: string } | null
+      if (!response.ok || !data?.success) throw new Error(data?.error || 'Could not share this site')
+      if (on) showToast('Your site is reachable from anywhere while froam dev runs — the links now work on any computer')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not share this site')
+    } finally {
+      await readReach()
+      setReach((current) => (current ? { ...current, starting: false } : current))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readReach])
+
   const inviteLinks = useMemo(() => {
     const owned = room.owned
     if (!owned) return {}
-    const link = (role: 'editor' | 'contributor' | 'commenter' | 'viewer') => (owned.invites[role] ? room.inviteLink(owned, role) : undefined)
+    // Shared: links go through the share service, so they open on any computer.
+    const base = reach?.active && reach.url ? reach.url : undefined
+    const link = (role: 'editor' | 'contributor' | 'commenter' | 'viewer') => (owned.invites[role] ? room.inviteLink(owned, role, base) : undefined)
     return { editor: link('editor'), contributor: link('contributor'), commenter: link('commenter'), viewer: link('viewer') }
-  }, [room.owned, room.inviteLink])
+  }, [room.owned, room.inviteLink, reach?.active, reach?.url])
 
   const copyInviteLink = useCallback(async (link: string) => {
     try {
@@ -3131,6 +3393,54 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
   }
 
+  /**
+   * Base style edits into Tailwind class lists, where the bridge finds the
+   * element's exact class list once (lib/style-writeback.mjs). Written
+   * properties leave the drafts; everything else stays a Froam edit.
+   */
+  async function writeStylesToSource(drafts: Record<string, ElementDraft>) {
+    if (viewportMode !== 'desktop' || !bridgeInfo.tailwind) return { drafts, note: '' }
+    const edits: Array<{ path: string; tag: string; className: string; styles: Record<string, string> }> = []
+    for (const [path, draft] of Object.entries(drafts)) {
+      if (!draft.styles || !isSafeDraftPath(path)) continue
+      const className = sourceClasses(draft.fingerprint?.className)
+      const styles = Object.fromEntries(Object.entries(draft.styles).filter(([key, value]) => !key.startsWith('__froamState') && typeof value === 'string'))
+      if (className.split(' ').length < 2 || !Object.keys(styles).length) continue
+      edits.push({ path, tag: path.split('/').pop()?.split(':')[0] ?? '', className, styles })
+    }
+    if (!edits.length) return { drafts, note: '' }
+    try {
+      const response = await window.fetch(bridgeUrl('/__froam/source/styles'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ edits: edits.map(({ tag, className, styles }) => ({ tag, className, styles })) }),
+      })
+      const data = await response.json().catch(() => null) as { success?: boolean; results?: Array<{ status: string; file?: string; written?: string[]; to?: string }> } | null
+      if (!response.ok || !data?.success || !Array.isArray(data.results)) return { drafts, note: '' }
+      const next = { ...drafts }
+      const files = new Set<string>()
+      let count = 0
+      data.results.forEach((result, index) => {
+        const edit = edits[index]
+        if (!edit || result.status !== 'written' || !result.written?.length) return
+        const draft = next[edit.path]
+        const styles = { ...(draft?.styles ?? {}) }
+        for (const property of result.written) delete styles[property]
+        const { styles: _old, ...rest } = draft ?? {}
+        const updated: ElementDraft = Object.keys(styles).length ? { ...rest, styles } : rest
+        // The element's class list is the new one now; later edits must find it.
+        if (updated.fingerprint && result.to) updated.fingerprint = { ...updated.fingerprint, className: result.to }
+        if (Object.keys(updated).some((key) => key !== 'fingerprint')) next[edit.path] = updated
+        else delete next[edit.path]
+        count += result.written.length
+        if (result.file) files.add(result.file)
+      })
+      return { drafts: next, note: count ? ` · ${count} style${count === 1 ? '' : 's'} written into ${[...files].join(', ')}` : '' }
+    } catch {
+      return { drafts, note: '' }
+    }
+  }
+
   async function saveToRepo() {
     if (room.role === 'contributor') {
       showToast('Your changes go live when the owner approves them — use Submit')
@@ -3138,7 +3448,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
     keepStudioPinned()
     const routeSnapshot = collectVersionRouteDrafts()
-    const { drafts: cleanDrafts, note: sourceNote } = await writeCopyToSource(stripPersonaDrafts(routeSnapshot))
+    const copied = await writeCopyToSource(stripPersonaDrafts(routeSnapshot))
+    const styled = await writeStylesToSource(copied.drafts)
+    const cleanDrafts = styled.drafts
+    const sourceNote = `${copied.note}${styled.note}`
     const nextStore = { ...store, [viewportStoreKey]: cleanDrafts }
     setStore(nextStore)
     saveStore(nextStore)
@@ -5205,6 +5518,16 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
       {/* One-time quick tips — held back until the first-open scan finishes */}
       <FroamWelcomeTips open={showPanel && !studioMinimized && tipsReady && !scanActive} />
+      {showPanel && roomJoined && (
+        <RoomPins
+          messages={roomMessaging.messages}
+          routeKey={routeKey}
+          viewport={viewportMode}
+          getRoot={getRoot}
+          person={(actor) => (actor === roomMe?.actor ? roomMe ?? undefined : room.others.find((member) => member.actor === actor))}
+          onOpen={(messageId) => { setStudioMinimized(false); setOpenTarget({ kind: 'message', id: messageId, nonce: Date.now() }) }}
+        />
+      )}
 
       {/* One-time laser scan of the page's real DOM (also replayable via palette) */}
       <FroamScan
@@ -5417,6 +5740,18 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     ? { name: persona.name, avatarUrl: persona.imageUrl || null, title: persona.role }
                     : null}
                   onJoin={joinRoomAs}
+                  onRevert={room.role === 'owner' ? revertApprovedRequest : undefined}
+                  checks={requestChecks}
+                  expiresAt={room.room?.expiresAt ?? null}
+                  openTarget={openTarget}
+                  onOpenedTarget={() => setOpenTarget(null)}
+                  pinTarget={pinTarget}
+                  onShowAnchor={showMessageAnchor}
+                  onTyping={setComposingMessage}
+                  onEndRoom={room.role === 'owner' ? endCollaboration : undefined}
+                  reach={pageIsLocal && reach?.available ? reach : null}
+                  onReach={(on) => { void setReachable(on) }}
+                  ended={room.ended}
                 />
               )}
               repoStatus={repoStatus}

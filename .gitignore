@@ -25,3 +25,6 @@ docs/FROAM_48_HOUR_POLISH_OFFER.md
 docs/COMPETITIVE_POSITIONING.md
 docs/WEEKEND_PRODUCT_READINESS.md
 adoption.json
+
+# Wrangler local state (wrangler dev / deploy)
+.wrangler/

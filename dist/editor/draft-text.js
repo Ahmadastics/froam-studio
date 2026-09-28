@@ -13,6 +13,12 @@
  * draft is already on screen.
  */
 const shownAfterWrite = new WeakMap();
+/** What the page itself said before any draft was painted over it. */
+const pageText = new WeakMap();
+/** The element's own words, from before Froam first painted a draft on it. */
+export function pageTextOf(element) {
+    return pageText.get(element);
+}
 export function applyDraftText(element, text) {
     const shown = element.innerText;
     if (shown === text)
@@ -20,8 +26,27 @@ export function applyDraftText(element, text) {
     const last = shownAfterWrite.get(element);
     if (last && last.text === text && last.shown === shown)
         return false;
+    if (!pageText.has(element))
+        pageText.set(element, shown);
     element.innerText = text;
     shownAfterWrite.set(element, { text, shown: element.innerText });
+    return true;
+}
+/**
+ * A text draft went away (undone, reverted, taken off by a teammate): put the
+ * page's own words back — but only while the element still shows what Froam
+ * painted. If the page re-rendered it since, the page's text is already there.
+ */
+export function restorePageText(element) {
+    const original = pageText.get(element);
+    const last = shownAfterWrite.get(element);
+    if (original === undefined || !last || isBeingWritten(element))
+        return false;
+    if (element.innerText !== last.shown)
+        return false;
+    element.innerText = original;
+    pageText.delete(element);
+    shownAfterWrite.delete(element);
     return true;
 }
 /** The element the user is typing into right now — never repaint it under them. */

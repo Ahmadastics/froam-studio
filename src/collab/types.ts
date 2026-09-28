@@ -280,6 +280,7 @@ export type FroamRoomEvent =
   | { seq: number; type: 'proposal'; createdAt: number; actor: FroamActorId; proposal: FroamRevertProposal }
   | { seq: number; type: 'design'; createdAt: number; actor: FroamActorId; routeKey: string; viewport: FroamViewport }
   | { seq: number; type: 'request'; createdAt: number; actor: FroamActorId; requestId: string }
+  | { seq: number; type: 'ended'; createdAt: number; actor: FroamActorId }
 
 /** Session talk. Unlike an anchored comment it has no design lifecycle. */
 export type FroamChatMessage = {
@@ -290,6 +291,21 @@ export type FroamChatMessage = {
   createdAt: number
   /** Set when the message is about a change request. */
   requestId?: string
+  /** Pinned to something on a page. */
+  anchor?: FroamMessageAnchor
+  /** Actors the message names with @. */
+  mentions?: string[]
+}
+
+/** Where a message is pinned: a page, a screen size, an element on it. */
+export type FroamMessageAnchor = {
+  path: string
+  nodeId?: string
+  routeKey: string
+  viewport: FroamViewport
+  fingerprint: FroamAnchorFingerprint
+  /** "Heading “Plan a trip”" — what a person would call it. */
+  label?: string | null
 }
 
 export type FroamRevertProposal = {

@@ -1,0 +1,11 @@
+name = "froam-share"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+
+[[durable_objects.bindings]]
+name = "SHARES"
+class_name = "FroamShare"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["FroamShare"]

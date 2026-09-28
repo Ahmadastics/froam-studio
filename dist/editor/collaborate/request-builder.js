@@ -19,12 +19,15 @@ function fieldLabel(field) {
     const name = field.replace(/^style:/, '').replace(/^__froamState:([^:]+):/, '$1 ').replace(/([A-Z])/g, ' $1').trim().toLowerCase();
     return name.charAt(0).toUpperCase() + name.slice(1);
 }
-/** "Heading “Plan a trip”" — what a person would call the element. */
-export function elementLabel(path, root) {
+/**
+ * "Heading “Plan a trip”" — what a person would call the element. On another
+ * page the element isn't in the DOM, so the fingerprint's words stand in.
+ */
+export function elementLabel(path, root, fallbackText) {
     const tag = tagOfPath(path);
     const kind = TAG_NAMES[tag] ?? (tag ? `<${tag}>` : 'Element');
     const element = root ? findElementByPath(root, path) : null;
-    const sample = clip(element?.innerText ?? '', 32);
+    const sample = clip(element?.innerText ?? fallbackText ?? '', 32);
     return sample ? `${kind} “${sample}”` : kind;
 }
 function currentValue(draft, field) {
@@ -36,57 +39,97 @@ function currentValue(draft, field) {
         return draft.imageUrl;
     return draft.styles?.[field.replace(/^style:/, '')];
 }
+const scopeId = (routeKey, viewport) => `${routeKey}@@${viewport}`;
+/** The element's classes as its source writes them — never the editor's own markers. */
+export function sourceClasses(className) {
+    if (typeof className !== 'string')
+        return '';
+    return className.split(/\s+/).filter((name) => name && !/^(?:froam|chef|fs-|global-chef)/.test(name)).join(' ');
+}
 /**
- * A contributor's changes on one page and viewport, from the ops they made
- * themselves — never from diffing the page, which would sweep in whatever the
- * owner changed live in the meantime. Each touched field reads from its first
- * `before` to its value now; a field edited back to where it started is not
- * a change.
+ * A contributor's changes, from the ops they made themselves — never from
+ * diffing the page, which would sweep in whatever the owner changed live in
+ * the meantime. Each touched field reads from its first `before` to its value
+ * now; a field edited back to where it started is not a change.
+ *
+ * Every page and screen size they touched goes in one request: fixing the
+ * headline on desktop and on mobile is one change to a person, not two.
  */
 export function buildChangeRequest(input) {
+    // scope → path → field → first before
     const touched = new Map();
     const opIds = [];
     for (const op of input.ops) {
-        if (!input.isMine(op.actor) || op.routeKey !== input.routeKey || op.viewport !== input.viewport || input.excludedOpIds.has(op.id))
+        if (!input.isMine(op.actor) || input.excludedOpIds.has(op.id))
             continue;
         opIds.push(op.id);
-        const fields = touched.get(op.path) ?? new Map();
+        const id = scopeId(op.routeKey, op.viewport);
+        const scope = touched.get(id) ?? { routeKey: op.routeKey, viewport: op.viewport, paths: new Map() };
+        const fields = scope.paths.get(op.path) ?? new Map();
         if (!fields.has(op.field))
             fields.set(op.field, { before: op.before });
-        touched.set(op.path, fields);
+        scope.paths.set(op.path, fields);
+        touched.set(id, scope);
     }
-    const store = {};
-    const removed = [];
+    const currentId = scopeId(input.current.routeKey, input.current.viewport);
+    const ordered = [...touched.entries()].sort(([a], [b]) => (a === currentId ? -1 : b === currentId ? 1 : 0));
+    const scopes = [];
     const changes = [];
     const textEdits = [];
-    for (const [path, fields] of touched) {
-        const draft = input.drafts[path];
-        let changed = false;
-        for (const [field, first] of fields) {
-            const before = first.before ?? (field === 'text' ? input.originalText?.(path) : undefined);
-            const after = currentValue(draft, field);
-            if ((after ?? '') === (before ?? ''))
-                continue;
-            changed = true;
-            if (path.startsWith(INJECTION_PREFIX)) {
-                changes.push({ label: 'Added a section', before: null, after: null });
-                continue;
+    const styleEdits = [];
+    for (const [id, scope] of ordered) {
+        const drafts = input.draftsFor(scope.routeKey, scope.viewport);
+        const onScreen = id === currentId;
+        const store = {};
+        const removed = [];
+        for (const [path, fields] of scope.paths) {
+            const draft = drafts[path];
+            let changed = false;
+            const styles = {};
+            for (const [field, first] of fields) {
+                const before = first.before ?? (field === 'text' ? input.originalText?.(scope.routeKey, scope.viewport, path) : undefined);
+                const after = currentValue(draft, field);
+                if ((after ?? '') === (before ?? ''))
+                    continue;
+                changed = true;
+                if (path.startsWith(INJECTION_PREFIX)) {
+                    changes.push({ label: 'Added a section', before: null, after: null, routeKey: scope.routeKey, viewport: scope.viewport });
+                    continue;
+                }
+                changes.push({
+                    label: `${fieldLabel(field)} · ${elementLabel(path, onScreen ? input.current.root : null, draft?.fingerprint?.text)}`,
+                    before: field === 'imageUrl' ? (before ? 'previous image' : null) : clip(before),
+                    after: field === 'imageUrl' ? (after ? 'new image' : null) : clip(after),
+                    routeKey: scope.routeKey,
+                    viewport: scope.viewport,
+                });
+                if (field === 'text' && typeof before === 'string' && typeof after === 'string')
+                    textEdits.push({ from: before, to: after });
+                if (field.startsWith('style:') && !field.startsWith('style:__froamState') && typeof after === 'string')
+                    styles[field.slice('style:'.length)] = after;
             }
-            changes.push({
-                label: `${fieldLabel(field)} · ${elementLabel(path, input.root)}`,
-                before: field === 'imageUrl' ? (before ? 'previous image' : null) : clip(before),
-                after: field === 'imageUrl' ? (after ? 'new image' : null) : clip(after),
-            });
-            if (field === 'text' && typeof before === 'string' && typeof after === 'string')
-                textEdits.push({ from: before, to: after });
+            if (!changed)
+                continue;
+            if (draft)
+                store[path] = draft;
+            else
+                removed.push(path);
+            const className = sourceClasses(draft?.fingerprint?.className);
+            if (scope.viewport === 'desktop' && Object.keys(styles).length && className.split(' ').length >= 2) {
+                styleEdits.push({ routeKey: scope.routeKey, viewport: 'desktop', path, tag: tagOfPath(path), className, styles });
+            }
         }
-        if (!changed)
-            continue;
-        if (draft)
-            store[path] = draft;
-        else
-            removed.push(path);
+        if (Object.keys(store).length || removed.length)
+            scopes.push({ routeKey: scope.routeKey, viewport: scope.viewport, store, removed });
     }
-    return { opIds, store, removed, changes, textEdits };
+    return {
+        opIds,
+        scopes,
+        store: (scopes[0]?.store ?? {}),
+        removed: scopes[0]?.removed ?? [],
+        changes,
+        textEdits,
+        styleEdits,
+    };
 }
 //# sourceMappingURL=request-builder.js.map

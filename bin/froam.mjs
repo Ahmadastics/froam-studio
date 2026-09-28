@@ -543,12 +543,13 @@ async function dev(flags) {
   const sourceRoot = !writeSource ? null
     : serveDir ?? (!remoteApp && path.resolve(cwd) !== os.homedir() && looksLikeProjectDir(cwd) ? cwd : null)
 
-  const { server, appTarget } = createBridgeServer({
+  const { server, appTarget, startShare } = createBridgeServer({
     port,
     froamDir,
     app,
     serveDir,
     sourceRoot,
+    notify: config.notify ?? null,
     allowOrigins: typeof flags['allow-origin'] === 'string' ? flags['allow-origin'] : undefined,
     log: (line) => log(`${dim(new Date().toLocaleTimeString())} ${OK} ${line}`),
   })
@@ -582,12 +583,18 @@ async function dev(flags) {
         log(`  ${bold('network')}  ${teal(`http://${address}:${port}`)} ${dim('← open on your phone (same Wi-Fi)')}`)
       }
     } else if (appTarget || serveDir) {
-      log(`  ${dim('network')}  ${dim('add --host to expose on your local network')}`)
+      log(`  ${dim('network')}  ${dim('add --host for your network, --share for anywhere')}`)
     }
     log(`  ${bold('repo')}     ${displayDir(froamDir)} ${dim('← Save to Repo (Ctrl+Shift+S) writes here')}`)
     log()
     log(dim('  Ctrl+C to stop'))
     if (flags.open && (appTarget || serveDir)) openBrowser(`http://localhost:${port}`)
+    // --share: reachable from anywhere, through the Froam share service.
+    if (flags.share && (appTarget || serveDir)) {
+      startShare().then((share) => {
+        log(`  ${bold('share')}    ${teal(share.url)} ${dim('← works on any computer while this runs')}`)
+      }).catch((error) => log(`${WARN} could not share: ${error instanceof Error ? error.message : error}`))
+    }
   })
 }
 
@@ -954,6 +961,7 @@ function help() {
   log(`      ${dim('--port <n>')}         bridge port (default 4600)`)
   log(`      ${dim('--open')}             open the browser once the bridge is up`)
   log(`      ${dim('--host [addr]')}      expose on your local network (phone testing)`)
+  log(`      ${dim('--share')}            a link that opens this local site on any computer`)
   log(`      ${dim('--allow-origin <o>')} let a custom dev domain use the bridge (comma-separated)`)
   log(`      ${dim('--no-write-source')}  keep copy edits as Froam edits (default: written into your source)`)
   log(`  ${teal('build')}              recompile design.json → generated.css + runtime.js`)

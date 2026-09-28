@@ -42,7 +42,7 @@ export function createFroamPublishApi(options: {
   commit?: ((input: FroamCommitInput) => Promise<unknown>) | null
 }): (req: IncomingMessage, res: ServerResponse) => Promise<boolean>
 
-export type FroamRole = 'owner' | 'editor' | 'commenter' | 'viewer'
+export type FroamRole = 'owner' | 'editor' | 'contributor' | 'commenter' | 'viewer'
 
 export type FroamRoomMember = {
   actor: string
@@ -50,6 +50,9 @@ export type FroamRoomMember = {
   role: FroamRole
   color: string
   avatarUrl: string | null
+  /** What they do, in their words ("Marketing"). */
+  title: string | null
+  joinedAt: number | null
   /** Heartbeat within the presence window. */
   here: boolean
   routeKey: string | null
@@ -73,6 +76,8 @@ export type FroamRoomView = {
   presenter: string | null
   /** Latest ordered collaboration event. */
   sequence: number
+  /** When the host keeps rooms for a limited time. */
+  expiresAt: number | null
   you: { actor: string; role: FroamRole; name: string } | null
 }
 
@@ -104,24 +109,77 @@ export function createFroamRoomApi(options: {
    * createGitHubCommitter), trigger a deploy. Resolve `{ detail }` for the
    * record; throw to leave the request pending with the error shown.
    */
-  onApproveRequest?: (input: {
-    room: { id: string }
-    request: {
-      id: string
-      routeKey: string
-      viewport: 'desktop' | 'tablet' | 'mobile'
-      title: string
-      note: string | null
-      store: Record<string, Record<string, unknown>>
-      removed: string[]
-      changes: Array<{ label: string; before: string | null; after: string | null }>
-      textEdits: Array<{ from: string; to: string }>
-      createdBy: string
-    }
-  }) => Promise<{ detail?: string } | void> | { detail?: string } | void
+  onApproveRequest?: (input: { room: { id: string }; request: FroamChangeRequest }) => Promise<FroamPublishResult | void> | FroamPublishResult | void
+  /**
+   * Takes an approved request back, given the `undo` its approval returned.
+   * Without it, Revert isn't offered.
+   */
+  onRevertRequest?: (input: { room: { id: string }; request: FroamChangeRequest; undo: FroamRequestUndo | null }) => Promise<{ detail?: string; link?: string; skipped?: unknown[] } | void>
+  /** Told about requests and @mentions, for people away from the editor (see createFroamNotifier). */
+  notify?: ((event: FroamRoomNotification) => unknown) | null
+  /** Rooms end this long after they open; the room says when (`expiresAt`). */
+  roomTtlMs?: number | null
   log?: (line: string) => void
   now?: () => number
 }): (req: IncomingMessage, res: ServerResponse) => Promise<boolean>
+
+export type FroamViewport = 'desktop' | 'tablet' | 'mobile'
+
+/** One page at one screen size, as a request changes it. */
+export type FroamRequestScope = {
+  routeKey: string
+  viewport: FroamViewport
+  store: Record<string, Record<string, unknown>>
+  removed: string[]
+}
+
+export type FroamChangeRequest = {
+  id: string
+  /** The first scope, for readers that predate multi-page requests. */
+  routeKey: string
+  viewport: FroamViewport
+  store: Record<string, Record<string, unknown>>
+  removed: string[]
+  /** Every page and screen size the request changes. */
+  scopes?: FroamRequestScope[]
+  title: string
+  note: string | null
+  changes: Array<{ label: string; before: string | null; after: string | null; routeKey?: string; viewport?: FroamViewport }>
+  textEdits: Array<{ from: string; to: string }>
+  /** Base (desktop) style edits a Tailwind project can take into class lists. */
+  styleEdits?: Array<{ routeKey: string; viewport: FroamViewport; path: string; tag: string; className: string; styles: Record<string, string> }>
+  actor: string
+  createdBy: string
+  createdAt: number
+  status: 'pending' | 'approved' | 'changes-requested' | 'withdrawn' | 'reverted'
+  decidedBy: string | null
+  published: { ok: boolean; detail: string; link: string | null; number: number | null; branch: string | null } | null
+}
+
+/** What approving returns so a revert can take it back. */
+export type FroamRequestUndo = {
+  scopes: Array<FroamRequestScope & { expect: Record<string, unknown> }>
+  textEdits: Array<{ from: string; to: string }>
+  classLists?: Array<{ tag: string | null; from: string; to: string }>
+}
+
+export type FroamPublishResult = {
+  detail?: string
+  /** Where to see it: a pull request, a commit, a deploy. */
+  link?: string
+  number?: number
+  branch?: string
+  undo?: FroamRequestUndo
+}
+
+export type FroamRoomNotification = {
+  type: 'request.submitted' | 'request.decided' | 'request.reverted' | 'chat.mention'
+  room: { id: string }
+  actor: { actor: string; name: string; role: FroamRole; title: string | null } | null
+  request?: FroamChangeRequest
+  message?: { id: string; body: string; actor: string; name: string; createdAt: number }
+  mentioned?: Array<{ actor: string; name: string; role: FroamRole }>
+}
 
 /**
  * Apply an approved change request to a design: only the paths it changed
@@ -133,6 +191,61 @@ export function applyChangeRequest<T extends { routes?: Record<string, unknown> 
   request: { routeKey: string; viewport: string; store: Record<string, Record<string, unknown>>; removed?: string[] },
   options?: { writtenText?: string[] },
 ): T
+
+/** Apply an approved request and get back how to undo it. */
+export function approveChangeRequest<T extends { routes?: Record<string, unknown> }>(
+  design: T,
+  request: Partial<FroamChangeRequest> & { store?: Record<string, Record<string, unknown>> },
+  options?: { writtenText?: string[] },
+): { design: T; undo: FroamRequestUndo }
+
+/** Take an approved request back; paths changed again since are left alone and listed. */
+export function revertChangeRequest<T extends { routes?: Record<string, unknown> }>(
+  design: T,
+  undo: FroamRequestUndo,
+): { design: T; skipped: Array<{ routeKey: string; viewport: FroamViewport; path: string }> }
+
+/**
+ * Approve on GitHub: one commit with the design, copy written into the source
+ * and (for Tailwind) styles written into class lists — as a pull request, or
+ * straight onto the branch with `mode: 'commit'`. Spread the result into
+ * createFroamRoomApi: `{ ...createGitHubPublisher(options) }`.
+ */
+export function createGitHubPublisher(options: {
+  token: string
+  repo: string
+  base?: string
+  /** Where froam.design.json lives in the repo. */
+  dir?: string
+  /** Only search this folder for copy and class lists. */
+  sourceDir?: string
+  mode?: 'pull-request' | 'commit'
+  /** Try to merge the pull request right away (it stays open if checks or protection say no). */
+  autoMerge?: boolean
+  /** Links in the pull request open the request in Froam. */
+  siteUrl?: string
+  /** Write base style edits into Tailwind class lists. */
+  tailwind?: boolean
+  maxSourceFiles?: number
+  committer?: { name: string; email: string }
+  fetchImpl?: typeof fetch
+}): {
+  onApproveRequest: NonNullable<Parameters<typeof createFroamRoomApi>[0]['onApproveRequest']>
+  onRevertRequest: NonNullable<Parameters<typeof createFroamRoomApi>[0]['onRevertRequest']>
+}
+
+/**
+ * Tell people about requests and @mentions where they already are: Slack,
+ * Discord, any webhook, or email (through Resend). Links open the request in
+ * the editor and never carry a token.
+ */
+export function createFroamNotifier(options: {
+  siteUrl?: string
+  webhooks?: Array<string | { url: string; format?: 'slack' | 'discord' | 'json' }>
+  email?: { resendApiKey: string; from: string; to: string[] }
+  events?: Array<FroamRoomNotification['type']>
+  fetchImpl?: typeof fetch
+}): (event: FroamRoomNotification) => Promise<Array<{ ok: boolean; to?: string; error?: string }>>
 
 /**
  * Beta branch/checkpoint project-document delta contract. The existing Room

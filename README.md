@@ -13,8 +13,10 @@
 rendered page. Supported revisions can be saved as a versioned Froam design,
 generated override CSS, and a small runtime for content changes.
 
-Froam does **not** rewrite original React components, templates, application
-logic, or source stylesheets.
+Froam does **not** rewrite React components, templates, application logic, or
+source stylesheets. The one exception is deliberate and narrow: copy you change
+(and, in Tailwind projects, an element's class list) is written back into the
+source only where it appears exactly once; everything else stays a Froam edit.
 
 ## Try it
 
@@ -92,8 +94,8 @@ Invite teammates who aren't developers to change the site themselves, with
 you approving what goes live:
 
 1. In the editor, open **Share** in the toolbar and copy the **Can suggest
-   changes** link. Send it to them — no account, no install. (With
-   `froam dev`, run it with `--host` or behind a tunnel so they can reach it.)
+   changes** link. Send it to them — no account, no install. (On a site running
+   on your computer, turn on **Make it reachable from anywhere** first — see below.)
 2. They open it, say their name, and edit anything on the page. Nothing they
    do is live. When they're done they press **Submit** and add a note.
 3. You get the request in **Share → Requests**: who, why, and exactly what
@@ -101,26 +103,58 @@ you approving what goes live:
    live; **Request changes** sends it back with your note.
 
 Approving under `froam dev` does what Save to Repo does: copy is written into
-your source files where it can be placed, and the rest into the Froam design
-files — ready to commit. On a hosted backend, give the room API a publish step:
+your source files where it can be placed (and, in Tailwind projects, styles
+into the element's class list), the rest into the Froam design files — ready
+to commit. Anything approved can be taken back with **Revert**; whatever
+someone changed again since is left alone.
+
+A request can span pages and screen sizes. Previewing it runs checks on the
+page — contrast, text running off the screen, broken images, missing alt
+text, links that go nowhere — before you approve.
+
+### Sharing a site that's on your computer
+
+A link to `localhost` only opens on your machine. Under `froam dev`, Share
+offers **Make it reachable from anywhere** (or start with `froam dev --share`):
+Froam connects out to its share service and your invite links switch to a
+public address that opens your local site, with the editor and the room, on
+any computer — while `froam dev` runs (Node 22 or newer). People on the link can
+look, talk and suggest changes; nothing they send can write your files. Set
+`FROAM_SHARE_URL` to use your own deployment of `templates/cloudflare-share`.
+
+When you're done, **End collaboration** in Share stops every link.
+
+### Hosted: pull requests, notifications, realtime
+
+On a hosted site, approval opens a pull request and the owner hears about
+requests wherever they are:
 
 ```js
-import { applyChangeRequest, createFroamRoomApi, createGitHubCommitter } from '@ahmadastic/froam/server'
+import { createFroamNotifier, createFroamRoomApi, createGitHubPublisher } from '@ahmadastic/froam/server'
 
-const commit = createGitHubCommitter({ token: process.env.GITHUB_TOKEN, repo: 'you/site', dir: 'froam' })
 const rooms = createFroamRoomApi({
   storage,                                   // your database adapter
-  onApproveRequest: async ({ request }) => {
-    const design = applyChangeRequest(await loadDesign(), request)   // only what changed
-    await saveDesign(design)                                         // your storage
-    await commit({ design, message: `${request.title} — approved from Froam` })
-    return { detail: 'Committed — deploying' }
-  },
+  // Approve → one commit (design + copy + Tailwind classes) as a pull request.
+  // Revert → closes it, or opens a revert pull request once merged.
+  ...createGitHubPublisher({ token: process.env.GITHUB_TOKEN, repo: 'you/site', dir: 'froam', siteUrl: 'https://your-site.com' }),
+  // Slack (with a Review button), Discord, any webhook, or email via Resend.
+  notify: createFroamNotifier({ siteUrl: 'https://your-site.com', webhooks: [process.env.SLACK_WEBHOOK_URL] }),
 })
 ```
 
+Links in notifications and pull requests open the editor on that request and
+never carry a token. Under `froam dev`, set `FROAM_NOTIFY_WEBHOOK` (and
+`FROAM_SITE_URL`) or `"notify"` in froam.config.json.
+
+Serverless hosts can't hold connections open, so rooms there would poll. For
+instant updates and live cursors, run the room server on Cloudflare
+(`templates/cloudflare-rooms` — rooms, storage and realtime in one Worker, free
+tier), or keep your own room server and add the relay in
+`templates/cloudflare-realtime`.
+
 The other links: **Can edit together** (live co-editing, for designers and
 developers), **Can comment** (clients: notes and approvals), **Can view**.
+In Chat, type @ to mention someone, and pin a message to the selected element.
 
 ## Verified static workflow
 

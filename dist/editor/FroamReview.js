@@ -1,4 +1,4 @@
-import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+import { jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment } from "react/jsx-runtime";
 /**
  * Froam Review — the client's side of a session.
  *
@@ -227,6 +227,9 @@ export default function FroamReview({ routeKey, viewport }) {
     const sender = room.room?.members.find((m) => m.role === 'owner')?.name;
     if (!room.inRoom)
         return null;
+    if (room.ended) {
+        return (_jsx("div", { className: "froam-review", "data-chef-editor-root": "true", children: _jsx("div", { className: "froam-review__bar", children: _jsxs("span", { className: "froam-review__label", children: [room.ended.by ?? 'The owner', " ended this review \u2014 thanks for your notes"] }) }) }));
+    }
     /**
      * The client's chrome is for people who are not editing.
      *
@@ -239,7 +242,8 @@ export default function FroamReview({ routeKey, viewport }) {
     // surfaces — including when it was the editor, not this surface, that joined.
     const joinedAs = room.roomId ? readRememberedRole(room.roomId) ?? joinedElsewhere : null;
     const hasStudio = (role) => role === 'owner' || role === 'editor' || role === 'contributor';
-    if (hasStudio(room.role) || hasStudio(joinedAs))
+    // A studio link (editor, contributor) is known before joining: never flash the client bar at it.
+    if (hasStudio(room.role) || hasStudio(joinedAs) || hasStudio(room.client?.inviteRole ?? null))
         return null;
     /* ── Arrival: name yourself once. No account, ever. ── */
     if (room.needsName) {

@@ -67,10 +67,11 @@ export function useRoomMessages({ client, events, roomId, role, me }) {
         }
     }, [events, client, moderates, me]);
     const deliver = useCallback(async (draft, requestId) => {
+        const anchor = draft.anchor ?? null;
         if (!client)
             return false;
         setLocal((current) => [...current.filter((message) => message.id !== draft.id), { ...draft, state: 'sending' }]);
-        const about = requestId ?? draft.requestId ?? null;
+        const about = { requestId: requestId ?? draft.requestId ?? null, anchor };
         try {
             // One quiet second try: a busy room or a blip on the network shouldn't
             // be the person's problem. Only a second failure asks them.
@@ -88,7 +89,8 @@ export function useRoomMessages({ client, events, roomId, role, me }) {
             return false;
         }
     }, [client]);
-    const send = useCallback(async (body, requestId) => {
+    const send = useCallback(async (body, aboutInput) => {
+        const { requestId = null, anchor = null } = typeof aboutInput === 'string' ? { requestId: aboutInput } : aboutInput ?? {};
         const text = body.trim();
         if (!text || !me)
             return false;
@@ -99,6 +101,7 @@ export function useRoomMessages({ client, events, roomId, role, me }) {
             body: text,
             createdAt: Date.now(),
             ...(requestId ? { requestId } : {}),
+            ...(anchor ? { anchor } : {}),
         };
         return deliver(draft, requestId);
     }, [deliver, me]);

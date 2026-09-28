@@ -12,7 +12,7 @@
  * Transport and storage are injected so the whole thing can be tested without
  * a browser; the defaults are the ones a page actually wants.
  */
-import type { FroamChatMessage, FroamOp, FroamRevertProposal, FroamRole, FroamRoomEvent, FroamViewport } from './types';
+import type { FroamChatMessage, FroamMessageAnchor, FroamOp, FroamRevertProposal, FroamRole, FroamRoomEvent, FroamViewport } from './types';
 export type RoomMemberView = {
     actor: string;
     name: string;
@@ -44,6 +44,11 @@ export type RoomView = {
     members: RoomMemberView[];
     presenter: string | null;
     sequence: number;
+    /** When the host keeps rooms for a limited time (the public demo does). */
+    expiresAt?: number | null;
+    /** The owner ended the session: every link has stopped working. */
+    endedAt?: number | null;
+    endedBy?: string | null;
     you: {
         actor: string;
         role: FroamRole;
@@ -107,38 +112,86 @@ export type RoomRevision = {
  * Changes a contributor submitted for the owner's approval. Approving is what
  * publishes them (lib/room-store.mjs → the host's onApproveRequest).
  */
-export type RoomRequest = {
-    id: string;
+/** One page at one screen size, as a request changes it. */
+export type RoomRequestScope = {
     routeKey: string;
     viewport: FroamViewport;
-    title: string;
-    note: string | null;
-    /** Only the drafts that changed, keyed by path. */
     store: Record<string, Record<string, unknown>>;
-    /** Paths whose draft the contributor cleared. */
     removed: string[];
-    /** What changed, for a person to read. */
-    changes: Array<{
-        label: string;
-        before: string | null;
-        after: string | null;
+};
+/** A base style edit a Tailwind project can take into the element's class list. */
+export type RoomStyleEdit = {
+    routeKey: string;
+    viewport: FroamViewport;
+    path: string;
+    tag: string;
+    className: string;
+    styles: Record<string, string>;
+};
+export type RoomRequestChange = {
+    label: string;
+    before: string | null;
+    after: string | null;
+    routeKey?: string;
+    viewport?: FroamViewport;
+};
+/** How to take an approved request back — what the approval replaced, per scope. */
+export type RoomRequestUndo = {
+    scopes: Array<RoomRequestScope & {
+        expect: Record<string, unknown>;
     }>;
     textEdits: Array<{
         from: string;
         to: string;
     }>;
+};
+export type RoomRequest = {
+    id: string;
+    /** The first scope, kept for readers that predate multi-page requests. */
+    routeKey: string;
+    viewport: FroamViewport;
+    /** Every page and screen size the request changes. */
+    scopes?: RoomRequestScope[];
+    title: string;
+    note: string | null;
+    /** Only the drafts that changed, keyed by path (the first scope). */
+    store: Record<string, Record<string, unknown>>;
+    /** Paths whose draft the contributor cleared (the first scope). */
+    removed: string[];
+    /** What changed, for a person to read. */
+    changes: RoomRequestChange[];
+    textEdits: Array<{
+        from: string;
+        to: string;
+    }>;
+    styleEdits?: RoomStyleEdit[];
     actor: string;
     createdBy: string;
     createdAt: number;
-    status: 'pending' | 'approved' | 'changes-requested' | 'withdrawn';
+    status: 'pending' | 'approved' | 'changes-requested' | 'withdrawn' | 'reverted';
     decidedBy: string | null;
     decidedAt: number | null;
     decisionNote: string | null;
+    /** Where it went live: a pull request, a commit, the design files. */
     published: {
         ok: boolean;
         detail: string;
+        link?: string | null;
+        number?: number | null;
+        branch?: string | null;
+    } | null;
+    undo?: RoomRequestUndo | null;
+    reverted?: {
+        by: string;
+        at: number;
+        detail: string;
+        link: string | null;
+        skipped: number;
+        note: string | null;
     } | null;
 };
+/** Every scope of a request, including one made before requests could span pages. */
+export declare function scopesOf(request: Pick<RoomRequest, 'routeKey' | 'viewport' | 'store' | 'removed' | 'scopes'>): RoomRequestScope[];
 export type RoomTransport = {
     get: (path: string) => Promise<unknown>;
     post: (path: string, body: unknown) => Promise<unknown>;
@@ -199,6 +252,8 @@ export declare function createRoomClient(options: {
     readonly identity: RoomIdentity | null;
     readonly room: RoomView | null;
     readonly cursor: number;
+    /** What the link in hand grants — known before joining, so a page can tell a studio invite from a client's. */
+    readonly inviteRole: FroamRole | null;
     /** Have we already been someone in this room? Decides whether to ask for a name. */
     readonly joined: boolean;
     on(listener: (room: RoomView | null) => void): () => boolean;
@@ -287,12 +342,19 @@ export declare function createRoomClient(options: {
     requests(): Promise<RoomRequest[]>;
     submitRequest(input: Pick<RoomRequest, "routeKey" | "viewport" | "title" | "store" | "removed" | "changes" | "textEdits"> & {
         note?: string;
+        scopes?: RoomRequestScope[];
+        styleEdits?: RoomStyleEdit[];
     }): Promise<RoomRequest | null>;
     withdrawRequest(requestId: string): Promise<RoomRequest | null>;
     decideRequest(requestId: string, decision: "approved" | "changes-requested", note?: string): Promise<RoomRequest | null>;
+    /** The owner takes an approved change back (the host decides how — close a pull request, open a revert). */
+    revertRequest(requestId: string, note?: string): Promise<RoomRequest | null>;
     resolveComment(commentId: string, resolved?: boolean): Promise<RoomComment | null>;
     chat(): Promise<FroamChatMessage[]>;
-    sendChat(body: string, requestId?: string | null): Promise<FroamChatMessage | null>;
+    sendChat(body: string, about?: {
+        requestId?: string | null;
+        anchor?: FroamMessageAnchor | null;
+    } | string | null): Promise<FroamChatMessage | null>;
     signalDesign(routeKey: string, viewport: FroamViewport): Promise<void>;
     proposals(): Promise<FroamRevertProposal[]>;
     decideProposal(proposalId: string, decision: "approved" | "declined"): Promise<{
@@ -300,6 +362,15 @@ export declare function createRoomClient(options: {
         accepted?: FroamOp[];
         cursor?: number;
     }>;
+    /** Is the room's relay connected (instant updates and live presence)? */
+    readonly live: boolean;
+    /** Has the owner ended this session? */
+    readonly ended: {
+        at: number;
+        by: string | null;
+    } | null;
+    /** The owner is done: every link stops working, and everyone in the room is told. */
+    endRoom(): Promise<boolean>;
 };
 export type RoomClient = ReturnType<typeof createRoomClient>;
 //# sourceMappingURL=room.d.ts.map

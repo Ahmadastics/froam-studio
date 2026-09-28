@@ -805,7 +805,7 @@ collabTest('the contributor submits; the owner sees what changed, previews it, a
   await maya.locator('.froam-collab__request.is-pending').waitFor({ timeout: 8000 })
   await closeShare(maya)
 
-  await page.locator('.froam-collab__trigger .froam-collab__badge').waitFor({ timeout: 12000 })
+  await page.locator('.froam-collab__trigger .froam-collab__badge:not(.is-chat)').waitFor({ timeout: 12000 })
   await openShare(page)
   const request = page.locator('.froam-collab__request.is-pending')
   await request.waitFor({ timeout: 5000 })
@@ -817,6 +817,9 @@ collabTest('the contributor submits; the owner sees what changed, previews it, a
   await page.waitForTimeout(400)
   const previewed = await page.evaluate(() => document.getElementById('subtitle').innerText)
   assert(previewed.startsWith('Spring deals.'), `preview shows "${previewed.slice(0, 30)}"`)
+  await request.locator('.froam-collab__checks').waitFor({ timeout: 5000 })
+  const checks = await request.locator('.froam-collab__checks').innerText()
+  assert(/Checks passed|to look at/.test(checks), `checks read: ${checks}`)
   await request.locator('button:has-text("Approve & publish")').click()
   await page.locator('.froam-collab__request.is-approved').waitFor({ timeout: 8000 })
   await closeShare(page)
@@ -842,6 +845,7 @@ collabTest('a request carries the sender\'s profile, one click away', async ({ p
   await profile.waitFor({ timeout: 5000 })
   const text = await profile.innerText()
   await profile.locator('button:has-text("Message")').click()
+  await page.waitForFunction(() => document.querySelector('textarea[aria-label="Message the room"]')?.value.startsWith('@'), null, { timeout: 3000 }).catch(() => {})
   const draft = await page.inputValue('textarea[aria-label="Message the room"]')
   await closeShare(page)
   assert(text.includes('Maya') && text.includes('Marketing') && text.includes('Suggesting'), `profile reads: ${text.slice(0, 160)}`)
@@ -893,6 +897,61 @@ collabTest('people talk in Share → Chat: a peek and a badge for whoever is not
   assert(replyText.includes('Looks great, it is live') && replyText.includes('Spring sale copy'), `reply reads: ${replyText}`)
 })
 
+collabTest('@mentions, typing and pins: talk about the thing, on the thing', async ({ page }) => {
+  const maya = collab.contributor
+  await maya.evaluate(() => document.getElementById('subtitle').scrollIntoView({ block: 'center' }))
+  const box = await maya.locator('#subtitle').boundingBox()
+  await maya.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await maya.waitForTimeout(300)
+  await openShare(maya)
+  await maya.click('.froam-collab__tabs button:has-text("Chat")')
+  const input = maya.locator('textarea[aria-label="Message the room"]')
+  await input.click()
+  await maya.keyboard.type('@')
+  const suggestion = maya.locator('.froam-chat__mentions button').first()
+  await suggestion.waitFor({ timeout: 5000 })
+  const suggested = await suggestion.innerText()
+  await maya.keyboard.press('Enter')
+  await maya.keyboard.type('is this line too long?')
+  const drafted = await input.inputValue()
+
+  // The owner sees Maya typing while it's unsent.
+  await openShare(page)
+  await page.click('.froam-collab__tabs button:has-text("Chat")')
+  await page.locator('.froam-chat__typing').waitFor({ timeout: 12000 })
+  const typing = await page.locator('.froam-chat__typing').innerText()
+  await closeShare(page)
+
+  // Pinned to the selected element, and sent.
+  const pinButton = maya.locator('button[aria-label="Pin to the selected element"]')
+  const pinEnabled = await pinButton.isEnabled()
+  await pinButton.click()
+  await maya.locator('.froam-chat__context.is-pin').waitFor({ timeout: 3000 })
+  await input.press('Enter')
+  await maya.locator('.froam-chat__msg.is-mine .froam-chat__pin').waitFor({ timeout: 8000 })
+  await closeShare(maya)
+
+  const peek = page.locator('.froam-collab__peek')
+  await peek.waitFor({ timeout: 12000 })
+  const peeked = await peek.innerText()
+  await page.evaluate(() => document.getElementById('subtitle').scrollIntoView({ block: 'center' }))
+  const pin = page.locator('.froam-pin').first()
+  await pin.waitFor({ timeout: 8000 })
+  await pin.click()
+  const focused = page.locator('.froam-chat__msg.is-focused')
+  await focused.waitFor({ timeout: 5000 })
+  const focusedText = await focused.innerText()
+  await closeShare(page)
+
+  assert(suggested.length > 0, 'no one to mention')
+  const mentioned = drafted.slice(1).split(' is this line')[0]
+  assert(drafted.startsWith('@') && mentioned && suggested.includes(mentioned), `mention inserted as "${drafted}" from "${suggested}"`)
+  assert(/is typing/.test(typing) && typing.includes('Maya'), `typing reads "${typing}"`)
+  assert(pinEnabled, 'the pin button was disabled with an element selected')
+  assert(peeked.includes('mentioned you'), `peek reads "${peeked}"`)
+  assert(focusedText.includes('is this line too long?'), `pin opened "${focusedText}"`)
+})
+
 collabTest('sending back: the note reaches the contributor, and the change counts again', async ({ page }) => {
   const maya = collab.contributor
   await maya.evaluate(() => document.getElementById('cta').scrollIntoView({ block: 'center' }))
@@ -906,7 +965,7 @@ collabTest('sending back: the note reaches the contributor, and the change count
   await maya.locator('.froam-collab__request.is-pending').waitFor({ timeout: 8000 })
   await closeShare(maya)
 
-  await page.locator('.froam-collab__trigger .froam-collab__badge').waitFor({ timeout: 12000 })
+  await page.locator('.froam-collab__trigger .froam-collab__badge:not(.is-chat)').waitFor({ timeout: 12000 })
   await openShare(page)
   const request = page.locator('.froam-collab__request.is-pending')
   await request.locator('button:has-text("Request changes")').click()
@@ -921,9 +980,60 @@ collabTest('sending back: the note reaches the contributor, and the change count
   const note = await maya.locator('.froam-collab__request.is-changes-requested blockquote').innerText()
   const again = await maya.locator('.froam-collab__changes li').count()
   await closeShare(maya)
-  await collab.contributorContext.close()
   assert(note.includes('Keep it where it was'), `note reads "${note}"`)
   assert(again === 1, `the sent-back change should count again (${again} listed)`)
+})
+
+collabTest('a notification link opens the request; the owner reverts it and the file follows', async ({ page, url, siteDir }) => {
+  const owned = await page.evaluate(() => JSON.parse(localStorage.getItem('froam-room-owner:v1') || 'null'))
+  await openShare(page)
+  await page.click('.froam-collab__tabs button:has-text("Requests")')
+  const approvedId = await page.locator('.froam-collab__request.is-approved').first().getAttribute('data-request-id')
+  await closeShare(page)
+
+  await page.goto(`${url}?froam-room-id=${owned.roomId}&froam-open=request:${approvedId}`)
+  const focused = page.locator(`.froam-collab__request.is-focused[data-request-id="${approvedId}"]`)
+  await focused.waitFor({ timeout: 20000 })
+  const cleanUrl = await page.evaluate(() => window.location.search)
+
+  await focused.locator('button:has-text("Revert")').click()
+  await page.fill('textarea[aria-label="Why revert"]', 'Wrong season')
+  await page.locator('.froam-collab__danger').click()
+  await page.locator(`.froam-collab__request.is-reverted[data-request-id="${approvedId}"]`).waitFor({ timeout: 10000 })
+  await closeShare(page)
+  const source = fs.readFileSync(path.join(siteDir, 'index.html'), 'utf8')
+
+  const maya = collab.contributor
+  await maya.waitForTimeout(5500)
+  await openShare(maya)
+  await maya.locator('.froam-collab__request.is-reverted').waitFor({ timeout: 8000 })
+  await closeShare(maya)
+
+  assert(!cleanUrl.includes('froam-open'), `the link stayed in the address bar: ${cleanUrl}`)
+  assert(!source.includes('Spring deals.'), 'reverting did not take the copy back out of index.html')
+  assert(source.includes('Extraordinary places. Unforgettable experiences.'), 'the original copy is not back in index.html')
+})
+
+collabTest('the owner ends the session: links stop, Maya is told, Share starts fresh', async ({ page }) => {
+  await openShare(page)
+  await page.click('.froam-collab__tabs button:has-text("Share")')
+  await page.click('button:has-text("End collaboration")')
+  await page.locator('.froam-collab__end').waitFor({ timeout: 3000 })
+  await page.click('.froam-collab__end button:has-text("End session")')
+  await page.locator('text=Create invite links').waitFor({ timeout: 8000 })
+  const owned = await page.evaluate(() => localStorage.getItem('froam-room-owner:v1'))
+  await closeShare(page)
+
+  const maya = collab.contributor
+  await maya.waitForTimeout(5500)
+  await maya.locator('.froam-collab__trigger:has-text("Ended")').waitFor({ timeout: 10000 })
+  await openShare(maya)
+  const said = await maya.locator('.froam-collab__panel').innerText()
+  await closeShare(maya)
+  await collab.contributorContext.close()
+
+  assert(owned === null, 'the ended room is still remembered as the owner’s')
+  assert(/ended this session/.test(said), `Maya’s panel reads: ${said.slice(0, 160)}`)
 })
 
 /* ─── run ─── */

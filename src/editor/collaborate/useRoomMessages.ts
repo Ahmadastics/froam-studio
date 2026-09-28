@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RoomClient } from '../../collab/room'
-import type { FroamChatMessage, FroamRevertProposal, FroamRole, FroamRoomEvent } from '../../collab/types'
+import type { FroamChatMessage, FroamMessageAnchor, FroamRevertProposal, FroamRole, FroamRoomEvent } from '../../collab/types'
+
+/** What a message is about: a request, or something on the page it's pinned to. */
+export type MessageAbout = { requestId?: string | null; anchor?: FroamMessageAnchor | null }
 
 /** A message as the panel shows it: sent, still sending, or failed and retryable. */
 export type RoomMessage = FroamChatMessage & { state?: 'sending' | 'failed' }
@@ -13,7 +16,7 @@ export type RoomMessaging = {
   unread: number
   /** The newest message from someone else, for the peek under the Share button. */
   latestIncoming: RoomMessage | null
-  send: (body: string, requestId?: string | null) => Promise<boolean>
+  send: (body: string, about?: MessageAbout | string | null) => Promise<boolean>
   retry: (message: RoomMessage) => Promise<boolean>
   markRead: () => void
   decideProposal: (id: string, decision: 'approved' | 'declined') => Promise<void>
@@ -89,9 +92,10 @@ export function useRoomMessages({ client, events, roomId, role, me }: {
   }, [events, client, moderates, me])
 
   const deliver = useCallback(async (draft: RoomMessage, requestId?: string | null) => {
+    const anchor = draft.anchor ?? null
     if (!client) return false
     setLocal((current) => [...current.filter((message) => message.id !== draft.id), { ...draft, state: 'sending' }])
-    const about = requestId ?? draft.requestId ?? null
+    const about = { requestId: requestId ?? draft.requestId ?? null, anchor }
     try {
       // One quiet second try: a busy room or a blip on the network shouldn't
       // be the person's problem. Only a second failure asks them.
@@ -108,7 +112,8 @@ export function useRoomMessages({ client, events, roomId, role, me }: {
     }
   }, [client])
 
-  const send = useCallback(async (body: string, requestId?: string | null) => {
+  const send = useCallback(async (body: string, aboutInput?: MessageAbout | string | null) => {
+    const { requestId = null, anchor = null } = typeof aboutInput === 'string' ? { requestId: aboutInput } : aboutInput ?? {}
     const text = body.trim()
     if (!text || !me) return false
     const draft: RoomMessage = {
@@ -118,6 +123,7 @@ export function useRoomMessages({ client, events, roomId, role, me }: {
       body: text,
       createdAt: Date.now(),
       ...(requestId ? { requestId } : {}),
+      ...(anchor ? { anchor } : {}),
     }
     return deliver(draft, requestId)
   }, [deliver, me])

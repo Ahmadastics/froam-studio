@@ -659,6 +659,7 @@ async function requestRoom(options = {}) {
     file: nodePath.join(dir, 'froam.rooms.json'),
     now,
     onApproveRequest: options.onApproveRequest ?? (async ({ request }) => { published.push(request); return { detail: 'Published to test' } }),
+    ...(options.api ?? {}),
   })
   const created = await open(api)
   const contributor = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, { token: created.invites.contributor, name: 'Maya' })
@@ -703,7 +704,7 @@ test('approving publishes through the host, once', async () => {
   const approved = await call(api, 'POST', `${base}/${request.id}/decision`, { ...owner, decision: 'approved', note: 'Looks great' })
   assert.equal(approved.request.status, 'approved')
   assert.equal(approved.request.decisionNote, 'Looks great')
-  assert.deepEqual(approved.request.published, { ok: true, detail: 'Published to test' })
+  assert.deepEqual(approved.request.published, { ok: true, detail: 'Published to test', link: null, number: null, branch: null })
   assert.equal(published.length, 1)
   assert.equal(published[0].store['main:1/h1:1'].text, 'Plan your escape')
   const again = await call(api, 'POST', `${base}/${request.id}/decision`, { ...owner, decision: 'approved' })
@@ -852,6 +853,147 @@ test('chat events carry the message, so clients need no extra read', async () =>
   const chat = events.events.find((event) => event.type === 'chat')
   assert.equal(chat.message.body, 'Hi!')
   assert.equal(chat.message.name, 'Maya')
+})
+
+/* ── 8.8: many pages per request, revert, notifications, mentions, pins ── */
+
+test('one request can span pages and screen sizes', async () => {
+  const { api, owner, maya, base, submit } = await requestRoom()
+  const { request } = await submit(maya, {
+    scopes: [
+      { routeKey: '/', viewport: 'desktop', store: { 'main:1/h1:1': { text: 'A' } }, removed: [] },
+      { routeKey: '/', viewport: 'mobile', store: { 'main:1/h1:1': { styles: { fontSize: '28px' } } }, removed: [] },
+      { routeKey: '/pricing', viewport: 'desktop', store: {}, removed: ['main:1/p:2'] },
+      { routeKey: '/empty', viewport: 'desktop', store: {}, removed: [] },
+    ],
+    changes: [{ label: 'Headline', before: 'x', after: 'A', routeKey: '/pricing', viewport: 'mobile' }],
+  })
+  assert.equal(request.scopes.length, 3, 'an empty scope was kept')
+  assert.equal(request.routeKey, '/')
+  assert.deepEqual(request.scopes[2], { routeKey: '/pricing', viewport: 'desktop', store: {}, removed: ['main:1/p:2'] })
+  assert.equal(request.changes[0].routeKey, '/pricing')
+  const approved = await call(api, 'POST', `${base}/${request.id}/decision`, { ...owner, decision: 'approved' })
+  assert.equal(approved.request.status, 'approved')
+})
+
+test('a scope outside the room is refused', async () => {
+  const dir = await fsp.mkdtemp(nodePath.join(os.tmpdir(), 'froam-rooms-'))
+  const api = createFroamRoomApi({ file: nodePath.join(dir, 'r.json'), now })
+  const created = await call(api, 'POST', '/api/froam/rooms', { name: 'Ahmad', routes: ['/'] })
+  const maya = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/join`, { token: created.invites.contributor, name: 'Maya' })
+  const refused = await call(api, 'POST', `/api/froam/rooms/${created.room.id}/requests`, {
+    token: created.invites.contributor, actor: maya.you.actor, session: maya.you.session, title: 'x',
+    scopes: [{ routeKey: '/', viewport: 'desktop', store: { 'a:1': { text: 'x' } } }, { routeKey: '/admin', viewport: 'desktop', store: { 'a:1': { text: 'x' } } }],
+  })
+  assert.equal(refused.status, 403)
+})
+
+test('approving keeps the link and the undo; the owner can revert', async () => {
+  const reverted = []
+  const { api, owner, maya, base, submit } = await requestRoom({
+    onApproveRequest: async () => ({ detail: 'Opened pull request #7', link: 'https://github.com/x/y/pull/7', number: 7, branch: 'froam/x', undo: { scopes: [], textEdits: [] } }),
+    api: { onRevertRequest: async ({ request, undo }) => { reverted.push({ request, undo }); return { detail: 'Closed pull request #7', link: 'https://github.com/x/y/pull/7', skipped: [1] } } },
+  })
+  const { request } = await submit(maya)
+  const approved = await call(api, 'POST', `${base}/${request.id}/decision`, { ...owner, decision: 'approved' })
+  assert.deepEqual(approved.request.published, { ok: true, detail: 'Opened pull request #7', link: 'https://github.com/x/y/pull/7', number: 7, branch: 'froam/x' })
+  assert.deepEqual(approved.request.undo, { scopes: [], textEdits: [] })
+
+  const byMaya = await call(api, 'POST', `${base}/${request.id}/revert`, { ...maya })
+  assert.equal(byMaya.status, 403)
+  const back = await call(api, 'POST', `${base}/${request.id}/revert`, { ...owner, note: 'Wrong season' })
+  assert.equal(back.request.status, 'reverted')
+  assert.equal(back.request.reverted.detail, 'Closed pull request #7')
+  assert.equal(back.request.reverted.skipped, 1)
+  assert.equal(back.request.reverted.note, 'Wrong season')
+  assert.equal(reverted.length, 1)
+  assert.deepEqual(reverted[0].undo, { scopes: [], textEdits: [] })
+  const again = await call(api, 'POST', `${base}/${request.id}/revert`, { ...owner })
+  assert.equal(again.status, 409)
+})
+
+test('without a revert hook, revert says so; a failing hook leaves it approved', async () => {
+  const plain = await requestRoom()
+  const one = await plain.submit(plain.maya)
+  await call(plain.api, 'POST', `${plain.base}/${one.request.id}/decision`, { ...plain.owner, decision: 'approved' })
+  assert.equal((await call(plain.api, 'POST', `${plain.base}/${one.request.id}/revert`, { ...plain.owner })).status, 501)
+
+  const broken = await requestRoom({ api: { onRevertRequest: async () => { throw new Error('GitHub is down') } } })
+  const two = await broken.submit(broken.maya)
+  await call(broken.api, 'POST', `${broken.base}/${two.request.id}/decision`, { ...broken.owner, decision: 'approved' })
+  const failed = await call(broken.api, 'POST', `${broken.base}/${two.request.id}/revert`, { ...broken.owner })
+  assert.equal(failed.status, 502)
+  assert.match(failed.error, /GitHub is down/)
+  assert.equal((await broken.list(broken.owner)).requests[0].status, 'approved')
+})
+
+test('the host hears about requests, and a failing notifier never fails one', async () => {
+  const heard = []
+  const { api, owner, maya, base, submit } = await requestRoom({ api: { notify: async (event) => { heard.push(event); throw new Error('Slack is down') } } })
+  const { request } = await submit(maya)
+  assert.equal(request.status, 'pending')
+  await call(api, 'POST', `${base}/${request.id}/decision`, { ...owner, decision: 'approved' })
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  assert.deepEqual(heard.map((event) => event.type), ['request.submitted', 'request.decided'])
+  assert.equal(heard[0].actor.name, 'Maya')
+  assert.equal(heard[0].actor.session, undefined, 'a member session reached the notifier')
+  assert.equal(heard[0].room.tokens, undefined, 'room tokens reached the notifier')
+  assert.equal(heard[0].request.id, request.id)
+})
+
+test('@mentions name people in the room, by first or full name', async () => {
+  const heard = []
+  const { api, created, owner, maya } = await requestRoom({ api: { notify: (event) => heard.push(event) } })
+  const chat = `/api/froam/rooms/${created.room.id}/chat`
+  const sent = await call(api, 'POST', chat, { ...maya, body: 'Hey @ahmad, can you check? (cc @Nobody) email@ahmadx.com' })
+  assert.deepEqual(sent.message.mentions, [owner.actor])
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  assert.equal(heard.length, 1)
+  assert.equal(heard[0].type, 'chat.mention')
+  assert.deepEqual(heard[0].mentioned.map((m) => m.name), ['Ahmad'])
+  const self = await call(api, 'POST', chat, { ...maya, body: 'note to @Maya self' })
+  assert.equal(self.message.mentions, undefined)
+})
+
+test('a message can be pinned to something on the page', async () => {
+  const { api, created, maya } = await requestRoom()
+  const chat = `/api/froam/rooms/${created.room.id}/chat`
+  const pinned = await call(api, 'POST', chat, {
+    ...maya, body: 'Make this shorter',
+    anchor: { path: 'main:1/h1:1', routeKey: '/', viewport: 'mobile', fingerprint: { tag: 'h1', text: 'Plan a trip', evil: '<script>' }, label: 'Heading “Plan a trip”' },
+  })
+  assert.deepEqual(pinned.message.anchor, { path: 'main:1/h1:1', routeKey: '/', viewport: 'mobile', fingerprint: { tag: 'h1', text: 'Plan a trip' }, label: 'Heading “Plan a trip”' })
+  const bad = await call(api, 'POST', chat, { ...maya, body: 'x', anchor: { path: '<img onerror=x>' } })
+  assert.equal(bad.message.anchor, undefined)
+})
+
+test('a room can say when it ends, and a link says what it grants before joining', async () => {
+  const dir = await fsp.mkdtemp(nodePath.join(os.tmpdir(), 'froam-rooms-'))
+  const api = createFroamRoomApi({ file: nodePath.join(dir, 'r.json'), now, roomTtlMs: 7 * 86_400_000 })
+  const created = await call(api, 'POST', '/api/froam/rooms', { name: 'Ahmad' })
+  assert.equal(created.room.expiresAt, clock + 7 * 86_400_000)
+  const peek = await call(api, 'GET', `/api/froam/rooms/${created.room.id}?token=${created.invites.contributor}`)
+  assert.equal(peek.invite, 'contributor')
+  assert.equal(peek.room.you, null)
+})
+
+test('the owner ends a session: every link stops working, and says why', async () => {
+  const { api, created, owner, maya, base } = await requestRoom()
+  const id = created.room.id
+  const byMaya = await call(api, 'POST', `/api/froam/rooms/${id}/end`, { ...maya })
+  assert.equal(byMaya.status, 403)
+  const ended = await call(api, 'POST', `/api/froam/rooms/${id}/end`, { ...owner })
+  assert.equal(ended.success, true)
+  for (const token of Object.values(created.invites)) {
+    const read = await call(api, 'GET', `/api/froam/rooms/${id}?token=${token}`)
+    assert.equal(read.status, 410)
+    assert.equal(read.ended, true)
+    assert.equal(read.error, 'Ahmad ended this session')
+  }
+  const chat = await call(api, 'POST', `/api/froam/rooms/${id}/chat`, { ...maya, body: 'still here?' })
+  assert.equal(chat.status, 410)
+  const submit = await call(api, 'POST', base, { ...maya, title: 'x', store: { 'a:1': { text: 'x' } } })
+  assert.equal(submit.status, 410)
 })
 
 let failed = 0

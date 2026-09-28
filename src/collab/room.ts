@@ -14,6 +14,7 @@
  */
 import type {
   FroamChatMessage,
+  FroamMessageAnchor,
   FroamOp,
   FroamRevertProposal,
   FroamRole,
@@ -50,6 +51,11 @@ export type RoomView = {
   members: RoomMemberView[]
   presenter: string | null
   sequence: number
+  /** When the host keeps rooms for a limited time (the public demo does). */
+  expiresAt?: number | null
+  /** The owner ended the session: every link has stopped working. */
+  endedAt?: number | null
+  endedBy?: string | null
   you: { actor: string; role: FroamRole; name: string } | null
 }
 
@@ -91,27 +97,65 @@ export type RoomRevision = {
  * Changes a contributor submitted for the owner's approval. Approving is what
  * publishes them (lib/room-store.mjs → the host's onApproveRequest).
  */
-export type RoomRequest = {
-  id: string
+/** One page at one screen size, as a request changes it. */
+export type RoomRequestScope = {
   routeKey: string
   viewport: FroamViewport
+  store: Record<string, Record<string, unknown>>
+  removed: string[]
+}
+
+/** A base style edit a Tailwind project can take into the element's class list. */
+export type RoomStyleEdit = {
+  routeKey: string
+  viewport: FroamViewport
+  path: string
+  tag: string
+  className: string
+  styles: Record<string, string>
+}
+
+export type RoomRequestChange = { label: string; before: string | null; after: string | null; routeKey?: string; viewport?: FroamViewport }
+
+/** How to take an approved request back — what the approval replaced, per scope. */
+export type RoomRequestUndo = {
+  scopes: Array<RoomRequestScope & { expect: Record<string, unknown> }>
+  textEdits: Array<{ from: string; to: string }>
+}
+
+export type RoomRequest = {
+  id: string
+  /** The first scope, kept for readers that predate multi-page requests. */
+  routeKey: string
+  viewport: FroamViewport
+  /** Every page and screen size the request changes. */
+  scopes?: RoomRequestScope[]
   title: string
   note: string | null
-  /** Only the drafts that changed, keyed by path. */
+  /** Only the drafts that changed, keyed by path (the first scope). */
   store: Record<string, Record<string, unknown>>
-  /** Paths whose draft the contributor cleared. */
+  /** Paths whose draft the contributor cleared (the first scope). */
   removed: string[]
   /** What changed, for a person to read. */
-  changes: Array<{ label: string; before: string | null; after: string | null }>
+  changes: RoomRequestChange[]
   textEdits: Array<{ from: string; to: string }>
+  styleEdits?: RoomStyleEdit[]
   actor: string
   createdBy: string
   createdAt: number
-  status: 'pending' | 'approved' | 'changes-requested' | 'withdrawn'
+  status: 'pending' | 'approved' | 'changes-requested' | 'withdrawn' | 'reverted'
   decidedBy: string | null
   decidedAt: number | null
   decisionNote: string | null
-  published: { ok: boolean; detail: string } | null
+  /** Where it went live: a pull request, a commit, the design files. */
+  published: { ok: boolean; detail: string; link?: string | null; number?: number | null; branch?: string | null } | null
+  undo?: RoomRequestUndo | null
+  reverted?: { by: string; at: number; detail: string; link: string | null; skipped: number; note: string | null } | null
+}
+
+/** Every scope of a request, including one made before requests could span pages. */
+export function scopesOf(request: Pick<RoomRequest, 'routeKey' | 'viewport' | 'store' | 'removed' | 'scopes'>): RoomRequestScope[] {
+  return request.scopes?.length ? request.scopes : [{ routeKey: request.routeKey, viewport: request.viewport, store: request.store, removed: request.removed }]
 }
 
 export type RoomTransport = {
@@ -244,18 +288,36 @@ export function createRoomClient(options: {
   isHidden?: () => boolean
   now?: () => number
 }) {
-  const { roomId, token, transport } = options
+  const { roomId, token } = options
+  // Every answer is checked for "this session has ended", wherever it comes from.
+  const transport: RoomTransport = {
+    ...options.transport,
+    get: (path) => watchEnded(options.transport.get(path)),
+    post: (path, body) => watchEnded(options.transport.post(path, body)),
+  }
   const storage = options.storage ?? browserStorage()
   const isHidden = options.isHidden ?? (() => typeof document !== 'undefined' && document.hidden)
 
   const key = `froam-room:${roomId}`
   let identity: RoomIdentity | null = readIdentity()
   let room: RoomView | null = null
+  let invite: FroamRole | null = null
   let timer: ReturnType<typeof setInterval> | null = null
   let liveTimer: ReturnType<typeof setInterval> | null = null
   let liveUnsubscribe: (() => void) | null = null
   let cursor = 0
   let polling = false
+  // The room's relay (lib/realtime.mjs), when the host has one: a socket that
+  // says "read now" and carries presence between people without storing it.
+  let realtime: { url: string; ticket: string } | null = null
+  let socket: WebSocket | null = null
+  let socketWanted = false
+  let socketRetry: ReturnType<typeof setTimeout> | null = null
+  let socketAttempts = 0
+  let lastPoll = 0
+  let lastHttpBeat = 0
+  /** Presence heard over the socket, newer than the last stored heartbeat. */
+  const livePresence = new Map<string, { presence: Record<string, unknown>; at: number }>()
   const listeners = new Set<(room: RoomView | null) => void>()
   const eventListeners = new Set<(events: readonly FroamRoomEvent[]) => void>()
 
@@ -299,6 +361,34 @@ export function createRoomClient(options: {
     return { actor: identity.actor, session: identity.session }
   }
 
+  let ended: { at: number; by: string | null } | null = null
+
+  async function watchEnded<T>(pending: Promise<T>): Promise<T> {
+    try {
+      const payload = await pending as T & { success?: boolean; ended?: boolean; endedAt?: number; error?: string }
+      if (payload && payload.ended === true && payload.success === false) markEnded(payload.endedAt, payload.error)
+      return payload
+    } catch (error) {
+      if (Number((error as { status?: number })?.status) === 410) markEnded(undefined, (error as Error).message)
+      throw error
+    }
+  }
+
+  /** The room is over: stop listening, and tell everyone watching this client. */
+  function markEnded(at?: number, message?: string) {
+    if (ended) return
+    ended = { at: at ?? Date.now(), by: message?.replace(/ ended this session.*$/, '') ?? null }
+    socketWanted = false
+    if (timer) clearInterval(timer)
+    if (liveTimer) clearInterval(liveTimer)
+    timer = null
+    liveTimer = null
+    try { socket?.close() } catch { /* closed */ }
+    socket = null
+    room = { ...(room ?? { id: roomId, routes: '*', createdAt: 0, members: [], presenter: null, sequence: 0, you: null }), endedAt: ended.at, endedBy: ended.by }
+    announce()
+  }
+
   async function post(path: string, body: unknown) {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
@@ -312,19 +402,75 @@ export function createRoomClient(options: {
   }
 
   function adopt(payload: unknown) {
+    const granted = (payload as { invite?: FroamRole } | null)?.invite
+    if (granted) invite = granted
+    const offered = (payload as { realtime?: { url?: string; ticket?: string } | null } | null)?.realtime
+    if (offered?.url && offered.ticket && (offered.url !== realtime?.url || !socket)) {
+      realtime = { url: offered.url, ticket: offered.ticket }
+      if (socketWanted) connectSocket()
+    }
     const next = (payload as { room?: RoomView } | null)?.room
     if (next && Array.isArray(next.members)) {
-      room = next
+      room = withLivePresence(next)
       announce()
     }
     return room
   }
 
-  return {
+  /** Stored presence can lag the socket by a heartbeat; what the socket said last wins. */
+  function withLivePresence(view: RoomView): RoomView {
+    if (!livePresence.size) return view
+    const now = Date.now()
+    return {
+      ...view,
+      members: view.members.map((member) => {
+        const live = livePresence.get(member.actor)
+        if (!live || now - live.at > 30_000) return member
+        return { ...member, ...live.presence, here: true, seenAt: live.at } as RoomMemberView
+      }),
+    }
+  }
+
+  function connectSocket() {
+    if (typeof WebSocket === 'undefined' || !realtime || !identity) return
+    try { socket?.close() } catch { /* already closed */ }
+    const current = new WebSocket(`${realtime.url}?ticket=${encodeURIComponent(realtime.ticket)}`)
+    socket = current
+    current.onopen = () => { socketAttempts = 0 }
+    current.onmessage = (event) => {
+      let frame: { type?: string; actor?: string; presence?: Record<string, unknown>; at?: number } | null = null
+      try { frame = JSON.parse(String(event.data)) } catch { return }
+      if (frame?.type === 'wake') void client.pollEvents()
+      else if (frame?.type === 'presence' && frame.actor && frame.presence) {
+        livePresence.set(frame.actor, { presence: frame.presence, at: Date.now() })
+        if (room) { room = withLivePresence(room); announce() }
+      } else if (frame?.type === 'leave' && frame.actor) {
+        livePresence.delete(frame.actor)
+        if (room) {
+          room = { ...room, members: room.members.map((member) => (member.actor === frame!.actor ? { ...member, here: false } : member)) }
+          announce()
+        }
+      }
+    }
+    current.onclose = () => {
+      if (socket === current) socket = null
+      if (!socketWanted) return
+      // Back off, then try again; polling carries the room in the meantime.
+      socketAttempts += 1
+      socketRetry = setTimeout(connectSocket, Math.min(30_000, 1_000 * 2 ** Math.min(socketAttempts, 5)))
+    }
+  }
+
+  const socketOpen = () => socket?.readyState === 1
+
+  const client = {
     get roomId() { return roomId },
     get identity() { return identity },
     get room() { return room },
     get cursor() { return cursor },
+
+    /** What the link in hand grants — known before joining, so a page can tell a studio invite from a client's. */
+    get inviteRole() { return invite },
 
     /** Have we already been someone in this room? Decides whether to ask for a name. */
     get joined() { return identity !== null },
@@ -385,6 +531,12 @@ export function createRoomClient(options: {
       action?: string | null
     } = {}) {
       if (!identity || isHidden()) return room
+      if (socketOpen()) {
+        try { socket!.send(JSON.stringify({ type: 'presence', presence: where })) } catch { /* reconnecting */ }
+        // The relay carries it to everyone now; the stored heartbeat only keeps us "here".
+        if (Date.now() - lastHttpBeat < 30_000) return room
+      }
+      lastHttpBeat = Date.now()
       try {
         return adopt(await post(`/api/froam/rooms/${roomId}/presence`, {
           token,
@@ -413,6 +565,7 @@ export function createRoomClient(options: {
     async pollEvents() {
       if (polling) return []
       polling = true
+      lastPoll = Date.now()
       try {
         const payload = await transport.get(`/api/froam/rooms/${roomId}/events?token=${encodeURIComponent(token)}&after=${cursor}${identityQuery()}`) as {
           events?: FroamRoomEvent[]
@@ -438,7 +591,14 @@ export function createRoomClient(options: {
         const path = `/api/froam/rooms/${roomId}/stream?token=${encodeURIComponent(token)}${identityQuery()}`
         liveUnsubscribe = transport.subscribe(path, () => { if (!isHidden()) void this.pollEvents() })
       }
-      liveTimer = setInterval(() => { if (!isHidden()) void this.pollEvents() }, everyMs)
+      // With a relay the socket says when to read; the timer is only a safety net.
+      liveTimer = setInterval(() => {
+        if (isHidden()) return
+        if (socketOpen() && Date.now() - lastPoll < 30_000) return
+        void this.pollEvents()
+      }, everyMs)
+      socketWanted = true
+      if (realtime && !socket) connectSocket()
       return () => this.stopLive()
     },
 
@@ -447,6 +607,11 @@ export function createRoomClient(options: {
       liveTimer = null
       liveUnsubscribe?.()
       liveUnsubscribe = null
+      socketWanted = false
+      if (socketRetry) clearTimeout(socketRetry)
+      socketRetry = null
+      try { socket?.close() } catch { /* already closed */ }
+      socket = null
     },
 
     async pushOps(ops: readonly FroamOp[]) {
@@ -550,7 +715,7 @@ export function createRoomClient(options: {
       return payload?.requests ?? []
     },
 
-    async submitRequest(input: Pick<RoomRequest, 'routeKey' | 'viewport' | 'title' | 'store' | 'removed' | 'changes' | 'textEdits'> & { note?: string }) {
+    async submitRequest(input: Pick<RoomRequest, 'routeKey' | 'viewport' | 'title' | 'store' | 'removed' | 'changes' | 'textEdits'> & { note?: string; scopes?: RoomRequestScope[]; styleEdits?: RoomStyleEdit[] }) {
       if (!identity) throw new Error('Join the room first')
       const payload = await post(`/api/froam/rooms/${roomId}/requests`, { token, ...credentials(), ...input }) as { request?: RoomRequest }
       return payload?.request ?? null
@@ -565,6 +730,13 @@ export function createRoomClient(options: {
     async decideRequest(requestId: string, decision: 'approved' | 'changes-requested', note?: string) {
       if (!identity) throw new Error('Join the room first')
       const payload = await post(`/api/froam/rooms/${roomId}/requests/${requestId}/decision`, { token, ...credentials(), decision, note }) as { request?: RoomRequest }
+      return payload?.request ?? null
+    },
+
+    /** The owner takes an approved change back (the host decides how — close a pull request, open a revert). */
+    async revertRequest(requestId: string, note?: string) {
+      if (!identity) throw new Error('Join the room first')
+      const payload = await post(`/api/froam/rooms/${roomId}/requests/${requestId}/revert`, { token, ...credentials(), note }) as { request?: RoomRequest }
       return payload?.request ?? null
     },
 
@@ -583,9 +755,10 @@ export function createRoomClient(options: {
       return payload.messages ?? []
     },
 
-    async sendChat(body: string, requestId?: string | null) {
+    async sendChat(body: string, about: { requestId?: string | null; anchor?: FroamMessageAnchor | null } | string | null = null) {
+      const { requestId = null, anchor = null } = typeof about === 'string' ? { requestId: about } : about ?? {}
       const payload = await post(`/api/froam/rooms/${roomId}/chat`, {
-        token, ...credentials(), body, ...(requestId ? { requestId } : {}),
+        token, ...credentials(), body, ...(requestId ? { requestId } : {}), ...(anchor ? { anchor } : {}),
       }) as { message?: FroamChatMessage }
       return payload.message ?? null
     },
@@ -609,7 +782,22 @@ export function createRoomClient(options: {
       }) as { proposal?: FroamRevertProposal; accepted?: FroamOp[]; cursor?: number }
       return payload
     },
+
+    /** Is the room's relay connected (instant updates and live presence)? */
+    get live() { return socketOpen() },
+
+    /** Has the owner ended this session? */
+    get ended() { return ended },
+
+    /** The owner is done: every link stops working, and everyone in the room is told. */
+    async endRoom() {
+      if (!identity) throw new Error('Join the room first')
+      const payload = await post(`/api/froam/rooms/${roomId}/end`, { token, ...credentials() }) as { success?: boolean; endedAt?: number }
+      if (payload?.success) markEnded(payload.endedAt, `${identity.name} ended this session`)
+      return Boolean(payload?.success)
+    },
   }
+  return client
 }
 
 export type RoomClient = ReturnType<typeof createRoomClient>

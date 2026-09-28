@@ -230,6 +230,15 @@ export default function FroamReview({ routeKey, viewport }: Props) {
   const sender = room.room?.members.find((m) => m.role === 'owner')?.name
 
   if (!room.inRoom) return null
+  if (room.ended) {
+    return (
+      <div className="froam-review" data-chef-editor-root="true">
+        <div className="froam-review__bar">
+          <span className="froam-review__label">{room.ended.by ?? 'The owner'} ended this review — thanks for your notes</span>
+        </div>
+      </div>
+    )
+  }
 
   /**
    * The client's chrome is for people who are not editing.
@@ -243,7 +252,8 @@ export default function FroamReview({ routeKey, viewport }: Props) {
   // surfaces — including when it was the editor, not this surface, that joined.
   const joinedAs = room.roomId ? readRememberedRole(room.roomId) ?? joinedElsewhere : null
   const hasStudio = (role: string | null) => role === 'owner' || role === 'editor' || role === 'contributor'
-  if (hasStudio(room.role) || hasStudio(joinedAs)) return null
+  // A studio link (editor, contributor) is known before joining: never flash the client bar at it.
+  if (hasStudio(room.role) || hasStudio(joinedAs) || hasStudio(room.client?.inviteRole ?? null)) return null
 
   /* ── Arrival: name yourself once. No account, ever. ── */
   if (room.needsName) {

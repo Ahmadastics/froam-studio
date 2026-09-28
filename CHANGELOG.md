@@ -1,5 +1,86 @@
 # Changelog
 
+## 8.8.0 - 2026-09-28
+
+**The whole loop: a teammate's change becomes a pull request, the owner hears about it wherever they are, and anything approved can be taken back.**
+
+- **Approve on GitHub.** `createGitHubPublisher({ token, repo, dir })` makes
+  approving a request one commit — the design, copy written into the source,
+  and (for Tailwind) styles written into class lists — opened as a pull
+  request with a readable description: who suggested it, their note, a
+  before → after table, where on the site, and a link back into Froam. CI runs
+  on it like any other; merging publishes. `mode: 'commit'` publishes
+  straight onto the branch; `autoMerge` merges when checks allow. Spread it
+  into `createFroamRoomApi`.
+- **Revert.** Every approval records how to undo itself. The owner's
+  **Revert** takes it back: under `froam dev` the files (design, copy and class
+  lists) are restored; on GitHub an unmerged pull request is closed, a merged
+  one gets a revert pull request. Anything someone changed again since is
+  left alone and counted. Requests show *Reverted*, by whom, and why.
+- **Notifications.** `createFroamNotifier` tells people where they already
+  are — Slack (with a Review button), Discord, any webhook, or email through
+  Resend — when a request is sent, approved, sent back or reverted, and when a
+  message @mentions someone. Links open the editor on exactly that request or
+  message and never carry a token. Under `froam dev`: `FROAM_NOTIFY_WEBHOOK`
+  (and `FROAM_SITE_URL`, `RESEND_API_KEY`) or `"notify"` in froam.config.json.
+- **One request, many pages.** A contributor's changes across pages and screen
+  sizes go in one request; the owner sees where each change is, previews it on
+  the page it's for, and approves it all at once.
+- **Styles into the source.** In Tailwind projects, Save to Repo (and an
+  approved request) writes base style edits into the element's class list —
+  `text-[color:#e11d48]`, `p-[14px]`, `font-bold` — replacing the utilities
+  they conflict with. Only when the class list is unique in the source, never
+  over a screen-size or dark-mode variant, and only for properties with a clean
+  utility; the rest stay Froam edits.
+- **Checks before approving.** Previewing a request checks the changed
+  elements on the page as people will see them: contrast against the real
+  background, text running off the screen or cut off, images that don't load
+  or have no alt text, links that go nowhere, text too small on phones.
+- **Pinned messages.** Pin a message to the selected element; it shows as a
+  face on that element for everyone on that page and screen size, and clicking
+  it opens the conversation there. *Show it* on a message takes you to the
+  element.
+- **@mentions.** Type @ for a list of the room; mentions are highlighted, a
+  message that mentions you is marked, the peek says *mentioned you*, and a
+  notification goes out.
+- **"Maya is typing…"**, from presence.
+- **Realtime on serverless hosts.** `createRealtimeRelayClient` plus the
+  Cloudflare template in `templates/cloudflare-realtime` (free tier): the room
+  server wakes a per-room relay after each change, so people read at once
+  instead of on a timer, and cursors, selections and typing travel straight
+  between people without being stored. Tickets are signed by the room server;
+  the relay never sees a room token. `presenceWriteMs` stores heartbeats only
+  when something changes — far fewer writes on storage that charges for them.
+- **Share a site that's on your computer.** On a local page, Share offers
+  *Make it reachable from anywhere*: `froam dev` opens one outbound connection
+  to the Froam share service, and every invite link switches to a public
+  address that opens your local site — editor, room and all — on any computer
+  or phone, while `froam dev` runs. Behind any router, no port forwarding, the
+  same link every time for the same project. People on the link can look, talk
+  and suggest; anything else that would write to your machine is refused —
+  only your approval saves. Text is compressed on your machine before it
+  crosses, live updates stream through, and a stopped share says so. From the
+  terminal: `froam dev --share`. Self-host the service with
+  `templates/cloudflare-share` and `FROAM_SHARE_URL`.
+- **End collaboration.** Under *Reset links*, the owner can end the session:
+  every invite link stops working, everyone in the room is told (and a
+  contributor learns if unsent changes were lost), and Share starts fresh. The
+  room answers `410` from then on.
+- **Rooms on Cloudflare.** `templates/cloudflare-rooms`: the whole room server
+  as one Worker — each room a Durable Object holding its state and its sockets
+  (so there are no write races and updates are instant), deleting itself when
+  its time is up. `froam.vercel.app` runs on it.
+- **Rooms that end say so** (`roomTtlMs` → `expiresAt`, shown in Share).
+- The owner shows up as themselves: under `froam dev` the name comes from
+  `git config user.name` instead of "Froam".
+- A studio invite link (edit, suggest) no longer flashes the client review bar
+  before joining.
+- Owners opening Share land on waiting requests first, then unread messages.
+- Server: `approveChangeRequest` and `revertChangeRequest` exported; requests
+  carry `scopes`, `styleEdits`, `undo` and `reverted`; messages carry
+  `anchor` and `mentions`; members' room views include a realtime ticket when
+  there's a relay; a room link says what it grants before joining (`invite`).
+
 ## 8.7.0 - 2026-09-26
 
 **Everything about working together, in your room — with faces, and a real conversation.**

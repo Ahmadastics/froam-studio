@@ -17,6 +17,7 @@ import {
   readOwnedRoom,
   rememberOwnedRoom,
   rememberRoomIdentity,
+  forgetOwnedRoom,
   inviteLink,
   ROOM_BEAT_MS,
   type OwnedRoom,
@@ -210,6 +211,18 @@ export function useFroamRoom(options: {
     return owned
   }, [transport])
 
+  /** The owner ends the session: links stop working, and this browser no longer holds the room. */
+  const endRoom = useCallback(async () => {
+    if (!client) return false
+    const done = await client.endRoom()
+    if (done) {
+      const owned = readOwnedRoom()
+      if (owned?.roomId === client.roomId) forgetOwnedRoom()
+      setOwnedTick((n) => n + 1)
+    }
+    return done
+  }, [client])
+
   const others = client?.others() ?? []
   const presenter = client?.presenter() ?? null
 
@@ -235,5 +248,8 @@ export function useFroamRoom(options: {
     someoneElseIsPresenting: client?.someoneElseIsPresenting() ?? false,
     role: (client?.role() ?? null) as FroamRole | null,
     events,
+    endRoom,
+    /** The owner ended the session (who and when), for everyone who was in it. */
+    ended: room?.endedAt ? { at: room.endedAt, by: room.endedBy ?? null } : null,
   }
 }

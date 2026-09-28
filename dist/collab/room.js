@@ -1,3 +1,7 @@
+/** Every scope of a request, including one made before requests could span pages. */
+export function scopesOf(request) {
+    return request.scopes?.length ? request.scopes : [{ routeKey: request.routeKey, viewport: request.viewport, store: request.store, removed: request.removed }];
+}
 /** Heartbeat well inside the server's 45s window, so one dropped beat is survivable. */
 export const ROOM_BEAT_MS = 15_000;
 /* ─── the invite in the URL ─── */
@@ -107,17 +111,35 @@ function browserStorage() {
 }
 /* ─── the client ─── */
 export function createRoomClient(options) {
-    const { roomId, token, transport } = options;
+    const { roomId, token } = options;
+    // Every answer is checked for "this session has ended", wherever it comes from.
+    const transport = {
+        ...options.transport,
+        get: (path) => watchEnded(options.transport.get(path)),
+        post: (path, body) => watchEnded(options.transport.post(path, body)),
+    };
     const storage = options.storage ?? browserStorage();
     const isHidden = options.isHidden ?? (() => typeof document !== 'undefined' && document.hidden);
     const key = `froam-room:${roomId}`;
     let identity = readIdentity();
     let room = null;
+    let invite = null;
     let timer = null;
     let liveTimer = null;
     let liveUnsubscribe = null;
     let cursor = 0;
     let polling = false;
+    // The room's relay (lib/realtime.mjs), when the host has one: a socket that
+    // says "read now" and carries presence between people without storing it.
+    let realtime = null;
+    let socket = null;
+    let socketWanted = false;
+    let socketRetry = null;
+    let socketAttempts = 0;
+    let lastPoll = 0;
+    let lastHttpBeat = 0;
+    /** Presence heard over the socket, newer than the last stored heartbeat. */
+    const livePresence = new Map();
     const listeners = new Set();
     const eventListeners = new Set();
     function readIdentity() {
@@ -162,6 +184,40 @@ export function createRoomClient(options) {
             throw new Error('Join the room first');
         return { actor: identity.actor, session: identity.session };
     }
+    let ended = null;
+    async function watchEnded(pending) {
+        try {
+            const payload = await pending;
+            if (payload && payload.ended === true && payload.success === false)
+                markEnded(payload.endedAt, payload.error);
+            return payload;
+        }
+        catch (error) {
+            if (Number(error?.status) === 410)
+                markEnded(undefined, error.message);
+            throw error;
+        }
+    }
+    /** The room is over: stop listening, and tell everyone watching this client. */
+    function markEnded(at, message) {
+        if (ended)
+            return;
+        ended = { at: at ?? Date.now(), by: message?.replace(/ ended this session.*$/, '') ?? null };
+        socketWanted = false;
+        if (timer)
+            clearInterval(timer);
+        if (liveTimer)
+            clearInterval(liveTimer);
+        timer = null;
+        liveTimer = null;
+        try {
+            socket?.close();
+        }
+        catch { /* closed */ }
+        socket = null;
+        room = { ...(room ?? { id: roomId, routes: '*', createdAt: 0, members: [], presenter: null, sequence: 0, you: null }), endedAt: ended.at, endedBy: ended.by };
+        announce();
+    }
     async function post(path, body) {
         for (let attempt = 0; attempt < 3; attempt += 1) {
             try {
@@ -176,18 +232,90 @@ export function createRoomClient(options) {
         throw new Error('Could not update the room');
     }
     function adopt(payload) {
+        const granted = payload?.invite;
+        if (granted)
+            invite = granted;
+        const offered = payload?.realtime;
+        if (offered?.url && offered.ticket && (offered.url !== realtime?.url || !socket)) {
+            realtime = { url: offered.url, ticket: offered.ticket };
+            if (socketWanted)
+                connectSocket();
+        }
         const next = payload?.room;
         if (next && Array.isArray(next.members)) {
-            room = next;
+            room = withLivePresence(next);
             announce();
         }
         return room;
     }
-    return {
+    /** Stored presence can lag the socket by a heartbeat; what the socket said last wins. */
+    function withLivePresence(view) {
+        if (!livePresence.size)
+            return view;
+        const now = Date.now();
+        return {
+            ...view,
+            members: view.members.map((member) => {
+                const live = livePresence.get(member.actor);
+                if (!live || now - live.at > 30_000)
+                    return member;
+                return { ...member, ...live.presence, here: true, seenAt: live.at };
+            }),
+        };
+    }
+    function connectSocket() {
+        if (typeof WebSocket === 'undefined' || !realtime || !identity)
+            return;
+        try {
+            socket?.close();
+        }
+        catch { /* already closed */ }
+        const current = new WebSocket(`${realtime.url}?ticket=${encodeURIComponent(realtime.ticket)}`);
+        socket = current;
+        current.onopen = () => { socketAttempts = 0; };
+        current.onmessage = (event) => {
+            let frame = null;
+            try {
+                frame = JSON.parse(String(event.data));
+            }
+            catch {
+                return;
+            }
+            if (frame?.type === 'wake')
+                void client.pollEvents();
+            else if (frame?.type === 'presence' && frame.actor && frame.presence) {
+                livePresence.set(frame.actor, { presence: frame.presence, at: Date.now() });
+                if (room) {
+                    room = withLivePresence(room);
+                    announce();
+                }
+            }
+            else if (frame?.type === 'leave' && frame.actor) {
+                livePresence.delete(frame.actor);
+                if (room) {
+                    room = { ...room, members: room.members.map((member) => (member.actor === frame.actor ? { ...member, here: false } : member)) };
+                    announce();
+                }
+            }
+        };
+        current.onclose = () => {
+            if (socket === current)
+                socket = null;
+            if (!socketWanted)
+                return;
+            // Back off, then try again; polling carries the room in the meantime.
+            socketAttempts += 1;
+            socketRetry = setTimeout(connectSocket, Math.min(30_000, 1_000 * 2 ** Math.min(socketAttempts, 5)));
+        };
+    }
+    const socketOpen = () => socket?.readyState === 1;
+    const client = {
         get roomId() { return roomId; },
         get identity() { return identity; },
         get room() { return room; },
         get cursor() { return cursor; },
+        /** What the link in hand grants — known before joining, so a page can tell a studio invite from a client's. */
+        get inviteRole() { return invite; },
         /** Have we already been someone in this room? Decides whether to ask for a name. */
         get joined() { return identity !== null; },
         on(listener) {
@@ -235,6 +363,16 @@ export function createRoomClient(options) {
         async beat(where = {}) {
             if (!identity || isHidden())
                 return room;
+            if (socketOpen()) {
+                try {
+                    socket.send(JSON.stringify({ type: 'presence', presence: where }));
+                }
+                catch { /* reconnecting */ }
+                // The relay carries it to everyone now; the stored heartbeat only keeps us "here".
+                if (Date.now() - lastHttpBeat < 30_000)
+                    return room;
+            }
+            lastHttpBeat = Date.now();
             try {
                 return adopt(await post(`/api/froam/rooms/${roomId}/presence`, {
                     token,
@@ -263,6 +401,7 @@ export function createRoomClient(options) {
             if (polling)
                 return [];
             polling = true;
+            lastPoll = Date.now();
             try {
                 const payload = await transport.get(`/api/froam/rooms/${roomId}/events?token=${encodeURIComponent(token)}&after=${cursor}${identityQuery()}`);
                 adopt(payload);
@@ -286,8 +425,17 @@ export function createRoomClient(options) {
                 liveUnsubscribe = transport.subscribe(path, () => { if (!isHidden())
                     void this.pollEvents(); });
             }
-            liveTimer = setInterval(() => { if (!isHidden())
-                void this.pollEvents(); }, everyMs);
+            // With a relay the socket says when to read; the timer is only a safety net.
+            liveTimer = setInterval(() => {
+                if (isHidden())
+                    return;
+                if (socketOpen() && Date.now() - lastPoll < 30_000)
+                    return;
+                void this.pollEvents();
+            }, everyMs);
+            socketWanted = true;
+            if (realtime && !socket)
+                connectSocket();
             return () => this.stopLive();
         },
         stopLive() {
@@ -296,6 +444,15 @@ export function createRoomClient(options) {
             liveTimer = null;
             liveUnsubscribe?.();
             liveUnsubscribe = null;
+            socketWanted = false;
+            if (socketRetry)
+                clearTimeout(socketRetry);
+            socketRetry = null;
+            try {
+                socket?.close();
+            }
+            catch { /* already closed */ }
+            socket = null;
         },
         async pushOps(ops) {
             const pending = ops.filter((op) => op.actor === identity?.actor);
@@ -401,6 +558,13 @@ export function createRoomClient(options) {
             const payload = await post(`/api/froam/rooms/${roomId}/requests/${requestId}/decision`, { token, ...credentials(), decision, note });
             return payload?.request ?? null;
         },
+        /** The owner takes an approved change back (the host decides how — close a pull request, open a revert). */
+        async revertRequest(requestId, note) {
+            if (!identity)
+                throw new Error('Join the room first');
+            const payload = await post(`/api/froam/rooms/${roomId}/requests/${requestId}/revert`, { token, ...credentials(), note });
+            return payload?.request ?? null;
+        },
         async resolveComment(commentId, resolved = true) {
             if (!identity)
                 throw new Error('Join the room first');
@@ -416,9 +580,10 @@ export function createRoomClient(options) {
             const payload = await transport.get(`/api/froam/rooms/${roomId}/chat?${params}`);
             return payload.messages ?? [];
         },
-        async sendChat(body, requestId) {
+        async sendChat(body, about = null) {
+            const { requestId = null, anchor = null } = typeof about === 'string' ? { requestId: about } : about ?? {};
             const payload = await post(`/api/froam/rooms/${roomId}/chat`, {
-                token, ...credentials(), body, ...(requestId ? { requestId } : {}),
+                token, ...credentials(), body, ...(requestId ? { requestId } : {}), ...(anchor ? { anchor } : {}),
             });
             return payload.message ?? null;
         },
@@ -440,6 +605,20 @@ export function createRoomClient(options) {
             });
             return payload;
         },
+        /** Is the room's relay connected (instant updates and live presence)? */
+        get live() { return socketOpen(); },
+        /** Has the owner ended this session? */
+        get ended() { return ended; },
+        /** The owner is done: every link stops working, and everyone in the room is told. */
+        async endRoom() {
+            if (!identity)
+                throw new Error('Join the room first');
+            const payload = await post(`/api/froam/rooms/${roomId}/end`, { token, ...credentials() });
+            if (payload?.success)
+                markEnded(payload.endedAt, `${identity.name} ended this session`);
+            return Boolean(payload?.success);
+        },
     };
+    return client;
 }
 //# sourceMappingURL=room.js.map

@@ -41,6 +41,7 @@ export declare function useFroamRoom(options: {
         readonly identity: import("./room").RoomIdentity | null;
         readonly room: RoomView | null;
         readonly cursor: number;
+        readonly inviteRole: FroamRole | null;
         readonly joined: boolean;
         on(listener: (room: RoomView | null) => void): () => boolean;
         onEvents(listener: (events: readonly FroamRoomEvent[]) => void): () => boolean;
@@ -112,12 +113,18 @@ export declare function useFroamRoom(options: {
         requests(): Promise<import("./room").RoomRequest[]>;
         submitRequest(input: Pick<import("./room").RoomRequest, "routeKey" | "viewport" | "title" | "store" | "removed" | "changes" | "textEdits"> & {
             note?: string;
+            scopes?: import("./room").RoomRequestScope[];
+            styleEdits?: import("./room").RoomStyleEdit[];
         }): Promise<import("./room").RoomRequest | null>;
         withdrawRequest(requestId: string): Promise<import("./room").RoomRequest | null>;
         decideRequest(requestId: string, decision: "approved" | "changes-requested", note?: string): Promise<import("./room").RoomRequest | null>;
+        revertRequest(requestId: string, note?: string): Promise<import("./room").RoomRequest | null>;
         resolveComment(commentId: string, resolved?: boolean): Promise<import("./room").RoomComment | null>;
         chat(): Promise<import("./types").FroamChatMessage[]>;
-        sendChat(body: string, requestId?: string | null): Promise<import("./types").FroamChatMessage | null>;
+        sendChat(body: string, about?: {
+            requestId?: string | null;
+            anchor?: import("./types").FroamMessageAnchor | null;
+        } | string | null): Promise<import("./types").FroamChatMessage | null>;
         signalDesign(routeKey: string, viewport: FroamViewport): Promise<void>;
         proposals(): Promise<import("./types").FroamRevertProposal[]>;
         decideProposal(proposalId: string, decision: "approved" | "declined"): Promise<{
@@ -125,6 +132,12 @@ export declare function useFroamRoom(options: {
             accepted?: import("./types").FroamOp[];
             cursor?: number;
         }>;
+        readonly live: boolean;
+        readonly ended: {
+            at: number;
+            by: string | null;
+        } | null;
+        endRoom(): Promise<boolean>;
     } | null;
     openRoom: (name: string, profile?: RoomProfile) => Promise<{
         roomId: string;
@@ -149,5 +162,11 @@ export declare function useFroamRoom(options: {
     someoneElseIsPresenting: boolean;
     role: FroamRole | null;
     events: readonly FroamRoomEvent[];
+    endRoom: () => Promise<boolean>;
+    /** The owner ended the session (who and when), for everyone who was in it. */
+    ended: {
+        at: number;
+        by: string | null;
+    } | null;
 };
 //# sourceMappingURL=useFroamRoom.d.ts.map

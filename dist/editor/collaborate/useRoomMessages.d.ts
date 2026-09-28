@@ -1,5 +1,10 @@
 import type { RoomClient } from '../../collab/room';
-import type { FroamChatMessage, FroamRevertProposal, FroamRole, FroamRoomEvent } from '../../collab/types';
+import type { FroamChatMessage, FroamMessageAnchor, FroamRevertProposal, FroamRole, FroamRoomEvent } from '../../collab/types';
+/** What a message is about: a request, or something on the page it's pinned to. */
+export type MessageAbout = {
+    requestId?: string | null;
+    anchor?: FroamMessageAnchor | null;
+};
 /** A message as the panel shows it: sent, still sending, or failed and retryable. */
 export type RoomMessage = FroamChatMessage & {
     state?: 'sending' | 'failed';
@@ -12,7 +17,7 @@ export type RoomMessaging = {
     unread: number;
     /** The newest message from someone else, for the peek under the Share button. */
     latestIncoming: RoomMessage | null;
-    send: (body: string, requestId?: string | null) => Promise<boolean>;
+    send: (body: string, about?: MessageAbout | string | null) => Promise<boolean>;
     retry: (message: RoomMessage) => Promise<boolean>;
     markRead: () => void;
     decideProposal: (id: string, decision: 'approved' | 'declined') => Promise<void>;

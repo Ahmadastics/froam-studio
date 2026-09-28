@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { isFroamPersonaPath } from '../froamPersona.js';
 import { findElementByPath, isBodyScopedPath, isFroamOwnedNode, isInPageScope } from '../../collab/paths.js';
 import { getRoot } from './dom.js';
 import { applyCanvasDraftStyles, applyDraft, isInjectionPath, isSectionStructurePath } from './drafts.js';
 import { clearPseudoPaint, paintPseudoElements } from './pseudo.js';
+import { restorePageText } from '../draft-text.js';
 import { CANVAS_KEY } from './types.js';
 /**
  * Keeps this route's drafts on the page: painted once, then again whenever the
@@ -11,6 +12,27 @@ import { CANVAS_KEY } from './types.js';
  * painter's own writes are not page changes — see draft-text.ts.
  */
 export function useDraftPainter({ hasRouteDrafts, routeDrafts, viewportStoreKey, suspendDraftPaintingRef, applySectionStructure, restoreInjectedBlocks }) {
+    // Text drafts painted last time, per page and screen size. One that is gone
+    // now (undo, revert, a teammate's change taken back) must unpaint — a
+    // removed draft otherwise leaves its words on screen until a reload.
+    const paintedTextRef = useRef({ key: viewportStoreKey, paths: new Set() });
+    useEffect(() => {
+        const now = new Set(Object.entries(routeDrafts).filter(([, draft]) => typeof draft?.text === 'string').map(([path]) => path));
+        const before = paintedTextRef.current;
+        if (before.key === viewportStoreKey) {
+            const root = getRoot();
+            if (root) {
+                for (const path of before.paths) {
+                    if (now.has(path))
+                        continue;
+                    const target = findElementByPath(root, path);
+                    if (target)
+                        restorePageText(target);
+                }
+            }
+        }
+        paintedTextRef.current = { key: viewportStoreKey, paths: now };
+    }, [routeDrafts, viewportStoreKey]);
     useEffect(() => {
         if (!hasRouteDrafts) {
             clearPseudoPaint();

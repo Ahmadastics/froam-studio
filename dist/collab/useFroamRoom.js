@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiGetFresh, apiPost, resolveApiEndpoint } from '../lib/api.js';
-import { createRoomClient, readRoomFromLocation, readOwnedRoom, rememberOwnedRoom, rememberRoomIdentity, inviteLink, ROOM_BEAT_MS, } from './room.js';
+import { createRoomClient, readRoomFromLocation, readOwnedRoom, rememberOwnedRoom, rememberRoomIdentity, forgetOwnedRoom, inviteLink, ROOM_BEAT_MS, } from './room.js';
 const defaultTransport = {
     get: (path) => apiGetFresh(path),
     post: (path, body) => apiPost(path, body),
@@ -158,6 +158,19 @@ export function useFroamRoom(options) {
         setOwnedTick((n) => n + 1);
         return owned;
     }, [transport]);
+    /** The owner ends the session: links stop working, and this browser no longer holds the room. */
+    const endRoom = useCallback(async () => {
+        if (!client)
+            return false;
+        const done = await client.endRoom();
+        if (done) {
+            const owned = readOwnedRoom();
+            if (owned?.roomId === client.roomId)
+                forgetOwnedRoom();
+            setOwnedTick((n) => n + 1);
+        }
+        return done;
+    }, [client]);
     const others = client?.others() ?? [];
     const presenter = client?.presenter() ?? null;
     return {
@@ -182,6 +195,9 @@ export function useFroamRoom(options) {
         someoneElseIsPresenting: client?.someoneElseIsPresenting() ?? false,
         role: (client?.role() ?? null),
         events,
+        endRoom,
+        /** The owner ended the session (who and when), for everyone who was in it. */
+        ended: room?.endedAt ? { at: room.endedAt, by: room.endedBy ?? null } : null,
     };
 }
 //# sourceMappingURL=useFroamRoom.js.map
