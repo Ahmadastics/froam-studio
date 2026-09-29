@@ -79,6 +79,8 @@ function isFroamOwned(el: Element, wrapper: Element) {
     || el.id === HOST_ID
     || el.id.startsWith('froam-')
     || el.hasAttribute('data-chef-editor-root')
+    // The phone/tablet preview's frame holds the page; it is never inside it.
+    || el.hasAttribute('data-froam-stage')
     || ['SCRIPT', 'STYLE', 'LINK', 'TEMPLATE', 'NOSCRIPT'].includes(el.tagName)
 }
 

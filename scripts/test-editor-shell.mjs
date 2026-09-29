@@ -10,6 +10,8 @@ import { DEFAULT_FROAM_UI_PREFERENCE, froamUIPanelWidth, readFroamUIPreference, 
 import { FROAM_REFERENCE_ACCEPTED_TYPES, FROAM_REFERENCE_CONSENT_KEY, readReferenceConsent, referenceQualityLabel, suggestReferenceLabel, validateReferenceDimensions, validateReferenceFile, writeReferenceConsent } from '../dist/editor/reference-workspace-model.js'
 import { projectTextLayerStyles } from '../dist/editor/text-style-projection.js'
 import { decodePseudoContent, encodePseudoContent } from '../dist/editor/chef/pseudo.js'
+import { evaluateMediaList, isViewportQuery, resolveViewportUnits } from '../dist/editor/chef/viewport-emulation.js'
+import { DEVICE_SIZES } from '../dist/editor/chef/device-sizes.js'
 import {
   FROAM_WORKSPACE_MODES,
   readWorkspacePreference,
@@ -262,8 +264,12 @@ test('simple shell, quick chat, mobile, reduced-motion, and advanced surfaces st
   assert.match(toolbar, /label="Text"/)
   assert.match(toolbar, /onAskFroam/)
   assert.doesNotMatch(toolbar, /onToggleTheme|Toggle theme preview/)
-  assert.match(toolbarCss, /@media\(max-width:768px\)[\s\S]*?\.froam-tb__center\{display:flex/)
-  assert.doesNotMatch(toolbarCss, /@media\(max-width:768px\)[\s\S]*?\.froam-tb__center[^\{]*\{?[^\}]*display\s*:\s*none/)
+  // Phones: one row that fits — no sideways scrolling to find Save, Share or
+  // Exit; touch doesn't need the tool row, and menus aren't clipped.
+  const phoneBar = /@media\(max-width:768px\)\{([\s\S]*?)\n\}/.exec(toolbarCss)?.[1] ?? ''
+  assert.match(phoneBar, /\.froam-tb__center\{display:none\}/)
+  assert.doesNotMatch(phoneBar, /\.froam-tb\{[^}]*overflow-x:auto/)
+  assert.match(phoneBar, /\.froam-tb\{[^}]*overflow:visible/)
   assert.match(toolbar, /\{workspace\}/)
   assert.match(editor, /workspace=\{\(/)
   assert.match(editor, /has-context-inspector/)
@@ -338,7 +344,9 @@ test('Pages and Library use the connected project while Reference owns screensho
   assert.match(triggerCss, /\.global-chef-button\.is-studio-open[\s\S]*?pointer-events: none/)
   assert.match(floatingBar, /safeTop/)
   assert.match(editingCss, /data-froam-boundary-label/)
-  assert.match(editingCss, /data-froam-static-boundary/)
+  // Hovering a section never changes its layout: its name is drawn over the page.
+  assert.doesNotMatch(editingCss, /data-froam-static-boundary/)
+  assert.match(editingCss, /\.froam-boundary-tag/)
   assert.match(editingCss, /data-froam-editor-hidden/)
   assert.match(editingCss, /data-froam-export-hidden/)
   assert.match(reference, /Add screenshot references/)
@@ -419,6 +427,35 @@ test('::before / ::after content round-trips between text and CSS', () => {
   assert.equal(encodePseudoContent('"quoted"'), '"quoted"')
   assert.equal(decodePseudoContent('"\\2605  "'), '\u2605 ')
   assert.equal(decodePseudoContent('"a\\\\7B"'), 'a\\7B', 'an escaped backslash is not a hex escape')
+})
+
+test('a phone preview answers media queries the way the phone would', () => {
+  const phone = { width: 390, height: 844, touch: true }
+  const tablet = { width: 768, height: 1024, touch: true }
+  assert.equal(evaluateMediaList('(max-width: 640px)', phone), true)
+  assert.equal(evaluateMediaList('(min-width: 641px) and (max-width: 1024px)', phone), false)
+  assert.equal(evaluateMediaList('(min-width: 641px) and (max-width: 1024px)', tablet), true)
+  assert.equal(evaluateMediaList('screen and (min-width: 48em)', tablet), true, 'em is 16px')
+  assert.equal(evaluateMediaList('(width >= 768px)', tablet), true, 'range syntax')
+  assert.equal(evaluateMediaList('(400px <= width < 700px)', phone), false)
+  assert.equal(evaluateMediaList('(400px <= width < 700px)', { ...phone, width: 430 }), true)
+  assert.equal(evaluateMediaList('(max-width: 300px), (orientation: portrait)', phone), true, 'a list is any-of')
+  assert.equal(evaluateMediaList('not screen and (min-width: 1025px)', tablet), true)
+  assert.equal(evaluateMediaList('(hover: hover)', phone), false, 'a phone cannot hover')
+  assert.equal(evaluateMediaList('(pointer: coarse)', phone), true)
+  assert.equal(evaluateMediaList('(min-aspect-ratio: 16/9)', phone), false)
+  assert.equal(evaluateMediaList('(max-width: calc(100px + 1em))', phone), null, 'unreadable: left to the browser')
+  assert.equal(isViewportQuery('(prefers-color-scheme: dark)'), false, 'not about the screen: never touched')
+  assert.equal(isViewportQuery('print'), false)
+  assert.equal(isViewportQuery('(orientation: landscape)'), true)
+  assert.equal(resolveViewportUnits('calc(100vh - 64px)', phone), 'calc(844px - 64px)')
+  assert.equal(resolveViewportUnits('50vw 10dvh', phone), '195px 84.4px')
+  assert.equal(resolveViewportUnits('12px', phone), '12px')
+})
+
+test('every preview size is inside the width its edits are saved for', () => {
+  for (const size of DEVICE_SIZES.mobile) assert.ok(size.width <= 640, `${size.label} is ${size.width}px wide — a tablet, not a phone`)
+  for (const size of DEVICE_SIZES.tablet) assert.ok(size.width >= 641 && size.width <= 1024, `${size.label} is ${size.width}px wide`)
 })
 
 console.log(`\n${count} editor-shell tests passed.`)

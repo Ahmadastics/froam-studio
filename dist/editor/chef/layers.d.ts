@@ -3,6 +3,7 @@ export declare function ensureFroamNodeId(element: HTMLElement): string;
 export declare function layerDepthFromPath(path: string): number;
 export declare function labelLayerElement(element: HTMLElement): string;
 export declare function isStructuralLayerElement(element: HTMLElement): boolean;
+/** A section's outline (an outline never moves anything); its name tag is drawn over the page — see boundary-tag.ts. */
 export declare function syncStructureBoundaryLabel(element: HTMLElement): void;
 export declare function buildLayerNode(element: HTMLElement, root: HTMLElement): LayerNode;
 export declare const LAYER_MAX_DEPTH = 64;

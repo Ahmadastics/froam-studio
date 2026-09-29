@@ -176,6 +176,8 @@ import { checkRequestOnPage, type RequestCheck } from './collaborate/request-che
 import { PSEUDO_HOST_ATTR, pseudoKey, type PseudoElement } from './chef/pseudo'
 import { useDraftPainter } from './chef/useDraftPainter'
 import { useDeviceShell } from './chef/useDeviceShell'
+import { deviceSizeFor, readDeviceSizes, writeDeviceSizes, type DeviceFrame, type DeviceKind } from './chef/device-sizes'
+import FroamDeviceBar from './FroamDeviceBar'
 import {
   DEFAULT_FROAM_PERSONA,
   readFroamPersonaDraft,
@@ -1941,7 +1943,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   }, [])
 
   /* ─── Device shell: CSS-transform viewport simulation (no DOM tree moves) ─── */
-  const prevViewportRef = useDeviceShell({ routeKey, store, viewportMode, zoom, currentSelectionRef, setPanelPosition, setSelection })
+  const [deviceSizes, setDeviceSizes] = useState(() => readDeviceSizes())
+  const [deviceFrame, setDeviceFrame] = useState<DeviceFrame | null>(null)
+  const deviceSize = viewportMode === 'desktop' ? null : deviceSizeFor(viewportMode as DeviceKind, deviceSizes[viewportMode as DeviceKind])
+  const prevViewportRef = useDeviceShell({ routeKey, store, viewportMode, deviceSize, zoom, currentSelectionRef, setPanelPosition, setSelection, onFrame: setDeviceFrame })
 
   /* ─── Route change reset ─── */
   // Only on an actual navigation. On mount this used to close the editor a
@@ -1970,10 +1975,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   }, [showPanel])
 
   // Keep the page's own header out from under Froam's toolbar while editing.
-  usePageCanvasOffset(showPanel && !studioMinimized, getRoot)
+  // (In a phone or tablet preview the page is on its own screen: no gap needed.)
+  usePageCanvasOffset(showPanel && !studioMinimized && viewportMode === 'desktop', getRoot)
 
   /* ─── Move mode cursor ─── */
   /* ─── Tool cursor ─── */
+  useEffect(() => {
+    const html = document.documentElement
+    if (showPanel && activeTool === 'hand' && !moveMode) html.setAttribute('data-froam-hand', 'true')
+    else html.removeAttribute('data-froam-hand')
+    return () => html.removeAttribute('data-froam-hand')
+  }, [activeTool, moveMode, showPanel])
   useEffect(() => {
     if (!showPanel) { document.body.style.removeProperty('cursor'); return }
     if (moveMode || activeTool === 'move') {
@@ -4877,6 +4889,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     event.currentTarget.releasePointerCapture(event.pointerId)
     dragRef.current = null
     if (!drag.moved) {
+      // The button opens on pointerup and then steps aside — so the click a
+      // tap produces afterwards would land on the page beneath and select
+      // whatever is there. That one click belongs to the button.
+      const swallow = (click: MouseEvent) => { click.preventDefault(); click.stopPropagation(); click.stopImmediatePropagation() }
+      document.addEventListener('click', swallow, { capture: true, once: true })
+      window.setTimeout(() => document.removeEventListener('click', swallow, true), 450)
       // Cycle: idle → open, open → minimized, minimized → restored
       if (!showPanel) {
         setPanelOpen(true)
@@ -5796,6 +5814,18 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         </div>
       )}
 
+      {showPanel && !studioMinimized && deviceFrame && (
+        <FroamDeviceBar
+          frame={deviceFrame}
+          onPick={(id) => {
+            const next = { ...deviceSizes, [deviceFrame.kind]: id }
+            setDeviceSizes(next)
+            writeDeviceSizes(next)
+          }}
+          onDesktop={() => setViewportMode('desktop')}
+        />
+      )}
+
       <FroamIntentResult
         state={froamIntent.state}
         aiModel={aiStatus?.model}
@@ -5880,7 +5910,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 if (tool === 'hand') {
                   setActiveTool('hand')
                   setMoveMode(false)
-                  showToast('Hand tool — click and drag to pan')
+                  showToast('Hand tool — drag to move around the page (V to select again)')
                   return
                 }
                 if (tool === 'pointer') {

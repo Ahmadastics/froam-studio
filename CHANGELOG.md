@@ -1,5 +1,37 @@
 # Changelog
 
+## 9.1.0 - 2026-09-29
+
+**Smooth scrolling, real phone and tablet previews, and an editor that fits a phone.**
+
+- **Scrolling is as smooth as without the editor.** Hover no longer chases
+  the page as it slides under the pointer — it waits until the page stops —
+  so scrolling doesn't restyle the page on every frame (it dropped to about
+  30 frames a second on long pages). A section's name tag is drawn over the
+  page instead of into it: hovering a section no longer sets
+  `position: relative` on it, which could shift absolutely placed art.
+- **The Hand tool drags the page.** It used to only block clicks.
+- **Phone and tablet previews show the phone and tablet layouts.** The page's
+  media queries, `vw`/`vh` units and `matchMedia()` answer for the device
+  (touch included: `(hover: none)`, `(pointer: coarse)`), so a responsive
+  site — Tailwind's `sm:`/`md:`, a hamburger menu — looks the way it does on
+  the device. The whole page goes on the screen, header and footer too;
+  sticky headers stick to the top of the phone and fixed bars stay put. The
+  frame fits between the top bar and the panels, a phone gets its status bar,
+  and a bar beneath offers other sizes (small, standard and large phone;
+  tablet, large tablet, tablet landscape) — all inside the widths their edits
+  are saved for. Froam's own layout isn't fooled, and desktop puts everything
+  back exactly.
+- **The editor on a phone.** The top bar fits in one row — menu, Layers,
+  Undo, History, Share, Quick Edit, Save, Design and Exit — instead of a
+  sideways scroll that hid Save and Exit off screen. Share and History open
+  as sheets across the screen, the selection's chip stays below the top bar,
+  the selection bar fades where there's more to swipe to, and touch shows no
+  hover outlines. Opening the editor with a tap no longer selects the part of
+  the page under the button.
+- **On an iPad,** Undo and History are in the top bar (no keyboard needed);
+  the Hand tool, which touch doesn't need, gives up its place.
+
 ## 9.0.0 - 2026-09-29
 
 **Share links only your invitees can open, a History you can use, a light

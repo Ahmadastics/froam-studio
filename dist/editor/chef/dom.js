@@ -32,6 +32,8 @@ export function shouldSkipElement(element) {
         return true;
     if (element.dataset.chefEditorRoot === 'true')
         return true;
+    if (element.hasAttribute('data-froam-stage'))
+        return true;
     return false;
 }
 export function readNumber(value, fallback) {

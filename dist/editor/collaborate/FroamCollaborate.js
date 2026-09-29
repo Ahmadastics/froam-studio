@@ -228,8 +228,10 @@ export function FroamCollaborate(props) {
             return;
         const measure = () => {
             const rect = rootRef.current?.getBoundingClientRect();
+            // Under its button, but never off the screen's left edge.
+            const width = Math.min(384, window.innerWidth - 24);
             if (rect)
-                setPlace({ top: Math.round(rect.bottom + 8), right: Math.max(8, Math.round(window.innerWidth - rect.right)) });
+                setPlace({ top: Math.round(rect.bottom + 8), right: Math.max(8, Math.min(Math.round(window.innerWidth - rect.right), window.innerWidth - width - 8)) });
         };
         measure();
         window.addEventListener('resize', measure);

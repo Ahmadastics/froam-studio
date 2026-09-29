@@ -335,6 +335,12 @@ Local deterministic Quick Edit does not require remote AI.
 
 ## Known limitations
 
+- Phone and tablet previews answer CSS media queries, viewport units and
+  `matchMedia()` for the device, on the page itself. A script that reads
+  `window.innerWidth` directly still sees the real window, and a script that
+  listened to a media query before the preview opened hears about the change
+  on its next resize.
+
 - Generated selectors are structural paths such as
   `section:nth-of-type(1) > h1:nth-of-type(1)`. Inserting, deleting, or
   reordering same-tag siblings retargets an edit. Edits saved since fingerprints

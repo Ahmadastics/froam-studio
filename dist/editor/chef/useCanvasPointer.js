@@ -3,6 +3,8 @@ import { getElementPath, isInPageScope } from '../../collab/paths.js';
 import { buildSelection, getRoot } from './dom.js';
 import { createHitTester } from './hit-test.js';
 import { buildLayerNode, syncStructureBoundaryLabel } from './layers.js';
+import { hideBoundaryTag, removeBoundaryTag, showBoundaryTag } from './boundary-tag.js';
+import { nativeMatchMedia, nativeMediaMatches } from './viewport-emulation.js';
 import { isWritableElement } from './writing.js';
 /**
  * Pointer input on the page while editing: hover, click to select (Shift adds,
@@ -23,28 +25,112 @@ export function useCanvasPointer(options) {
         const { resolveTarget, resolveClick, disconnect: disconnectHitTester } = createHitTester(rootElement, () => selectionRef.current?.path);
         function clearHover() {
             currentHoverRef.current?.removeAttribute('data-chef-hovered');
-            currentHoverRef.current?.removeAttribute('data-froam-boundary-label');
-            currentHoverRef.current?.removeAttribute('data-froam-static-boundary');
+            if (currentHoverRef.current !== currentSelectionRef.current)
+                currentHoverRef.current?.removeAttribute('data-froam-boundary-label');
             currentHoverRef.current = null;
+            hideBoundaryTag();
         }
         let hoverFrame = 0;
+        function hoverAt(event) {
+            const { target } = resolveClick(event);
+            if (!target || target === currentSelectionRef.current)
+                return;
+            if (currentHoverRef.current === target)
+                return;
+            clearHover();
+            currentHoverRef.current = target;
+            target.setAttribute('data-chef-hovered', 'true');
+            syncStructureBoundaryLabel(target);
+            showBoundaryTag(target);
+        }
+        /*
+         * Scrolling: the page slides under a still pointer, and every element it
+         * passes would re-target hover — restyling the page on each frame, which
+         * is what made scrolling with the editor on feel heavy. While the page
+         * moves, hover waits; when it stops, hover catches up once.
+         */
+        let quietUntil = 0;
+        let settleTimer = 0;
+        const lastPoint = { x: -1, y: -1 };
+        function onScrollActivity() {
+            quietUntil = performance.now() + 140;
+            hideBoundaryTag();
+            window.clearTimeout(settleTimer);
+            settleTimer = window.setTimeout(() => {
+                if (lastPoint.x < 0)
+                    return;
+                const under = document.elementFromPoint(lastPoint.x, lastPoint.y);
+                if (!under || under.closest('[data-chef-editor-root="true"]')) {
+                    clearHover();
+                    return;
+                }
+                hoverAt(new MouseEvent('mouseover', { clientX: lastPoint.x, clientY: lastPoint.y }));
+            }, 160);
+        }
+        // A finger has no hover: the mouse events a tap also fires don't draw one.
+        let lastTouch = 0;
+        // A touch-only screen never hovers — not even from the tap that opened the editor.
+        const touchOnly = nativeMediaMatches(nativeMatchMedia('(hover: none)')) && !nativeMediaMatches(nativeMatchMedia('(any-hover: hover)'));
+        function trackPointer(event) {
+            if (event.pointerType !== 'mouse') {
+                lastTouch = performance.now();
+                return;
+            }
+            lastPoint.x = event.clientX;
+            lastPoint.y = event.clientY;
+        }
+        function forgetPointer() { lastPoint.x = -1; lastPoint.y = -1; }
         function handlePointerOver(event) {
+            if (touchOnly || performance.now() < quietUntil || performance.now() - lastTouch < 800)
+                return;
             cancelAnimationFrame(hoverFrame);
-            hoverFrame = requestAnimationFrame(() => {
-                const { target } = resolveClick(event);
-                if (!target || target === currentSelectionRef.current)
-                    return;
-                if (currentHoverRef.current === target)
-                    return;
-                clearHover();
-                currentHoverRef.current = target;
-                target.setAttribute('data-chef-hovered', 'true');
-                syncStructureBoundaryLabel(target);
-            });
+            hoverFrame = requestAnimationFrame(() => hoverAt(event));
         }
         function handlePointerLeave() {
+            if (performance.now() < quietUntil)
+                return;
             cancelAnimationFrame(hoverFrame);
             hoverFrame = requestAnimationFrame(clearHover);
+        }
+        /*
+         * The Hand tool pans: drag the page like paper. In a phone or tablet
+         * preview the page scrolls inside its frame, which is scaled — so the
+         * frame scrolls by the pointer's distance in the frame's own pixels.
+         */
+        let pan = null;
+        function pageScroller() {
+            const screen = document.querySelector('[data-froam-stage="scroll"]');
+            if (screen) {
+                const frameEl = screen.parentElement;
+                const scale = frameEl.offsetWidth ? frameEl.getBoundingClientRect().width / frameEl.offsetWidth : 1;
+                return { scroller: screen, scale: scale || 1 };
+            }
+            const frame = rootElement !== document.body && /(auto|scroll)/.test(window.getComputedStyle(rootElement).overflowY) && rootElement.scrollHeight > rootElement.clientHeight;
+            if (!frame)
+                return { scroller: (document.scrollingElement ?? document.documentElement), scale: 1 };
+            const scale = rootElement.offsetHeight ? rootElement.getBoundingClientRect().height / rootElement.offsetHeight : 1;
+            return { scroller: rootElement, scale: scale || 1 };
+        }
+        function handlePanDown(event) {
+            if (activeToolRef.current !== 'hand' || event.button !== 0 || !isPageTarget(event.target))
+                return;
+            const { scroller, scale } = pageScroller();
+            pan = { id: event.pointerId, x: event.clientX, y: event.clientY, left: scroller.scrollLeft, top: scroller.scrollTop, scroller, scale };
+            document.documentElement.setAttribute('data-froam-panning', 'true');
+            event.preventDefault();
+        }
+        function handlePanMove(event) {
+            if (!pan || event.pointerId !== pan.id)
+                return;
+            pan.scroller.scrollTop = pan.top - (event.clientY - pan.y) / pan.scale;
+            pan.scroller.scrollLeft = pan.left - (event.clientX - pan.x) / pan.scale;
+            event.preventDefault();
+        }
+        function handlePanUp(event) {
+            if (!pan || event.pointerId !== pan.id)
+                return;
+            pan = null;
+            document.documentElement.removeAttribute('data-froam-panning');
         }
         function handleClick(event) {
             // Clicks inside copy that's being written move the caret — the browser's job.
@@ -248,6 +334,15 @@ export function useCanvasPointer(options) {
             if (event.button === 1 && isPageTarget(event.target) && event.target.closest('a[href]'))
                 event.preventDefault();
         }
+        window.addEventListener('wheel', onScrollActivity, { capture: true, passive: true });
+        window.addEventListener('scroll', onScrollActivity, { capture: true, passive: true });
+        document.addEventListener('pointermove', trackPointer, { capture: true, passive: true });
+        document.addEventListener('pointerdown', trackPointer, { capture: true, passive: true });
+        document.documentElement.addEventListener('mouseleave', forgetPointer);
+        document.addEventListener('pointerdown', handlePanDown, true);
+        document.addEventListener('pointermove', handlePanMove, true);
+        document.addEventListener('pointerup', handlePanUp, true);
+        document.addEventListener('pointercancel', handlePanUp, true);
         document.addEventListener('mouseover', handlePointerOver, { capture: true, passive: true });
         document.addEventListener('mouseout', handlePointerLeave, { capture: true, passive: true });
         document.addEventListener('mousedown', handleMouseDown, true);
@@ -263,6 +358,18 @@ export function useCanvasPointer(options) {
         document.addEventListener('touchcancel', cancelLongPress, { capture: true, passive: true });
         return () => {
             cancelAnimationFrame(hoverFrame);
+            window.clearTimeout(settleTimer);
+            window.removeEventListener('wheel', onScrollActivity, true);
+            window.removeEventListener('scroll', onScrollActivity, true);
+            document.removeEventListener('pointermove', trackPointer, true);
+            document.removeEventListener('pointerdown', trackPointer, true);
+            document.documentElement.removeEventListener('mouseleave', forgetPointer);
+            document.removeEventListener('pointerdown', handlePanDown, true);
+            document.removeEventListener('pointermove', handlePanMove, true);
+            document.removeEventListener('pointerup', handlePanUp, true);
+            document.removeEventListener('pointercancel', handlePanUp, true);
+            document.documentElement.removeAttribute('data-froam-panning');
+            removeBoundaryTag();
             disconnectHitTester();
             document.removeEventListener('mouseover', handlePointerOver, true);
             document.removeEventListener('mouseout', handlePointerLeave, true);

@@ -334,7 +334,10 @@ export function SelectionHandoffOverlay({
   pulseKey: number
 }) {
   if (!rect) return null
-  const top = Math.max(10, rect.top - 36)
+  // Below the top bar, always: a selection scrolled up under it loses its chip, not the bar its buttons.
+  const chrome = typeof document === 'undefined' ? 0 : document.querySelector('#froam-editor-portal .froam-chrome')?.getBoundingClientRect().bottom ?? 0
+  if (rect.bottom < chrome + 8) return null
+  const top = Math.max(chrome + 6, rect.top - 36)
   const left = Math.min(Math.max(10, rect.left), Math.max(10, window.innerWidth - 210))
 
   return (

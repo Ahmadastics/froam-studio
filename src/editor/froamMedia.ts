@@ -7,22 +7,23 @@
    an iPad gets touch behaviors while keeping the desktop chrome.
    =============================================================== */
 import { useEffect, useState } from 'react'
+import { nativeMatchMedia, nativeMediaMatches } from './chef/viewport-emulation'
 
 export const MOBILE_UI_QUERY = '(max-width: 768px)'
 export const COARSE_POINTER_QUERY = '(pointer: coarse)'
 
 export function matchesMedia(query: string): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
-  return window.matchMedia(query).matches
+  if (typeof window === 'undefined') return false
+  return nativeMediaMatches(nativeMatchMedia(query))
 }
 
 export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => matchesMedia(query))
 
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
-    const mql = window.matchMedia(query)
-    const onChange = () => setMatches(mql.matches)
+    const mql = typeof window === 'undefined' ? null : nativeMatchMedia(query)
+    if (!mql) return
+    const onChange = () => setMatches(nativeMediaMatches(mql))
     onChange()
     if (typeof mql.addEventListener === 'function') {
       mql.addEventListener('change', onChange)

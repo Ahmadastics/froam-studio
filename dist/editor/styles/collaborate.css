@@ -472,3 +472,8 @@
 .froam-collab__expiry-pick { display: flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--fs-text-tertiary); font-size: 12px; }
 .froam-collab__expiry-pick select { min-height: 26px; padding: 0 22px 0 8px; border: 0; border-radius: 6px; background: var(--fs-surface-control) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23a4a5ad' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 7px center; color: var(--fs-text-primary); font-size: 12px; appearance: none; -webkit-appearance: none; cursor: pointer; }
 .froam-collab__expiry-pick select option { background: var(--fs-option-bg); }
+
+/* Phones: Share is a sheet across the screen, not a card hanging off a button. */
+@media (max-width: 560px) {
+  .froam-collab__panel { left: 8px !important; right: 8px !important; width: auto; max-height: calc(100vh - 64px); }
+}

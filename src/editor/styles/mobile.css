@@ -102,6 +102,13 @@ html[data-froam-touch] [contenteditable='true'] {
     display: none;
   }
 
+  /* More controls than fit: the row fades at its edge, so a swipe is the obvious next move. */
+  .froam-floating-bar.is-docked .froam-floating-bar__primary {
+    padding-right: 28px;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+  }
+
   .froam-floating-bar.is-docked .froam-floating-bar__primary > * {
     flex-shrink: 0;
   }
@@ -135,40 +142,18 @@ html[data-froam-touch] [contenteditable='true'] {
     'canvas';
 }
 
-/* Toolbar: condensed, horizontally scrollable, no desktop-only widgets */
+/* Toolbar: one row that fits — see "Phones" in toolbar.css. Nothing scrolls sideways. */
 .froam-figma-layout.is-mobile .froam-tb {
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  gap: 6px;
-  padding: 0 8px;
-}
-
-.froam-figma-layout.is-mobile .froam-tb::-webkit-scrollbar {
-  display: none;
-}
-
-.froam-figma-layout.is-mobile .froam-tb > *,
-.froam-figma-layout.is-mobile .froam-tb__left,
-.froam-figma-layout.is-mobile .froam-tb__right {
-  flex-shrink: 0;
-}
-
-.froam-figma-layout.is-mobile .froam-tb__center {
-  flex: 0 0 auto;
+  overflow: visible;
+  gap: 2px;
+  padding: 0 6px;
 }
 
 .froam-figma-layout.is-mobile .froam-tb__desktop-only,
-.froam-figma-layout.is-mobile .froam-tb__sep {
-  display: none;
-}
-
+.froam-figma-layout.is-mobile .froam-tb__sep,
+.froam-figma-layout.is-mobile .froam-tb__center,
 .froam-figma-layout.is-mobile .froam-tb__mobile-command {
-  display: grid;
-  min-width: 40px;
-  min-height: 40px;
-  color: var(--fs-accent-text);
-  background: rgba(var(--fs-accent-rgb), 0.1);
+  display: none;
 }
 
 /* Left panel (Plan / Layers) becomes a slide-over drawer */

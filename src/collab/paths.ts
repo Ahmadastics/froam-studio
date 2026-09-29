@@ -21,7 +21,36 @@
  * dataset, attributes, geometry); callers must not assume innerText on an svg.
  */
 export function isPathElement(node: Element | null | undefined): node is HTMLElement {
-  return node instanceof HTMLElement || node instanceof SVGSVGElement
+  return (node instanceof HTMLElement || node instanceof SVGSVGElement) && !isStageElement(node)
+}
+
+/**
+ * The phone and tablet preview puts the page on a screen: a frame and a
+ * scroller around it (see useDeviceShell). They are not page content and not
+ * part of any path — their children count as the children of whatever holds
+ * the frame — so an element has the same path in every preview.
+ */
+export const STAGE_ATTR = 'data-froam-stage'
+
+export function isStageElement(node: Element | null | undefined) {
+  return node?.hasAttribute?.(STAGE_ATTR) === true
+}
+
+/** An element's children as paths see them: a preview frame is looked through. */
+export function pathChildren(parent: Element): Element[] {
+  const out: Element[] = []
+  for (const child of Array.from(parent.children)) {
+    if (isStageElement(child)) out.push(...pathChildren(child))
+    else out.push(child)
+  }
+  return out
+}
+
+/** An element's parent as paths see it. */
+export function pathParent(element: Element): HTMLElement | null {
+  let parent = element.parentElement
+  while (parent && isStageElement(parent)) parent = parent.parentElement
+  return parent
 }
 
 export function isSafeDraftPath(path: string) {
@@ -60,7 +89,7 @@ export function isFroamOwnedNode(element: Element) {
 /** Children of `parent` that count toward a path segment's position. */
 function countedChildren(parent: Element, tagName: string) {
   const onBody = parent === parent.ownerDocument?.body
-  return Array.from(parent.children).filter(
+  return pathChildren(parent).filter(
     (child): child is HTMLElement => isPathElement(child)
       && child.tagName.toLowerCase() === tagName
       && !(onBody && isFroamOwnedNode(child)),
@@ -88,7 +117,7 @@ function segmentsFrom(element: HTMLElement, base: HTMLElement) {
   const segments: string[] = []
   let current: HTMLElement | null = element
   while (current && current !== base) {
-    const parent = current.parentElement as HTMLElement | null
+    const parent = pathParent(current)
     if (!parent) break
     const tag = current.tagName.toLowerCase()
     const index = Math.max(1, countedChildren(parent, tag).indexOf(current) + 1)

@@ -20,6 +20,18 @@
  * dataset, attributes, geometry); callers must not assume innerText on an svg.
  */
 export declare function isPathElement(node: Element | null | undefined): node is HTMLElement;
+/**
+ * The phone and tablet preview puts the page on a screen: a frame and a
+ * scroller around it (see useDeviceShell). They are not page content and not
+ * part of any path — their children count as the children of whatever holds
+ * the frame — so an element has the same path in every preview.
+ */
+export declare const STAGE_ATTR = "data-froam-stage";
+export declare function isStageElement(node: Element | null | undefined): boolean;
+/** An element's children as paths see them: a preview frame is looked through. */
+export declare function pathChildren(parent: Element): Element[];
+/** An element's parent as paths see it. */
+export declare function pathParent(element: Element): HTMLElement | null;
 export declare function isSafeDraftPath(path: string): boolean;
 /**
  * Page content outside the root. A React app renders into `#root`, but its

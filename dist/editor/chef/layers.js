@@ -1,4 +1,5 @@
-import { getElementPath, isPathElement } from '../../collab/paths.js';
+import { getElementPath, isPathElement, pathChildren } from '../../collab/paths.js';
+import { describeSelection } from '../selection-name.js';
 import { shouldSkipElement } from './dom.js';
 export function ensureFroamNodeId(element) {
     const existing = element.dataset.froamId;
@@ -19,28 +20,23 @@ export function labelLayerElement(element) {
             : element.dataset.froamFrameLabel
                 || element.getAttribute('aria-label')
                 || element.dataset.froamComponentCategory
-                || element.tagName.toLowerCase();
+                || describeSelection(element.tagName.toLowerCase()).kind;
 }
 export function isStructuralLayerElement(element) {
     return ['section', 'header', 'footer', 'main', 'article', 'nav', 'aside'].includes(element.tagName.toLowerCase());
 }
+/** A section's outline (an outline never moves anything); its name tag is drawn over the page — see boundary-tag.ts. */
 export function syncStructureBoundaryLabel(element) {
-    if (isStructuralLayerElement(element)) {
+    element.removeAttribute('data-froam-static-boundary');
+    if (isStructuralLayerElement(element))
         element.dataset.froamBoundaryLabel = labelLayerElement(element);
-        if (window.getComputedStyle(element).position === 'static')
-            element.dataset.froamStaticBoundary = 'true';
-        else
-            element.removeAttribute('data-froam-static-boundary');
-    }
-    else {
+    else
         element.removeAttribute('data-froam-boundary-label');
-        element.removeAttribute('data-froam-static-boundary');
-    }
 }
 export function buildLayerNode(element, root) {
     const path = getElementPath(element, root);
     const computed = window.getComputedStyle(element);
-    const elementChildren = Array.from(element.children).filter((child) => isPathElement(child) && !shouldSkipElement(child));
+    const elementChildren = pathChildren(element).filter((child) => isPathElement(child) && !shouldSkipElement(child));
     return {
         element,
         path,
@@ -68,11 +64,11 @@ export function collectLayers(root, maxDepth = LAYER_MAX_DEPTH) {
             return;
         if (shouldSkipElement(el))
             return;
-        const elementChildren = Array.from(el.children).filter((child) => isPathElement(child) && !shouldSkipElement(child));
+        const elementChildren = pathChildren(el).filter((child) => isPathElement(child) && !shouldSkipElement(child));
         nodes.push(buildLayerNode(el, root));
         elementChildren.forEach((child) => walk(child, depth + 1));
     }
-    for (const child of Array.from(root.children)) {
+    for (const child of pathChildren(root)) {
         if (isPathElement(child))
             walk(child, 0);
     }

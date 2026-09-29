@@ -796,20 +796,40 @@
 @media(min-width:769px) and (max-width:980px){
   .froam-tb__where,.froam-tb__me,.froam-tb__history{display:none}
 }
+/* A tablet: no keyboard for Ctrl+Z, and no need for a Hand tool (a swipe scrolls) —
+   so Undo and History take the Hand tool's place. */
+@media(min-width:769px) and (max-width:980px) and (pointer:coarse){
+  .froam-tb__history{display:flex}
+  .froam-tb__history>:nth-child(2){display:none}
+  .froam-tb__tool[aria-label="Hand"],
+  .froam-tb__tool[aria-label="Library"],
+  .froam-tb__tool-group>.froam-tb__tool-sep:last-of-type{display:none}
+}
 
-/* ─── Phones: one scrolling row, the tools first ─── */
+/* ─── Phones: everything in one glance — Save, Share and Exit never off screen ───
+   Touch doesn't need the tool row: tap selects, tap again types, a swipe
+   scrolls, a long press shows more. What's left is what you reach for. */
 @media(max-width:768px){
-  .froam-tb{display:flex;justify-content:flex-start;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding-inline:6px}
-  .froam-tb::-webkit-scrollbar{display:none}
-  .froam-tb__center{display:flex;flex:0 0 auto;order:2}
-  .froam-tb__left{order:1;flex:0 0 auto}
-  .froam-tb__right{order:3;flex:0 0 auto}
-  .froam-tb__viewport-group,.froam-tb__zoom-group,.froam-tb__where,.froam-tb__desktop-only,.froam-tb__sep,.froam-tb__history,.froam-tb__me,.froam-tb__save-btn--repo,.froam-tb__minimize-btn{display:none}
+  .froam-tb{display:flex;align-items:center;justify-content:space-between;gap:2px;overflow:visible;padding-inline:6px}
+  .froam-tb__center{display:none}
+  .froam-tb__left{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:2px}
+  .froam-tb__right{flex:0 0 auto;display:flex;align-items:center;gap:2px}
+  .froam-tb__viewport-group,.froam-tb__zoom-group,.froam-tb__where,.froam-tb__desktop-only,.froam-tb__sep,.froam-tb__me,.froam-tb__save-btn--repo,.froam-tb__minimize-btn,.froam-tb__mobile-command{display:none}
+  .froam-tb__history{display:flex;gap:0}
+  .froam-tb__history>:nth-child(2){display:none}
+  .froam-tb__route{display:block;flex:0 1 auto;min-width:0;max-width:none;padding-inline:4px;color:var(--fs-text-primary);font-size:13px;font-weight:600}
   .froam-tb__save:has(.froam-tb__save-btn--repo)>.froam-tb__save-btn:first-child{border-radius:8px}
-  .froam-tb__mobile-command{display:grid}
-  .froam-tb__ask-btn,.froam-tb__save-btn{width:36px;padding:0;justify-content:center}
+  .froam-tb__icon-btn{width:36px;height:36px}
+  .froam-tb__ask-btn,.froam-tb__save-btn{min-width:36px;height:36px;width:auto;padding:0 9px;justify-content:center}
   .froam-tb__ask-btn span,.froam-tb__save-btn span{display:none}
+  .froam-tb .froam-collab__trigger{min-width:36px;height:36px;padding:0 9px;justify-content:center}
+  .froam-tb .froam-collab__trigger>span:not(.froam-collab__badge){display:none}
+  .froam-tb__history-pop{position:fixed;top:52px;left:8px;right:8px;width:auto;max-height:calc(100vh - 72px)}
+  .froam-tb__history-list button{opacity:1}
   .froam-persona-modal{padding:10px;align-items:end}
   .froam-persona-modal__identity{grid-template-columns:1fr}
   .froam-persona-modal__photo-col{grid-template-columns:auto auto auto;justify-content:start;align-items:center}
 }
+/* The smallest phones: the page name gives way, then History. */
+@media(max-width:400px){ .froam-tb__route{display:none} }
+@media(max-width:370px){ .froam-tb__history>.froam-tb__menu-anchor{display:none} }

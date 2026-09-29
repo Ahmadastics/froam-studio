@@ -1,4 +1,5 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { matchesMedia } from './froamMedia.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Accessibility, Check, Component, Crosshair, Droplet, Palette, PenLine, ScanLine, ShieldCheck, Sparkles, SquareStack, Type as TypeIcon, Wand2, } from 'lucide-react';
 import { componentAncestry, nearestComponent } from './froamReactFiber.js';
@@ -133,7 +134,7 @@ function HealthTab({ rootEl, solidColorTokens, onSelectElement, onFixElement, se
         // Defer so the spinner paints.
         requestAnimationFrame(() => {
             const found = [];
-            const isMobile = window.matchMedia('(max-width: 640px)').matches;
+            const isMobile = matchesMedia('(max-width: 640px)');
             const els = Array.from(rootEl.querySelectorAll('*')).filter((el) => !isFroamOwn(el)).slice(0, 500);
             const tokenValues = new Set(solidColorTokens.map((t) => t.rgb ? `${t.rgb.r},${t.rgb.g},${t.rgb.b}` : ''));
             for (const el of els) {

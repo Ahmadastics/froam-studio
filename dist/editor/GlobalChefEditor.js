@@ -77,6 +77,8 @@ import { checkRequestOnPage } from './collaborate/request-checks.js';
 import { PSEUDO_HOST_ATTR, pseudoKey } from './chef/pseudo.js';
 import { useDraftPainter } from './chef/useDraftPainter.js';
 import { useDeviceShell } from './chef/useDeviceShell.js';
+import { deviceSizeFor, readDeviceSizes, writeDeviceSizes } from './chef/device-sizes.js';
+import FroamDeviceBar from './FroamDeviceBar.js';
 import { DEFAULT_FROAM_PERSONA, readFroamPersonaDraft, sanitizeFroamPersona, isFroamPersonaPath, } from './froamPersona.js';
 import { intelligenceTabs, labTabs, CHEF_BUTTON_START, CANVAS_KEY, INJECTION_KEY, ROOT_PARENT_KEY, INJECTED_BLOCK_SELECTOR, VIEWPORT_MODES, DEVICE_SHELL_ID, } from './chef/types.js';
 import { cursorOptions, displayOptions, flexDirectionOptions, justifyOptions, alignOptions, positionOptions, overflowOptions, borderStyleOptions, blendModeOptions, textTransformOptions, persistedStyleKeys, } from './chef/style-options.js';
@@ -1864,7 +1866,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
     }, []);
     /* ─── Device shell: CSS-transform viewport simulation (no DOM tree moves) ─── */
-    const prevViewportRef = useDeviceShell({ routeKey, store, viewportMode, zoom, currentSelectionRef, setPanelPosition, setSelection });
+    const [deviceSizes, setDeviceSizes] = useState(() => readDeviceSizes());
+    const [deviceFrame, setDeviceFrame] = useState(null);
+    const deviceSize = viewportMode === 'desktop' ? null : deviceSizeFor(viewportMode, deviceSizes[viewportMode]);
+    const prevViewportRef = useDeviceShell({ routeKey, store, viewportMode, deviceSize, zoom, currentSelectionRef, setPanelPosition, setSelection, onFrame: setDeviceFrame });
     /* ─── Route change reset ─── */
     // Only on an actual navigation. On mount this used to close the editor a
     // frame later — undoing `initialOpen`, and swallowing a Ctrl+. pressed the
@@ -1891,9 +1896,18 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         return () => { document.documentElement.removeAttribute('data-chef-editing'); };
     }, [showPanel]);
     // Keep the page's own header out from under Froam's toolbar while editing.
-    usePageCanvasOffset(showPanel && !studioMinimized, getRoot);
+    // (In a phone or tablet preview the page is on its own screen: no gap needed.)
+    usePageCanvasOffset(showPanel && !studioMinimized && viewportMode === 'desktop', getRoot);
     /* ─── Move mode cursor ─── */
     /* ─── Tool cursor ─── */
+    useEffect(() => {
+        const html = document.documentElement;
+        if (showPanel && activeTool === 'hand' && !moveMode)
+            html.setAttribute('data-froam-hand', 'true');
+        else
+            html.removeAttribute('data-froam-hand');
+        return () => html.removeAttribute('data-froam-hand');
+    }, [activeTool, moveMode, showPanel]);
     useEffect(() => {
         if (!showPanel) {
             document.body.style.removeProperty('cursor');
@@ -4771,6 +4785,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         event.currentTarget.releasePointerCapture(event.pointerId);
         dragRef.current = null;
         if (!drag.moved) {
+            // The button opens on pointerup and then steps aside — so the click a
+            // tap produces afterwards would land on the page beneath and select
+            // whatever is there. That one click belongs to the button.
+            const swallow = (click) => { click.preventDefault(); click.stopPropagation(); click.stopImmediatePropagation(); };
+            document.addEventListener('click', swallow, { capture: true, once: true });
+            window.setTimeout(() => document.removeEventListener('click', swallow, true), 450);
             // Cycle: idle → open, open → minimized, minimized → restored
             if (!showPanel) {
                 setPanelOpen(true);
@@ -5690,7 +5710,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                     setCommandPaletteOpen(false);
                                     setCommandSearch('');
                                 }
-                            } }), _jsxs("ul", { className: "fs-command-palette__list", id: "froam-command-results", role: "listbox", children: [filteredCommands.map((cmd, idx) => (_jsx("li", { id: `froam-command-${cmd.id}`, role: "option", "aria-selected": idx === commandFocusIndex, className: `fs-command-palette__item ${idx === commandFocusIndex ? 'is-focused' : ''}`, onMouseEnter: () => setCommandFocusIndex(idx), children: _jsxs("button", { type: "button", tabIndex: -1, onClick: () => executePaletteCommand(cmd), children: [cmd.icon, _jsx("span", { className: "fs-command-palette__item-label", children: cmd.label }), (cmd.shortcut || cmd.hint) && _jsx("span", { className: "fs-command-palette__item-shortcut", children: cmd.shortcut ?? cmd.hint })] }) }, cmd.id))), askFroamVisible && (_jsx("li", { id: "froam-command-ask", role: "option", "aria-selected": commandFocusIndex === 0, className: `fs-command-palette__item fs-command-palette__ask ${commandFocusIndex === 0 ? 'is-focused' : ''}`, children: _jsxs("button", { type: "button", tabIndex: -1, "aria-label": `Quick Edit: ${commandSearch.trim()}`, onClick: executeAskFroam, children: [_jsx(Sparkles, { size: 15 }), _jsxs("span", { className: "fs-command-palette__item-label", children: [_jsx("strong", { children: "Quick Edit" }), _jsx("small", { children: commandSearch.trim() })] }), _jsx("span", { className: "fs-command-palette__item-shortcut", children: "Enter" })] }) })), filteredCommands.length === 0 && !askFroamVisible && (_jsx("li", { role: "status", className: "fs-command-palette__empty", children: "No commands found" }))] })] }) })), _jsx(FroamIntentResult, { state: froamIntent.state, aiModel: aiStatus?.model, onAllow: froamIntent.allow, onNotNow: froamIntent.notNow, onKeep: froamIntent.keep, onRetry: froamIntent.retry, onCancel: froamIntent.cancel, onDismiss: froamIntent.dismiss }), showPanel && !inlineEditing && (_jsx(FroamQuickChat, { open: quickChatOpen, selectionLabel: selection?.label, busy: ['preparing', 'awaiting-consent', 'requesting', 'plan-ready', 'creating-prototype', 'retrying', 'adopting'].includes(froamIntent.state.phase), onSubmit: (intent) => { setQuickChatOpen(false); void froamIntent.submit({ origin: 'contextual', intent }); }, onClose: () => setQuickChatOpen(false), ai: aiStatus && !isContributor ? {
+                            } }), _jsxs("ul", { className: "fs-command-palette__list", id: "froam-command-results", role: "listbox", children: [filteredCommands.map((cmd, idx) => (_jsx("li", { id: `froam-command-${cmd.id}`, role: "option", "aria-selected": idx === commandFocusIndex, className: `fs-command-palette__item ${idx === commandFocusIndex ? 'is-focused' : ''}`, onMouseEnter: () => setCommandFocusIndex(idx), children: _jsxs("button", { type: "button", tabIndex: -1, onClick: () => executePaletteCommand(cmd), children: [cmd.icon, _jsx("span", { className: "fs-command-palette__item-label", children: cmd.label }), (cmd.shortcut || cmd.hint) && _jsx("span", { className: "fs-command-palette__item-shortcut", children: cmd.shortcut ?? cmd.hint })] }) }, cmd.id))), askFroamVisible && (_jsx("li", { id: "froam-command-ask", role: "option", "aria-selected": commandFocusIndex === 0, className: `fs-command-palette__item fs-command-palette__ask ${commandFocusIndex === 0 ? 'is-focused' : ''}`, children: _jsxs("button", { type: "button", tabIndex: -1, "aria-label": `Quick Edit: ${commandSearch.trim()}`, onClick: executeAskFroam, children: [_jsx(Sparkles, { size: 15 }), _jsxs("span", { className: "fs-command-palette__item-label", children: [_jsx("strong", { children: "Quick Edit" }), _jsx("small", { children: commandSearch.trim() })] }), _jsx("span", { className: "fs-command-palette__item-shortcut", children: "Enter" })] }) })), filteredCommands.length === 0 && !askFroamVisible && (_jsx("li", { role: "status", className: "fs-command-palette__empty", children: "No commands found" }))] })] }) })), showPanel && !studioMinimized && deviceFrame && (_jsx(FroamDeviceBar, { frame: deviceFrame, onPick: (id) => {
+                    const next = { ...deviceSizes, [deviceFrame.kind]: id };
+                    setDeviceSizes(next);
+                    writeDeviceSizes(next);
+                }, onDesktop: () => setViewportMode('desktop') })), _jsx(FroamIntentResult, { state: froamIntent.state, aiModel: aiStatus?.model, onAllow: froamIntent.allow, onNotNow: froamIntent.notNow, onKeep: froamIntent.keep, onRetry: froamIntent.retry, onCancel: froamIntent.cancel, onDismiss: froamIntent.dismiss }), showPanel && !inlineEditing && (_jsx(FroamQuickChat, { open: quickChatOpen, selectionLabel: selection?.label, busy: ['preparing', 'awaiting-consent', 'requesting', 'plan-ready', 'creating-prototype', 'retrying', 'adopting'].includes(froamIntent.state.phase), onSubmit: (intent) => { setQuickChatOpen(false); void froamIntent.submit({ origin: 'contextual', intent }); }, onClose: () => setQuickChatOpen(false), ai: aiStatus && !isContributor ? {
                     available: aiStatus.configured,
                     on: quickEditAi,
                     model: aiStatus.model,
@@ -5743,7 +5767,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 if (tool === 'hand') {
                                     setActiveTool('hand');
                                     setMoveMode(false);
-                                    showToast('Hand tool — click and drag to pan');
+                                    showToast('Hand tool — drag to move around the page (V to select again)');
                                     return;
                                 }
                                 if (tool === 'pointer') {

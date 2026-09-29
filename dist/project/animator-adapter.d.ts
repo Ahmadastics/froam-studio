@@ -23,7 +23,7 @@ export declare function interactionToLegacyAnimator(interaction: FroamInteractio
 /** Stores replaceable keyframe blocks alongside canvas custom CSS. */
 export declare function upsertAnimationCss(existing: string | undefined, animationName: string, css: string): string;
 export declare function interactionInspectorRecord(interaction: FroamInteraction): {
-    trigger: "click" | "drag" | "focus" | "load" | "scroll" | "custom" | "hover" | "press";
+    trigger: "click" | "drag" | "focus" | "load" | "scroll" | "hover" | "custom" | "press";
     source: string;
     targets: string[];
     state: {

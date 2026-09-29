@@ -106,30 +106,34 @@ html[data-chef-editing] :is(section, header, footer, main, article, nav, aside)[
   outline-offset: 4px;
 }
 
-html[data-chef-editing] :is(section, header, footer, main, article, nav, aside)[data-froam-static-boundary='true'] {
-  position: relative;
-}
-
-html[data-chef-editing] :is(section, header, footer, main, article, nav, aside)[data-froam-boundary-label]::before {
-  content: attr(data-froam-boundary-label);
-  position: absolute;
-  left: 0;
+/* A section's name, over the page (never in it — see boundary-tag.ts): it
+   rides below the top bar, and sits under every menu and panel (1188). */
+.froam-boundary-tag {
+  position: fixed;
   top: 0;
-  /* Over the page, under the editor (its layout is 1188): a section's name
-     never draws across a menu or a panel. */
+  left: 0;
   z-index: 1187;
-  max-width: min(220px, 100%);
+  max-width: 220px;
   padding: 4px 6px;
   border-radius: 5px;
   background: rgba(12, 16, 22, 0.88);
-  color: var(--fs-text-primary);
+  color: #ececef;
   font: 600 11px/1 var(--fs-font);
   overflow: hidden;
   pointer-events: none;
   text-overflow: ellipsis;
-  transform: translateY(calc(-100% - 6px));
   white-space: nowrap;
+  will-change: transform;
 }
+.froam-boundary-tag[hidden] { display: none; }
+
+/* The Hand tool: the whole page is paper to drag, links included. */
+html[data-froam-hand] body,
+html[data-froam-hand] body * { cursor: grab !important; }
+html[data-froam-panning] body,
+html[data-froam-panning] body * { cursor: grabbing !important; user-select: none !important; }
+html[data-froam-hand] #froam-editor-portal,
+html[data-froam-hand] #froam-editor-portal * { cursor: revert !important; }
 
 html[data-chef-editing] [data-froam-editor-hidden='true'] {
   display: none !important;

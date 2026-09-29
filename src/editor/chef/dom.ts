@@ -34,6 +34,7 @@ export function shouldSkipElement(element: HTMLElement) {
   if (isSvgInternal(element)) return true
   if (element.id === 'root') return true
   if (element.dataset.chefEditorRoot === 'true') return true
+  if (element.hasAttribute('data-froam-stage')) return true
   return false
 }
 

@@ -583,6 +583,68 @@ test('History takes back one older change and leaves the later one; Save counts 
   assert((await textOf(page, REAL_FILES)) === 'Real files' && (await textOf(page, ANY_STACK)) === 'Any stack', `left "${await textOf(page, REAL_FILES)}" / "${await textOf(page, ANY_STACK)}"`)
 })
 
+test('scrolling with the editor on leaves the page alone: no hover restyling mid-scroll', async ({ page }) => {
+  await deselect(page)
+  await page.evaluate(() => { document.documentElement.style.minHeight = '4000px'; window.scrollTo(0, 0) })
+  await page.mouse.move(720, 500)
+  await page.waitForTimeout(300)
+  await page.evaluate(() => {
+    window.__froamScrollMutations = 0
+    window.__froamScrollObserver = new MutationObserver((records) => {
+      window.__froamScrollMutations += records.filter((r) => r.target instanceof Element && !r.target.closest('[data-chef-editor-root="true"]') && r.target.id !== 'froam-boundary-tag').length
+    })
+    window.__froamScrollObserver.observe(document.body, { subtree: true, attributes: true, childList: true })
+  })
+  for (let i = 0; i < 12; i += 1) { await page.mouse.wheel(0, 120); await page.waitForTimeout(30) }
+  const during = await page.evaluate(() => window.__froamScrollMutations)
+  await page.waitForTimeout(400)
+  await page.evaluate(() => { window.__froamScrollObserver.disconnect(); document.documentElement.style.removeProperty('min-height'); window.scrollTo(0, 0) })
+  assert(during <= 2, `${during} changes to the page while scrolling`)
+})
+
+test('the Hand tool drags the page', async ({ page }) => {
+  await deselect(page)
+  await page.evaluate(() => { document.documentElement.style.minHeight = '4000px'; window.scrollTo(0, 0) })
+  await page.keyboard.press('h')
+  await page.waitForTimeout(150)
+  await page.mouse.move(720, 700)
+  await page.mouse.down()
+  await page.mouse.move(720, 400, { steps: 8 })
+  await page.mouse.up()
+  const scrolled = await page.evaluate(() => Math.round(document.scrollingElement.scrollTop))
+  await page.keyboard.press('v')
+  await page.evaluate(() => { document.documentElement.style.removeProperty('min-height'); window.scrollTo(0, 0) })
+  assert(Math.abs(scrolled - 300) <= 2, `dragging up 300px with the Hand tool scrolled ${scrolled}px`)
+})
+
+test('the phone preview shows the page’s phone layout — header included — and puts it all back', async ({ page }) => {
+  await deselect(page)
+  const style = await page.addStyleTag({ content: '@media (max-width: 640px) { #headline { color: rgb(200, 30, 60) } } @media (hover: none) { #cta { outline: 3px solid rgb(0, 160, 255) } }' })
+  const desktop = await page.evaluate(() => ({ color: getComputedStyle(document.getElementById('headline')).color, order: [...document.body.children].filter((n) => !n.id.startsWith('froam-') && n.getAttribute('data-chef-editor-root') !== 'true').map((n) => n.id || n.tagName).join(',') }))
+  await page.click('button[aria-label*="Mobile" i], button[title*="Mobile" i], button[title*="Phone" i]')
+  await page.waitForTimeout(900)
+  const phone = await page.evaluate(() => ({
+    color: getComputedStyle(document.getElementById('headline')).color,
+    outline: getComputedStyle(document.getElementById('cta')).outlineColor,
+    headerOnScreen: Boolean(document.getElementById('site-header')?.closest('[data-froam-stage]')),
+    bar: document.querySelector('.froam-device-bar')?.textContent ?? '',
+  }))
+  assert(phone.color === 'rgb(200, 30, 60)', `the page's phone CSS did not apply (headline ${phone.color})`)
+  assert(phone.outline === 'rgb(0, 160, 255)', 'a phone is a touch screen: (hover: none) should apply')
+  assert(phone.headerOnScreen, 'the header is not on the phone screen')
+  assert(/390 × 844/.test(phone.bar), `the size bar reads "${phone.bar}"`)
+  await clickOn(page, '#logo')
+  assert((await selectedId(page)) === 'logo', `clicking the logo on the phone selected ${await selectedId(page)}`)
+  await deselect(page)
+  await page.click('button[aria-label*="Desktop" i], button[title*="Desktop" i]')
+  await page.waitForTimeout(700)
+  const back = await page.evaluate(() => ({ color: getComputedStyle(document.getElementById('headline')).color, order: [...document.body.children].filter((n) => !n.id.startsWith('froam-') && n.getAttribute('data-chef-editor-root') !== 'true').map((n) => n.id || n.tagName).join(','), frames: document.querySelectorAll('[data-froam-stage]').length }))
+  await style.evaluate((node) => node.remove())
+  assert(back.frames === 0, 'the phone frame was left behind')
+  assert(back.color === desktop.color, `desktop CSS did not come back (headline ${back.color})`)
+  assert(back.order === desktop.order, `the page did not go back in its place: ${back.order}`)
+})
+
 test('an edited page is quiet: drafts are painted once, not every frame', async ({ page }) => {
   await deselect(page)
   await page.mouse.move(4, 890)

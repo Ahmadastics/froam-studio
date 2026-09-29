@@ -879,3 +879,144 @@ body.froam-drag-active * {
   font: 600 11px/1.4 system-ui, sans-serif;
   white-space: nowrap;
 }
+
+/* ─── Phone and tablet preview: the bezel around the screen, the bar beneath ─── */
+.froam-device-bezel {
+  position: fixed;
+  z-index: 1046;
+  box-sizing: border-box;
+  border: var(--froam-device-pad) solid #17181c;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.07), 0 30px 80px rgba(0, 0, 0, 0.45);
+}
+html:has(#froam-editor-portal[data-froam-ui-theme='light']) .froam-device-bezel {
+  box-shadow: 0 0 0 1px rgba(17, 24, 39, 0.14), 0 26px 64px rgba(15, 23, 42, 0.22);
+}
+/* The phone's status bar: above the page's viewport, in the page's colour. */
+.froam-device-status {
+  --s: var(--froam-device-scale, 1);
+  position: absolute;
+  inset: 0 0 auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 calc(30px * var(--s)) 0 calc(34px * var(--s));
+  color: #0b0c0f;
+  font: 600 calc(15px * var(--s)) / 1 -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+  letter-spacing: -0.01em;
+}
+.froam-device-status.is-dark { color: #fff; }
+.froam-device-status__icons { display: flex; align-items: center; gap: calc(6px * var(--s)); }
+.froam-device-status__icons .is-signal {
+  width: calc(17px * var(--s));
+  height: calc(11px * var(--s));
+  background: linear-gradient(to right, currentColor 0 18%, transparent 18% 27%, currentColor 27% 45%, transparent 45% 54%, currentColor 54% 72%, transparent 72% 81%, currentColor 81%);
+  clip-path: polygon(0 75%, 18% 75%, 18% 100%, 27% 100%, 27% 50%, 45% 50%, 45% 100%, 54% 100%, 54% 25%, 72% 25%, 72% 100%, 81% 100%, 81% 0, 100% 0, 100% 100%, 0 100%);
+}
+.froam-device-status__icons .is-battery {
+  position: relative;
+  width: calc(24px * var(--s));
+  height: calc(11px * var(--s));
+  border: calc(1px * var(--s) + 0.4px) solid currentColor;
+  border-radius: calc(3.5px * var(--s));
+  opacity: 0.9;
+  box-shadow: inset 0 0 0 calc(1.5px * var(--s)) transparent;
+  background: linear-gradient(currentColor, currentColor) calc(2px * var(--s)) 50% / 72% 62% no-repeat;
+}
+.froam-device-status__icons .is-battery::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: calc(-3.5px * var(--s));
+  width: calc(1.6px * var(--s));
+  height: calc(4px * var(--s));
+  translate: 0 -50%;
+  border-radius: 0 2px 2px 0;
+  background: currentColor;
+  opacity: 0.5;
+}
+.froam-device-island {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(122px * var(--s));
+  height: calc(35px * var(--s));
+  translate: -50% -50%;
+  border-radius: 999px;
+  background: #050506;
+}
+
+.froam-device-bar {
+  position: fixed;
+  z-index: 1190;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  translate: -50% 0;
+  font: 500 12px/1 var(--fs-font);
+  color: var(--fs-text-secondary);
+}
+.froam-device-bar__pick {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px 0 11px;
+  border: 1px solid var(--fs-border);
+  border-radius: 999px;
+  background: var(--fs-surface-2);
+  box-shadow: var(--fs-shadow-card);
+  color: var(--fs-text-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+.froam-device-bar__pick:hover { background: var(--fs-surface-3); }
+.froam-device-bar__pick em,
+.froam-device-bar__menu em { color: var(--fs-text-tertiary); font-style: normal; font-weight: 500; font-variant-numeric: tabular-nums; }
+.froam-device-bar__pick svg:last-child { color: var(--fs-text-tertiary); }
+.froam-device-bar__scale {
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--fs-surface-control);
+  font-variant-numeric: tabular-nums;
+}
+.froam-device-bar__menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 260px;
+  display: grid;
+  gap: 1px;
+  padding: 4px;
+  border: 1px solid var(--fs-border);
+  border-radius: 10px;
+  background: var(--fs-surface-2);
+  box-shadow: var(--fs-shadow-pop);
+  animation: froam-menu-in 120ms ease-out;
+}
+.froam-device-bar__menu button {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px 0 8px;
+  border-radius: 7px;
+  color: var(--fs-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.froam-device-bar__menu button:hover,
+.froam-device-bar__menu button:focus-visible { background: var(--fs-surface-control-hover); outline: none; }
+.froam-device-bar__tick { display: grid; place-items: center; color: var(--fs-accent-text); }
+.froam-device-bar__note {
+  margin: 4px 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--fs-border-muted);
+  color: var(--fs-text-tertiary);
+  font-size: 11px;
+  line-height: 1.4;
+}

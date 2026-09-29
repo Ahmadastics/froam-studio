@@ -1,3 +1,4 @@
+import { matchesMedia } from './froamMedia'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Accessibility,
@@ -360,7 +361,7 @@ function HealthTab({
     // Defer so the spinner paints.
     requestAnimationFrame(() => {
       const found: LintIssue[] = []
-      const isMobile = window.matchMedia('(max-width: 640px)').matches
+      const isMobile = matchesMedia('(max-width: 640px)')
       const els = Array.from(rootEl.querySelectorAll<HTMLElement>('*')).filter((el) => !isFroamOwn(el)).slice(0, 500)
       const tokenValues = new Set(solidColorTokens.map((t) => t.rgb ? `${t.rgb.r},${t.rgb.g},${t.rgb.b}` : ''))
 
