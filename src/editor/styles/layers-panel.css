@@ -7,7 +7,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
-  scrollbar-color: rgba(94, 234, 212, 0.2) transparent;
+  scrollbar-color: rgba(var(--fs-accent-rgb), 0.2) transparent;
 }
 
 .fs-layers__node {
@@ -18,7 +18,7 @@
   border-radius: var(--fs-radius-sm);
   cursor: pointer;
   transition: background var(--fs-transition-fast);
-  font-size: 0.72rem;
+  font-size: 12px;
   color: var(--fs-text-secondary);
   border: 1px solid transparent;
 }
@@ -30,17 +30,17 @@
 .fs-layers__node.is-selected {
   background: var(--fs-bg-active);
   border-color: var(--fs-border-hover);
-  color: var(--fs-accent);
+  color: var(--fs-accent-text);
 }
 
 .fs-layers__node-tag {
-  font-weight: 700;
+  font-weight: 600;
   color: inherit;
 }
 
 .fs-layers__node-class {
   color: var(--fs-text-tertiary);
-  font-size: 0.66rem;
+  font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

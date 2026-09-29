@@ -1,6 +1,6 @@
 import type { FroamStyleState } from '../project/types';
 import { type FontOption } from './fontSources';
-type FloatingAction = 'bold' | 'italic' | 'underline' | 'strike' | 'align-left' | 'align-center' | 'align-right' | 'align-justify' | 'color' | 'bg-color' | 'clear-bg' | 'image' | 'duplicate' | 'merge' | 'unmerge' | 'delete' | 'edit-text' | 'undo' | 'toggle-hidden' | 'bring-front' | 'send-back';
+type FloatingAction = 'bold' | 'italic' | 'underline' | 'strike' | 'align-left' | 'align-center' | 'align-right' | 'align-justify' | 'color' | 'bg-color' | 'clear-bg' | 'image' | 'duplicate' | 'merge' | 'unmerge' | 'delete' | 'edit-text' | 'undo' | 'toggle-hidden' | 'bring-front' | 'send-back' | 'open-design' | 'animate';
 type WalkDirection = 'parent' | 'prev' | 'next' | 'child';
 type SelectionPatch = Record<string, string | number>;
 type Props = {
@@ -38,6 +38,9 @@ type Props = {
     fontOptions: FontOption[];
     selectionCount: number;
     isTextLayer?: boolean;
+    /** The element has words of its own — show the type controls. */
+    hasText?: boolean;
+    isImage?: boolean;
     docked?: boolean;
     canUndo?: boolean;
     onWalk?: (direction: WalkDirection) => void;
@@ -50,6 +53,6 @@ type Props = {
 };
 export declare function collectPagePalette(): string[];
 export declare const LOOK_NOTES: Record<string, string>;
-export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, wordSpacing, textTransform, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, width, height, display, flexDirection, justifyContent, alignItems, gap, padding, radius, overflow, opacity, isHidden, mixBlendMode, zIndex, fontOptions, selectionCount, isTextLayer, docked, canUndo, onWalk, onAction, onStyle, onSaveLook, }: Props): import("react").JSX.Element | null;
+export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, radius, opacity, isHidden, fontOptions, selectionCount, isTextLayer, hasText, isImage, docked, canUndo, onWalk, onAction, onStyle, onSaveLook, }: Props): import("react").JSX.Element | null;
 export {};
 //# sourceMappingURL=FroamFloatingBar.d.ts.map

@@ -1002,7 +1002,7 @@ export default function FroamVersionPanel({
                         <strong style={{ color: 'var(--fs-text-warm)' }}>{diffResult.b.name}</strong>
                       </span>
                       <span className="froam-versions__diff-summary" data-chef-editor-root="true">
-                        <span style={{ color: '#5eead4' }}>+{diffResult.summary.added}</span>
+                        <span style={{ color: 'var(--fs-success)' }}>+{diffResult.summary.added}</span>
                         {' '}
                         <span style={{ color: '#ff6c4f' }}>−{diffResult.summary.removed}</span>
                         {' '}

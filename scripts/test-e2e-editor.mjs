@@ -1060,7 +1060,8 @@ async function runSuite(browser, label, fixture, tests) {
   fs.cpSync(fixture, siteDir, { recursive: true })
   const port = await freePort()
   const url = `http://localhost:${port}/`
-  const bridge = spawn(process.execPath, [BIN, 'dev', '--serve', '.', '--port', String(port)], { cwd: siteDir, stdio: ['ignore', 'pipe', 'pipe'] })
+  // Invite links stay on this machine: the run never opens a public share.
+  const bridge = spawn(process.execPath, [BIN, 'dev', '--serve', '.', '--port', String(port)], { cwd: siteDir, env: { ...process.env, FROAM_SHARE: 'off' }, stdio: ['ignore', 'pipe', 'pipe'] })
   let bridgeLog = ''
   bridge.stdout.on('data', (d) => { bridgeLog += d })
   bridge.stderr.on('data', (d) => { bridgeLog += d })

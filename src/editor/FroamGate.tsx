@@ -59,7 +59,7 @@ class FroamBoundary extends Component<{ children: ReactNode; onReset: () => void
       <div style={{ position: 'fixed', left: 16, bottom: 16, zIndex: 1200, background: '#1e1e2e', border: '1px solid #ff6c4f', borderRadius: 8, padding: '10px 14px', maxWidth: 420, fontSize: 12 }}>
         <p style={{ color: '#ff6c4f', margin: '0 0 6px', fontWeight: 700 }}>Froam crashed</p>
         <p style={{ color: '#a0a0b0', margin: '0 0 8px', fontFamily: 'monospace', fontSize: 11, wordBreak: 'break-all' }}>{this.state.errorMessage}</p>
-        <button type="button" style={{ color: '#5eead4', background: 'none', border: '1px solid #5eead4', borderRadius: 4, cursor: 'pointer', padding: '3px 10px', fontSize: 11 }} onClick={() => { this.setState({ crashed: false, errorMessage: '' }); this.props.onReset() }}>Restart Froam</button>
+        <button type="button" style={{ color: 'var(--fs-accent-text)', background: 'none', border: '1px solid var(--fs-border-strong)', borderRadius: 6, cursor: 'pointer', padding: '3px 10px', fontSize: 11 }} onClick={() => { this.setState({ crashed: false, errorMessage: '' }); this.props.onReset() }}>Restart Froam</button>
       </div>
     )
   }

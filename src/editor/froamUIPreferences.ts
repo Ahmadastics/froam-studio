@@ -1,6 +1,6 @@
 export type FroamUIDensity = 'compact' | 'comfortable'
 export type FroamUIAppearance = 'graphite' | 'midnight' | 'glass'
-export type FroamUIAccent = 'mint' | 'blue' | 'violet' | 'coral'
+export type FroamUIAccent = 'blue' | 'teal' | 'violet' | 'coral'
 export type FroamUIPanelLayout = 'standard' | 'mirrored'
 export type FroamUIToolbarPosition = 'top' | 'bottom'
 export type FroamUIWorkspacePosition = 'attached' | 'floating-bottom'
@@ -30,7 +30,7 @@ export const DEFAULT_FROAM_UI_PREFERENCE: FroamUIPreference = {
   panels: 'standard',
   density: 'comfortable',
   appearance: 'graphite',
-  accent: 'mint',
+  accent: 'blue',
   leftSize: 'standard',
   inspectorSize: 'standard',
   scale: 1,
@@ -39,7 +39,7 @@ export const DEFAULT_FROAM_UI_PREFERENCE: FroamUIPreference = {
 
 const values = {
   toolbar: ['top', 'bottom'], workspace: ['attached', 'floating-bottom'], panels: ['standard', 'mirrored'],
-  density: ['compact', 'comfortable'], appearance: ['graphite', 'midnight', 'glass'], accent: ['mint', 'blue', 'violet', 'coral'],
+  density: ['compact', 'comfortable'], appearance: ['graphite', 'midnight', 'glass'], accent: ['blue', 'teal', 'violet', 'coral'],
   leftSize: ['narrow', 'standard', 'wide'], inspectorSize: ['narrow', 'standard', 'wide'], scale: [0.9, 1, 1.1],
 } as const
 
@@ -54,7 +54,7 @@ export function sanitizeFroamUIPreference(value: unknown): FroamUIPreference {
     panels: allowed(values.panels, input.panels, DEFAULT_FROAM_UI_PREFERENCE.panels),
     density: allowed(values.density, input.density, DEFAULT_FROAM_UI_PREFERENCE.density),
     appearance: allowed(values.appearance, input.appearance, DEFAULT_FROAM_UI_PREFERENCE.appearance),
-    accent: allowed(values.accent, input.accent, DEFAULT_FROAM_UI_PREFERENCE.accent),
+    accent: allowed(values.accent, (input.accent as string) === 'mint' ? 'blue' : input.accent, DEFAULT_FROAM_UI_PREFERENCE.accent),
     leftSize: allowed(values.leftSize, input.leftSize, DEFAULT_FROAM_UI_PREFERENCE.leftSize),
     inspectorSize: allowed(values.inspectorSize, input.inspectorSize, DEFAULT_FROAM_UI_PREFERENCE.inspectorSize),
     scale: allowed(values.scale, input.scale, DEFAULT_FROAM_UI_PREFERENCE.scale),
@@ -71,6 +71,6 @@ export function writeFroamUIPreference(storage: Pick<Storage, 'setItem'> | undef
 }
 
 export function froamUIPanelWidth(size: FroamUIPanelSize, kind: 'left' | 'inspector') {
-  const widths = kind === 'left' ? { narrow: 210, standard: 240, wide: 300 } : { narrow: 280, standard: 300, wide: 380 }
+  const widths = kind === 'left' ? { narrow: 240, standard: 272, wide: 320 } : { narrow: 280, standard: 300, wide: 380 }
   return widths[size]
 }

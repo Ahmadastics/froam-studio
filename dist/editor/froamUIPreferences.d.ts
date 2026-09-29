@@ -1,6 +1,6 @@
 export type FroamUIDensity = 'compact' | 'comfortable';
 export type FroamUIAppearance = 'graphite' | 'midnight' | 'glass';
-export type FroamUIAccent = 'mint' | 'blue' | 'violet' | 'coral';
+export type FroamUIAccent = 'blue' | 'teal' | 'violet' | 'coral';
 export type FroamUIPanelLayout = 'standard' | 'mirrored';
 export type FroamUIToolbarPosition = 'top' | 'bottom';
 export type FroamUIWorkspacePosition = 'attached' | 'floating-bottom';

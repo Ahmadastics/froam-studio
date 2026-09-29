@@ -1,22 +1,31 @@
 import { useState, useMemo, useCallback } from 'react'
 import {
+  Archive,
+  ArrowDown,
+  ArrowDownToLine,
+  ArrowUp,
+  ArrowUpToLine,
+  Check,
+  ChevronLeft,
   ChevronRight,
   Code,
+  Copy,
+  CornerLeftUp,
+  CornerRightDown,
+  Dna,
   Eye,
   EyeOff,
+  FileOutput,
   Image,
   Layers,
-  SquareDashedBottom,
-  Type,
-  Search,
-  RefreshCw,
   MousePointer2,
-  ArrowUp,
-  ArrowDown,
-  Copy,
-  FileOutput,
-  Plus,
+  RefreshCw,
+  Search,
+  Smartphone,
+  SquareDashedBottom,
   Trash2,
+  Type,
+  WandSparkles,
 } from 'lucide-react'
 
 type LayerNode = {
@@ -67,22 +76,36 @@ type Props = {
 function getElementIcon(tag: string) {
   switch (tag) {
     case 'img':
-      return <Image size={12} />
+      return <Image size={13} />
     case 'h1': case 'h2': case 'h3': case 'h4': case 'h5': case 'h6':
     case 'p': case 'span': case 'a': case 'label': case 'strong': case 'em':
-      return <Type size={12} />
+      return <Type size={13} />
     case 'section': case 'article': case 'div': case 'main': case 'aside':
-      return <SquareDashedBottom size={12} />
+      return <SquareDashedBottom size={13} />
     case 'button':
-      return <MousePointer2 size={12} />
+      return <MousePointer2 size={13} />
     default:
-      return <Code size={12} />
+      return <Code size={13} />
   }
 }
 
+/** What a person calls a layer: its own name, or what kind of thing it is. */
+const LAYER_KIND: Record<string, string> = {
+  h1: 'Heading 1', h2: 'Heading 2', h3: 'Heading 3', h4: 'Heading 4', h5: 'Heading 5', h6: 'Heading 6',
+  p: 'Paragraph', span: 'Text', strong: 'Bold text', em: 'Italic text', small: 'Small text', a: 'Link', button: 'Button',
+  img: 'Image', picture: 'Image', svg: 'Icon', video: 'Video', section: 'Section', header: 'Header', footer: 'Footer',
+  nav: 'Navigation', main: 'Main', aside: 'Sidebar', article: 'Article', div: 'Box', ul: 'List', ol: 'List', li: 'Item',
+  form: 'Form', input: 'Field', textarea: 'Text box', select: 'Dropdown', label: 'Label', table: 'Table', figure: 'Figure',
+  blockquote: 'Quote', hr: 'Divider',
+}
+function layerName(node: LayerNode) {
+  if (node.label && node.label.toLowerCase() !== node.tag) return node.label
+  return LAYER_KIND[node.tag] ?? node.tag
+}
+
 function getLayerIcon(node: LayerNode) {
-  if (node.kind === 'stamp') return <Layers size={12} />
-  if (node.kind === 'shape') return <SquareDashedBottom size={12} />
+  if (node.kind === 'stamp') return <Layers size={13} />
+  if (node.kind === 'shape') return <SquareDashedBottom size={13} />
   return getElementIcon(node.tag)
 }
 
@@ -202,67 +225,64 @@ export default function FroamLayersPanel({
 
   return (
     <div className="froam-lp" data-chef-editor-root="true">
-      {/* Header */}
-      <div className="froam-lp__header" data-chef-editor-root="true">
-        <div className="froam-lp__header-title">
-          <Layers size={14} />
-          <span>Layers</span>
-        </div>
-        <button
-          type="button"
-          className="froam-lp__header-btn"
-          onClick={onRefresh}
-          title="Refresh layers"
-          data-chef-editor-root="true"
-        >
-          <RefreshCw size={12} />
-        </button>
-      </div>
-
-      {/* Route info */}
-      <div className="froam-lp__route" data-chef-editor-root="true">
-        <span className="froam-lp__route-dot" />
-        <span className="froam-lp__route-copy"><strong>{projectName}</strong><small>{branchName} · {routeKey}</small></span>
-        {selections.length > 1 && (
-          <span className="froam-lp__selection-count">{selections.length} selected</span>
-        )}
-      </div>
-
-      {/* Search */}
+      {/* Find, and how many are selected */}
       <div className="froam-lp__search" data-chef-editor-root="true">
-        <Search size={12} />
+        <Search size={13} />
         <input
           type="text"
           className="froam-lp__search-input"
-          placeholder="Search layers…"
+          placeholder="Find a layer…"
+          aria-label="Find a layer"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           data-chef-editor-root="true"
         />
+        {selections.length > 1 && (
+          <span className="froam-lp__selection-count">{selections.length} selected</span>
+        )}
+        <button
+          type="button"
+          className="froam-lp__header-btn"
+          onClick={onRefresh}
+          title={`Read the page again (${projectName} · ${branchName} · ${routeKey})`}
+          aria-label="Refresh layers"
+          data-chef-editor-root="true"
+        >
+          <RefreshCw size={13} />
+        </button>
       </div>
+
+      {/* Where the selection sits, and its neighbours */}
       {selectedTrail.length > 0 && (
-        <div className="froam-lp__breadcrumbs" aria-label="Selected layer path" data-chef-editor-root="true">
-          {selectedTrail.map((node, index) => (
-            <button
-              type="button"
-              key={node.path}
-              className={node.path === selectedPath ? 'is-current' : ''}
-              onClick={() => onSelectLayer(node)}
-              title={node.path}
-              data-chef-editor-root="true"
-            >
-              <span>{node.label}</span>
-              {index < selectedTrail.length - 1 && <ChevronRight size={10} aria-hidden="true" />}
-            </button>
-          ))}
-        </div>
-      )}
-      {selectedNode && (
-        <div className="froam-lp__ladder" role="toolbar" aria-label="Move through nearby layers" data-chef-editor-root="true">
-          <button type="button" disabled={!nearbyLayers.parent} onClick={() => nearbyLayers.parent && onSelectLayer(nearbyLayers.parent)} title="Select parent layer">Parent</button>
-          <button type="button" disabled={!nearbyLayers.previous} onClick={() => nearbyLayers.previous && onSelectLayer(nearbyLayers.previous)} title="Select previous sibling">Prev</button>
-          <button type="button" disabled={!nearbyLayers.next} onClick={() => nearbyLayers.next && onSelectLayer(nearbyLayers.next)} title="Select next sibling">Next</button>
-          <button type="button" disabled={!nearbyLayers.child} onClick={() => nearbyLayers.child && onSelectLayer(nearbyLayers.child)} title="Select first child layer">Child</button>
+        <div className="froam-lp__where" data-chef-editor-root="true">
+          <div className="froam-lp__breadcrumbs" aria-label="Selected layer path" data-chef-editor-root="true">
+            {selectedTrail.length > 3 && (
+              <button type="button" onClick={() => onSelectLayer(selectedTrail[selectedTrail.length - 4])} title={selectedTrail.slice(0, -3).map(layerName).join(' › ')} aria-label="Select further up" data-chef-editor-root="true">
+                <span>…</span><ChevronRight size={11} aria-hidden="true" />
+              </button>
+            )}
+            {selectedTrail.slice(-3).map((node, index, shown) => (
+              <button
+                type="button"
+                key={node.path}
+                className={node.path === selectedPath ? 'is-current' : ''}
+                onClick={() => onSelectLayer(node)}
+                title={node.path}
+                data-chef-editor-root="true"
+              >
+                <span>{layerName(node)}</span>
+                {index < shown.length - 1 && <ChevronRight size={11} aria-hidden="true" />}
+              </button>
+            ))}
+          </div>
+          {selectedNode && (
+            <div className="froam-lp__ladder" role="toolbar" aria-label="Move through nearby layers" data-chef-editor-root="true">
+              <button type="button" disabled={!nearbyLayers.parent} onClick={() => nearbyLayers.parent && onSelectLayer(nearbyLayers.parent)} title="Parent" aria-label="Select parent layer"><CornerLeftUp size={13} /></button>
+              <button type="button" disabled={!nearbyLayers.previous} onClick={() => nearbyLayers.previous && onSelectLayer(nearbyLayers.previous)} title="Previous" aria-label="Select previous sibling"><ChevronLeft size={13} /></button>
+              <button type="button" disabled={!nearbyLayers.next} onClick={() => nearbyLayers.next && onSelectLayer(nearbyLayers.next)} title="Next" aria-label="Select next sibling"><ChevronRight size={13} /></button>
+              <button type="button" disabled={!nearbyLayers.child} onClick={() => nearbyLayers.child && onSelectLayer(nearbyLayers.child)} title="First inside" aria-label="Select first child layer"><CornerRightDown size={13} /></button>
+            </div>
+          )}
         </div>
       )}
       {pointerStack.length > 1 && (
@@ -291,7 +311,7 @@ export default function FroamLayersPanel({
         {visibleLayers.length === 0 ? (
           <div className="froam-lp__empty">
             <Layers size={20} />
-            <span>No layers found</span>
+            <span>{searchQuery.trim() ? `Nothing called “${searchQuery.trim()}” on this page` : 'No layers yet — the page is still loading'}</span>
           </div>
         ) : (
           visibleLayers.map((node) => {
@@ -299,6 +319,12 @@ export default function FroamLayersPanel({
             const isCollapsed = collapsed.has(node.path)
             const isSectionNode = ['section', 'header', 'footer', 'main', 'article', 'nav', 'aside'].includes(node.tag)
             const knowledge = node.nodeId ? knowledgeByNodeId[node.nodeId] : undefined
+            const facts = [
+              knowledge?.dna && 'Design DNA saved',
+              knowledge?.interactions && `${knowledge.interactions} interaction${knowledge.interactions === 1 ? '' : 's'}`,
+              knowledge?.responsive && `Responsive: ${knowledge.responsive}`,
+              knowledge?.archived && 'In your archive',
+            ].filter(Boolean).join(' · ')
 
             return (
               <div
@@ -309,7 +335,8 @@ export default function FroamLayersPanel({
                 aria-expanded={node.hasChildren ? !isCollapsed : undefined}
                 tabIndex={isSelected ? 0 : -1}
                 className={`froam-lp__node ${isSelected ? 'is-selected' : ''} ${node.hidden ? 'is-hidden-layer' : ''}`}
-                style={{ paddingLeft: `${12 + node.depth * 16}px` }}
+                style={{ paddingLeft: `${8 + node.depth * 14}px` }}
+                title={facts || undefined}
                 onClick={() => onSelectLayer(node)}
                 onKeyDown={(event) => {
                   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); moveTreeFocus(event.currentTarget, event.key === 'ArrowDown' ? 1 : -1) }
@@ -324,6 +351,7 @@ export default function FroamLayersPanel({
                   <button
                     type="button"
                     className="froam-lp__expand-btn"
+                    aria-label={isCollapsed ? 'Expand' : 'Collapse'}
                     onClick={(e) => {
                       e.stopPropagation()
                       toggleCollapse(node.path)
@@ -331,7 +359,7 @@ export default function FroamLayersPanel({
                     data-chef-editor-root="true"
                   >
                     <ChevronRight
-                      size={10}
+                      size={12}
                       style={{
                         transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)',
                         transition: 'transform 120ms ease',
@@ -342,28 +370,21 @@ export default function FroamLayersPanel({
                   <span className="froam-lp__expand-spacer" />
                 )}
 
-                {/* Element icon */}
                 <span className={`froam-lp__node-icon ${node.kind === 'stamp' ? 'is-stamp' : ''}`}>
                   {getLayerIcon(node)}
                 </span>
 
-                {/* Element name */}
-                <span className="froam-lp__node-tag">{node.label}</span>
+                <span className="froam-lp__node-tag">{layerName(node)}</span>
                 {node.kind === 'stamp' && (
-                  <span className="froam-lp__node-badge">stamp</span>
+                  <span className="froam-lp__node-badge">group</span>
                 )}
-                {node.nodeId && <span className="froam-lp__node-badge is-identity" title={node.nodeId}>id</span>}
-                {knowledge?.dna && <span className="froam-lp__node-signal" title="DNA captured">D</span>}
-                {knowledge?.interactions ? <span className="froam-lp__node-signal" title={`${knowledge.interactions} interactions`}>I{knowledge.interactions}</span> : null}
-                {knowledge?.responsive && <span className="froam-lp__node-signal" title={`Responsive priority: ${knowledge.responsive}`}>R</span>}
-                {knowledge?.archived && <span className="froam-lp__node-signal" title="Saved in Component Archive">A</span>}
                 {node.className && (
                   <span className="froam-lp__node-class">
-                    .{node.className.replace(/ /g, '.')}
+                    .{node.className.split(/\s+/)[0]}
                   </span>
                 )}
+                {knowledge?.interactions ? <span className="froam-lp__node-signal" aria-label={`${knowledge.interactions} interactions`}><WandSparkles size={11} /></span> : null}
 
-                {/* Right side: visibility */}
                 <div className="froam-lp__node-actions">
                   <button
                     type="button"
@@ -374,11 +395,12 @@ export default function FroamLayersPanel({
                       else onToggleVisibility(node)
                     }}
                     title={isSectionNode ? node.editorHidden ? 'Show in editor' : 'Hide in editor only' : node.hidden ? 'Show' : 'Hide'}
+                    aria-label={node.hidden || node.editorHidden ? 'Show layer' : 'Hide layer'}
                     data-chef-editor-root="true"
                   >
                     {isSectionNode
-                      ? node.editorHidden ? <EyeOff size={11} /> : <Eye size={11} />
-                      : node.hidden ? <EyeOff size={11} /> : <Eye size={11} />}
+                      ? node.editorHidden ? <EyeOff size={13} /> : <Eye size={13} />
+                      : node.hidden ? <EyeOff size={13} /> : <Eye size={13} />}
                   </button>
                 </div>
               </div>
@@ -388,38 +410,36 @@ export default function FroamLayersPanel({
       </div>
       {selectedNode && (
         <footer className="froam-lp__inspector" data-chef-editor-root="true">
-          <div>
-            <span>Selected structure</span>
-            <strong>{selectedNode.label}</strong>
-            <small>{selectedNode.nodeId ? 'Stable identity connected' : 'Legacy path · select or scan to connect'}</small>
+          <div className="froam-lp__inspector-head" title={selectedNode.nodeId ? 'Stable identity connected' : 'Legacy path · select or scan to connect'}>
+            <span className="froam-lp__node-icon">{getLayerIcon(selectedNode)}</span>
+            <strong>{layerName(selectedNode)}</strong>
+            {selectedNode.className && <small>.{selectedNode.className.split(/\s+/)[0]}</small>}
           </div>
           {selectedSection && (
             <div className="froam-lp__section-controls" aria-label="Section controls" data-chef-editor-root="true">
-              <span>Section controls</span>
               <div className="froam-lp__section-actions" role="toolbar" aria-label="Insert and reorder section">
-                <button type="button" onClick={() => onAddSection(selectedSection, 'before')} title="Add section above" aria-label="Add section above"><Plus size={12} /><ArrowUp size={10} /></button>
-                <button type="button" onClick={() => onAddSection(selectedSection, 'after')} title="Add section below" aria-label="Add section below"><Plus size={12} /><ArrowDown size={10} /></button>
-                <button type="button" onClick={() => onDuplicateSection(selectedSection)} title="Duplicate section" aria-label="Duplicate section"><Copy size={13} /></button>
-                <button type="button" disabled={!canMoveSection(selectedSection, 'up')} onClick={() => onMoveSection(selectedSection, 'up')} title="Move section up" aria-label="Move section up"><ArrowUp size={13} /></button>
-                <button type="button" disabled={!canMoveSection(selectedSection, 'down')} onClick={() => onMoveSection(selectedSection, 'down')} title="Move section down" aria-label="Move section down"><ArrowDown size={13} /></button>
+                <button type="button" onClick={() => onAddSection(selectedSection, 'before')} title="Add section above" aria-label="Add section above"><ArrowUpToLine size={14} /></button>
+                <button type="button" onClick={() => onAddSection(selectedSection, 'after')} title="Add section below" aria-label="Add section below"><ArrowDownToLine size={14} /></button>
+                <button type="button" onClick={() => onDuplicateSection(selectedSection)} title="Duplicate section" aria-label="Duplicate section"><Copy size={14} /></button>
+                <button type="button" disabled={!canMoveSection(selectedSection, 'up')} onClick={() => onMoveSection(selectedSection, 'up')} title="Move section up" aria-label="Move section up"><ArrowUp size={14} /></button>
+                <button type="button" disabled={!canMoveSection(selectedSection, 'down')} onClick={() => onMoveSection(selectedSection, 'down')} title="Move section down" aria-label="Move section down"><ArrowDown size={14} /></button>
+                <button type="button" className="is-danger" onClick={() => onDeleteSection(selectedSection)} title="Delete section" aria-label="Delete section"><Trash2 size={14} /></button>
               </div>
               <div className="froam-lp__section-visibility">
-                <button type="button" className={selectedSection.editorHidden ? 'is-active' : ''} onClick={() => onSetSectionVisibility(selectedSection, 'editor')} title={selectedSection.editorHidden ? 'Show in editor' : 'Hide in editor only'}>
-                  {selectedSection.editorHidden ? <Eye size={12} /> : <EyeOff size={12} />}<span>{selectedSection.editorHidden ? 'Show in editor' : 'Hide in editor'}</span>
+                <button type="button" className={selectedSection.editorHidden ? 'is-active' : ''} onClick={() => onSetSectionVisibility(selectedSection, 'editor')} title="Editor visibility never changes the exported page">
+                  {selectedSection.editorHidden ? <Eye size={13} /> : <EyeOff size={13} />}<span>{selectedSection.editorHidden ? 'Show in editor' : 'Hide in editor'}</span>
                 </button>
-                <button type="button" className={selectedSection.exportHidden ? 'is-active' : ''} onClick={() => onSetSectionVisibility(selectedSection, 'export')} title={selectedSection.exportHidden ? 'Include in export' : 'Hide in export'}>
-                  <FileOutput size={12} /><span>{selectedSection.exportHidden ? 'Include in export' : 'Hide in export'}</span>
+                <button type="button" className={selectedSection.exportHidden ? 'is-active' : ''} onClick={() => onSetSectionVisibility(selectedSection, 'export')} title="Export visibility keeps the section editable here">
+                  <FileOutput size={13} /><span>{selectedSection.exportHidden ? 'Include in export' : 'Hide in export'}</span>
                 </button>
               </div>
-              <button type="button" className="froam-lp__section-delete" onClick={() => onDeleteSection(selectedSection)}><Trash2 size={12} /><span>Delete section</span></button>
-              <small>Editor visibility never changes the exported page. Export visibility keeps the section editable here.</small>
             </div>
           )}
           <div className="froam-lp__knowledge-actions">
-            <button type="button" onClick={() => onOpenKnowledge(selectedNode, 'dna')}>DNA{selectedKnowledge?.dna ? ' ✓' : ''}</button>
-            <button type="button" onClick={() => onOpenKnowledge(selectedNode, 'responsive')}>Responsive</button>
-            <button type="button" onClick={() => onOpenKnowledge(selectedNode, 'interactions-create')}>Interactions{selectedKnowledge?.interactions ? ` ${selectedKnowledge.interactions}` : ''}</button>
-            <button type="button" onClick={() => onOpenKnowledge(selectedNode, 'archive')}>Archive{selectedKnowledge?.archived ? ' ✓' : ''}</button>
+            <button type="button" onClick={() => onOpenKnowledge(selectedNode, 'dna')} title="Its colours, type and spacing, captured"><Dna size={13} /><span>Design DNA</span>{selectedKnowledge?.dna && <Check size={13} />}</button>
+            <button type="button" onClick={() => onOpenKnowledge(selectedNode, 'responsive')} title="How it behaves across screen sizes"><Smartphone size={13} /><span>Responsive</span></button>
+            <button type="button" onClick={() => onOpenKnowledge(selectedNode, 'interactions-create')} title="Hover, click and scroll motion"><WandSparkles size={13} /><span>Interactions{selectedKnowledge?.interactions ? ` · ${selectedKnowledge.interactions}` : ''}</span></button>
+            <button type="button" onClick={() => onOpenKnowledge(selectedNode, 'archive')} title="Keep it to reuse on any page"><Archive size={13} /><span>{selectedKnowledge?.archived ? 'In archive' : 'Save to archive'}</span>{selectedKnowledge?.archived && <Check size={13} />}</button>
           </div>
         </footer>
       )}

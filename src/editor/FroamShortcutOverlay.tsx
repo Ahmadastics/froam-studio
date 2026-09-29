@@ -10,33 +10,35 @@ const SHORTCUT_GROUPS = [
   {
     title: 'General',
     shortcuts: [
-      { keys: 'Ctrl + S', label: 'Save / Publish' },
-      { keys: 'Ctrl + K', label: 'Command palette' },
+      { keys: 'Ctrl + S', label: 'Save' },
+      { keys: 'Ctrl + Shift + S', label: 'Save to your code' },
+      { keys: 'Ctrl + K', label: 'Search commands' },
       { keys: 'Ctrl + Z', label: 'Undo' },
       { keys: 'Ctrl + Y', label: 'Redo' },
-      { keys: 'Escape', label: 'Deselect / Close panel' },
-      { keys: '?', label: 'Toggle shortcuts' },
+      { keys: 'Escape', label: 'Deselect or close' },
+      { keys: 'Ctrl + .', label: 'Minimize the editor' },
+      { keys: '?', label: 'Show these shortcuts' },
     ],
   },
   {
     title: 'Tools',
     shortcuts: [
-      { keys: 'V', label: 'Select tool' },
-      { keys: 'H', label: 'Hand (pan) tool' },
-      { keys: 'T', label: 'Text tool' },
-      { keys: 'R', label: 'Rectangle / Shape' },
-      { keys: 'F', label: 'Frame / Section' },
-      { keys: 'Ctrl + Shift + L', label: 'Toggle move mode' },
+      { keys: 'V', label: 'Select' },
+      { keys: 'H', label: 'Hand — drag to pan' },
+      { keys: 'T', label: 'Text' },
+      { keys: 'R', label: 'Rectangle' },
+      { keys: 'F', label: 'Frame' },
+      { keys: 'Ctrl + Shift + L', label: 'Move freely' },
     ],
   },
   {
     title: 'Selection',
     shortcuts: [
-      { keys: 'Click', label: 'Select element' },
-      { keys: 'Shift + Click', label: 'Multi-select' },
-      { keys: 'Double-click', label: 'Edit text inline' },
-      { keys: 'Right-click', label: 'Context menu + Quick Edit' },
-      { keys: 'Delete', label: 'Clear element styles' },
+      { keys: 'Click', label: 'Select' },
+      { keys: 'Shift + Click', label: 'Add to the selection' },
+      { keys: 'Double-click', label: 'Edit the words' },
+      { keys: 'Right-click', label: 'More actions and Quick Edit' },
+      { keys: 'Delete', label: 'Reset styles' },
     ],
   },
   {
@@ -47,13 +49,13 @@ const SHORTCUT_GROUPS = [
     ],
   },
   {
-    title: 'Clipboard & Grouping',
+    title: 'Copy and group',
     shortcuts: [
-      { keys: 'Ctrl + D', label: 'Duplicate element' },
+      { keys: 'Ctrl + D', label: 'Duplicate' },
       { keys: 'Ctrl + Alt + C', label: 'Copy styles' },
       { keys: 'Ctrl + Alt + V', label: 'Paste styles' },
-      { keys: 'Ctrl + G', label: 'Group elements' },
-      { keys: 'Ctrl + Shift + G', label: 'Ungroup elements' },
+      { keys: 'Ctrl + G', label: 'Group' },
+      { keys: 'Ctrl + Shift + G', label: 'Ungroup' },
     ],
   },
 ]
@@ -81,13 +83,13 @@ export default function FroamShortcutOverlay({ visible, onClose }: Props) {
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className="froam-shortcut-overlay__card" data-chef-editor-root="true">
+      <div className="froam-shortcut-overlay__card" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" data-chef-editor-root="true">
         <div className="froam-shortcut-overlay__header">
           <div className="froam-shortcut-overlay__title">
             <Keyboard size={18} />
-            <span>Keyboard Shortcuts</span>
+            <span>Keyboard shortcuts</span>
           </div>
-          <button type="button" className="froam-shortcut-overlay__close" onClick={onClose}>
+          <button type="button" className="froam-shortcut-overlay__close" onClick={onClose} aria-label="Close shortcuts">
             <X size={16} />
           </button>
         </div>

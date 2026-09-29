@@ -77,9 +77,9 @@
 }
 
 .fs-css-var__name {
-  font-size: 0.72rem;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--fs-accent);
+  color: var(--fs-accent-text);
   flex-shrink: 0;
   max-width: 120px;
   overflow: hidden;

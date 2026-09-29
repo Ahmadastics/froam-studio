@@ -106,7 +106,9 @@ type Props = {
     /** The selection's saved draft styles (for its ::before / ::after edits). */
     draftStyles?: Record<string, string>;
     onApplyPseudoStyle?: (pseudo: PseudoElement, styles: Record<string, string>, label: string) => void;
+    /** Open motion for the selection. */
+    onAnimate?: () => void;
 };
-export default function FroamDesignPanel({ projectKey, selection, selectionRect, onApplyStyle, onUpdateDraft, onOpenImageUpload, onClearImage, onClearSelectionDraft, marginLinked, paddingLinked, radiusLinked, onToggleMarginLinked, onTogglePaddingLinked, onToggleRadiusLinked, onApplySizePreset, onBuildTransformString, fontOptions, onAddBrandFont, getRootEl, onOpenBlueprint, draftStyles, onApplyPseudoStyle, }: Props): import("react").JSX.Element;
+export default function FroamDesignPanel({ projectKey, selection, selectionRect, onApplyStyle, onUpdateDraft, onOpenImageUpload, onClearImage, onClearSelectionDraft, marginLinked, paddingLinked, radiusLinked, onToggleMarginLinked, onTogglePaddingLinked, onToggleRadiusLinked, onApplySizePreset, onBuildTransformString, fontOptions, onAddBrandFont, getRootEl, onOpenBlueprint, draftStyles, onApplyPseudoStyle, onAnimate, }: Props): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=FroamDesignPanel.d.ts.map

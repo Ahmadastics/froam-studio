@@ -15,10 +15,10 @@
   gap: 8px;
   padding: 18px 12px;
   border-radius: var(--fs-radius-md);
-  border: 1.5px dashed rgba(94, 234, 212, 0.28);
-  background: rgba(94, 234, 212, 0.04);
+  border: 1.5px dashed rgba(var(--fs-accent-rgb), 0.28);
+  background: rgba(var(--fs-accent-rgb), 0.04);
   color: var(--fs-text-tertiary);
-  font-size: 0.74rem;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--fs-transition-fast);
@@ -27,9 +27,9 @@
 
 .fs-inspiration__dropzone:hover,
 .fs-inspiration__dropzone.is-over {
-  border-color: rgba(94, 234, 212, 0.55);
-  background: rgba(94, 234, 212, 0.09);
-  color: var(--fs-accent);
+  border-color: rgba(var(--fs-accent-rgb), 0.55);
+  background: rgba(var(--fs-accent-rgb), 0.09);
+  color: var(--fs-accent-text);
 }
 
 .fs-inspiration__dropzone svg {
@@ -76,7 +76,7 @@
 
 .fs-inspiration__label {
   flex: 1;
-  font-size: 0.66rem;
+  font-size: 11px;
   color: var(--fs-text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -144,7 +144,7 @@
   background: rgba(14, 17, 23, 0.9);
   border: 1px solid var(--fs-border);
   color: var(--fs-text-secondary);
-  font-size: 0.76rem;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
   pointer-events: none;
@@ -165,7 +165,7 @@
   background: var(--fs-surface-raised);
   border: 1px solid var(--fs-border);
   border-radius: 6px;
-  font-size: 0.72rem;
+  font-size: 12px;
 }
 
 .fs-token__swatch {
@@ -188,13 +188,13 @@
 .fs-token__value {
   color: var(--fs-text-tertiary);
   font-family: var(--fs-font-mono, monospace);
-  font-size: 0.68rem;
+  font-size: 11px;
   flex-shrink: 0;
 }
 
 .fs-token__apply {
   padding: 2px 7px !important;
-  font-size: 0.66rem !important;
+  font-size: 11px !important;
   flex-shrink: 0;
 }
 
@@ -208,7 +208,7 @@
 .fs-align-grid .fs-pill {
   justify-content: center;
   gap: 4px;
-  font-size: 0.7rem;
+  font-size: 11px;
 }
 
 /* ── Asset Manager ──────────────────────────────────────────── */
@@ -242,7 +242,7 @@
 
 .fs-asset-item__name {
   display: block;
-  font-size: 0.64rem;
+  font-size: 11px;
   color: var(--fs-text-tertiary);
   padding: 3px 4px;
   overflow: hidden;

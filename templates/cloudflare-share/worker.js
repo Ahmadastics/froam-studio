@@ -2,7 +2,7 @@
  * Froam share on Cloudflare — local sites, reachable from anywhere.
  *
  *   GET /host/:id?key=…    WebSocket from `froam dev --share` (the owner's computer)
- *   GET /s/:id[?…]         a share link: remembers the share for this browser, opens the site
+ *   GET /s/:id[/page][?…]  a share link: remembers the share for this browser, opens that page
  *   anything else          with the share remembered: the owner's site, through the socket
  *
  * One Durable Object per share holds the owner's socket. The first computer to
@@ -14,7 +14,7 @@
 import { SHARE_COOKIE, createShareHub, isShareId, landingPage, sha256Hex, shareFromCookie } from './share.js'
 
 const HOST_PATH = /^\/host\/([A-Za-z0-9_-]{16,64})$/
-const LINK_PATH = /^\/s\/([A-Za-z0-9_-]{16,64})\/?$/
+const LINK_PATH = /^\/s\/([A-Za-z0-9_-]{16,64})(\/[^?#]*)?$/
 
 export default {
   async fetch(request, env) {
@@ -24,12 +24,13 @@ export default {
 
     const link = LINK_PATH.exec(url.pathname)
     if (link) {
-      // Remember the share for this browser, then open the site at its root so
-      // the page's own /paths resolve exactly as they do on the owner's machine.
+      // Remember the share for this browser, then open the page at its own path
+      // so the site's /paths resolve exactly as they do on the owner's machine.
+      const page = link[2] && link[2] !== '/' ? link[2].replace(/\/{2,}/g, '/') : '/'
       return new Response(null, {
         status: 302,
         headers: {
-          Location: `/${url.search}`,
+          Location: `${page}${url.search}`,
           'Set-Cookie': `${SHARE_COOKIE}=${link[1]}; Path=/; Max-Age=604800; Secure; HttpOnly; SameSite=Lax`,
           'Cache-Control': 'no-store',
         },

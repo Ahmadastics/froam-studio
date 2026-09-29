@@ -26,11 +26,9 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.74rem;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--fs-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 .fs-export__preview {
   display: flex;
@@ -53,12 +51,12 @@
   border: 1px solid var(--fs-border);
   background: var(--fs-bg-secondary);
   color: var(--fs-text-tertiary);
-  font-size: 0.68rem;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 .fs-export-note {
   color: var(--fs-text-tertiary);
-  font-size: 0.68rem;
+  font-size: 11px;
   line-height: 1.35;
 }
 html[data-froam-capturing-full-page='true'] [data-chef-editor-root='true'] {

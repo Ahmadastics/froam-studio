@@ -1,3 +1,4 @@
+import { describeSelection } from '../selection-name'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, Sparkles, X, Zap } from 'lucide-react'
@@ -232,13 +233,13 @@ export function FroamScan({ active, onDone }: { active: boolean; onDone: () => v
 
       if (!reduce && t >= START_DELAY && t <= START_DELAY + SWEEP) {
         const trailGrad = ctx.createLinearGradient(0, scanY - trail, 0, scanY)
-        trailGrad.addColorStop(0, 'rgba(94,234,212,0)')
-        trailGrad.addColorStop(1, 'rgba(94,234,212,0.18)')
+        trailGrad.addColorStop(0, 'rgba(53,114,239,0)')
+        trailGrad.addColorStop(1, 'rgba(53,114,239,0.18)')
         ctx.fillStyle = trailGrad
         ctx.fillRect(0, scanY - trail, vw, trail)
         ctx.strokeStyle = 'rgba(150,255,238,0.95)'
         ctx.lineWidth = 2
-        ctx.shadowColor = 'rgba(94,234,212,0.9)'
+        ctx.shadowColor = 'rgba(53,114,239,0.9)'
         ctx.shadowBlur = 16
         ctx.beginPath()
         ctx.moveTo(0, scanY)
@@ -351,7 +352,7 @@ export function SelectionHandoffOverlay({
     >
       <span className="froam-selection-handoff__dot" />
       <span className="froam-selection-handoff__mode">{mode}</span>
-      <span className="froam-selection-handoff__label">{count > 1 ? `${count} selected` : label}</span>
+      <span className="froam-selection-handoff__label" title={label}>{count > 1 ? `${count} selected` : describeSelection(label).kind}</span>
     </div>
   )
 }

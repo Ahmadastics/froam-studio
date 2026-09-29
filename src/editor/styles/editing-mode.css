@@ -11,9 +11,9 @@
   padding: 6px 10px;
   margin: 0 12px;
   border-radius: var(--fs-radius-sm);
-  background: rgba(255, 108, 79, 0.08);
-  border: 1px solid rgba(255, 108, 79, 0.2);
-  font-size: 0.72rem;
+  background: rgba(var(--fs-danger-rgb), 0.08);
+  border: 1px solid rgba(var(--fs-danger-rgb), 0.2);
+  font-size: 12px;
   color: var(--fs-text-warm);
   font-weight: 600;
 }
@@ -120,8 +120,8 @@ html[data-chef-editing] :is(section, header, footer, main, article, nav, aside)[
   padding: 4px 6px;
   border-radius: 5px;
   background: rgba(12, 16, 22, 0.88);
-  color: #dffcf8;
-  font: 800 10px/1 var(--fs-font);
+  color: var(--fs-text-primary);
+  font: 600 11px/1 var(--fs-font);
   overflow: hidden;
   pointer-events: none;
   text-overflow: ellipsis;
@@ -135,7 +135,7 @@ html[data-chef-editing] [data-froam-editor-hidden='true'] {
 
 html[data-chef-editing] [data-froam-export-hidden='true'] {
   opacity: .42 !important;
-  outline: 1px dashed rgba(248, 193, 92, .72) !important;
+  outline: 1px dashed rgba(var(--fs-warning-rgb), 0.72) !important;
   outline-offset: 3px;
 }
 
@@ -145,7 +145,7 @@ html[data-chef-editing] [data-froam-export-hidden='true'] {
 
 [data-froam-shape='true'][contenteditable='true'] {
   cursor: text !important;
-  caret-color: var(--fs-accent-control);
+  caret-color: var(--fs-accent-text);
 }
 
 @keyframes froam-target-handoff {
@@ -163,7 +163,7 @@ html[data-chef-editing] [data-froam-export-hidden='true'] {
 }
 
 [data-froam-injected='true'] {
-  outline: 1px dashed rgba(94, 234, 212, 0.3);
+  outline: 1px dashed rgba(var(--fs-accent-rgb), 0.3);
   outline-offset: 1px;
   min-height: 24px;
 }
@@ -186,8 +186,8 @@ html[data-chef-editing] [data-froam-artboard='true']::before {
   background: rgba(15, 23, 42, 0.84);
   color: #ffffff;
   font-family: var(--fs-font);
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -195,7 +195,7 @@ html[data-chef-editing] [data-froam-artboard='true']::before {
 }
 
 [contenteditable='true'] {
-  outline: 2px solid rgba(255, 108, 79, 0.6) !important;
+  outline: 2px solid rgba(var(--fs-danger-rgb), 0.6) !important;
   outline-offset: 2px;
   cursor: text !important;
 }

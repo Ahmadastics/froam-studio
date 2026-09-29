@@ -1,5 +1,6 @@
 import { ArrowUp, Sparkles, X } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { describeSelection } from './selection-name'
 
 type Props = {
   open: boolean
@@ -22,7 +23,7 @@ export default function FroamQuickChat({ open, selectionLabel, busy, onSubmit, o
     return () => cancelAnimationFrame(frame)
   }, [open, selectionLabel])
   if (!open) return null
-  const targetLabel = selectionLabel || 'this page'
+  const targetLabel = selectionLabel ? describeSelection(selectionLabel).kind.toLowerCase() : 'this page'
   const suggestions = selectionLabel ? selectedSuggestions : pageSuggestions
   const submitIntent = (intent: string) => {
     const command = intent.trim()
@@ -33,11 +34,20 @@ export default function FroamQuickChat({ open, selectionLabel, busy, onSubmit, o
     event?.preventDefault()
     submitIntent(value)
   }
-  return <section className="froam-quick-chat" data-chef-editor-root="true" role="dialog" aria-label={`Quick Edit ${targetLabel}`}>
-    <header><span><Sparkles size={14}/><b>Quick Edit · {targetLabel}</b></span><button type="button" onClick={onClose} aria-label="Close Quick Edit"><X size={14}/></button></header>
+  return <section
+    className="froam-quick-chat"
+    data-chef-editor-root="true"
+    role="dialog"
+    aria-label={`Quick Edit ${targetLabel}`}
+    onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); onClose() } }}
+  >
+    <header>
+      <span><Sparkles size={15}/><b>Quick Edit</b><em>{selectionLabel ? `the selected ${targetLabel}` : targetLabel}</em></span>
+      <button type="button" onClick={onClose} aria-label="Close Quick Edit" title="Close (Esc)"><X size={15}/></button>
+    </header>
     <form onSubmit={send}>
-      <input ref={inputRef} value={value} onChange={(event) => setValue(event.target.value)} placeholder={selectionLabel ? 'Describe a visual change…' : 'Run a quick local command…'} aria-label="Describe the change" disabled={busy}/>
-      <button type="submit" className="is-send" disabled={!value.trim() || busy} aria-label="Preview change"><ArrowUp size={16}/></button>
+      <input ref={inputRef} value={value} onChange={(event) => setValue(event.target.value)} placeholder={selectionLabel ? 'Say what to change — “make it bolder”…' : 'Run a quick local command…'} aria-label="Describe the change" disabled={busy}/>
+      <button type="submit" className="is-send" disabled={!value.trim() || busy} aria-label="Preview change" title="Preview (Enter)"><ArrowUp size={16}/></button>
     </form>
     <div className="froam-quick-chat__suggestions" aria-label="One-tap commands">
       {suggestions.map((suggestion) => <button type="button" key={suggestion} disabled={busy} onClick={() => submitIntent(suggestion)}>{suggestion}</button>)}

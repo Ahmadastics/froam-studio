@@ -4,7 +4,7 @@
 
 /* ─── WRAPPER: full-frame layout when editor is active ─── */
 .froam-figma-layout {
-  --froam-left-width: 240px;
+  --froam-left-width: 272px;
   --froam-planner-width: 420px;
   --froam-inspector-width: 300px;
   --froam-ui-scale: 1;
@@ -12,13 +12,13 @@
   inset: 0;
   z-index: 1188;
   display: grid;
-  grid-template-rows: calc(86px * var(--froam-ui-scale)) 1fr;
+  grid-template-rows: calc(48px * var(--froam-ui-scale)) 1fr;
   grid-template-columns: var(--froam-left-width) 1fr var(--froam-inspector-width);
   grid-template-areas:
     "toolbar toolbar toolbar"
     "layers  canvas  design";
   font-family: var(--fs-font);
-  font-size: 0.82rem;
+  font-size: 13px;
   color: var(--fs-text-primary);
   -webkit-font-smoothing: antialiased;
   pointer-events: none;
@@ -33,7 +33,7 @@
 }
 
 .froam-figma-layout.is-right-collapsed {
-  grid-template-columns: 240px minmax(0, 1fr) 0;
+  grid-template-columns: var(--froam-left-width) minmax(0, 1fr) 0;
 }
 
 .froam-figma-layout.is-planning.is-right-collapsed {
@@ -58,7 +58,7 @@
   grid-template-columns: 0 minmax(0, 1fr) max(382px, var(--froam-inspector-width));
 }
 
-.froam-figma-layout.is-toolbar-bottom { grid-template-rows:1fr calc(86px * var(--froam-ui-scale)); grid-template-areas:"layers canvas design" "toolbar toolbar toolbar"; }
+.froam-figma-layout.is-toolbar-bottom { grid-template-rows:1fr calc(48px * var(--froam-ui-scale)); grid-template-areas:"layers canvas design" "toolbar toolbar toolbar"; }
 .froam-figma-layout.is-panels-mirrored { grid-template-columns: var(--froam-inspector-width) 1fr var(--froam-left-width); grid-template-areas:"toolbar toolbar toolbar" "design canvas layers"; }
 .froam-figma-layout.is-panels-mirrored.is-toolbar-bottom { grid-template-areas:"design canvas layers" "toolbar toolbar toolbar"; }
 .froam-figma-layout.is-panels-mirrored.is-planning { grid-template-columns:var(--froam-inspector-width) 1fr minmax(320px,var(--froam-planner-width)); }
@@ -84,8 +84,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
-  background: linear-gradient(180deg, rgba(30, 30, 30, 0.99), rgba(21, 21, 23, 0.99));
+  border-right: 1px solid var(--fs-border-muted);
+  background: var(--fs-surface-1);
 }
 
 .froam-figma-left[hidden] {
@@ -113,14 +113,14 @@
   color: var(--fs-text-tertiary);
   cursor: pointer;
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 13px;
 }
 
 .froam-figma-left__tabs button:hover,
 .froam-figma-left__tabs button.is-active {
-  border-color: rgba(94, 234, 212, 0.18);
-  background: rgba(94, 234, 212, 0.09);
-  color: var(--fs-accent);
+  border-color: rgba(var(--fs-accent-rgb), 0.18);
+  background: rgba(var(--fs-accent-rgb), 0.09);
+  color: var(--fs-accent-text);
 }
 
 .froam-figma-left__body {
@@ -128,9 +128,9 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 10px;
+  padding: 0;
   scrollbar-width: thin;
-  scrollbar-color: rgba(94, 234, 212, 0.2) transparent;
+  scrollbar-color: rgba(var(--fs-accent-rgb), 0.2) transparent;
 }
 
 .froam-figma-left__body > .froam-lp,
@@ -141,7 +141,7 @@
   border-right: 0;
 }
 
-.froam-figma-left__body > .froam-lp { margin: -10px; }
+.froam-figma-left__body > .froam-lp { margin: 0; }
 
 /* The canvas area is transparent / pass-through */
 .froam-figma-layout__canvas {
@@ -159,8 +159,8 @@
 .froam-reference__ready {
   padding: 3px 6px;
   border-radius: 999px;
-  background: rgba(125, 243, 225, 0.08);
-  color: #7dd3b0 !important;
-  font-size: 7px !important;
+  background: rgba(var(--fs-accent-rgb), 0.08);
+  color: var(--fs-accent-text) !important;
+  font-size: 11px !important;
   letter-spacing: 0.08em;
 }

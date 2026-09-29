@@ -2,14 +2,15 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { createPortal } from 'react-dom'
 import type { FroamStyleState } from '../project/types'
 import { FONT_GROUP_LABELS, groupFontOptions, type FontOption } from './fontSources'
+import { describeSelection } from './selection-name'
 import {
   AlignCenter,
   AlignJustify,
   AlignLeft,
   AlignRight,
-  Blend,
   Bold,
   BringToFront,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -21,17 +22,10 @@ import {
   Eraser,
   Eye,
   EyeOff,
-  Grid2X2,
   ImagePlus,
   Italic,
-  Layers,
-  LayoutTemplate,
-  Maximize,
-  Palette,
+  MoreHorizontal,
   SendToBack,
-  Pipette,
-  RectangleHorizontal,
-  Rows3,
   Search,
   SlidersHorizontal,
   Sparkles,
@@ -41,6 +35,7 @@ import {
   Underline,
   Undo2,
   Ungroup,
+  WandSparkles,
 } from 'lucide-react'
 
 type FloatingAction =
@@ -65,6 +60,8 @@ type FloatingAction =
   | 'toggle-hidden'
   | 'bring-front'
   | 'send-back'
+  | 'open-design'
+  | 'animate'
 
 type WalkDirection = 'parent' | 'prev' | 'next' | 'child'
 
@@ -105,6 +102,9 @@ type Props = {
   fontOptions: FontOption[]
   selectionCount: number
   isTextLayer?: boolean
+  /** The element has words of its own — show the type controls. */
+  hasText?: boolean
+  isImage?: boolean
   docked?: boolean
   canUndo?: boolean
   onWalk?: (direction: WalkDirection) => void
@@ -2107,43 +2107,7 @@ export const LOOK_NOTES: Record<string, string> = {
   'Reset look': 'Strips every look back to nothing.',
 }
 
-function NumericField({
-  label,
-  value,
-  min,
-  max,
-  step = 1,
-  unit,
-  onChange,
-}: {
-  label: string
-  value: string | number
-  min?: number
-  max?: number
-  step?: number
-  unit?: string
-  onChange: (value: number) => void
-}) {
-  const numericValue = Number.parseFloat(String(value)) || 0
-  const clamp = (next: number) => Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min ?? Number.NEGATIVE_INFINITY, next))
-  const scrub = useScrub((steps) => onChange(clamp(numericValue + steps * step)), 6)
-  return (
-    <label className="froam-floating-bar__field froam-floating-bar__field--scrub">
-      <span {...scrub} style={{ touchAction: 'none', cursor: 'ew-resize' }}>{label}</span>
-      <div className="froam-floating-bar__number">
-        <input
-          type="number"
-          value={numericValue}
-          min={min}
-          max={max}
-          step={step}
-          onChange={(event) => onChange(Number(event.target.value))}
-        />
-        {unit && <small>{unit}</small>}
-      </div>
-    </label>
-  )
-}
+type Pop = 'palette' | 'looks' | 'align' | 'more' | null
 
 export default function FroamFloatingBar({
   targetRect,
@@ -2152,10 +2116,6 @@ export default function FroamFloatingBar({
   fontFamily,
   fontSize,
   fontWeight,
-  lineHeight,
-  letterSpacing,
-  wordSpacing,
-  textTransform,
   isBold,
   isItalic,
   isUnderline,
@@ -2163,23 +2123,14 @@ export default function FroamFloatingBar({
   textAlign,
   color,
   background,
-  width,
-  height,
-  display,
-  flexDirection,
-  justifyContent,
-  alignItems,
-  gap,
-  padding,
   radius,
-  overflow,
   opacity,
   isHidden = false,
-  mixBlendMode,
-  zIndex,
   fontOptions,
   selectionCount,
   isTextLayer = false,
+  hasText = true,
+  isImage = false,
   docked = false,
   canUndo = false,
   onWalk,
@@ -2188,10 +2139,10 @@ export default function FroamFloatingBar({
   onSaveLook,
 }: Props) {
   const barRef = useRef<HTMLDivElement>(null)
-  const [expanded, setExpanded] = useState(false)
   const [narrow, setNarrow] = useState(false)
   const [position, setPosition] = useState({ left: 12, top: 12 })
-  const [openPop, setOpenPop] = useState<'palette' | 'looks' | null>(null)
+  const [openPop, setOpenPop] = useState<Pop>(null)
+  const [menuLeft, setMenuLeft] = useState(0)
   const [palette, setPalette] = useState<string[]>([])
   const [paletteMode, setPaletteMode] = useState<'fill' | 'text'>('fill')
   const [lookSearch, setLookSearch] = useState('')
@@ -2217,11 +2168,24 @@ export default function FroamFloatingBar({
   // v4.1: opacity scrub — accumulate in a ref so fast drags don't lose steps to render lag
   const opacityRef = useRef(opacity)
   useEffect(() => { opacityRef.current = opacity }, [opacity])
-  const opacityScrub = useScrub((steps) => {
-    const next = Math.min(1, Math.max(0, Math.round((opacityRef.current + steps * 0.02) * 100) / 100))
-    opacityRef.current = next
-    onStyle({ opacity: String(next) }, { opacity: next }, 'Changed opacity')
-  }, 6)
+  const setOpacity = (next: number) => {
+    const clamped = Math.min(1, Math.max(0, Math.round(next * 100) / 100))
+    opacityRef.current = clamped
+    onStyle({ opacity: String(clamped) }, { opacity: clamped }, 'Changed opacity')
+  }
+
+  // A menu closes on Escape or a press anywhere else; the Look Studio dock stays.
+  useEffect(() => {
+    if (!openPop || openPop === 'looks') return
+    const onDown = (event: PointerEvent) => { if (!barRef.current?.contains(event.target as Node)) setOpenPop(null) }
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); setOpenPop(null) } }
+    window.addEventListener('pointerdown', onDown, true)
+    window.addEventListener('keydown', onKey, true)
+    return () => {
+      window.removeEventListener('pointerdown', onDown, true)
+      window.removeEventListener('keydown', onKey, true)
+    }
+  }, [openPop])
 
   useLayoutEffect(() => {
     if (docked || !visible || !targetRect || !barRef.current) return
@@ -2229,29 +2193,30 @@ export default function FroamFloatingBar({
     const placeBar = () => {
       const bar = barRef.current
       if (!bar) return
-      const leftPanel = document.querySelector<HTMLElement>('.froam-figma-left')?.getBoundingClientRect()
+      const leftPanel = document.querySelector<HTMLElement>('.froam-figma-left:not([hidden])')?.getBoundingClientRect()
       const rightPanel = document.querySelector<HTMLElement>('.froam-dp:not(.froam-sheet .froam-dp)')?.getBoundingClientRect()
       const toolbar = document.querySelector<HTMLElement>('.froam-chrome')?.getBoundingClientRect()
-      const safeLeft = leftPanel ? leftPanel.right + VIEWPORT_GAP : VIEWPORT_GAP
-      const safeRight = rightPanel ? rightPanel.left - VIEWPORT_GAP : window.innerWidth - VIEWPORT_GAP
+      const safeLeft = leftPanel && leftPanel.width > 0 ? leftPanel.right + VIEWPORT_GAP : VIEWPORT_GAP
+      const safeRight = rightPanel && rightPanel.width > 0 ? rightPanel.left - VIEWPORT_GAP : window.innerWidth - VIEWPORT_GAP
       const toolbarAtTop = Boolean(toolbar && toolbar.top <= VIEWPORT_GAP)
       const safeTop = toolbarAtTop && toolbar ? toolbar.bottom + VIEWPORT_GAP : VIEWPORT_GAP
       const safeBottom = !toolbarAtTop && toolbar ? toolbar.top - VIEWPORT_GAP : window.innerHeight - VIEWPORT_GAP
       const availableWidth = Math.max(280, safeRight - safeLeft)
-      const nextNarrow = availableWidth < 760
+      const nextNarrow = availableWidth < 560
 
       bar.style.maxWidth = `${availableWidth}px`
-      bar.style.width = expanded ? `${Math.min(920, availableWidth)}px` : 'max-content'
+      bar.style.width = 'max-content'
 
-      const constrainedRect = bar.getBoundingClientRect()
-      const centeredLeft = targetRect.left + targetRect.width / 2 - constrainedRect.width / 2
+      const barRect = bar.getBoundingClientRect()
+      const centeredLeft = targetRect.left + targetRect.width / 2 - barRect.width / 2
       const left = Math.min(
         Math.max(safeLeft, centeredLeft),
-        Math.max(safeLeft, safeRight - constrainedRect.width),
+        Math.max(safeLeft, safeRight - barRect.width),
       )
-      const above = targetRect.top - constrainedRect.height - TARGET_GAP
-      const below = targetRect.bottom + TARGET_GAP
-      const maxTop = Math.max(safeTop, safeBottom - constrainedRect.height)
+      // Above the selection when it fits, else below it; never over it.
+      const above = targetRect.top - barRect.height - TARGET_GAP
+      const below = targetRect.bottom + TARGET_GAP + 22
+      const maxTop = Math.max(safeTop, safeBottom - barRect.height)
       const top = above >= safeTop ? Math.min(above, maxTop) : Math.min(Math.max(safeTop, below), maxTop)
 
       bar.style.left = `${left}px`
@@ -2272,16 +2237,18 @@ export default function FroamFloatingBar({
       resizeObserver.disconnect()
       window.removeEventListener('resize', placeBar)
     }
-  }, [docked, expanded, narrow, targetRect, visible])
+  }, [docked, narrow, targetRect, visible])
 
   useLayoutEffect(() => {
     if (openPop !== 'looks') return
 
     const placeLookDock = () => {
-      const leftPanel = document.querySelector<HTMLElement>('.froam-figma-left')?.getBoundingClientRect()
+      const leftPanel = document.querySelector<HTMLElement>('.froam-figma-left:not([hidden])')?.getBoundingClientRect()
       const rightPanel = document.querySelector<HTMLElement>('.froam-dp:not(.froam-sheet .froam-dp)')?.getBoundingClientRect()
-      const safeLeft = leftPanel ? leftPanel.right + VIEWPORT_GAP : VIEWPORT_GAP
-      const safeRight = rightPanel ? rightPanel.left - VIEWPORT_GAP : window.innerWidth - VIEWPORT_GAP
+      const toolbar = document.querySelector<HTMLElement>('.froam-chrome')?.getBoundingClientRect()
+      const safeLeft = leftPanel && leftPanel.width > 0 ? leftPanel.right + VIEWPORT_GAP : VIEWPORT_GAP
+      const safeRight = rightPanel && rightPanel.width > 0 ? rightPanel.left - VIEWPORT_GAP : window.innerWidth - VIEWPORT_GAP
+      const safeTop = toolbar && toolbar.top <= VIEWPORT_GAP ? toolbar.bottom + VIEWPORT_GAP : VIEWPORT_GAP
       const availableWidth = Math.max(280, safeRight - safeLeft)
 
       if (availableWidth < 620 || window.innerWidth < 720) {
@@ -2298,9 +2265,9 @@ export default function FroamFloatingBar({
       const panelWidth = Math.min(380, Math.max(320, Math.round(availableWidth * 0.34)))
       setLookDockStyle({
         left: lookDockSide === 'left' ? safeLeft : safeRight - panelWidth,
-        top: VIEWPORT_GAP,
+        top: safeTop,
         width: panelWidth,
-        maxHeight: window.innerHeight - VIEWPORT_GAP * 2,
+        maxHeight: window.innerHeight - safeTop - VIEWPORT_GAP,
       })
     }
 
@@ -2311,15 +2278,15 @@ export default function FroamFloatingBar({
 
   if (!visible || !targetRect) return null
 
-  const cleanDimension = (value: string, fallback: number) => Number.parseFloat(value) || fallback
-  const widthValue = cleanDimension(width, targetRect.width)
-  const heightValue = cleanDimension(height, targetRect.height)
   const backgroundHex = normalizeToHex(background) ?? '#0b0f14'
+  const { kind, detail } = describeSelection(label)
+  const showType = hasText || isTextLayer
 
-  function togglePop(which: 'palette' | 'looks') {
+  function togglePop(which: Exclude<Pop, null>, mode?: 'fill' | 'text') {
+    if (mode) setPaletteMode(mode)
     setOpenPop((current) => {
-      const next = current === which ? null : which
-      if (next && palette.length === 0) {
+      const next = current === which && (!mode || mode === paletteMode) ? null : which
+      if ((next === 'palette' || next === 'looks') && palette.length === 0) {
         const pagePalette = collectPagePalette()
         setPalette(pagePalette)
         if (which === 'looks') setLookAccent(pickAccent(pagePalette))
@@ -2385,226 +2352,237 @@ export default function FroamFloatingBar({
       && (!query || `${look.name} ${look.group} ${LOOK_NOTES[look.name] ?? ''}`.toLowerCase().includes(query))
   })
 
+  const alignIcon = textAlign === 'center' ? <AlignCenter size={15} /> : textAlign === 'right' || textAlign === 'end' ? <AlignRight size={15} /> : textAlign === 'justify' ? <AlignJustify size={15} /> : <AlignLeft size={15} />
+  const act = (action: FloatingAction, value?: string) => { setOpenPop(null); onAction(action, value) }
+  // Open toward the side with more room, and never past the screen's edge.
+  const barHeight = barRef.current?.offsetHeight ?? 40
+  const roomBelow = typeof window === 'undefined' ? 600 : window.innerHeight - (position.top + barHeight) - 16
+  const roomAbove = position.top - 16
+  const menuUp = !docked && roomBelow < 420 && roomAbove > roomBelow
+  const menuRoom = Math.max(180, (menuUp ? roomAbove : roomBelow) - 8)
+  function anchorAt(button: HTMLElement) {
+    const bar = barRef.current?.getBoundingClientRect()
+    const own = button.getBoundingClientRect()
+    setMenuLeft(bar ? Math.max(0, own.left - bar.left + own.width / 2) : 0)
+  }
+  const walk = (direction: WalkDirection) => { setOpenPop(null); onWalk?.(direction) }
+
   return (
     <div
       ref={barRef}
-      className={`froam-floating-bar ${expanded ? 'is-expanded' : ''} ${narrow ? 'is-narrow' : ''} ${docked ? 'is-docked' : ''}`}
+      className={`froam-floating-bar ${narrow ? 'is-narrow' : ''} ${docked ? 'is-docked' : ''}`}
       data-chef-editor-root="true"
       style={docked ? undefined : { left: position.left, top: position.top }}
+      role="toolbar"
+      aria-label={`${kind} tools`}
     >
       <div className="froam-floating-bar__primary">
-        {/* v4: selection walker — precise selection without precise fingers */}
         {onWalk && (
-          <div className="froam-floating-bar__group froam-floating-bar__walker" role="group" aria-label="Walk selection">
-            <button type="button" className="froam-floating-bar__btn" title="Select parent" onClick={() => onWalk('parent')}><CornerLeftUp size={13} /></button>
-            <button type="button" className="froam-floating-bar__btn" title="Previous sibling" onClick={() => onWalk('prev')}><ChevronLeft size={13} /></button>
-            <button type="button" className="froam-floating-bar__btn" title="Next sibling" onClick={() => onWalk('next')}><ChevronRight size={13} /></button>
-            <button type="button" className="froam-floating-bar__btn" title="Select first child" onClick={() => onWalk('child')}><CornerRightDown size={13} /></button>
-          </div>
+          <button type="button" className="froam-floating-bar__btn froam-floating-bar__walker" title="Select the parent (Esc climbs too)" aria-label="Select parent" onClick={() => onWalk('parent')}>
+            <CornerLeftUp size={15} />
+          </button>
         )}
 
         <div className="froam-floating-bar__identity" title={label}>
-          <Type size={13} />
-          <span>{label}</span>
+          <strong>{selectionCount > 1 ? `${selectionCount} selected` : kind}</strong>
+          {selectionCount <= 1 && detail && <small>{detail}</small>}
         </div>
 
-        {/* v4: one tap to edit copy — double-tap is misery on phones */}
-        <button
-          type="button"
-          className="froam-floating-bar__btn froam-floating-bar__edit-text"
-          title="Edit text"
-          onClick={() => onAction('edit-text')}
-        >
-          <span className="froam-floating-bar__aa">Aa</span>
-        </button>
-
-        <select
-          className="froam-floating-bar__select froam-floating-bar__font"
-          value={fontFamily}
-          title="Font family"
-          aria-label="Font family"
-          onChange={(event) => onStyle(
-            { fontFamily: event.target.value },
-            { fontFamily: event.target.value },
-            'Changed font family',
-          )}
-        >
-          {/* Grouped by the job the face does — forty-five names in a flat
-              list is a scroll, not a choice. */}
-          {groupFontOptions(fontOptions).map(([role, options]) => (
-            <optgroup key={role} label={FONT_GROUP_LABELS[role]}>
-              {options.map((font) => <option key={font.value} value={font.value}>{font.label}</option>)}
-            </optgroup>
-          ))}
-        </select>
-
-        <div className="froam-floating-bar__stepper froam-floating-bar__stepper--scrub" title="Font size — drag the number to scrub" {...fontScrub} style={{ touchAction: 'none' }}>
-          <button type="button" onClick={() => onStyle({ fontSize: `${Math.max(6, fontSize - 1)}px` }, { fontSize: Math.max(6, fontSize - 1) })}>−</button>
-          <input
-            type="number"
-            value={Math.round(fontSize)}
-            min={6}
-            max={400}
-            aria-label="Font size"
-            onChange={(event) => {
-              const next = Math.max(6, Number(event.target.value))
-              onStyle({ fontSize: `${next}px` }, { fontSize: next }, 'Changed font size')
-            }}
-          />
-          <button type="button" onClick={() => onStyle({ fontSize: `${Math.min(400, fontSize + 1)}px` }, { fontSize: Math.min(400, fontSize + 1) })}>+</button>
-        </div>
-
-        <select
-          className="froam-floating-bar__select froam-floating-bar__weight"
-          value={fontWeight}
-          title="Font weight"
-          aria-label="Font weight"
-          onChange={(event) => onStyle(
-            { fontWeight: event.target.value },
-            { fontWeight: event.target.value },
-            'Changed font weight',
-          )}
-        >
-          {['300', '400', '500', '600', '700', '800', '900'].map((weight) => <option key={weight} value={weight}>{weight}</option>)}
-        </select>
-
-        <span className="froam-floating-bar__sep" />
-
-        <div className="froam-floating-bar__group">
-          <button type="button" className={`froam-floating-bar__btn ${isBold ? 'is-active' : ''}`} title="Bold" onClick={() => onAction('bold')}><Bold size={13} /></button>
-          <button type="button" className={`froam-floating-bar__btn ${isItalic ? 'is-active' : ''}`} title="Italic" onClick={() => onAction('italic')}><Italic size={13} /></button>
-          <button type="button" className={`froam-floating-bar__btn ${isUnderline ? 'is-active' : ''}`} title="Underline" onClick={() => onAction('underline')}><Underline size={13} /></button>
-          <button type="button" className={`froam-floating-bar__btn ${isStrike ? 'is-active' : ''}`} title="Strikethrough" onClick={() => onAction('strike')}><Strikethrough size={13} /></button>
-        </div>
-
-        <span className="froam-floating-bar__sep" />
-
-        <div className="froam-floating-bar__group">
-          <button type="button" className={`froam-floating-bar__btn ${textAlign === 'left' || textAlign === 'start' ? 'is-active' : ''}`} title="Align left" onClick={() => onAction('align-left')}><AlignLeft size={13} /></button>
-          <button type="button" className={`froam-floating-bar__btn ${textAlign === 'center' ? 'is-active' : ''}`} title="Align center" onClick={() => onAction('align-center')}><AlignCenter size={13} /></button>
-          <button type="button" className={`froam-floating-bar__btn ${textAlign === 'right' || textAlign === 'end' ? 'is-active' : ''}`} title="Align right" onClick={() => onAction('align-right')}><AlignRight size={13} /></button>
-          <button type="button" className={`froam-floating-bar__btn ${textAlign === 'justify' ? 'is-active' : ''}`} title="Justify" onClick={() => onAction('align-justify')}><AlignJustify size={13} /></button>
-        </div>
-
-        <span className="froam-floating-bar__sep" />
-
-        <div className="froam-floating-bar__group">
-          <button
-            type="button"
-            className="froam-floating-bar__btn froam-floating-bar__btn--merge"
-            title={selectionCount > 1 ? 'Merge selected into one movable stamp' : 'Merge this with overlapping sibling shapes'}
-            onClick={() => onAction('merge')}
-          >
-            <Combine size={13} />
-          </button>
-          <button
-            type="button"
-            className="froam-floating-bar__btn"
-            title="Ungroup merged stamp"
-            onClick={() => onAction('unmerge')}
-          >
-            <Ungroup size={13} />
-          </button>
-        </div>
-
-        <span className="froam-floating-bar__sep" />
-
-        {/* v4: page palette — the site's own colors as one-tap chips */}
-        <button
-          type="button"
-          className={`froam-floating-bar__btn ${openPop === 'palette' ? 'is-active' : ''}`}
-          title="Page palette — colors from this site"
-          onClick={() => togglePop('palette')}
-        >
-          <Pipette size={13} />
-        </button>
-
-        {/* v4: quick looks — one-tap style recipes */}
-        <button
-          type="button"
-          className={`froam-floating-bar__btn ${openPop === 'looks' ? 'is-active' : ''}`}
-          title="Quick looks — one-tap styles"
-          onClick={() => togglePop('looks')}
-        >
-          <Sparkles size={13} />
-        </button>
-
-        <label className="froam-floating-bar__color-btn" title="Text color" style={{ '--froam-swatch': color } as CSSProperties}>
-          <Type size={11} />
-          <input type="color" className="froam-floating-bar__color-input" value={color} onChange={(event) => onAction('color', event.target.value)} />
-        </label>
-        <label className="froam-floating-bar__color-btn" title={isTextLayer ? 'Text fill' : 'Background'} style={{ '--froam-swatch': isTextLayer ? color : background } as CSSProperties}>
-          <Palette size={11} />
-          <input type="color" className="froam-floating-bar__color-input" value={background} onChange={(event) => onAction('bg-color', event.target.value)} />
-        </label>
-        <button
-          type="button"
-          className="froam-floating-bar__btn"
-          title="Clear fill"
-          onClick={() => onAction('clear-bg')}
-        >
-          <Eraser size={13} />
-        </button>
-
-        <span className="froam-floating-bar__sep" />
-
-        {/* v4.1: opacity scrub — drag the % to fade any element */}
-        <div
-          className="froam-floating-bar__opacity"
-          title="Opacity — drag to fade"
-          {...opacityScrub}
-          style={{ touchAction: 'none' }}
-        >
-          <Contrast size={13} />
-          <span>{Math.round(opacity * 100)}%</span>
-        </div>
-
-        {/* v4.1: show / hide any element */}
-        <button
-          type="button"
-          className={`froam-floating-bar__btn ${isHidden ? 'is-active' : ''}`}
-          title={isHidden ? 'Show element' : 'Hide element'}
-          onClick={() => onAction('toggle-hidden')}
-        >
-          {isHidden ? <EyeOff size={13} /> : <Eye size={13} />}
-        </button>
-
-        {docked && (
+        {showType && (
           <>
             <span className="froam-floating-bar__sep" />
             <button
               type="button"
-              className="froam-floating-bar__btn"
-              title="Undo"
-              disabled={!canUndo}
-              onClick={() => onAction('undo')}
+              className="froam-floating-bar__btn froam-floating-bar__edit-text"
+              title="Edit the words (or double-click them)"
+              aria-label="Edit text"
+              onClick={() => onAction('edit-text')}
             >
-              <Undo2 size={13} />
+              <Type size={15} />
             </button>
+            <select
+              className="froam-floating-bar__select froam-floating-bar__font"
+              value={fontFamily}
+              title="Font"
+              aria-label="Font family"
+              onChange={(event) => onStyle(
+                { fontFamily: event.target.value },
+                { fontFamily: event.target.value },
+                'Changed font family',
+              )}
+            >
+              {/* Grouped by the job the face does — forty-five names in a flat
+                  list is a scroll, not a choice. */}
+              {groupFontOptions(fontOptions).map(([role, options]) => (
+                <optgroup key={role} label={FONT_GROUP_LABELS[role]}>
+                  {options.map((font) => <option key={font.value} value={font.value}>{font.label}</option>)}
+                </optgroup>
+              ))}
+            </select>
+
+            <div className="froam-floating-bar__stepper froam-floating-bar__stepper--scrub" title="Size — drag the number to scrub" {...fontScrub} style={{ touchAction: 'none' }}>
+              <input
+                type="number"
+                value={Math.round(fontSize)}
+                min={6}
+                max={400}
+                aria-label="Font size"
+                onChange={(event) => {
+                  const next = Math.max(6, Number(event.target.value))
+                  onStyle({ fontSize: `${next}px` }, { fontSize: next }, 'Changed font size')
+                }}
+              />
+            </div>
+
+            <select
+              className="froam-floating-bar__select froam-floating-bar__weight"
+              value={fontWeight}
+              title="Weight"
+              aria-label="Font weight"
+              onChange={(event) => onStyle(
+                { fontWeight: event.target.value },
+                { fontWeight: event.target.value },
+                'Changed font weight',
+              )}
+            >
+              {[['300', 'Light'], ['400', 'Regular'], ['500', 'Medium'], ['600', 'Semibold'], ['700', 'Bold'], ['800', 'Extra bold'], ['900', 'Black']].map(([weight, name]) => <option key={weight} value={weight}>{name}</option>)}
+            </select>
+
+            <span className="froam-floating-bar__sep" />
+
+            <button type="button" className={`froam-floating-bar__btn ${isBold ? 'is-active' : ''}`} title="Bold (Ctrl+B)" aria-label="Bold" aria-pressed={Boolean(isBold)} onClick={() => onAction('bold')}><Bold size={15} /></button>
+            <button type="button" className={`froam-floating-bar__btn ${isItalic ? 'is-active' : ''}`} title="Italic (Ctrl+I)" aria-label="Italic" aria-pressed={Boolean(isItalic)} onClick={() => onAction('italic')}><Italic size={15} /></button>
+            <button type="button" className={`froam-floating-bar__btn ${isUnderline ? 'is-active' : ''}`} title="Underline (Ctrl+U)" aria-label="Underline" aria-pressed={Boolean(isUnderline)} onClick={() => onAction('underline')}><Underline size={15} /></button>
+            <div className="froam-floating-bar__anchor">
+              <button type="button" className={`froam-floating-bar__btn froam-floating-bar__btn--menu ${openPop === 'align' ? 'is-open' : ''}`} title="Alignment" aria-label="Text alignment" aria-haspopup="menu" aria-expanded={openPop === 'align'} onClick={(event) => { anchorAt(event.currentTarget); togglePop('align') }}>
+                {alignIcon}<ChevronDown size={11} />
+              </button>
+            </div>
           </>
+        )}
+
+        <span className="froam-floating-bar__sep" />
+
+        {/* Colours: the site's own palette first, any colour after. */}
+        {showType && (
+          <button
+            type="button"
+            className={`froam-floating-bar__swatch ${openPop === 'palette' && paletteMode === 'text' ? 'is-open' : ''}`}
+            title="Text colour"
+            aria-label="Text colour"
+            onClick={(event) => { anchorAt(event.currentTarget); togglePop('palette', 'text') }}
+          >
+            <span className="froam-floating-bar__swatch-text" style={{ '--froam-swatch': color } as CSSProperties}>A</span>
+          </button>
+        )}
+        <button
+          type="button"
+          className={`froam-floating-bar__swatch ${openPop === 'palette' && paletteMode === 'fill' ? 'is-open' : ''}`}
+          title={isTextLayer ? 'Text fill' : 'Fill'}
+          aria-label={isTextLayer ? 'Text fill' : 'Fill colour'}
+          onClick={(event) => { anchorAt(event.currentTarget); togglePop('palette', 'fill') }}
+        >
+          <span className="froam-floating-bar__swatch-fill" style={{ '--froam-swatch': isTextLayer ? color : background } as CSSProperties} />
+        </button>
+
+        {isImage && (
+          <button type="button" className="froam-floating-bar__btn" title="Replace image" aria-label="Replace image" onClick={() => onAction('image')}><ImagePlus size={15} /></button>
         )}
 
         <button
           type="button"
-          className={`froam-floating-bar__expand ${expanded ? 'is-active' : ''}`}
-          onClick={() => setExpanded((current) => !current)}
-          aria-expanded={expanded}
-          title="More typography and layout controls"
+          className={`froam-floating-bar__looks-btn ${openPop === 'looks' ? 'is-active' : ''}`}
+          title="Styles — one-tap looks, previewed live"
+          onClick={() => togglePop('looks')}
         >
-          <span>More</span>
-          <ChevronDown size={13} />
+          <Sparkles size={14} /><span>Styles</span>
         </button>
+
+        {docked && (
+          <button
+            type="button"
+            className="froam-floating-bar__btn"
+            title="Undo"
+            aria-label="Undo"
+            disabled={!canUndo}
+            onClick={() => onAction('undo')}
+          >
+            <Undo2 size={15} />
+          </button>
+        )}
+
+        <div className="froam-floating-bar__anchor">
+          <button
+            type="button"
+            className={`froam-floating-bar__btn ${openPop === 'more' ? 'is-open' : ''}`}
+            onClick={() => togglePop('more')}
+            aria-haspopup="menu"
+            aria-expanded={openPop === 'more'}
+            aria-label="More actions"
+            title="More"
+          >
+            <MoreHorizontal size={16} />
+          </button>
+        </div>
       </div>
 
+      {openPop === 'align' && (
+        <div className={`froam-floating-bar__menu is-row${menuUp ? ' is-up' : ''}`} style={{ left: menuLeft }} role="menu" aria-label="Text alignment">
+          <button type="button" role="menuitemradio" aria-checked={textAlign === 'left' || textAlign === 'start'} className={textAlign === 'left' || textAlign === 'start' ? 'is-active' : ''} title="Align left" onClick={() => act('align-left')}><AlignLeft size={15} /></button>
+          <button type="button" role="menuitemradio" aria-checked={textAlign === 'center'} className={textAlign === 'center' ? 'is-active' : ''} title="Align center" onClick={() => act('align-center')}><AlignCenter size={15} /></button>
+          <button type="button" role="menuitemradio" aria-checked={textAlign === 'right' || textAlign === 'end'} className={textAlign === 'right' || textAlign === 'end' ? 'is-active' : ''} title="Align right" onClick={() => act('align-right')}><AlignRight size={15} /></button>
+          <button type="button" role="menuitemradio" aria-checked={textAlign === 'justify'} className={textAlign === 'justify' ? 'is-active' : ''} title="Justify" onClick={() => act('align-justify')}><AlignJustify size={15} /></button>
+        </div>
+      )}
+      {openPop === 'more' && (
+        <div className={`froam-floating-bar__menu is-list${menuUp ? ' is-up' : ''}`} style={{ maxHeight: docked ? undefined : menuRoom }} role="menu" aria-label="More actions">
+          <button type="button" role="menuitem" onClick={() => act('open-design')}><SlidersHorizontal size={14} /><span>All design controls</span></button>
+          <button type="button" role="menuitem" onClick={() => act('animate')}><WandSparkles size={14} /><span>Animate…</span></button>
+          <button type="button" role="menuitem" onClick={() => act('duplicate')}><Copy size={14} /><span>Duplicate</span><kbd>Ctrl D</kbd></button>
+          {!isImage && <button type="button" role="menuitem" onClick={() => act('image')}><ImagePlus size={14} /><span>Add an image</span></button>}
+          <div className="froam-floating-bar__menu-divider" />
+          <div className="froam-floating-bar__menu-row" role="group" aria-label="Opacity">
+            <Contrast size={14} />
+            <span>Opacity</span>
+            <input type="range" min={0} max={100} value={Math.round(opacity * 100)} aria-label="Opacity" onChange={(event) => setOpacity(Number(event.target.value) / 100)} />
+            <output>{Math.round(opacity * 100)}%</output>
+          </div>
+          {showType && <button type="button" role="menuitemcheckbox" aria-checked={Boolean(isStrike)} onClick={() => act('strike')}><Strikethrough size={14} /><span>Strikethrough</span>{isStrike && <Check size={13} />}</button>}
+          <button type="button" role="menuitem" onClick={() => act('clear-bg')}><Eraser size={14} /><span>Remove fill</span></button>
+          <button type="button" role="menuitem" onClick={() => act('toggle-hidden')}>{isHidden ? <Eye size={14} /> : <EyeOff size={14} />}<span>{isHidden ? 'Show element' : 'Hide element'}</span></button>
+          <div className="froam-floating-bar__menu-divider" />
+          <div className="froam-floating-bar__menu-label">Select</div>
+          <button type="button" role="menuitem" onClick={() => walk('parent')}><CornerLeftUp size={14} /><span>Parent</span></button>
+          <button type="button" role="menuitem" onClick={() => walk('child')}><CornerRightDown size={14} /><span>First inside</span></button>
+          <button type="button" role="menuitem" onClick={() => walk('prev')}><ChevronLeft size={14} /><span>Previous</span></button>
+          <button type="button" role="menuitem" onClick={() => walk('next')}><ChevronRight size={14} /><span>Next</span></button>
+          <div className="froam-floating-bar__menu-divider" />
+          <button type="button" role="menuitem" onClick={() => act('bring-front')}><BringToFront size={14} /><span>Bring to front</span></button>
+          <button type="button" role="menuitem" onClick={() => act('send-back')}><SendToBack size={14} /><span>Send to back</span></button>
+          <button
+            type="button"
+            role="menuitem"
+            title={selectionCount > 1 ? 'Merge selected into one movable stamp' : 'Merge this with overlapping sibling shapes'}
+            onClick={() => act('merge')}
+          >
+            <Combine size={14} /><span>Merge shapes</span>
+          </button>
+          <button type="button" role="menuitem" onClick={() => act('unmerge')}><Ungroup size={14} /><span>Ungroup</span></button>
+          <div className="froam-floating-bar__menu-divider" />
+          <button type="button" role="menuitem" className="is-danger" onClick={() => act('delete')}><Trash2 size={14} /><span>Reset styles</span></button>
+        </div>
+      )}
+
       {openPop === 'palette' && (
-        <div className="froam-floating-bar__pop" data-chef-editor-root="true">
+        <div className={`froam-floating-bar__pop is-anchored${menuUp ? ' is-up' : ''}`} style={docked ? undefined : { left: Math.max(4, menuLeft - 136) }} data-chef-editor-root="true">
           <div className="froam-floating-bar__pop-head">
-            <span>Page palette</span>
+            <span>{paletteMode === 'text' ? 'Text colour' : isTextLayer ? 'Text fill' : 'Fill'}</span>
             <div className="froam-floating-bar__pop-toggle" role="group" aria-label="Apply as">
               <button type="button" className={paletteMode === 'fill' ? 'is-active' : ''} onClick={() => setPaletteMode('fill')}>{isTextLayer ? 'Glyph' : 'Fill'}</button>
-              <button type="button" className={paletteMode === 'text' ? 'is-active' : ''} onClick={() => setPaletteMode('text')}>Text</button>
+              {showType && <button type="button" className={paletteMode === 'text' ? 'is-active' : ''} onClick={() => setPaletteMode('text')}>Text</button>}
             </div>
           </div>
+          <small className="froam-floating-bar__pop-note">From this page</small>
           <div className="froam-floating-bar__chips">
             {palette.map((hex) => {
               const readable = paletteMode === 'text' && contrastRatio(hex, backgroundHex) >= 4.5
@@ -2614,7 +2592,7 @@ export default function FroamFloatingBar({
                   type="button"
                   className="froam-floating-bar__chip"
                   style={{ '--froam-chip': hex } as CSSProperties}
-                  title={`${hex}${readable ? ' — readable on current fill' : ''}`}
+                  title={`${hex}${readable ? ' — easy to read on this fill' : ''}`}
                   onClick={() => applyChip(hex)}
                 >
                   {paletteMode === 'text' && <span style={{ color: hex }}>Aa</span>}
@@ -2622,7 +2600,18 @@ export default function FroamFloatingBar({
                 </button>
               )
             })}
-            {palette.length === 0 && <span className="froam-floating-bar__pop-empty">No colors found yet</span>}
+            {palette.length === 0 && <span className="froam-floating-bar__pop-empty">No colours found on this page yet</span>}
+          </div>
+          <div className="froam-floating-bar__pop-actions">
+            <label className="froam-floating-bar__custom-color">
+              <input
+                type="color"
+                value={normalizeToHex(paletteMode === 'text' ? color : background) ?? '#000000'}
+                onChange={(event) => onAction(paletteMode === 'text' ? 'color' : 'bg-color', event.target.value)}
+              />
+              <span>Any colour…</span>
+            </label>
+            {paletteMode === 'fill' && <button type="button" onClick={() => act('clear-bg')}><Eraser size={13} /> No fill</button>}
           </div>
         </div>
       )}
@@ -2636,17 +2625,17 @@ export default function FroamFloatingBar({
           style={lookDockStyle}
         >
           <div className="froam-floating-bar__pop-head">
-            <span>Look Studio <small>{LOOKS.length} {isTextLayer ? 'text-safe ' : ''}recipes · live preview</small></span>
+            <span>Styles <small>{LOOKS.length} {isTextLayer ? 'text-safe ' : ''}looks · live preview</small></span>
             <div className="froam-floating-bar__look-window-actions">
-              <button type="button" onClick={() => setLookDockSide((side) => side === 'left' ? 'right' : 'left')} title="Move Look Studio to the other side">
-                {lookDockSide === 'left' ? <ChevronRight size={12} /> : <ChevronLeft size={12} />} Move
+              <button type="button" onClick={() => setLookDockSide((side) => side === 'left' ? 'right' : 'left')} title="Move to the other side" aria-label="Move to the other side">
+                {lookDockSide === 'left' ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
               </button>
               <button type="button" className="froam-floating-bar__look-apply" onClick={() => setOpenPop(null)}>Done</button>
             </div>
           </div>
           <label className="froam-floating-bar__look-search">
-            <Search size={12} />
-            <input value={lookSearch} onChange={(event) => setLookSearch(event.target.value)} placeholder="Search looks…" />
+            <Search size={13} />
+            <input value={lookSearch} onChange={(event) => setLookSearch(event.target.value)} placeholder="Search styles…" />
           </label>
           <div className="froam-floating-bar__look-groups" role="tablist" aria-label="Look categories">
             {(['All', ...LOOK_GROUPS] as const).map((group) => (
@@ -2662,13 +2651,13 @@ export default function FroamFloatingBar({
                   <small>{look.group}</small>
                 </button>
               ))}
-              {visibleLooks.length === 0 && <span className="froam-floating-bar__pop-empty">No looks match “{lookSearch}”</span>}
+              {visibleLooks.length === 0 && <span className="froam-floating-bar__pop-empty">No styles match “{lookSearch}”</span>}
             </div>
           </div>
           <div className="froam-floating-bar__look-editor">
-            <div className="froam-floating-bar__look-editor-title"><SlidersHorizontal size={12} /><span>Customize {selectedLook.name}</span></div>
+            <div className="froam-floating-bar__look-editor-title"><SlidersHorizontal size={13} /><span>Adjust {selectedLook.name}</span></div>
             <div className="froam-floating-bar__look-states" role="tablist" aria-label="Style state">
-              {(['base', 'hover', 'focus', 'active'] as const).map((state) => <button key={state} type="button" role="tab" aria-selected={lookState === state} className={lookState === state ? 'is-active' : ''} onClick={() => setLookState(state)}>{state}</button>)}
+              {(['base', 'hover', 'focus', 'active'] as const).map((state) => <button key={state} type="button" role="tab" aria-selected={lookState === state} className={lookState === state ? 'is-active' : ''} onClick={() => setLookState(state)}>{state === 'base' ? 'Normal' : state[0].toUpperCase() + state.slice(1)}</button>)}
             </div>
             <div className="froam-floating-bar__look-colors">
               <label title="Accent used by accent-aware looks"><span>Accent</span><input type="color" value={lookAccent} onChange={(event) => { const next = event.target.value; setLookAccent(next); applyLook(selectedLook, { accent: next }) }} /></label>
@@ -2681,138 +2670,11 @@ export default function FroamFloatingBar({
               <input type="range" min="0" max="64" value={lookRadius} onChange={(event) => { const next = Number(event.target.value); setLookRadius(next); if (overrideLookRadius) applyLook(selectedLook, { radius: next }) }} disabled={!overrideLookRadius} />
               <output>{lookRadius}px</output>
             </label>}
-            <p>{isTextLayer ? 'Box effects become glyph effects: fill, gradient, stroke, and text shadow stay on the words.' : 'Every recipe and design-variable change previews directly on the selected element.'} Keep this dock open while you inspect the page.</p>
-            {onSaveLook && <button type="button" className="froam-floating-bar__look-save" onClick={() => onSaveLook({ name: selectedLook.name, states: { ...lookStateDrafts, [lookState]: customizedLook(selectedLook).styles } })}>Save as reusable style</button>}
+            <p>{isTextLayer ? 'On text, box effects become glyph effects: fill, gradient, stroke and shadow stay on the words.' : 'Every style previews on the selected element as you pick it.'}</p>
+            {onSaveLook && <button type="button" className="froam-floating-bar__look-save" onClick={() => onSaveLook({ name: selectedLook.name, states: { ...lookStateDrafts, [lookState]: customizedLook(selectedLook).styles } })}>Save as a reusable style</button>}
           </div>
         </div>,
         document.body,
-      )}
-
-      {expanded && (
-        <div className="froam-floating-bar__advanced">
-          <section>
-            <header><Type size={13} /> Typography</header>
-            <div className="froam-floating-bar__fields">
-              <NumericField label="Line" value={lineHeight} min={0.5} max={5} step={0.05} onChange={(next) => onStyle({ lineHeight: String(next) }, { lineHeight: next }, 'Changed line height')} />
-              <NumericField label="Tracking" value={letterSpacing} min={-20} max={100} step={0.1} unit="px" onChange={(next) => onStyle({ letterSpacing: `${next}px` }, { letterSpacing: next }, 'Changed letter spacing')} />
-              <NumericField label="Words" value={wordSpacing} min={-20} max={100} step={0.5} unit="px" onChange={(next) => onStyle({ wordSpacing: `${next}px` }, { wordSpacing: next }, 'Changed word spacing')} />
-              <label className="froam-floating-bar__field">
-                <span>Case</span>
-                <select value={textTransform} onChange={(event) => onStyle({ textTransform: event.target.value }, { textTransform: event.target.value }, 'Changed text case')}>
-                  <option value="none">Original</option>
-                  <option value="uppercase">UPPER</option>
-                  <option value="lowercase">lower</option>
-                  <option value="capitalize">Title</option>
-                </select>
-              </label>
-            </div>
-          </section>
-
-          <section>
-            <header><Maximize size={13} /> Size & shape</header>
-            <div className="froam-floating-bar__fields">
-              <NumericField label="Width" value={widthValue} min={1} max={5000} unit="px" onChange={(next) => onStyle({ width: `${next}px` }, { width: `${next}px` }, 'Changed width')} />
-              <NumericField label="Height" value={heightValue} min={1} max={5000} unit="px" onChange={(next) => onStyle({ height: `${next}px` }, { height: `${next}px` }, 'Changed height')} />
-              <NumericField label="Padding" value={padding} min={0} max={400} unit="px" onChange={(next) => onStyle({ padding: `${next}px` }, { paddingTop: next, paddingRight: next, paddingBottom: next, paddingLeft: next }, 'Changed padding')} />
-              <NumericField label="Radius" value={radius} min={0} max={1000} unit="px" onChange={(next) => onStyle({ borderRadius: `${next}px` }, { borderRadiusTL: next, borderRadiusTR: next, borderRadiusBR: next, borderRadiusBL: next }, 'Changed radius')} />
-            </div>
-            <div className="froam-floating-bar__preset-row">
-              <button type="button" onClick={() => onStyle({ width: 'auto' }, { width: 'auto' }, 'Width: auto')}>Auto W</button>
-              <button type="button" onClick={() => onStyle({ height: 'auto' }, { height: 'auto' }, 'Height: auto')}>Auto H</button>
-              <button type="button" onClick={() => onStyle({ width: '100%', maxWidth: '100%' }, { width: '100%', maxWidth: '100%' }, 'Fill parent')}>Fill</button>
-              <button type="button" onClick={() => onStyle({ width: 'max-content', height: 'auto', maxWidth: '100%' }, { width: 'max-content', height: 'auto' }, 'Hug content')}>Hug</button>
-            </div>
-          </section>
-
-          <section>
-            <header><LayoutTemplate size={13} /> Layout</header>
-            <div className="froam-floating-bar__segmented">
-              <button type="button" className={display === 'block' ? 'is-active' : ''} onClick={() => onStyle({ display: 'block' }, { display: 'block' }, 'Layout: block')}><RectangleHorizontal size={13} /> Block</button>
-              <button type="button" className={display.includes('flex') ? 'is-active' : ''} onClick={() => onStyle({ display: 'flex' }, { display: 'flex' }, 'Layout: flex')}><Rows3 size={13} /> Flex</button>
-              <button type="button" className={display === 'grid' ? 'is-active' : ''} onClick={() => onStyle({ display: 'grid' }, { display: 'grid' }, 'Layout: grid')}><Grid2X2 size={13} /> Grid</button>
-            </div>
-            <div className="froam-floating-bar__fields">
-              <label className="froam-floating-bar__field">
-                <span>Direction</span>
-                <select value={flexDirection} onChange={(event) => onStyle({ display: 'flex', flexDirection: event.target.value }, { display: 'flex', flexDirection: event.target.value }, 'Changed flex direction')}>
-                  <option value="row">Row</option>
-                  <option value="column">Column</option>
-                  <option value="row-reverse">Row reverse</option>
-                  <option value="column-reverse">Column reverse</option>
-                </select>
-              </label>
-              <label className="froam-floating-bar__field">
-                <span>Justify</span>
-                <select value={justifyContent} onChange={(event) => onStyle({ justifyContent: event.target.value }, { justifyContent: event.target.value }, 'Changed distribution')}>
-                  <option value="flex-start">Start</option>
-                  <option value="center">Center</option>
-                  <option value="flex-end">End</option>
-                  <option value="space-between">Between</option>
-                  <option value="space-around">Around</option>
-                  <option value="space-evenly">Evenly</option>
-                </select>
-              </label>
-              <label className="froam-floating-bar__field">
-                <span>Align</span>
-                <select value={alignItems} onChange={(event) => onStyle({ alignItems: event.target.value }, { alignItems: event.target.value }, 'Changed alignment')}>
-                  <option value="stretch">Stretch</option>
-                  <option value="flex-start">Start</option>
-                  <option value="center">Center</option>
-                  <option value="flex-end">End</option>
-                  <option value="baseline">Baseline</option>
-                </select>
-              </label>
-              <NumericField label="Gap" value={gap} min={0} max={400} unit="px" onChange={(next) => onStyle({ gap: `${next}px` }, { gap: next }, 'Changed gap')} />
-              <label className="froam-floating-bar__field">
-                <span>Overflow</span>
-                <select value={overflow} onChange={(event) => onStyle({ overflow: event.target.value }, { overflow: event.target.value }, 'Changed overflow')}>
-                  <option value="visible">Visible</option>
-                  <option value="hidden">Hidden</option>
-                  <option value="auto">Auto</option>
-                  <option value="scroll">Scroll</option>
-                </select>
-              </label>
-            </div>
-          </section>
-
-          <section>
-            <header><Layers size={13} /> Depth &amp; blend</header>
-            <div className="froam-floating-bar__fields">
-              <NumericField label="Z-index" value={zIndex} min={-999} max={9999} onChange={(next) => onStyle({ zIndex: String(next) }, { zIndex: next }, 'Changed z-index')} />
-              <label className="froam-floating-bar__field">
-                <span>Blend</span>
-                <select value={mixBlendMode} onChange={(event) => onStyle({ mixBlendMode: event.target.value }, { mixBlendMode: event.target.value }, 'Changed blend mode')}>
-                  <option value="normal">Normal</option>
-                  <option value="multiply">Multiply</option>
-                  <option value="screen">Screen</option>
-                  <option value="overlay">Overlay</option>
-                  <option value="darken">Darken</option>
-                  <option value="lighten">Lighten</option>
-                  <option value="color-dodge">Color dodge</option>
-                  <option value="color-burn">Color burn</option>
-                  <option value="hard-light">Hard light</option>
-                  <option value="soft-light">Soft light</option>
-                  <option value="difference">Difference</option>
-                  <option value="exclusion">Exclusion</option>
-                  <option value="hue">Hue</option>
-                  <option value="saturation">Saturation</option>
-                  <option value="color">Color</option>
-                  <option value="luminosity">Luminosity</option>
-                </select>
-              </label>
-            </div>
-            <div className="froam-floating-bar__preset-row">
-              <button type="button" onClick={() => onAction('bring-front')}><BringToFront size={12} /> Front</button>
-              <button type="button" onClick={() => onAction('send-back')}><SendToBack size={12} /> Back</button>
-            </div>
-          </section>
-
-          <section className="froam-floating-bar__actions">
-            <button type="button" onClick={() => onAction('image')}><ImagePlus size={13} /> Image</button>
-            <button type="button" onClick={() => onAction('duplicate')}><Copy size={13} /> Duplicate</button>
-            <button type="button" className="is-danger" onClick={() => onAction('delete')}><Trash2 size={13} /> Reset styles</button>
-          </section>
-        </div>
       )}
     </div>
   )

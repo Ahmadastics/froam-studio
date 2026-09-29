@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { describeSelection } from './selection-name'
 import {
   ArrowDown,
   ArrowUp,
@@ -917,7 +918,7 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
   return (
     <div className="fsp" data-chef-editor-root="true">
       <header className="fsp-context">
-        <div className="fsp-context__project">
+        <div className="fsp-context__project" title="Graph synced — your pages stay connected to this project">
           <Network size={14} />
           <span>
             <input
@@ -931,25 +932,23 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
                 if (event.key === 'Escape') { setProjectNameDraft(projectName); event.currentTarget.blur() }
               }}
             />
-            <small>{branchName} · {routeKey}</small>
+            <small>{branchName === 'main' || branchName === 'Main' ? '' : `${branchName} · `}{routeKey === '/' ? 'Home page' : routeKey}</small>
           </span>
-          <em>Graph synced</em>
         </div>
-        <div className={`fsp-context__selection ${selection ? 'has-selection' : ''}`}>
-          <span>{selection ? 'Insert relative to' : 'Canvas target'}</span>
-          <strong>{selection?.label ?? 'Page end'}</strong>
-          {selection?.nodeId && <small title={selection.nodeId}>stable ID</small>}
+        <div className={`fsp-context__selection ${selection ? 'has-selection' : ''}`} title={selection?.nodeId ? `Stable ID ${selection.nodeId}` : undefined}>
+          <span>{selection ? 'New sections go after' : 'New sections go at'}</span>
+          <strong>{selection ? describeSelection(selection.label).kind : 'the end of the page'}</strong>
         </div>
       </header>
       {tab !== 'library' && <div className="fsp-tabs" role="tablist" aria-label="Froam planning tools">
-        <button type="button" className={tab === 'blueprint' ? 'is-active' : ''} onClick={() => selectTab('blueprint')}>
-          <Frame size={14} /> Draft
-        </button>
-        <button type="button" className={tab === 'sitemap' ? 'is-active' : ''} onClick={() => selectTab('sitemap')}>
+        <button type="button" role="tab" aria-selected={tab === 'sitemap'} className={tab === 'sitemap' ? 'is-active' : ''} onClick={() => selectTab('sitemap')}>
           <ListTree size={14} /> Pages
         </button>
-        <button type="button" className={tab === 'wireframe' ? 'is-active' : ''} onClick={() => selectTab('wireframe')}>
-          <LayoutTemplate size={14} /> Compose
+        <button type="button" role="tab" aria-selected={tab === 'wireframe'} className={tab === 'wireframe' ? 'is-active' : ''} onClick={() => selectTab('wireframe')}>
+          <LayoutTemplate size={14} /> Wireframe
+        </button>
+        <button type="button" role="tab" aria-selected={tab === 'blueprint'} className={tab === 'blueprint' ? 'is-active' : ''} onClick={() => selectTab('blueprint')}>
+          <Sparkles size={14} /> Plan
         </button>
       </div>}
 
@@ -1093,10 +1092,10 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
         <div className="fsp-pane">
           <div className="fsp-pane__heading">
             <div>
-              <span>Information architecture</span>
-              <strong>{plan.pages.length} pages connected</strong>
+              <strong>Pages</strong>
+              <span>{plan.pages.length} {plan.pages.length === 1 ? 'page' : 'pages'} in this site</span>
             </div>
-            <button type="button" className="fsp-icon-btn" onClick={() => addPage(null)} title="Add top-level page">
+            <button type="button" className="fsp-icon-btn" onClick={() => addPage(null)} title="Add a page" aria-label="Add a page">
               <FilePlus2 size={15} />
             </button>
           </div>
@@ -1128,8 +1127,8 @@ export default function FroamSitePlanner({ projectKey, routeKey, projectName, br
               </label>
             </div>
             <div className="fsp-page-editor__actions">
-              <button type="button" onClick={() => addPage(selectedPage.id)}><Plus size={13} /> Child page</button>
-              <button type="button" onClick={() => selectTab('wireframe')}><LayoutTemplate size={13} /> Open wireframe</button>
+              <button type="button" onClick={() => addPage(selectedPage.id)}><Plus size={13} /> Add a page inside</button>
+              <button type="button" onClick={() => selectTab('wireframe')}><LayoutTemplate size={13} /> Wireframe</button>
             </div>
           </div>
         </div>

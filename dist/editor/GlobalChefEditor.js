@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState, } from 'react';
 import { createPortal } from 'react-dom';
-import { AlignCenter, AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignLeft, AlignRight, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, Bold, Box, ClipboardCheck, Clock, Code, Command, Copy, Download, Eraser, Eye, EyeOff, FileImage, FileText, GitCommit, Grid2X2, Grip, ImagePlus, Italic, Keyboard, Layers, LayoutGrid, ListTree, Link, Minus, Monitor, MousePointer, Share2, Smartphone, Tablet, MousePointer2, MessageSquare, Move, Paintbrush, Palette, PencilLine, Plus, Redo2, RotateCw, Save, DraftingCompass, ScanLine, Search, SlidersHorizontal, Sparkles, Square, SquareDashedBottom, Strikethrough, Type, Underline, Undo2, Unlink, Variable, Maximize2, X, Zap, Coins, AlignCenterHorizontal, AlignCenterVertical, Timer, } from 'lucide-react';
+import { AlignCenter, AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignLeft, AlignRight, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, Bold, Box, ClipboardCheck, Clock, Code, Command, Copy, Download, Eraser, Eye, EyeOff, FileImage, FileText, GitCommit, Grip, ImagePlus, Italic, Keyboard, Layers, LayoutGrid, Link, Minus, Monitor, MousePointer, Share2, Smartphone, Tablet, MousePointer2, MessageSquare, Move, Paintbrush, Palette, PencilLine, Plus, Redo2, RotateCw, Save, DraftingCompass, ScanLine, Search, SlidersHorizontal, Sparkles, Square, SquareDashedBottom, Strikethrough, Type, Underline, Undo2, Unlink, Variable, Maximize2, X, Zap, Coins, AlignCenterHorizontal, AlignCenterVertical, Timer, } from 'lucide-react';
 import FroamSectionBoundary from './FroamSectionBoundary.js';
 import { apiGetFresh, apiPost } from '../lib/api.js';
 import { bridgeUrl } from '../lib/bridge.js';
@@ -42,7 +42,7 @@ import { useFroamIntent } from './useFroamIntent.js';
 import { shouldOfferAskFroam } from './froam-intent-model.js';
 import { searchFroamQuickEdits } from './quick-edit-catalog.js';
 import FroamLabs from './FroamLabs.js';
-import FroamWorkspaceShell from './FroamWorkspaceShell.js';
+import FroamWorkspaceShell, { FroamPanelTabs, LEFT_PANEL_TABS } from './FroamWorkspaceShell.js';
 import FroamUICustomizer from './FroamUICustomizer.js';
 import { froamUIPanelWidth, readFroamUIPreference, writeFroamUIPreference } from './froamUIPreferences.js';
 import { FROAM_WORKSPACE_SECTIONS, readWorkspacePreference, workspaceCommandMatches, writeWorkspacePreference } from './workspace-shell-model.js';
@@ -106,6 +106,15 @@ function roomProfileOf(persona) {
         title: persona.role || null,
         color: persona.accentColor && persona.accentColor !== DEFAULT_FROAM_PERSONA.accentColor ? persona.accentColor : null,
     };
+}
+/** Words of its own, not only inside children: what the type controls act on. */
+function hasOwnWords(element) {
+    if (/^(INPUT|TEXTAREA|SELECT|BUTTON|A|LABEL|H[1-6]|P|LI|SPAN|STRONG|EM|SMALL|B|I|U|BLOCKQUOTE|FIGCAPTION|TD|TH|DT|DD|CAPTION|LEGEND)$/.test(element.tagName))
+        return true;
+    for (const node of Array.from(element.childNodes))
+        if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim())
+            return true;
+    return false;
 }
 export default function GlobalChefEditor({ initialOpen = false, routeKey: explicitRouteKey, projectKey: explicitProjectKey }) {
     const routeKey = useFroamRouteKey(explicitRouteKey);
@@ -691,9 +700,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     /** Set when invite links couldn't be made — there's no room server behind this page. */
     const [shareUnavailable, setShareUnavailable] = useState(false);
     const [copied, setCopied] = useState(false);
+    /**
+     * Invite links by role, exactly as the Share panel hands them out — through
+     * the public link when this site runs on this computer. Set further down,
+     * once that link is known; read at the moment of copying.
+     */
+    const inviteLinksRef = useRef({});
     /** The link to hand over — a commenter one, since that is what a client is. */
-    const shareLink = room.owned ? room.inviteLink(room.owned, 'commenter') : null;
-    const editorLink = room.owned ? room.inviteLink(room.owned, 'editor') : null;
+    const shareLink = room.owned ? (inviteLinksRef.current.commenter ?? null) : null;
+    const editorLink = room.owned ? (inviteLinksRef.current.editor ?? null) : null;
     const startSharing = useCallback(async (fresh = false) => {
         setSharing(true);
         setShareUnavailable(false);
@@ -703,7 +718,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             // no longer the one being shown.
             if (fresh || !room.owned)
                 await room.openRoom(persona.name || 'Designer');
-            showToast(fresh ? 'New link — the old one no longer works' : 'Review link ready');
+            showToast(fresh ? 'New links — the old ones no longer work' : 'Invite links ready');
         }
         catch {
             // No room server here (a static preview, a site without Froam's
@@ -716,10 +731,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [room.owned, room.openRoom, persona.name]);
     const copyShareLink = useCallback(async () => {
-        if (!shareLink)
+        const link = inviteLinksRef.current.commenter;
+        if (!link) {
+            showToast('The link is on its way — try again in a moment');
             return;
+        }
         try {
-            await navigator.clipboard.writeText(shareLink);
+            await navigator.clipboard.writeText(link);
             setCopied(true);
             window.setTimeout(() => setCopied(false), 2_000);
         }
@@ -727,19 +745,22 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             showToast('Copy failed — select the link and copy it');
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [shareLink]);
+    }, []);
     const copyEditorLink = useCallback(async () => {
-        if (!editorLink)
+        const link = inviteLinksRef.current.editor;
+        if (!link) {
+            showToast('The link is on its way — try again in a moment');
             return;
+        }
         try {
-            await navigator.clipboard.writeText(editorLink);
+            await navigator.clipboard.writeText(link);
             showToast('Editor invite copied');
         }
         catch {
             showToast('Copy failed — select the link and copy it');
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [editorLink]);
+    }, []);
     const refreshNotes = useCallback(async () => {
         if (!room.client || !room.inRoom)
             return;
@@ -1145,6 +1166,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+    const stopReachRef = useRef(() => { });
     /** The owner is done: every link stops working and Share starts fresh. */
     const endCollaboration = useCallback(async () => {
         try {
@@ -1153,8 +1175,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 setPreviewingRequestId(null);
             }
             const done = await room.endRoom();
-            if (done)
+            if (done) {
                 showToast('Session ended — the invite links no longer work');
+                stopReachRef.current();
+            }
         }
         catch (error) {
             showToast(error instanceof Error ? error.message : 'Could not reach the room');
@@ -1176,6 +1200,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
      * its address instead of localhost (lib/share-tunnel.mjs).
      */
     const [reach, setReach] = useState(null);
+    /** Whether the bridge has answered once — until then a local page has no link to give. */
+    const [reachChecked, setReachChecked] = useState(false);
+    /** The owner turned the public link off: links open on this computer only. */
+    const [reachOff, setReachOff] = useState(false);
     const pageIsLocal = typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1|\[::1\]|.+\.localhost|.+\.local)$/i.test(window.location.hostname);
     const readReach = useCallback(async () => {
         try {
@@ -1185,14 +1213,19 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 setReach(null);
                 return;
             }
-            setReach((current) => ({ available: true, active: Boolean(data.active), online: Boolean(data.online), url: data.url ?? null, starting: current?.starting ?? false }));
+            setReach((current) => ({ available: data.available !== false, active: Boolean(data.active), online: Boolean(data.online), url: data.url ?? null, starting: current?.starting ?? false, error: current?.error ?? null }));
         }
         catch {
             setReach(null);
         }
+        finally {
+            setReachChecked(true);
+        }
     }, []);
     useEffect(() => { if (pageIsLocal)
-        void readReach(); }, [pageIsLocal, readReach]);
+        void readReach();
+    else
+        setReachChecked(true); }, [pageIsLocal, readReach]);
     // While the share is connecting, look again until it's up.
     useEffect(() => {
         if (!reach?.active || reach.online)
@@ -1201,33 +1234,50 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         return () => window.clearInterval(timer);
     }, [reach?.active, reach?.online, readReach]);
     const setReachable = useCallback(async (on) => {
-        setReach((current) => (current ? { ...current, starting: on } : current));
+        setReachOff(!on);
+        setReach((current) => (current ? { ...current, starting: on, error: null } : current));
+        let failure = null;
         try {
             const response = await window.fetch(bridgeUrl(on ? '/__froam/share/start' : '/__froam/share/stop'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
             const data = await response.json().catch(() => null);
             if (!response.ok || !data?.success)
-                throw new Error(data?.error || 'Could not share this site');
-            if (on)
-                showToast('Your site is reachable from anywhere while froam dev runs — the links now work on any computer');
+                throw new Error(data?.error || 'Could not make a public link');
         }
         catch (error) {
-            showToast(error instanceof Error ? error.message : 'Could not share this site');
+            failure = error instanceof Error ? error.message : 'Could not make a public link';
         }
         finally {
             await readReach();
-            setReach((current) => (current ? { ...current, starting: false } : current));
+            setReach((current) => (current ? { ...current, starting: false, error: on ? failure : null } : current));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [readReach]);
+    // A site on this computer is shared through the share service whenever it
+    // has a room: links sent earlier come back to life with froam dev, and new
+    // ones never point at localhost.
+    const wantsReach = pageIsLocal && room.role === 'owner' && Boolean(room.owned) && !room.ended
+        && Boolean(reach?.available) && !reach?.active && !reach?.starting && !reach?.error && !reachOff;
+    useEffect(() => { if (wantsReach)
+        void setReachable(true); }, [wantsReach, setReachable]);
+    stopReachRef.current = () => { if (pageIsLocal && reach?.active)
+        void setReachable(false).then(() => setReachOff(false)); };
+    /** Local page, public link on: links wait for its address. */
+    const sharesThroughService = pageIsLocal && !reachOff && (!reachChecked || Boolean(reach?.available));
+    const linksPending = Boolean(room.owned) && sharesThroughService && !(reach?.active && reach.url);
     const inviteLinks = useMemo(() => {
         const owned = room.owned;
         if (!owned)
             return {};
-        // Shared: links go through the share service, so they open on any computer.
-        const base = reach?.active && reach.url ? reach.url : undefined;
+        if (linksPending)
+            return {};
+        // Shared: links go through the share service, so they open on any computer,
+        // on the page you're looking at.
+        const page = typeof window === 'undefined' || window.location.pathname === '/' ? '' : window.location.pathname;
+        const base = sharesThroughService && reach?.url ? `${reach.url}${page}` : undefined;
         const link = (role) => (owned.invites[role] ? room.inviteLink(owned, role, base) : undefined);
         return { editor: link('editor'), contributor: link('contributor'), commenter: link('commenter'), viewer: link('viewer') };
-    }, [room.owned, room.inviteLink, reach?.active, reach?.url]);
+    }, [room.owned, room.inviteLink, linksPending, sharesThroughService, reach?.url]);
+    inviteLinksRef.current = inviteLinks;
     const copyInviteLink = useCallback(async (link) => {
         try {
             await navigator.clipboard.writeText(link);
@@ -1285,6 +1335,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const draftCount = useMemo(() => countRenderableDrafts(routeDrafts), [routeDrafts]);
     const hasRouteDrafts = useMemo(() => draftCount > 0, [draftCount]);
     const showPanel = panelOpen || active;
+    // A page wider than the phone (one oversized image is enough) makes mobile
+    // Chrome widen the layout viewport, and every fixed control — the top bar's
+    // end, the docked bar, the sheet — lands off-screen. While editing on a
+    // phone the page doesn't scroll sideways, so the controls stay in reach.
+    useEffect(() => {
+        if (!(isMobileUI && showPanel) || typeof document === 'undefined')
+            return;
+        const root = document.documentElement;
+        root.setAttribute('data-froam-phone-editing', '');
+        return () => root.removeAttribute('data-froam-phone-editing');
+    }, [isMobileUI, showPanel]);
     /* Fonts the drafts reference must actually load, or the preview lies. */
     useEffect(() => {
         ensureFontLinks(collectStoreFontFamilies(routeDrafts));
@@ -4926,7 +4987,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         }
         if (section === 'reference' || section === 'layers') {
             setLeftPanelOpen(true);
-            setRightPanelOpen(false);
+            if (!roomForBothPanels())
+                setRightPanelOpen(false);
             setLeftWorkspaceMode(section);
             if (section === 'layers') {
                 const root = getRoot();
@@ -4938,7 +5000,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         if (mode === 'create') {
             if (section === 'plan' || section === 'library') {
                 setLeftPanelOpen(true);
-                setRightPanelOpen(false);
+                if (!roomForBothPanels())
+                    setRightPanelOpen(false);
                 setLeftWorkspaceMode('plan');
                 setPlannerRequestedTab(section === 'library' ? 'library' : 'sitemap');
                 return;
@@ -4969,6 +5032,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         if (labTabs[section])
             setRequestedLab(labTabs[section]);
     }
+    /** A wide screen fits both side panels and still leaves the page room. */
+    function roomForBothPanels() { return typeof window !== 'undefined' && window.innerWidth >= 1280; }
+    function openLeftTab(section) {
+        const tab = LEFT_PANEL_TABS.find((item) => item.id === section);
+        openWorkspaceSection(section, tab?.mode ?? 'create');
+    }
+    const leftTab = leftWorkspaceMode === 'layers' ? 'layers' : leftWorkspaceMode === 'reference' ? 'reference' : plannerRequestedTab === 'library' ? 'library' : 'plan';
+    const contextInspectorOpen = connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen;
     function toggleAdvancedWorkspace() {
         const opening = !workspacePreference.advancedOpen;
         setWorkspacePreference((current) => ({ ...current, advancedOpen: opening }));
@@ -4991,13 +5062,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         showToast(error instanceof Error ? error.message : 'Could not switch prototype');
     } }
     const corePaletteCommands = [
-        { id: 'save', label: 'Save draft', shortcut: 'Ctrl+S', icon: _jsx(Save, { size: 15 }), action: saveToRunam },
-        { id: 'save-repo', label: 'Save to Repo (git-ready)', shortcut: 'Ctrl+Shift+S', icon: _jsx(GitCommit, { size: 15 }), action: () => { void saveToRepo(); } },
+        { id: 'save', label: 'Save', shortcut: 'Ctrl+S', icon: _jsx(Save, { size: 15 }), action: saveToRunam },
+        { id: 'save-repo', label: 'Save to your code (git-ready files)', shortcut: 'Ctrl+Shift+S', icon: _jsx(GitCommit, { size: 15 }), action: () => { void saveToRepo(); } },
         // Sharing is the start of a review, so it belongs where people look for a
         // verb — not only in a panel section they have to find first.
         {
             id: 'share',
-            label: shareLink ? 'Copy review link' : 'Share for review',
+            label: shareLink ? 'Copy a link for comments' : 'Invite people to review',
             icon: _jsx(Share2, { size: 15 }),
             action: () => {
                 setOpenSections((p) => ({ ...p, share: true }));
@@ -5010,14 +5081,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         ...(shareLink
             ? [{
                     id: 'share-new',
-                    label: 'New review link (revokes the old one)',
+                    label: 'New invite links (the old ones stop working)',
                     icon: _jsx(Share2, { size: 15 }),
                     action: () => { setOpenSections((p) => ({ ...p, share: true })); void startSharing(true); },
                 }]
             : []),
         { id: 'scan', label: 'Scan page', icon: _jsx(ScanLine, { size: 15 }), action: () => setScanActive(true) },
-        { id: 'blueprint', label: 'Blueprint', icon: _jsx(DraftingCompass, { size: 15 }), action: () => setBlueprintOpen(true) },
-        ...FROAM_WORKSPACE_SECTIONS.filter((section) => !section.labFlag || labsFlags[section.labFlag]).map((section) => ({ id: `workspace:${section.mode}:${section.id}`, label: `${section.mode[0].toUpperCase()}${section.mode.slice(1)} · ${section.label}`, searchText: [section.label, section.description, ...(section.aliases ?? [])].join(' '), icon: _jsx(Sparkles, { size: 15 }), action: () => openWorkspaceSection(section.id, section.mode) })),
+        { id: 'blueprint', label: 'Page map', icon: _jsx(DraftingCompass, { size: 15 }), action: () => setBlueprintOpen(true) },
+        ...FROAM_WORKSPACE_SECTIONS.filter((section) => !section.labFlag || labsFlags[section.labFlag]).map((section) => ({ id: `workspace:${section.mode}:${section.id}`, label: `Open ${section.label}`, hint: { create: 'Build', understand: 'Understand', experiment: 'Experiment' }[section.mode], searchText: [section.label, section.description, ...(section.aliases ?? [])].join(' '), icon: _jsx(Sparkles, { size: 15 }), action: () => openWorkspaceSection(section.id, section.mode) })),
         ...Object.values(projectSession.project.branches).map((branch) => ({ id: `branch:${branch.id}`, label: `Switch prototype · ${branch.name}`, searchText: `switch branch prototype mutation ${branch.id} ${branch.name}`, icon: _jsx(GitCommit, { size: 15 }), action: () => switchWorkspaceBranch(branch.id) })),
         { id: 'versions', label: 'Versions', icon: _jsx(GitCommit, { size: 15 }), action: () => { setWorkspacePreference((current) => ({ ...current, advancedOpen: true })); setOpenSections((p) => ({ ...p, versions: true })); } },
         { id: 'undo', label: 'Undo', shortcut: 'Ctrl+Z', icon: _jsx(Undo2, { size: 15 }), action: undo },
@@ -5485,8 +5556,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     isMobileUI ? 'is-mobile' : '',
                     leftWorkspaceMode === 'plan' || leftWorkspaceMode === 'reference' ? 'is-planning' : '',
                     leftPanelOpen ? '' : 'is-left-collapsed',
-                    connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen ? 'has-context-inspector' : '',
-                    (workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen ? '' : 'is-right-collapsed',
+                    contextInspectorOpen ? 'has-context-inspector' : '',
+                    rightPanelOpen || contextInspectorOpen ? '' : 'is-right-collapsed',
                     `is-toolbar-${uiPreference.toolbar}`,
                     `is-workspace-${uiPreference.workspace}`,
                     `is-panels-${uiPreference.panels}`,
@@ -5534,7 +5605,16 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 setMoveMode(tool === 'move');
                             }, canUndo: canUndo, canRedo: canRedo, onSave: actionsRef.current.saveToRunam, onSaveRepo: isContributor ? undefined : () => { void actionsRef.current.saveToRepo(); }, collaborate: (_jsx(FroamCollaborate, { role: room.role, isOwner: room.role === 'owner', inRoom: room.inRoom, joined: roomJoined, myName: room.identity?.name ?? persona.name ?? 'You', me: roomMe, people: room.others, links: inviteLinks, opening: sharing, shareUnavailable: shareUnavailable, onOpenRoom: (fresh) => { void startSharing(fresh); }, onCopyLink: (link) => { void copyInviteLink(link); }, requests: requests, pendingChanges: contributorRequest?.changes ?? [], onSubmit: submitChangeRequest, onWithdraw: (request) => { void withdrawChangeRequest(request); }, previewingId: previewingRequestId, onPreview: previewChangeRequest, onDecide: decideChangeRequest, messaging: roomMessaging, onEditProfile: openPersonaEditor, needsName: room.needsName && invitedByLink, knownProfile: persona.name && persona.name !== DEFAULT_FROAM_PERSONA.name
                                     ? { name: persona.name, avatarUrl: persona.imageUrl || null, title: persona.role }
-                                    : null, onJoin: joinRoomAs, onRevert: room.role === 'owner' ? revertApprovedRequest : undefined, checks: requestChecks, expiresAt: room.room?.expiresAt ?? null, openTarget: openTarget, onOpenedTarget: () => setOpenTarget(null), pinTarget: pinTarget, onShowAnchor: showMessageAnchor, onTyping: setComposingMessage, onEndRoom: room.role === 'owner' ? endCollaboration : undefined, reach: pageIsLocal && reach?.available ? reach : null, onReach: (on) => { void setReachable(on); }, ended: room.ended })), repoStatus: repoStatus, repoDirtyCount: repoDirtyCount, onAskFroam: () => setQuickChatOpen(true), onUndo: actionsRef.current.undo, onRedo: actionsRef.current.redo, onCommandPalette: openCommandPalette, onShortcutsOverlay: () => setShowShortcutOverlay(true), routeKey: routeKey, persona: persona, onOpenPersonaEditor: openPersonaEditor, draftCount: draftCount, moveMode: moveMode, onToggleMoveMode: () => setMoveMode((value) => !value), zoom: zoom, setZoom: setZoom, leftPanelOpen: leftPanelOpen, rightPanelOpen: (workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen, onToggleLeftPanel: () => {
+                                    : null, onJoin: joinRoomAs, onRevert: room.role === 'owner' ? revertApprovedRequest : undefined, checks: requestChecks, expiresAt: room.room?.expiresAt ?? null, openTarget: openTarget, onOpenedTarget: () => setOpenTarget(null), pinTarget: pinTarget, onShowAnchor: showMessageAnchor, onTyping: setComposingMessage, onEndRoom: room.role === 'owner' ? endCollaboration : undefined, reach: pageIsLocal && reachChecked ? {
+                                    local: true,
+                                    available: Boolean(reach?.available),
+                                    on: !reachOff && Boolean(reach?.available),
+                                    ready: Boolean(reach?.active && reach.url),
+                                    online: Boolean(reach?.online),
+                                    url: reach?.url ?? null,
+                                    starting: Boolean(reach?.starting) || wantsReach,
+                                    error: reach?.error ?? null,
+                                } : null, linksPending: linksPending, onReach: (on) => { void setReachable(on); }, ended: room.ended })), repoStatus: repoStatus, repoDirtyCount: repoDirtyCount, onAskFroam: () => setQuickChatOpen(true), onUndo: actionsRef.current.undo, onRedo: actionsRef.current.redo, onCommandPalette: openCommandPalette, onShortcutsOverlay: () => setShowShortcutOverlay(true), routeKey: routeKey, persona: persona, onOpenPersonaEditor: openPersonaEditor, draftCount: draftCount, moveMode: moveMode, onToggleMoveMode: () => setMoveMode((value) => !value), zoom: zoom, setZoom: setZoom, leftPanelOpen: leftPanelOpen, rightPanelOpen: rightPanelOpen || contextInspectorOpen, onToggleLeftPanel: () => {
                                 if (workspaceMode !== 'create' && leftWorkspaceMode !== 'reference' && leftWorkspaceMode !== 'layers') {
                                     setWorkspaceMode('create');
                                     setLeftPanelOpen(true);
@@ -5551,21 +5631,24 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                     return;
                                 }
                                 setRightPanelOpen((value) => !value);
-                            }, workspace: (_jsx(FroamWorkspaceShell, { mode: workspaceMode, activeSection: activeWorkspaceSection, onModeChange: setWorkspaceMode, onSectionChange: openWorkspaceSection, projectName: projectSession.project.name, branchId: projectSession.project.activeBranchId, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, members: roomPresence, hasSelection: Boolean(selection), selectionLabel: selection?.label, flags: labsFlags, advancedOpen: workspacePreference.advancedOpen, onToggleAdvanced: toggleAdvancedWorkspace, onOpenPrototypes: () => openConnectedWorkspace('branches'), onOpenReplay: () => openConnectedWorkspace('replay'), onOpenCommands: openCommandPalette, onAskFroam: () => setQuickChatOpen(true), temporalOwner: temporalOwner, activity: workspaceActivity })), onMinimize: () => {
+                            }, workspace: (_jsx(FroamWorkspaceShell, { mode: workspaceMode, activeSection: activeWorkspaceSection, branchId: projectSession.project.activeBranchId, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, temporalOwner: temporalOwner, activity: workspaceActivity, hasSelection: Boolean(selection) })), projectName: projectSession.project.name, prototypeName: projectSession.project.activeBranchId === 'main' ? null : (projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId), onOpenPages: () => openLeftTab('plan'), onOpenLibrary: () => { if (leftPanelOpen && leftTab === 'library')
+                                setLeftPanelOpen(false);
+                            else
+                                openLeftTab('library'); }, libraryOpen: leftPanelOpen && leftTab === 'library', onOpenPrototypes: () => openConnectedWorkspace('branches'), onCustomize: () => setUICustomizerOpen(true), onMinimize: () => {
                                 setStudioMinimized(true);
                                 showToast(`${persona.name} minimized — editing is still active`);
                             }, onClose: () => {
                                 setPanelOpen(false);
                                 setActive(false);
                                 setStudioMinimized(false);
-                            } }) }), _jsxs("div", { className: "froam-figma-left", "data-chef-editor-root": "true", hidden: !leftPanelOpen, children: [_jsxs("div", { className: "froam-figma-left__tabs", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: leftWorkspaceMode === 'plan' && activeWorkspaceSection !== 'library' ? 'is-active' : '', onClick: () => openWorkspaceSection('plan', 'create'), children: [_jsx(ListTree, { size: 13 }), " Pages"] }), _jsxs("button", { type: "button", className: leftWorkspaceMode === 'plan' && activeWorkspaceSection === 'library' ? 'is-active' : '', onClick: () => openWorkspaceSection('library', 'create'), children: [_jsx(Grid2X2, { size: 13 }), " Library"] }), _jsxs("button", { type: "button", className: leftWorkspaceMode === 'reference' ? 'is-active' : '', onClick: () => openWorkspaceSection('reference', 'understand'), children: [_jsx(FileImage, { size: 13 }), " Reference"] })] }), _jsxs("div", { className: "froam-figma-left__body", "data-chef-editor-root": "true", children: [leftWorkspaceMode === 'plan' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "SitePlanner", children: _jsx(FroamSitePlanner, { projectKey: projectKey, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, requestedTab: plannerRequestedTab, selection: selection ? { nodeId: selection.nodeId, label: selection.label } : null, archiveItems: plannerArchiveItems, assets: assets, onRenameProject: renameProject, onAddAsset: addAssetEntry, onApplyAsset: applyAssetToSelection, onRemoveAsset: removeAsset, onTabChange: (nextTab) => {
+                            } }) }), _jsxs("div", { className: "froam-figma-left", "data-chef-editor-root": "true", hidden: !leftPanelOpen, children: [_jsx(FroamPanelTabs, { tabs: LEFT_PANEL_TABS, active: leftTab, onSelect: (tab) => openLeftTab(tab.id), label: "Layers, pages and library" }), _jsxs("div", { className: "froam-figma-left__body", "data-chef-editor-root": "true", children: [leftWorkspaceMode === 'plan' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "SitePlanner", children: _jsx(FroamSitePlanner, { projectKey: projectKey, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, requestedTab: plannerRequestedTab, selection: selection ? { nodeId: selection.nodeId, label: selection.label } : null, archiveItems: plannerArchiveItems, assets: assets, onRenameProject: renameProject, onAddAsset: addAssetEntry, onApplyAsset: applyAssetToSelection, onRemoveAsset: removeAsset, onTabChange: (nextTab) => {
                                                     setPlannerRequestedTab(nextTab);
                                                     const section = nextTab === 'library' ? 'library' : 'plan';
                                                     setWorkspacePreference((current) => ({ ...current, mode: 'create', sections: { ...current.sections, create: section } }));
                                                 }, onInsertComponent: insertLibraryComponent, onInsertBlankFrame: insertBlankFrame, onInsertBlock: addStructureBlock, onInsertArchived: insertArchivedHtml, onBuildPage: buildLibraryPage, onPlanChange: syncSitePlanGraph, onToast: showToast, sampleTheme: () => sampleSiteTheme(getRoot() ?? undefined) }) }) })) : null, _jsx("div", { className: "froam-figma-left__view", hidden: leftWorkspaceMode !== 'reference', children: _jsx(FroamSectionBoundary, { name: "ReferenceWorkspace", children: _jsx(FroamReferenceWorkspace, { project: projectSession.project, routeKey: routeKey, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, reconstructing: ['preparing', 'requesting', 'plan-ready', 'creating-prototype', 'retrying'].includes(froamIntent.state.phase), onReconstruct: (understanding, target) => { void froamIntent.submitReference({ understanding, target }); }, onReferencesChanged: () => { if (froamIntent.state.session?.origin === 'reference')
                                                     froamIntent.cancel(); }, onToast: showToast, onActivityChange: setWorkspaceActivity }) }) }), leftWorkspaceMode === 'layers' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "LayersPanel", children: _jsx(FroamLayersPanel, { layers: layers, selectedPath: selection?.path ?? null, selections: selections, selectionCandidates: selectionCandidates, onSelectLayer: selectLayerNode, onToggleVisibility: toggleLayerVisibility, onAddSection: addSectionRelative, onDuplicateSection: duplicateSection, onMoveSection: moveSection, canMoveSection: canMoveSection, onSetSectionVisibility: setSectionVisibility, onDeleteSection: deleteSection, onRefresh: () => { const root = getRoot(); if (root)
-                                                    setLayers(collectLayers(root)); }, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, knowledgeByNodeId: layerKnowledge, onOpenKnowledge: (node, section) => { selectLayerNode(node); openWorkspaceSection(section); } }) }) })) : null] })] }), _jsx("div", { className: "froam-figma-layout__canvas", "data-chef-editor-root": "true" }), rightPanelOpen && workspaceMode === 'create' && (() => {
-                        const designPanel = (_jsx(FroamSectionBoundary, { name: "DesignPanel", children: _jsx(FroamDesignPanel, { projectKey: projectKey, selection: selection, selectionRect: selectionRect, onApplyStyle: applyStyle, onUpdateDraft: updateDraft, onOpenImageUpload: openSelectedImageUpload, onClearImage: clearAppliedImage, onClearSelectionDraft: actionsRef.current.clearSelectionDraft, marginLinked: marginLinked, paddingLinked: paddingLinked, radiusLinked: radiusLinked, onToggleMarginLinked: () => setMarginLinked((value) => !value), onTogglePaddingLinked: () => setPaddingLinked((value) => !value), onToggleRadiusLinked: () => setRadiusLinked((value) => !value), onApplySizePreset: applySizePreset, onBuildTransformString: buildTransformString, fontOptions: fontOptions, onAddBrandFont: addBrandFont, getRootEl: getRoot, onOpenBlueprint: () => setBlueprintOpen(true), draftStyles: selection ? store[viewportStoreKey]?.[selection.path]?.styles : undefined, onApplyPseudoStyle: applyPseudoStyle }) }));
+                                                    setLayers(collectLayers(root)); }, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, knowledgeByNodeId: layerKnowledge, onOpenKnowledge: (node, section) => { selectLayerNode(node); openWorkspaceSection(section); } }) }) })) : null] })] }), _jsx("div", { className: "froam-figma-layout__canvas", "data-chef-editor-root": "true" }), rightPanelOpen && !contextInspectorOpen && (() => {
+                        const designPanel = (_jsx(FroamSectionBoundary, { name: "DesignPanel", children: _jsx(FroamDesignPanel, { projectKey: projectKey, selection: selection, selectionRect: selectionRect, onApplyStyle: applyStyle, onUpdateDraft: updateDraft, onOpenImageUpload: openSelectedImageUpload, onClearImage: clearAppliedImage, onClearSelectionDraft: actionsRef.current.clearSelectionDraft, marginLinked: marginLinked, paddingLinked: paddingLinked, radiusLinked: radiusLinked, onToggleMarginLinked: () => setMarginLinked((value) => !value), onTogglePaddingLinked: () => setPaddingLinked((value) => !value), onToggleRadiusLinked: () => setRadiusLinked((value) => !value), onApplySizePreset: applySizePreset, onBuildTransformString: buildTransformString, fontOptions: fontOptions, onAddBrandFont: addBrandFont, getRootEl: getRoot, onOpenBlueprint: () => setBlueprintOpen(true), draftStyles: selection ? store[viewportStoreKey]?.[selection.path]?.styles : undefined, onApplyPseudoStyle: applyPseudoStyle, onAnimate: () => openWorkspaceSection('animator', 'create') }) }));
                         if (!isMobileUI)
                             return designPanel;
                         return (_jsx(FroamBottomSheet, { detent: sheetDetent, onDetentChange: setSheetDetent, title: selection?.label ?? 'Design', subtitle: selection ? 'Tap for style controls' : 'Tap any element to start', children: designPanel }));
@@ -5573,9 +5656,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                             setPanelOpen(false);
                             setActive(false);
                             setStudioMinimized(false);
-                        }, title: `Exit ${persona.name}`, "aria-label": `Exit ${persona.name} editing`, children: _jsx(X, { size: 15 }) })] })), showPanel && !studioMinimized && workspacePreference.advancedOpen ? (_jsx("aside", { className: `froam-studio is-advanced-surface ${showPanel ? 'is-open' : ''} ${viewportMode !== 'desktop' ? 'is-device-mode' : ''}`, "data-chef-editor-root": "true", style: getDefaultPanelStyle(), onPointerMove: handlePanelPointerMove, onPointerUp: handlePanelPointerUp, onPointerCancel: handlePanelPointerUp, children: _jsxs("div", { className: "froam-studio__card", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-studio__header", "data-chef-editor-root": "true", style: { cursor: 'grab' }, onPointerDown: handlePanelHeaderPointerDown, children: [_jsxs("div", { className: "froam-studio__brand", children: [_jsx("span", { className: "froam-studio__version-dot" }), _jsxs("span", { className: "froam-studio__logo", children: [persona.name, " Studio"] }), _jsx("span", { className: "froam-studio__badge", children: "v4" }), roomPresence.length > 0 && (_jsx("span", { className: "froam-studio__badge", title: roomPresence.map((m) => `${m.name} · ${m.role}`).join('\n'), style: { background: 'rgba(94,234,212,0.16)', color: '#5eead4' }, children: roomPresence.length === 1
+                        }, title: `Exit ${persona.name}`, "aria-label": `Exit ${persona.name} editing`, children: _jsx(X, { size: 15 }) })] })), showPanel && !studioMinimized && workspacePreference.advancedOpen ? (_jsx("aside", { className: `froam-studio is-advanced-surface ${showPanel ? 'is-open' : ''} ${viewportMode !== 'desktop' ? 'is-device-mode' : ''}`, "data-chef-editor-root": "true", style: getDefaultPanelStyle(), onPointerMove: handlePanelPointerMove, onPointerUp: handlePanelPointerUp, onPointerCancel: handlePanelPointerUp, children: _jsxs("div", { className: "froam-studio__card", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-studio__header", "data-chef-editor-root": "true", style: { cursor: 'grab' }, onPointerDown: handlePanelHeaderPointerDown, children: [_jsxs("div", { className: "froam-studio__brand", children: [_jsx("span", { className: "froam-studio__version-dot" }), _jsxs("span", { className: "froam-studio__logo", children: [persona.name, " Studio"] }), _jsx("span", { className: "froam-studio__badge", children: "v4" }), roomPresence.length > 0 && (_jsx("span", { className: "froam-studio__badge", title: roomPresence.map((m) => `${m.name} · ${m.role}`).join('\n'), style: { background: 'var(--fs-accent-soft)', color: 'var(--fs-accent-text)' }, children: roomPresence.length === 1
                                                 ? `${roomPresence[0].name} is here`
-                                                : `${roomPresence.length} here` }))] }), _jsxs("div", { className: "froam-studio__header-actions", children: [_jsx("button", { type: "button", className: `froam-studio__icon-btn${moveMode ? ' is-active' : ''}`, "data-chef-editor-root": "true", onClick: () => { setMoveMode((v) => !v); showToast(moveMode ? 'Move mode off' : 'Move mode on — drag any element freely'); }, title: "Move mode \u2014 drag elements to reposition (Ctrl+Shift+L)", style: moveMode ? { background: 'rgba(239,68,68,0.18)', color: '#ef4444' } : {}, children: _jsx(Move, { size: 14 }) }), _jsx("div", { className: "froam-studio__header-divider" }), _jsxs("div", { className: "froam-viewport-switcher", "data-chef-editor-root": "true", children: [_jsx("button", { type: "button", className: `froam-studio__icon-btn ${viewportMode === 'desktop' ? 'is-active' : ''}`, onClick: () => setViewportMode('desktop'), title: "Desktop", children: _jsx(Monitor, { size: 14 }) }), _jsx("button", { type: "button", className: `froam-studio__icon-btn ${viewportMode === 'tablet' ? 'is-active' : ''}`, onClick: () => setViewportMode('tablet'), title: "Tablet (768px)", children: _jsx(Tablet, { size: 14 }) }), _jsx("button", { type: "button", className: `froam-studio__icon-btn ${viewportMode === 'mobile' ? 'is-active' : ''}`, onClick: () => setViewportMode('mobile'), title: "Mobile (375px)", children: _jsx(Smartphone, { size: 14 }) })] }), _jsx("div", { className: "froam-studio__header-divider" }), _jsx("button", { type: "button", className: "froam-studio__icon-btn", onClick: openCommandPalette, title: "Command palette (Ctrl+K)", children: _jsx(Command, { size: 14 }) }), _jsx("button", { type: "button", className: `froam-studio__icon-btn ${connectedCanvasOpen ? 'is-active' : ''}`, onClick: () => setConnectedCanvasOpen((value) => !value), title: "Connected Canvas \u2014 replay, prototypes and inspectors", children: _jsx(Share2, { size: 14 }) }), _jsx("button", { type: "button", className: `froam-studio__icon-btn ${intelligenceOpen ? 'is-active' : ''}`, onClick: () => setIntelligenceOpen((value) => !value), title: "Understand \u2014 Scan, DNA, Archive, Flow and responsive evidence", children: _jsx(Sparkles, { size: 14 }) }), _jsx("button", { type: "button", className: `froam-studio__icon-btn ${labsOpen ? 'is-active' : ''}`, onClick: () => setLabsOpen((value) => !value), title: "Experiments \u2014 optional Froam tools", children: _jsx(Zap, { size: 14 }) }), _jsx("button", { type: "button", className: "froam-studio__icon-btn", onClick: undo, disabled: !canUndo, title: "Undo (Ctrl+Z)", children: _jsx(Undo2, { size: 14 }) }), _jsx("button", { type: "button", className: "froam-studio__icon-btn", onClick: redo, disabled: !canRedo, title: "Redo (Ctrl+Y)", children: _jsx(Redo2, { size: 14 }) }), _jsx("button", { type: "button", className: "froam-studio__icon-btn", onClick: () => setShowShortcutOverlay(true), title: "Keyboard shortcuts (?)", children: _jsx(Keyboard, { size: 14 }) })] })] }), _jsxs("div", { className: "froam-studio__status", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-studio__status-left", children: [_jsx("span", { className: `froam-studio__status-dot ${showPanel ? '' : 'is-idle'}` }), _jsx("span", { className: "froam-studio__status-text", children: showPanel ? 'Editing live' : 'Idle' })] }), _jsx("span", { className: "froam-studio__route", children: routeKey }), viewportMode !== 'desktop' && (_jsx("span", { className: "froam-studio__viewport-badge", "data-chef-editor-root": "true", children: viewportMode === 'mobile' ? '375px' : '768px' }))] }), _jsx("div", { className: "froam-studio__divider" }), inlineEditing && (_jsxs("div", { className: "fs-inline-indicator", "data-chef-editor-root": "true", children: [_jsx(PencilLine, { size: 13, "aria-hidden": "true" }), "Editing inline \u2014 click away or press Esc to finish"] })), selection ? (_jsxs("div", { className: "froam-selection-banner", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-selection-banner__tag", children: [_jsx(MousePointer2, { size: 12, "aria-hidden": "true" }), selection.label] }), _jsx("span", { className: "froam-selection-banner__path", children: selection.path })] })) : (_jsxs("div", { className: "froam-empty-state", "data-chef-editor-root": "true", children: [_jsx(MousePointer2, { size: 28, className: "froam-empty-state__icon" }), _jsx("strong", { children: "No element selected" }), _jsx("span", { children: "Click any element on the page to start designing. Double-click to edit text inline." })] })), _jsxs(AccordionSection, { id: "quickActions", icon: _jsx(Zap, { size: 14 }), title: "Quick Actions", isOpen: openSections.quickActions, onToggle: () => toggleSection('quickActions'), children: [_jsxs("div", { className: "fs-pill-group", children: [_jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: saveToRunam, children: [_jsx(ClipboardCheck, { size: 13 }), " Save"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => { copyDesignReport(); }, children: [_jsx(FileText, { size: 13 }), " Copy report"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => { copyRouteDrafts(); }, children: [_jsx(Copy, { size: 13 }), " Copy JSON"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: downloadRunamDrafts, children: [_jsx(Download, { size: 13 }), " Export"] }), _jsxs("button", { type: "button", className: "fs-pill is-danger", onClick: clearRouteDrafts, children: [_jsx(Eraser, { size: 13 }), " Reset page"] }), selection && (_jsxs("button", { type: "button", className: "fs-pill", onClick: clearSelectionDraft, children: [_jsx(X, { size: 13 }), " Clear selected"] }))] }), _jsxs("div", { className: "fs-grid-2", style: { marginTop: 6 }, children: [_jsxs("label", { className: "fs-field", children: [_jsxs("span", { className: "fs-field__label", children: [_jsx(Palette, { size: 12 }), " Page BG"] }), _jsx("input", { type: "color", className: "fs-color-input", value: canvas.background, onChange: (e) => applyCanvasStyles({ background: e.target.value }) })] }), _jsxs("label", { className: "fs-field", children: [_jsxs("span", { className: "fs-field__label", children: [_jsx(Type, { size: 12 }), " Page text"] }), _jsx("input", { type: "color", className: "fs-color-input", value: canvas.text, onChange: (e) => applyCanvasStyles({ text: e.target.value }) })] })] }), _jsxs("div", { className: "fs-pill-group", style: { marginTop: 8 }, children: [_jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: openCanvasImageUpload, children: [_jsx(ImagePlus, { size: 13 }), " Page image"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: clearCanvasImage, children: [_jsx(Eraser, { size: 13 }), " Clear page image"] })] })] }), _jsx(AccordionSection, { id: "intel", icon: _jsx(Sparkles, { size: 14 }), title: "Design Intelligence", isOpen: openSections.intel, onToggle: () => toggleSection('intel'), children: _jsx(FroamIntel, { selectedElement: intelSelectedElement, selectionPath: selection?.path ?? '', applyStyle: applyStyle, onSelectElement: selectElementFromIntel, onFixElement: fixElementFromIntel, onToast: showToast, rootEl: getRoot() }) }), _jsx(AccordionSection, { id: "export", icon: _jsx(Download, { size: 14 }), title: "Export / Capture", isOpen: openSections.export, onToggle: () => toggleSection('export'), children: _jsx(FroamExport, { selectedElement: selectedExportElement, selectionLabel: selection?.label ?? 'Page', selectionPath: selection?.path ?? 'document.body', onToast: showToast }) }), _jsx(AccordionSection, { id: "layout", icon: _jsx(LayoutGrid, { size: 14 }), title: "Layout", isOpen: openSections.layout, onToggle: () => toggleSection('layout'), children: selection ? (_jsxs("div", { className: "fs-stack", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Display" }), _jsx("select", { className: "fs-select", value: selection.display, onChange: (e) => applyStyle({ display: e.target.value }, { display: e.target.value }), children: displayOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] }), (selection.display === 'flex' || selection.display === 'inline-flex') && (_jsxs(_Fragment, { children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Direction" }), _jsx("select", { className: "fs-select", value: selection.flexDirection, onChange: (e) => applyStyle({ flexDirection: e.target.value }, { flexDirection: e.target.value }), children: flexDirectionOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Justify" }), _jsx("select", { className: "fs-select", value: selection.justifyContent, onChange: (e) => applyStyle({ justifyContent: e.target.value }, { justifyContent: e.target.value }), children: justifyOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Align" }), _jsx("select", { className: "fs-select", value: selection.alignItems, onChange: (e) => applyStyle({ alignItems: e.target.value }, { alignItems: e.target.value }), children: alignOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Wrap" }), _jsxs("select", { className: "fs-select", value: selection.flexWrap, onChange: (e) => applyStyle({ flexWrap: e.target.value }, { flexWrap: e.target.value }), children: [_jsx("option", { value: "nowrap", children: "nowrap" }), _jsx("option", { value: "wrap", children: "wrap" }), _jsx("option", { value: "wrap-reverse", children: "wrap-reverse" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Gap" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "0", max: "64", value: selection.gap, onChange: (e) => { const v = e.target.value; applyStyle({ gap: `${v}px` }, { gap: Number(v) }); } }), _jsx("span", { className: "fs-range-value", children: selection.gap })] })] })] })] })), selection.display === 'grid' && (_jsxs(_Fragment, { children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Grid columns" }), _jsx("input", { type: "text", className: "fs-input", value: selection.gridTemplateColumns, placeholder: "1fr 1fr 1fr", onChange: (e) => applyStyle({ gridTemplateColumns: e.target.value }, { gridTemplateColumns: e.target.value }) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Grid rows" }), _jsx("input", { type: "text", className: "fs-input", value: selection.gridTemplateRows, placeholder: "auto", onChange: (e) => applyStyle({ gridTemplateRows: e.target.value }, { gridTemplateRows: e.target.value }) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Gap" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "0", max: "64", value: selection.gap, onChange: (e) => { const v = e.target.value; applyStyle({ gap: `${v}px` }, { gap: Number(v) }); } }), _jsx("span", { className: "fs-range-value", children: selection.gap })] })] })] })), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Position" }), _jsx("select", { className: "fs-select", value: selection.position, onChange: (e) => applyStyle({ position: e.target.value }, { position: e.target.value }), children: positionOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Z-Index" }), _jsx("input", { type: "number", className: "fs-input", value: selection.zIndex, onChange: (e) => { const v = e.target.value; applyStyle({ zIndex: v }, { zIndex: Number(v) }); } })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Overflow" }), _jsx("select", { className: "fs-select", value: selection.overflow, onChange: (e) => applyStyle({ overflow: e.target.value }, { overflow: e.target.value }), children: overflowOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] }), _jsxs("label", { className: "fs-field", children: [_jsxs("span", { className: "fs-field__label", children: [_jsx(MousePointer, { size: 12 }), " Cursor"] }), _jsx("select", { className: "fs-select", value: selection.cursor, onChange: (e) => applyStyle({ cursor: e.target.value }, { cursor: e.target.value }), children: cursorOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] })] })) : (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Select an element" })) }), _jsx(AccordionSection, { id: "spacing", icon: _jsx(Square, { size: 14 }), title: "Spacing & Sizing", isOpen: openSections.spacing, onToggle: () => toggleSection('spacing'), children: selection ? (_jsxs("div", { className: "fs-stack", children: [_jsxs("div", { className: "fs-boxmodel", "data-chef-editor-root": "true", children: [_jsx("button", { type: "button", className: `fs-boxmodel__link-btn ${marginLinked ? 'is-linked' : ''}`, onClick: () => setMarginLinked(!marginLinked), title: "Link margins", children: marginLinked ? _jsx(Link, { size: 10 }) : _jsx(Unlink, { size: 10 }) }), _jsx("input", { className: "fs-boxmodel__input is-mt", value: Math.round(selection.marginTop), onChange: (e) => { const v = e.target.value; if (marginLinked) {
+                                                : `${roomPresence.length} here` }))] }), _jsxs("div", { className: "froam-studio__header-actions", children: [_jsx("button", { type: "button", className: `froam-studio__icon-btn${moveMode ? ' is-active' : ''}`, "data-chef-editor-root": "true", onClick: () => { setMoveMode((v) => !v); showToast(moveMode ? 'Move mode off' : 'Move mode on — drag any element freely'); }, title: "Move mode \u2014 drag elements to reposition (Ctrl+Shift+L)", style: moveMode ? { background: 'var(--fs-accent-soft)', color: 'var(--fs-accent-text)' } : {}, children: _jsx(Move, { size: 14 }) }), _jsx("div", { className: "froam-studio__header-divider" }), _jsxs("div", { className: "froam-viewport-switcher", "data-chef-editor-root": "true", children: [_jsx("button", { type: "button", className: `froam-studio__icon-btn ${viewportMode === 'desktop' ? 'is-active' : ''}`, onClick: () => setViewportMode('desktop'), title: "Desktop", children: _jsx(Monitor, { size: 14 }) }), _jsx("button", { type: "button", className: `froam-studio__icon-btn ${viewportMode === 'tablet' ? 'is-active' : ''}`, onClick: () => setViewportMode('tablet'), title: "Tablet (768px)", children: _jsx(Tablet, { size: 14 }) }), _jsx("button", { type: "button", className: `froam-studio__icon-btn ${viewportMode === 'mobile' ? 'is-active' : ''}`, onClick: () => setViewportMode('mobile'), title: "Mobile (375px)", children: _jsx(Smartphone, { size: 14 }) })] }), _jsx("div", { className: "froam-studio__header-divider" }), _jsx("button", { type: "button", className: "froam-studio__icon-btn", onClick: openCommandPalette, title: "Command palette (Ctrl+K)", children: _jsx(Command, { size: 14 }) }), _jsx("button", { type: "button", className: `froam-studio__icon-btn ${connectedCanvasOpen ? 'is-active' : ''}`, onClick: () => setConnectedCanvasOpen((value) => !value), title: "Connected Canvas \u2014 replay, prototypes and inspectors", children: _jsx(Share2, { size: 14 }) }), _jsx("button", { type: "button", className: `froam-studio__icon-btn ${intelligenceOpen ? 'is-active' : ''}`, onClick: () => setIntelligenceOpen((value) => !value), title: "Understand \u2014 Scan, DNA, Archive, Flow and responsive evidence", children: _jsx(Sparkles, { size: 14 }) }), _jsx("button", { type: "button", className: `froam-studio__icon-btn ${labsOpen ? 'is-active' : ''}`, onClick: () => setLabsOpen((value) => !value), title: "Experiments \u2014 optional Froam tools", children: _jsx(Zap, { size: 14 }) }), _jsx("button", { type: "button", className: "froam-studio__icon-btn", onClick: undo, disabled: !canUndo, title: "Undo (Ctrl+Z)", children: _jsx(Undo2, { size: 14 }) }), _jsx("button", { type: "button", className: "froam-studio__icon-btn", onClick: redo, disabled: !canRedo, title: "Redo (Ctrl+Y)", children: _jsx(Redo2, { size: 14 }) }), _jsx("button", { type: "button", className: "froam-studio__icon-btn", onClick: () => setShowShortcutOverlay(true), title: "Keyboard shortcuts (?)", children: _jsx(Keyboard, { size: 14 }) })] })] }), _jsxs("div", { className: "froam-studio__status", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-studio__status-left", children: [_jsx("span", { className: `froam-studio__status-dot ${showPanel ? '' : 'is-idle'}` }), _jsx("span", { className: "froam-studio__status-text", children: showPanel ? 'Editing live' : 'Idle' })] }), _jsx("span", { className: "froam-studio__route", children: routeKey }), viewportMode !== 'desktop' && (_jsx("span", { className: "froam-studio__viewport-badge", "data-chef-editor-root": "true", children: viewportMode === 'mobile' ? '375px' : '768px' }))] }), _jsx("div", { className: "froam-studio__divider" }), inlineEditing && (_jsxs("div", { className: "fs-inline-indicator", "data-chef-editor-root": "true", children: [_jsx(PencilLine, { size: 13, "aria-hidden": "true" }), "Editing inline \u2014 click away or press Esc to finish"] })), selection ? (_jsxs("div", { className: "froam-selection-banner", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-selection-banner__tag", children: [_jsx(MousePointer2, { size: 12, "aria-hidden": "true" }), selection.label] }), _jsx("span", { className: "froam-selection-banner__path", children: selection.path })] })) : (_jsxs("div", { className: "froam-empty-state", "data-chef-editor-root": "true", children: [_jsx(MousePointer2, { size: 28, className: "froam-empty-state__icon" }), _jsx("strong", { children: "No element selected" }), _jsx("span", { children: "Click any element on the page to start designing. Double-click to edit text inline." })] })), _jsxs(AccordionSection, { id: "quickActions", icon: _jsx(Zap, { size: 14 }), title: "Quick Actions", isOpen: openSections.quickActions, onToggle: () => toggleSection('quickActions'), children: [_jsxs("div", { className: "fs-pill-group", children: [_jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: saveToRunam, children: [_jsx(ClipboardCheck, { size: 13 }), " Save"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => { copyDesignReport(); }, children: [_jsx(FileText, { size: 13 }), " Copy report"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => { copyRouteDrafts(); }, children: [_jsx(Copy, { size: 13 }), " Copy JSON"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: downloadRunamDrafts, children: [_jsx(Download, { size: 13 }), " Export"] }), _jsxs("button", { type: "button", className: "fs-pill is-danger", onClick: clearRouteDrafts, children: [_jsx(Eraser, { size: 13 }), " Reset page"] }), selection && (_jsxs("button", { type: "button", className: "fs-pill", onClick: clearSelectionDraft, children: [_jsx(X, { size: 13 }), " Clear selected"] }))] }), _jsxs("div", { className: "fs-grid-2", style: { marginTop: 6 }, children: [_jsxs("label", { className: "fs-field", children: [_jsxs("span", { className: "fs-field__label", children: [_jsx(Palette, { size: 12 }), " Page BG"] }), _jsx("input", { type: "color", className: "fs-color-input", value: canvas.background, onChange: (e) => applyCanvasStyles({ background: e.target.value }) })] }), _jsxs("label", { className: "fs-field", children: [_jsxs("span", { className: "fs-field__label", children: [_jsx(Type, { size: 12 }), " Page text"] }), _jsx("input", { type: "color", className: "fs-color-input", value: canvas.text, onChange: (e) => applyCanvasStyles({ text: e.target.value }) })] })] }), _jsxs("div", { className: "fs-pill-group", style: { marginTop: 8 }, children: [_jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: openCanvasImageUpload, children: [_jsx(ImagePlus, { size: 13 }), " Page image"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: clearCanvasImage, children: [_jsx(Eraser, { size: 13 }), " Clear page image"] })] })] }), _jsx(AccordionSection, { id: "intel", icon: _jsx(Sparkles, { size: 14 }), title: "Design Intelligence", isOpen: openSections.intel, onToggle: () => toggleSection('intel'), children: _jsx(FroamIntel, { selectedElement: intelSelectedElement, selectionPath: selection?.path ?? '', applyStyle: applyStyle, onSelectElement: selectElementFromIntel, onFixElement: fixElementFromIntel, onToast: showToast, rootEl: getRoot() }) }), _jsx(AccordionSection, { id: "export", icon: _jsx(Download, { size: 14 }), title: "Export / Capture", isOpen: openSections.export, onToggle: () => toggleSection('export'), children: _jsx(FroamExport, { selectedElement: selectedExportElement, selectionLabel: selection?.label ?? 'Page', selectionPath: selection?.path ?? 'document.body', onToast: showToast }) }), _jsx(AccordionSection, { id: "layout", icon: _jsx(LayoutGrid, { size: 14 }), title: "Layout", isOpen: openSections.layout, onToggle: () => toggleSection('layout'), children: selection ? (_jsxs("div", { className: "fs-stack", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Display" }), _jsx("select", { className: "fs-select", value: selection.display, onChange: (e) => applyStyle({ display: e.target.value }, { display: e.target.value }), children: displayOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] }), (selection.display === 'flex' || selection.display === 'inline-flex') && (_jsxs(_Fragment, { children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Direction" }), _jsx("select", { className: "fs-select", value: selection.flexDirection, onChange: (e) => applyStyle({ flexDirection: e.target.value }, { flexDirection: e.target.value }), children: flexDirectionOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Justify" }), _jsx("select", { className: "fs-select", value: selection.justifyContent, onChange: (e) => applyStyle({ justifyContent: e.target.value }, { justifyContent: e.target.value }), children: justifyOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Align" }), _jsx("select", { className: "fs-select", value: selection.alignItems, onChange: (e) => applyStyle({ alignItems: e.target.value }, { alignItems: e.target.value }), children: alignOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Wrap" }), _jsxs("select", { className: "fs-select", value: selection.flexWrap, onChange: (e) => applyStyle({ flexWrap: e.target.value }, { flexWrap: e.target.value }), children: [_jsx("option", { value: "nowrap", children: "nowrap" }), _jsx("option", { value: "wrap", children: "wrap" }), _jsx("option", { value: "wrap-reverse", children: "wrap-reverse" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Gap" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "0", max: "64", value: selection.gap, onChange: (e) => { const v = e.target.value; applyStyle({ gap: `${v}px` }, { gap: Number(v) }); } }), _jsx("span", { className: "fs-range-value", children: selection.gap })] })] })] })] })), selection.display === 'grid' && (_jsxs(_Fragment, { children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Grid columns" }), _jsx("input", { type: "text", className: "fs-input", value: selection.gridTemplateColumns, placeholder: "1fr 1fr 1fr", onChange: (e) => applyStyle({ gridTemplateColumns: e.target.value }, { gridTemplateColumns: e.target.value }) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Grid rows" }), _jsx("input", { type: "text", className: "fs-input", value: selection.gridTemplateRows, placeholder: "auto", onChange: (e) => applyStyle({ gridTemplateRows: e.target.value }, { gridTemplateRows: e.target.value }) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Gap" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "0", max: "64", value: selection.gap, onChange: (e) => { const v = e.target.value; applyStyle({ gap: `${v}px` }, { gap: Number(v) }); } }), _jsx("span", { className: "fs-range-value", children: selection.gap })] })] })] })), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Position" }), _jsx("select", { className: "fs-select", value: selection.position, onChange: (e) => applyStyle({ position: e.target.value }, { position: e.target.value }), children: positionOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Z-Index" }), _jsx("input", { type: "number", className: "fs-input", value: selection.zIndex, onChange: (e) => { const v = e.target.value; applyStyle({ zIndex: v }, { zIndex: Number(v) }); } })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Overflow" }), _jsx("select", { className: "fs-select", value: selection.overflow, onChange: (e) => applyStyle({ overflow: e.target.value }, { overflow: e.target.value }), children: overflowOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] }), _jsxs("label", { className: "fs-field", children: [_jsxs("span", { className: "fs-field__label", children: [_jsx(MousePointer, { size: 12 }), " Cursor"] }), _jsx("select", { className: "fs-select", value: selection.cursor, onChange: (e) => applyStyle({ cursor: e.target.value }, { cursor: e.target.value }), children: cursorOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] })] })) : (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Select an element" })) }), _jsx(AccordionSection, { id: "spacing", icon: _jsx(Square, { size: 14 }), title: "Spacing & Sizing", isOpen: openSections.spacing, onToggle: () => toggleSection('spacing'), children: selection ? (_jsxs("div", { className: "fs-stack", children: [_jsxs("div", { className: "fs-boxmodel", "data-chef-editor-root": "true", children: [_jsx("button", { type: "button", className: `fs-boxmodel__link-btn ${marginLinked ? 'is-linked' : ''}`, onClick: () => setMarginLinked(!marginLinked), title: "Link margins", children: marginLinked ? _jsx(Link, { size: 10 }) : _jsx(Unlink, { size: 10 }) }), _jsx("input", { className: "fs-boxmodel__input is-mt", value: Math.round(selection.marginTop), onChange: (e) => { const v = e.target.value; if (marginLinked) {
                                                     applyStyle({ margin: `${v}px` }, { marginTop: Number(v), marginRight: Number(v), marginBottom: Number(v), marginLeft: Number(v) });
                                                 }
                                                 else {
@@ -5703,7 +5786,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                                 return _jsxs("div", { className: "froam-note__body", children: ["Waiting on ", room.present[0]?.name ?? 'them', " \u00B7 sent ", relativeTime(latest.createdAt)] });
                                             }
                                             if (latest.status === 'approved') {
-                                                return _jsxs("div", { className: "froam-note__body", style: { color: 'var(--fs-accent, #5eead4)' }, children: ["Approved by ", latest.decidedBy, " \u00B7 ", relativeTime(latest.decidedAt ?? latest.createdAt)] });
+                                                return _jsxs("div", { className: "froam-note__body", style: { color: 'var(--fs-accent-text)' }, children: ["Approved by ", latest.decidedBy, " \u00B7 ", relativeTime(latest.decidedAt ?? latest.createdAt)] });
                                             }
                                             return _jsxs("div", { className: "froam-note__body", style: { color: '#ff8a45' }, children: [latest.decidedBy, " asked for changes \u00B7 ", relativeTime(latest.decidedAt ?? latest.createdAt), latest.decisionNote && _jsxs("div", { className: "froam-note__quote", style: { marginTop: 4 }, children: ["\u201C", latest.decisionNote, "\u201D"] })] });
                                         })(), _jsx("div", { className: "froam-note__row", children: _jsx("button", { type: "button", className: "fs-pill is-accent", onClick: () => void sendForReview(), children: revisions.length ? 'Send again' : 'Send for review' }) })] }), notes.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Nothing yet \u2014 notes land here as they are left" })) : (_jsx("div", { className: "froam-notes", children: notes.map((note, i) => {
@@ -5896,7 +5979,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         applyStyle(finalStyles, nextSelection, 'Resized element');
                     }
                     setSelectionRect(target.getBoundingClientRect());
-                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, inRoom: roomJoined, roomRole: room.role, onImageFile: (file) => { void applyPersonaImage(file); }, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && !quickChatOpen && froamIntent.state.phase !== 'previewing' && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: canUndo, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, opacity: selection.opacity, isHidden: selection.display === 'none', mixBlendMode: selection.mixBlendMode, zIndex: selection.zIndex, fontOptions: fontOptions, selectionCount: selections.length, isTextLayer: currentSelectionRef.current ? isTextVisualLayer(currentSelectionRef.current) : false, onSaveLook: ({ name, states }) => {
+                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, inRoom: roomJoined, roomRole: room.role, onImageFile: (file) => { void applyPersonaImage(file); }, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && !quickChatOpen && froamIntent.state.phase !== 'previewing' && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: canUndo, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, opacity: selection.opacity, isHidden: selection.display === 'none', mixBlendMode: selection.mixBlendMode, zIndex: selection.zIndex, fontOptions: fontOptions, selectionCount: selections.length, isTextLayer: currentSelectionRef.current ? isTextVisualLayer(currentSelectionRef.current) : false, hasText: currentSelectionRef.current ? hasOwnWords(currentSelectionRef.current) : true, isImage: currentSelectionRef.current?.tagName === 'IMG' || currentSelectionRef.current?.tagName === 'PICTURE', onSaveLook: ({ name, states }) => {
                     const style = createReusableStyle({ id: `style:look:${Date.now().toString(36)}`, name: `${name} custom`, states });
                     replaceDesignSystem(saveReusableStyle(activeProjectState.designSystem, style), `Saved reusable style: ${style.name}`);
                     showToast(`${style.name} saved to Design System`);
@@ -5997,6 +6080,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                             break;
                         case 'undo':
                             actionsRef.current.undo();
+                            break;
+                        case 'open-design':
+                            setRightPanelOpen(true);
+                            if (isMobileUI)
+                                setSheetDetent('half');
+                            break;
+                        case 'animate':
+                            openWorkspaceSection('animator', 'create');
                             break;
                         case 'edit-text': {
                             // Route through the dblclick pipeline so contentEditable setup + blur/text sync stay in one place

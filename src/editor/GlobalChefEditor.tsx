@@ -122,7 +122,7 @@ import { useFroamIntent } from './useFroamIntent'
 import { shouldOfferAskFroam } from './froam-intent-model'
 import { searchFroamQuickEdits } from './quick-edit-catalog'
 import FroamLabs, { type FroamLab } from './FroamLabs'
-import FroamWorkspaceShell from './FroamWorkspaceShell'
+import FroamWorkspaceShell, { FroamPanelTabs, LEFT_PANEL_TABS } from './FroamWorkspaceShell'
 import FroamUICustomizer from './FroamUICustomizer'
 import { froamUIPanelWidth, readFroamUIPreference, writeFroamUIPreference } from './froamUIPreferences'
 import { FROAM_WORKSPACE_SECTIONS, readWorkspacePreference, workspaceCommandMatches, writeWorkspacePreference, type FroamTemporalOwner, type FroamWorkspaceMode, type FroamWorkspaceSection } from './workspace-shell-model'
@@ -317,6 +317,13 @@ function roomProfileOf(persona: FroamPersona) {
     title: persona.role || null,
     color: persona.accentColor && persona.accentColor !== DEFAULT_FROAM_PERSONA.accentColor ? persona.accentColor : null,
   }
+}
+
+/** Words of its own, not only inside children: what the type controls act on. */
+function hasOwnWords(element: HTMLElement) {
+  if (/^(INPUT|TEXTAREA|SELECT|BUTTON|A|LABEL|H[1-6]|P|LI|SPAN|STRONG|EM|SMALL|B|I|U|BLOCKQUOTE|FIGCAPTION|TD|TH|DT|DD|CAPTION|LEGEND)$/.test(element.tagName)) return true
+  for (const node of Array.from(element.childNodes)) if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim()) return true
+  return false
 }
 
 export default function GlobalChefEditor({ initialOpen = false, routeKey: explicitRouteKey, projectKey: explicitProjectKey }: GlobalChefEditorProps) {
@@ -905,9 +912,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [shareUnavailable, setShareUnavailable] = useState(false)
   const [copied, setCopied] = useState(false)
 
+  /**
+   * Invite links by role, exactly as the Share panel hands them out — through
+   * the public link when this site runs on this computer. Set further down,
+   * once that link is known; read at the moment of copying.
+   */
+  const inviteLinksRef = useRef<Partial<Record<'editor' | 'contributor' | 'commenter' | 'viewer', string>>>({})
   /** The link to hand over — a commenter one, since that is what a client is. */
-  const shareLink = room.owned ? room.inviteLink(room.owned, 'commenter') : null
-  const editorLink = room.owned ? room.inviteLink(room.owned, 'editor') : null
+  const shareLink = room.owned ? (inviteLinksRef.current.commenter ?? null) : null
+  const editorLink = room.owned ? (inviteLinksRef.current.editor ?? null) : null
 
   const startSharing = useCallback(async (fresh = false) => {
     setSharing(true)
@@ -917,7 +930,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       // the tokens that were sent stop working because the room they name is
       // no longer the one being shown.
       if (fresh || !room.owned) await room.openRoom(persona.name || 'Designer')
-      showToast(fresh ? 'New link — the old one no longer works' : 'Review link ready')
+      showToast(fresh ? 'New links — the old ones no longer work' : 'Invite links ready')
     } catch {
       // No room server here (a static preview, a site without Froam's
       // backend). Say so where the person is looking, with the way forward.
@@ -929,27 +942,29 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   }, [room.owned, room.openRoom, persona.name])
 
   const copyShareLink = useCallback(async () => {
-    if (!shareLink) return
+    const link = inviteLinksRef.current.commenter
+    if (!link) { showToast('The link is on its way — try again in a moment'); return }
     try {
-      await navigator.clipboard.writeText(shareLink)
+      await navigator.clipboard.writeText(link)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2_000)
     } catch {
       showToast('Copy failed — select the link and copy it')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shareLink])
+  }, [])
 
   const copyEditorLink = useCallback(async () => {
-    if (!editorLink) return
+    const link = inviteLinksRef.current.editor
+    if (!link) { showToast('The link is on its way — try again in a moment'); return }
     try {
-      await navigator.clipboard.writeText(editorLink)
+      await navigator.clipboard.writeText(link)
       showToast('Editor invite copied')
     } catch {
       showToast('Copy failed — select the link and copy it')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorLink])
+  }, [])
 
   const refreshNotes = useCallback(async () => {
     if (!room.client || !room.inRoom) return
@@ -1318,12 +1333,16 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const stopReachRef = useRef<() => void>(() => {})
   /** The owner is done: every link stops working and Share starts fresh. */
   const endCollaboration = useCallback(async () => {
     try {
       if (previewingRequestId) { previewConnectedCanvas(null); setPreviewingRequestId(null) }
       const done = await room.endRoom()
-      if (done) showToast('Session ended — the invite links no longer work')
+      if (done) {
+        showToast('Session ended — the invite links no longer work')
+        stopReachRef.current()
+      }
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Could not reach the room')
     }
@@ -1344,19 +1363,25 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
    * the bridge opens a tunnel to the Froam share service, and invite links use
    * its address instead of localhost (lib/share-tunnel.mjs).
    */
-  const [reach, setReach] = useState<{ available: boolean; active: boolean; online: boolean; url: string | null; starting: boolean } | null>(null)
+  const [reach, setReach] = useState<{ available: boolean; active: boolean; online: boolean; url: string | null; starting: boolean; error: string | null } | null>(null)
+  /** Whether the bridge has answered once — until then a local page has no link to give. */
+  const [reachChecked, setReachChecked] = useState(false)
+  /** The owner turned the public link off: links open on this computer only. */
+  const [reachOff, setReachOff] = useState(false)
   const pageIsLocal = typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1|\[::1\]|.+\.localhost|.+\.local)$/i.test(window.location.hostname)
   const readReach = useCallback(async () => {
     try {
       const response = await window.fetch(bridgeUrl('/__froam/share'), { cache: 'no-store' })
-      const data = response.ok ? await response.json() as { active?: boolean; online?: boolean; url?: string | null; viewer?: string } : null
+      const data = response.ok ? await response.json() as { available?: boolean; active?: boolean; online?: boolean; url?: string | null; viewer?: string } : null
       if (!data || data.viewer === 'remote') { setReach(null); return }
-      setReach((current) => ({ available: true, active: Boolean(data.active), online: Boolean(data.online), url: data.url ?? null, starting: current?.starting ?? false }))
+      setReach((current) => ({ available: data.available !== false, active: Boolean(data.active), online: Boolean(data.online), url: data.url ?? null, starting: current?.starting ?? false, error: current?.error ?? null }))
     } catch {
       setReach(null)
+    } finally {
+      setReachChecked(true)
     }
   }, [])
-  useEffect(() => { if (pageIsLocal) void readReach() }, [pageIsLocal, readReach])
+  useEffect(() => { if (pageIsLocal) void readReach(); else setReachChecked(true) }, [pageIsLocal, readReach])
   // While the share is connecting, look again until it's up.
   useEffect(() => {
     if (!reach?.active || reach.online) return
@@ -1364,29 +1389,45 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     return () => window.clearInterval(timer)
   }, [reach?.active, reach?.online, readReach])
   const setReachable = useCallback(async (on: boolean) => {
-    setReach((current) => (current ? { ...current, starting: on } : current))
+    setReachOff(!on)
+    setReach((current) => (current ? { ...current, starting: on, error: null } : current))
+    let failure: string | null = null
     try {
       const response = await window.fetch(bridgeUrl(on ? '/__froam/share/start' : '/__froam/share/stop'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
       const data = await response.json().catch(() => null) as { success?: boolean; error?: string } | null
-      if (!response.ok || !data?.success) throw new Error(data?.error || 'Could not share this site')
-      if (on) showToast('Your site is reachable from anywhere while froam dev runs — the links now work on any computer')
+      if (!response.ok || !data?.success) throw new Error(data?.error || 'Could not make a public link')
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Could not share this site')
+      failure = error instanceof Error ? error.message : 'Could not make a public link'
     } finally {
       await readReach()
-      setReach((current) => (current ? { ...current, starting: false } : current))
+      setReach((current) => (current ? { ...current, starting: false, error: on ? failure : null } : current))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readReach])
 
+  // A site on this computer is shared through the share service whenever it
+  // has a room: links sent earlier come back to life with froam dev, and new
+  // ones never point at localhost.
+  const wantsReach = pageIsLocal && room.role === 'owner' && Boolean(room.owned) && !room.ended
+    && Boolean(reach?.available) && !reach?.active && !reach?.starting && !reach?.error && !reachOff
+  useEffect(() => { if (wantsReach) void setReachable(true) }, [wantsReach, setReachable])
+  stopReachRef.current = () => { if (pageIsLocal && reach?.active) void setReachable(false).then(() => setReachOff(false)) }
+
+  /** Local page, public link on: links wait for its address. */
+  const sharesThroughService = pageIsLocal && !reachOff && (!reachChecked || Boolean(reach?.available))
+  const linksPending = Boolean(room.owned) && sharesThroughService && !(reach?.active && reach.url)
   const inviteLinks = useMemo(() => {
     const owned = room.owned
     if (!owned) return {}
-    // Shared: links go through the share service, so they open on any computer.
-    const base = reach?.active && reach.url ? reach.url : undefined
+    if (linksPending) return {}
+    // Shared: links go through the share service, so they open on any computer,
+    // on the page you're looking at.
+    const page = typeof window === 'undefined' || window.location.pathname === '/' ? '' : window.location.pathname
+    const base = sharesThroughService && reach?.url ? `${reach.url}${page}` : undefined
     const link = (role: 'editor' | 'contributor' | 'commenter' | 'viewer') => (owned.invites[role] ? room.inviteLink(owned, role, base) : undefined)
     return { editor: link('editor'), contributor: link('contributor'), commenter: link('commenter'), viewer: link('viewer') }
-  }, [room.owned, room.inviteLink, reach?.active, reach?.url])
+  }, [room.owned, room.inviteLink, linksPending, sharesThroughService, reach?.url])
+  inviteLinksRef.current = inviteLinks
 
   const copyInviteLink = useCallback(async (link: string) => {
     try {
@@ -1443,6 +1484,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const draftCount = useMemo(() => countRenderableDrafts(routeDrafts), [routeDrafts])
   const hasRouteDrafts = useMemo(() => draftCount > 0, [draftCount])
   const showPanel = panelOpen || active
+
+  // A page wider than the phone (one oversized image is enough) makes mobile
+  // Chrome widen the layout viewport, and every fixed control — the top bar's
+  // end, the docked bar, the sheet — lands off-screen. While editing on a
+  // phone the page doesn't scroll sideways, so the controls stay in reach.
+  useEffect(() => {
+    if (!(isMobileUI && showPanel) || typeof document === 'undefined') return
+    const root = document.documentElement
+    root.setAttribute('data-froam-phone-editing', '')
+    return () => root.removeAttribute('data-froam-phone-editing')
+  }, [isMobileUI, showPanel])
 
   /* Fonts the drafts reference must actually load, or the preview lies. */
   useEffect(() => {
@@ -4998,14 +5050,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     setConnectedCanvasOpen(false)
     if (section === 'blueprint') { setBlueprintOpen(true); return }
     if (section === 'reference' || section === 'layers') {
-      setLeftPanelOpen(true); setRightPanelOpen(false); setLeftWorkspaceMode(section)
+      setLeftPanelOpen(true); if (!roomForBothPanels()) setRightPanelOpen(false); setLeftWorkspaceMode(section)
       if (section === 'layers') { const root = getRoot(); if (root) setLayers(collectLayers(root)) }
       return
     }
     if (mode === 'create') {
       if (section === 'plan' || section === 'library') {
         setLeftPanelOpen(true)
-        setRightPanelOpen(false)
+        if (!roomForBothPanels()) setRightPanelOpen(false)
         setLeftWorkspaceMode('plan')
         setPlannerRequestedTab(section === 'library' ? 'library' : 'sitemap')
         return
@@ -5018,6 +5070,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     if (mode === 'understand') { setLeftPanelOpen(false); setRightPanelOpen(false); setRequestedIntelligenceTab(intelligenceTabs[section] ?? 'scan'); setIntelligenceOpen(true); return }
     setLeftPanelOpen(false); setRightPanelOpen(false); setLabsOpen(true); if (labTabs[section]) setRequestedLab(labTabs[section]!)
   }
+
+  /** A wide screen fits both side panels and still leaves the page room. */
+  function roomForBothPanels() { return typeof window !== 'undefined' && window.innerWidth >= 1280 }
+  function openLeftTab(section: FroamWorkspaceSection) {
+    const tab = LEFT_PANEL_TABS.find((item) => item.id === section)
+    openWorkspaceSection(section, tab?.mode ?? 'create')
+  }
+  const leftTab: FroamWorkspaceSection = leftWorkspaceMode === 'layers' ? 'layers' : leftWorkspaceMode === 'reference' ? 'reference' : plannerRequestedTab === 'library' ? 'library' : 'plan'
+  const contextInspectorOpen = connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen
 
   function toggleAdvancedWorkspace() {
     const opening = !workspacePreference.advancedOpen
@@ -5034,13 +5095,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   function switchWorkspaceBranch(branchId: string) { try { const next = switchProjectBranch(projectSession.project, branchId); projectSession.setProject(next); materializeConnectedBranch(deriveBranchState(next, branchId).legacyStore); showToast(`Switched to ${next.branches[branchId].name}`) } catch (error) { showToast(error instanceof Error ? error.message : 'Could not switch prototype') } }
 
   const corePaletteCommands: PaletteCommand[] = [
-    { id: 'save', label: 'Save draft', shortcut: 'Ctrl+S', icon: <Save size={15} />, action: saveToRunam },
-    { id: 'save-repo', label: 'Save to Repo (git-ready)', shortcut: 'Ctrl+Shift+S', icon: <GitCommit size={15} />, action: () => { void saveToRepo() } },
+    { id: 'save', label: 'Save', shortcut: 'Ctrl+S', icon: <Save size={15} />, action: saveToRunam },
+    { id: 'save-repo', label: 'Save to your code (git-ready files)', shortcut: 'Ctrl+Shift+S', icon: <GitCommit size={15} />, action: () => { void saveToRepo() } },
     // Sharing is the start of a review, so it belongs where people look for a
     // verb — not only in a panel section they have to find first.
     {
       id: 'share',
-      label: shareLink ? 'Copy review link' : 'Share for review',
+      label: shareLink ? 'Copy a link for comments' : 'Invite people to review',
       icon: <Share2 size={15} />,
       action: () => {
         setOpenSections((p) => ({ ...p, share: true }))
@@ -5051,14 +5112,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     ...(shareLink
       ? [{
         id: 'share-new',
-        label: 'New review link (revokes the old one)',
+        label: 'New invite links (the old ones stop working)',
         icon: <Share2 size={15} />,
         action: () => { setOpenSections((p) => ({ ...p, share: true })); void startSharing(true) },
       }]
       : []),
     { id: 'scan', label: 'Scan page', icon: <ScanLine size={15} />, action: () => setScanActive(true) },
-    { id: 'blueprint', label: 'Blueprint', icon: <DraftingCompass size={15} />, action: () => setBlueprintOpen(true) },
-    ...FROAM_WORKSPACE_SECTIONS.filter((section) => !section.labFlag || labsFlags[section.labFlag]).map((section) => ({ id: `workspace:${section.mode}:${section.id}`, label: `${section.mode[0].toUpperCase()}${section.mode.slice(1)} · ${section.label}`, searchText: [section.label, section.description, ...(section.aliases ?? [])].join(' '), icon: <Sparkles size={15}/>, action: () => openWorkspaceSection(section.id, section.mode) })),
+    { id: 'blueprint', label: 'Page map', icon: <DraftingCompass size={15} />, action: () => setBlueprintOpen(true) },
+    ...FROAM_WORKSPACE_SECTIONS.filter((section) => !section.labFlag || labsFlags[section.labFlag]).map((section) => ({ id: `workspace:${section.mode}:${section.id}`, label: `Open ${section.label}`, hint: { create: 'Build', understand: 'Understand', experiment: 'Experiment' }[section.mode], searchText: [section.label, section.description, ...(section.aliases ?? [])].join(' '), icon: <Sparkles size={15}/>, action: () => openWorkspaceSection(section.id, section.mode) })),
     ...Object.values(projectSession.project.branches).map((branch) => ({ id: `branch:${branch.id}`, label: `Switch prototype · ${branch.name}`, searchText: `switch branch prototype mutation ${branch.id} ${branch.name}`, icon: <GitCommit size={15}/>, action: () => switchWorkspaceBranch(branch.id) })),
     { id: 'versions', label: 'Versions', icon: <GitCommit size={15} />, action: () => { setWorkspacePreference((current) => ({ ...current, advancedOpen: true })); setOpenSections((p) => ({ ...p, versions: true })) } },
     { id: 'undo', label: 'Undo', shortcut: 'Ctrl+Z', icon: <Undo2 size={15} />, action: undo },
@@ -5651,8 +5712,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             isMobileUI ? 'is-mobile' : '',
             leftWorkspaceMode === 'plan' || leftWorkspaceMode === 'reference' ? 'is-planning' : '',
             leftPanelOpen ? '' : 'is-left-collapsed',
-            connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen ? 'has-context-inspector' : '',
-            (workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen ? '' : 'is-right-collapsed',
+            contextInspectorOpen ? 'has-context-inspector' : '',
+            rightPanelOpen || contextInspectorOpen ? '' : 'is-right-collapsed',
             `is-toolbar-${uiPreference.toolbar}`,
             `is-workspace-${uiPreference.workspace}`,
             `is-panels-${uiPreference.panels}`,
@@ -5749,7 +5810,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   onShowAnchor={showMessageAnchor}
                   onTyping={setComposingMessage}
                   onEndRoom={room.role === 'owner' ? endCollaboration : undefined}
-                  reach={pageIsLocal && reach?.available ? reach : null}
+                  reach={pageIsLocal && reachChecked ? {
+                    local: true,
+                    available: Boolean(reach?.available),
+                    on: !reachOff && Boolean(reach?.available),
+                    ready: Boolean(reach?.active && reach.url),
+                    online: Boolean(reach?.online),
+                    url: reach?.url ?? null,
+                    starting: Boolean(reach?.starting) || wantsReach,
+                    error: reach?.error ?? null,
+                  } : null}
+                  linksPending={linksPending}
                   onReach={(on) => { void setReachable(on) }}
                   ended={room.ended}
                 />
@@ -5770,7 +5841,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               zoom={zoom}
               setZoom={setZoom}
               leftPanelOpen={leftPanelOpen}
-              rightPanelOpen={(workspaceMode === 'create' && rightPanelOpen) || connectedCanvasOpen || intelligenceOpen || labsOpen || workspacePreference.advancedOpen}
+              rightPanelOpen={rightPanelOpen || contextInspectorOpen}
               onToggleLeftPanel={() => {
                 if (workspaceMode !== 'create' && leftWorkspaceMode !== 'reference' && leftWorkspaceMode !== 'layers') {
                   setWorkspaceMode('create')
@@ -5794,25 +5865,20 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 <FroamWorkspaceShell
                   mode={workspaceMode}
                   activeSection={activeWorkspaceSection}
-                  onModeChange={setWorkspaceMode}
-                  onSectionChange={openWorkspaceSection}
-                  projectName={projectSession.project.name}
                   branchId={projectSession.project.activeBranchId}
                   branchName={projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId}
-                  members={roomPresence}
-                  hasSelection={Boolean(selection)}
-                  selectionLabel={selection?.label}
-                  flags={labsFlags}
-                  advancedOpen={workspacePreference.advancedOpen}
-                  onToggleAdvanced={toggleAdvancedWorkspace}
-                  onOpenPrototypes={() => openConnectedWorkspace('branches')}
-                  onOpenReplay={() => openConnectedWorkspace('replay')}
-                  onOpenCommands={openCommandPalette}
-                  onAskFroam={() => setQuickChatOpen(true)}
                   temporalOwner={temporalOwner}
                   activity={workspaceActivity}
+                  hasSelection={Boolean(selection)}
                 />
               )}
+              projectName={projectSession.project.name}
+              prototypeName={projectSession.project.activeBranchId === 'main' ? null : (projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId)}
+              onOpenPages={() => openLeftTab('plan')}
+              onOpenLibrary={() => { if (leftPanelOpen && leftTab === 'library') setLeftPanelOpen(false); else openLeftTab('library') }}
+              libraryOpen={leftPanelOpen && leftTab === 'library'}
+              onOpenPrototypes={() => openConnectedWorkspace('branches')}
+              onCustomize={() => setUICustomizerOpen(true)}
               onMinimize={() => {
                 setStudioMinimized(true)
                 showToast(`${persona.name} minimized — editing is still active`)
@@ -5825,29 +5891,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             />
           </FroamSectionBoundary>
           <div className="froam-figma-left" data-chef-editor-root="true" hidden={!leftPanelOpen}>
-            <div className="froam-figma-left__tabs" data-chef-editor-root="true">
-              <button
-                type="button"
-                className={leftWorkspaceMode === 'plan' && activeWorkspaceSection !== 'library' ? 'is-active' : ''}
-                onClick={() => openWorkspaceSection('plan', 'create')}
-              >
-                <ListTree size={13} /> Pages
-              </button>
-              <button
-                type="button"
-                className={leftWorkspaceMode === 'plan' && activeWorkspaceSection === 'library' ? 'is-active' : ''}
-                onClick={() => openWorkspaceSection('library', 'create')}
-              >
-                <Grid2X2 size={13} /> Library
-              </button>
-              <button
-                type="button"
-                className={leftWorkspaceMode === 'reference' ? 'is-active' : ''}
-                onClick={() => openWorkspaceSection('reference', 'understand')}
-              >
-                <FileImage size={13} /> Reference
-              </button>
-            </div>
+            <FroamPanelTabs tabs={LEFT_PANEL_TABS} active={leftTab} onSelect={(tab) => openLeftTab(tab.id)} label="Layers, pages and library" />
             <div className="froam-figma-left__body" data-chef-editor-root="true">
               {leftWorkspaceMode === 'plan' ? (
                 <div className="froam-figma-left__view">
@@ -5925,7 +5969,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             </div>
           </div>
           <div className="froam-figma-layout__canvas" data-chef-editor-root="true" />
-          {rightPanelOpen && workspaceMode === 'create' && (() => {
+          {rightPanelOpen && !contextInspectorOpen && (() => {
             const designPanel = (
               <FroamSectionBoundary name="DesignPanel">
                 <FroamDesignPanel
@@ -5951,6 +5995,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   onOpenBlueprint={() => setBlueprintOpen(true)}
                   draftStyles={selection ? store[viewportStoreKey]?.[selection.path]?.styles : undefined}
                   onApplyPseudoStyle={applyPseudoStyle}
+                  onAnimate={() => openWorkspaceSection('animator', 'create')}
                 />
               </FroamSectionBoundary>
             )
@@ -6048,7 +6093,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   <span
                     className="froam-studio__badge"
                     title={roomPresence.map((m) => `${m.name} · ${m.role}`).join('\n')}
-                    style={{ background: 'rgba(94,234,212,0.16)', color: '#5eead4' }}
+                    style={{ background: 'var(--fs-accent-soft)', color: 'var(--fs-accent-text)' }}
                   >
                     {roomPresence.length === 1
                       ? `${roomPresence[0].name} is here`
@@ -6063,7 +6108,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   data-chef-editor-root="true"
                   onClick={() => { setMoveMode((v) => !v); showToast(moveMode ? 'Move mode off' : 'Move mode on — drag any element freely') }}
                   title="Move mode — drag elements to reposition (Ctrl+Shift+L)"
-                  style={moveMode ? { background: 'rgba(239,68,68,0.18)', color: '#ef4444' } : {}}
+                  style={moveMode ? { background: 'var(--fs-accent-soft)', color: 'var(--fs-accent-text)' } : {}}
                 >
                   <Move size={14} />
                 </button>
@@ -7177,7 +7222,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                       return <div className="froam-note__body">Waiting on {room.present[0]?.name ?? 'them'} · sent {relativeTime(latest.createdAt)}</div>
                     }
                     if (latest.status === 'approved') {
-                      return <div className="froam-note__body" style={{ color: 'var(--fs-accent, #5eead4)' }}>
+                      return <div className="froam-note__body" style={{ color: 'var(--fs-accent-text)' }}>
                         Approved by {latest.decidedBy} · {relativeTime(latest.decidedAt ?? latest.createdAt)}
                       </div>
                     }
@@ -7793,6 +7838,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           fontOptions={fontOptions}
           selectionCount={selections.length}
           isTextLayer={currentSelectionRef.current ? isTextVisualLayer(currentSelectionRef.current) : false}
+          hasText={currentSelectionRef.current ? hasOwnWords(currentSelectionRef.current) : true}
+          isImage={currentSelectionRef.current?.tagName === 'IMG' || currentSelectionRef.current?.tagName === 'PICTURE'}
           onSaveLook={({ name, states }) => {
             const style = createReusableStyle({ id: `style:look:${Date.now().toString(36)}`, name: `${name} custom`, states })
             replaceDesignSystem(saveReusableStyle(activeProjectState.designSystem, style), `Saved reusable style: ${style.name}`)
@@ -7855,6 +7902,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               }
               case 'delete': clearSelectionDraft(); break
               case 'undo': actionsRef.current.undo(); break
+              case 'open-design': setRightPanelOpen(true); if (isMobileUI) setSheetDetent('half'); break
+              case 'animate': openWorkspaceSection('animator', 'create'); break
               case 'edit-text': {
                 // Route through the dblclick pipeline so contentEditable setup + blur/text sync stay in one place
                 const root = getRoot()

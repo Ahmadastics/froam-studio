@@ -17,6 +17,21 @@ export type JoinProfile = {
     title: string;
 };
 type InviteRole = 'editor' | 'contributor' | 'commenter' | 'viewer';
+/**
+ * A site on this computer and the public link that makes its invites open
+ * anywhere. `on`: wanted; `ready`: its address is known; `online`: the tunnel
+ * is up right now.
+ */
+export type Reach = {
+    local: true;
+    available: boolean;
+    on: boolean;
+    ready: boolean;
+    online: boolean;
+    url: string | null;
+    starting: boolean;
+    error: string | null;
+};
 type Props = {
     role: FroamRole | null;
     isOwner: boolean;
@@ -84,13 +99,10 @@ type Props = {
         at: number;
         by: string | null;
     } | null;
-    /** A site on this computer: whether links open anywhere, through the share service. */
-    reach?: {
-        active: boolean;
-        online: boolean;
-        url: string | null;
-        starting: boolean;
-    } | null;
+    /** A site on this computer: its public link through the share service. */
+    reach?: Reach | null;
+    /** The public link is on its way: there are no links to copy yet. */
+    linksPending?: boolean;
     onReach?: (on: boolean) => void;
 };
 /**

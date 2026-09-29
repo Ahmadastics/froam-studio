@@ -1,41 +1,72 @@
-import { Clapperboard, FileImage, GitBranch, Grid2X2, Layers, ListTree, MoreHorizontal, MousePointer2, Sparkles, WandSparkles } from 'lucide-react'
-import type { FroamLabsFlags } from '../project/experiments'
-import { workspaceProjectLabel, workspaceStatus, workspaceTemporalSurface, type FroamTemporalOwner, type FroamWorkspaceMode, type FroamWorkspaceSection } from './workspace-shell-model'
+import { useEffect, useState } from 'react'
+import { Clapperboard, FileImage, Grid2X2, Layers, ListTree, Loader2, MousePointer2, WandSparkles } from 'lucide-react'
+import { workspaceStatus, workspaceTemporalSurface, type FroamTemporalOwner, type FroamWorkspaceMode, type FroamWorkspaceSection } from './workspace-shell-model'
 
-type Member = { actor: string; name: string; role?: string; avatarUrl?: string | null }
+/**
+ * Where everything lives. The top bar is one row; each side panel carries its
+ * own tabs, the way design tools do: what you build with on the left, how the
+ * selection looks on the right.
+ */
+export type PanelTab = { id: FroamWorkspaceSection; mode: FroamWorkspaceMode; label: string; hint: string; icon: typeof MousePointer2 }
+
+export const LEFT_PANEL_TABS: PanelTab[] = [
+  { id: 'layers', mode: 'understand', label: 'Layers', hint: 'Everything on this page, as a tree', icon: Layers },
+  { id: 'plan', mode: 'create', label: 'Pages', hint: 'The pages of this site', icon: ListTree },
+  { id: 'library', mode: 'create', label: 'Library', hint: 'Sections and blocks to drop in', icon: Grid2X2 },
+  { id: 'reference', mode: 'understand', label: 'Reference', hint: 'Build from a screenshot', icon: FileImage },
+]
+
+export const RIGHT_PANEL_TABS: PanelTab[] = [
+  { id: 'design', mode: 'create', label: 'Design', hint: 'How the selection looks', icon: MousePointer2 },
+  { id: 'animator', mode: 'create', label: 'Animate', hint: 'Motion and interactions for the selection', icon: WandSparkles },
+]
+
+export function FroamPanelTabs({ tabs, active, onSelect, label }: {
+  tabs: PanelTab[]
+  active: FroamWorkspaceSection | null
+  onSelect: (tab: PanelTab) => void
+  label: string
+}) {
+  return (
+    <div className="froam-panel-tabs" role="tablist" aria-label={label} data-chef-editor-root="true">
+      {tabs.map((tab) => {
+        const Icon = tab.icon
+        return (
+          <button
+            type="button"
+            role="tab"
+            key={tab.id}
+            aria-selected={active === tab.id}
+            className={active === tab.id ? 'is-active' : ''}
+            title={tab.hint}
+            onClick={() => onSelect(tab)}
+            data-chef-editor-root="true"
+          >
+            <Icon size={14} /><span>{tab.label}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 type Props = {
   mode: FroamWorkspaceMode
   activeSection: FroamWorkspaceSection
-  onModeChange: (mode: FroamWorkspaceMode) => void
-  onSectionChange: (section: FroamWorkspaceSection, mode?: FroamWorkspaceMode) => void
-  projectName: string
   branchId: string
   branchName: string
-  members: Member[]
-  hasSelection: boolean
-  selectionLabel?: string
-  flags: FroamLabsFlags
-  advancedOpen: boolean
-  onToggleAdvanced: () => void
-  onOpenPrototypes: () => void
-  onOpenReplay: () => void
-  onOpenCommands: () => void
-  onAskFroam: () => void
   temporalOwner: FroamTemporalOwner
   activity?: 'scanning' | 'screenshot' | 'mutating' | 'chaos' | 'synthetic' | 'intent-understanding' | 'intent-creating' | 'intent-applying' | null
+  /** Something is selected — the first-time hint has done its job. */
+  hasSelection?: boolean
 }
 
-const primaryTools: Array<{ id: FroamWorkspaceSection; mode: FroamWorkspaceMode; label: string; icon: typeof MousePointer2 }> = [
-  { id: 'design', mode: 'create', label: 'Design', icon: MousePointer2 },
-  { id: 'plan', mode: 'create', label: 'Pages', icon: ListTree },
-  { id: 'library', mode: 'create', label: 'Library', icon: Grid2X2 },
-  { id: 'layers', mode: 'understand', label: 'Layers', icon: Layers },
-  { id: 'reference', mode: 'understand', label: 'Reference', icon: FileImage },
-  { id: 'animator', mode: 'create', label: 'Animate', icon: WandSparkles },
-]
+const FIRST_HINT_KEY = 'froam-first-hint-v1'
+const readHintSeen = () => { try { return window.localStorage.getItem(FIRST_HINT_KEY) === '1' } catch { return true } }
+const writeHintSeen = () => { try { window.localStorage.setItem(FIRST_HINT_KEY, '1') } catch { /* private mode */ } }
 
+/** What Froam is busy with, and which timeline owns time — shown only while it's true. */
 export default function FroamWorkspaceShell(props: Props) {
-  const project = workspaceProjectLabel(props.projectName, props.branchName, props.branchId)
   const status = workspaceStatus({
     mode: props.mode,
     branchName: props.branchName,
@@ -46,31 +77,24 @@ export default function FroamWorkspaceShell(props: Props) {
     physics: props.activeSection === 'physics',
   })
   const temporal = workspaceTemporalSurface(props.temporalOwner)
+  const [hintSeen, setHintSeen] = useState(readHintSeen)
+  useEffect(() => { if (props.hasSelection && !hintSeen) { writeHintSeen(); setHintSeen(true) } }, [props.hasSelection, hintSeen])
 
   return <>
-    <section className="froam-workspace froam-workspace--simple" data-chef-editor-root="true" aria-label="Froam workspace">
-      <button type="button" className={`froam-workspace__project ${project.prototype ? 'is-prototype' : ''}`} onClick={props.onOpenPrototypes} aria-label={`Project ${project.projectName}, branch ${project.branchName}. Open prototypes`}>
-        <GitBranch size={12} />
-        <span>{project.projectName}</span><i>/</i><strong>{project.branchName}{project.prototype ? ' ☣' : ''}</strong>
-      </button>
-      <nav className="froam-workspace__rail" aria-label="Primary Froam tools">
-        {primaryTools.map((item) => {
-          const Icon = item.icon
-          return <button type="button" key={item.id} className={props.activeSection === item.id ? 'is-active' : ''} aria-pressed={props.activeSection === item.id} onClick={() => props.onSectionChange(item.id, item.mode)}>
-            <Icon size={13} /><span>{item.label}</span>
-          </button>
-        })}
-      </nav>
-      <output className={`froam-workspace__status is-${status.tone}`} aria-live="polite">
-        <i />{props.activity ? status.label : props.selectionLabel ? `Selected · ${props.selectionLabel}` : 'Click anything to edit'}
+    {!hintSeen && !props.activity && !props.hasSelection && (
+      <div className="froam-first-hint" role="status" data-chef-editor-root="true">
+        <MousePointer2 size={14} />
+        <span>Click anything on the page to edit it</span>
+        <kbd>Ctrl K</kbd>
+        <span className="froam-first-hint__more">for everything else</span>
+        <button type="button" onClick={() => { writeHintSeen(); setHintSeen(true) }}>Got it</button>
+      </div>
+    )}
+    {props.activity && (
+      <output className={`froam-activity is-${status.tone}`} aria-live="polite" data-chef-editor-root="true">
+        <Loader2 size={13} className="froam-activity__spin" />{status.label.replace(/\s*[☣●]\s*$/u, '')}
       </output>
-      <button type="button" className="froam-workspace__ask" onClick={props.onAskFroam} title="Open Quick Edit">
-        <Sparkles size={13} /><span>Quick Edit</span>
-      </button>
-      <button type="button" className="froam-workspace__commands" onClick={props.onOpenCommands} title="Open all Froam commands">
-        <MoreHorizontal size={15} /><span>More</span>
-      </button>
-    </section>
-    {temporal && <section className="froam-temporal-dock" data-chef-editor-root="true" aria-label="Active temporal surface"><Clapperboard size={14}/><b>{temporal.label}</b><span>Only this timeline currently owns time controls.</span></section>}
+    )}
+    {temporal && <section className="froam-temporal-dock" data-chef-editor-root="true" aria-label="Active timeline"><Clapperboard size={14}/><b>{temporal.label}</b><span>This timeline owns playback until you close it.</span></section>}
   </>
 }

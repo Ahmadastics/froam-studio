@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertTriangle, ArrowLeft, Camera, Check, Clock, Copy, ExternalLink, Eye, EyeOff, Globe, Laptop, Link2, LogOut, MessageSquare, Pencil, RefreshCw, Send, ShieldCheck, Undo2, Users, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Camera, Check, Clock, Copy, ExternalLink, Eye, EyeOff, Globe, Link2, Loader2, LogOut, MessageSquare, Pencil, RefreshCw, Send, ShieldCheck, Undo2, Users, X } from 'lucide-react'
 import { scopesOf, type RoomMemberView, type RoomRequest } from '../../collab/room'
 import type { FroamMessageAnchor, FroamRole, FroamViewport } from '../../collab/types'
 import type { RequestCheck } from './request-checks'
@@ -22,6 +22,13 @@ export function whereLabel(routeKey?: string, viewport?: string) {
 export type JoinProfile = { avatarUrl: string | null; title: string }
 
 type InviteRole = 'editor' | 'contributor' | 'commenter' | 'viewer'
+
+/**
+ * A site on this computer and the public link that makes its invites open
+ * anywhere. `on`: wanted; `ready`: its address is known; `online`: the tunnel
+ * is up right now.
+ */
+export type Reach = { local: true; available: boolean; on: boolean; ready: boolean; online: boolean; url: string | null; starting: boolean; error: string | null }
 type Tab = 'share' | 'changes' | 'chat' | 'requests'
 
 const INVITES: Array<{ role: InviteRole; title: string; body: string }> = [
@@ -111,8 +118,10 @@ type Props = {
   onEndRoom?: () => Promise<void>
   /** The owner ended this session (for everyone else who was in it). */
   ended?: { at: number; by: string | null } | null
-  /** A site on this computer: whether links open anywhere, through the share service. */
-  reach?: { active: boolean; online: boolean; url: string | null; starting: boolean } | null
+  /** A site on this computer: its public link through the share service. */
+  reach?: Reach | null
+  /** The public link is on its way: there are no links to copy yet. */
+  linksPending?: boolean
   onReach?: (on: boolean) => void
 }
 
@@ -224,33 +233,74 @@ function ChangeList({ changes }: { changes: readonly PendingChange[] }) {
   )
 }
 
+/** "froam-share.example.dev" — where a public link lives, without the noise. */
+function hostOf(url: string | null) {
+  if (!url) return ''
+  try { return new URL(url).host } catch { return url }
+}
+
 /**
- * The site is running on this computer. Links to localhost only open here;
- * sharing sends them through the Froam share service so they open anywhere.
+ * The site runs on this computer. Invite links go through Froam's share
+ * service so they open on any device; this line says whether that's true yet.
  */
-function ReachNotice({ reach, onReach }: { reach: NonNullable<Props['reach']>; onReach?: (on: boolean) => void }) {
-  if (!reach.active) {
+function LinkStatus({ reach, onReach }: { reach: Reach; onReach?: (on: boolean) => void }) {
+  if (!reach.available) {
     return (
-      <div className="froam-collab__reach">
-        <Laptop size={14} />
+      <div className="froam-collab__reach is-local" role="status">
+        <span className="froam-collab__reach-dot" />
         <div>
-          <strong>This site is on your computer</strong>
-          <p>Links only open here. Make it reachable and they’ll open on any computer or phone, while froam dev is running.</p>
-          <button type="button" className="froam-collab__primary" disabled={reach.starting} onClick={() => onReach?.(true)}>
-            <Globe size={13} /> {reach.starting ? 'Connecting…' : 'Make it reachable from anywhere'}
-          </button>
+          <strong>Links open on this computer only</strong>
+          <p>Public links are off for this froam dev. Anyone on the same network can still join.</p>
+        </div>
+      </div>
+    )
+  }
+  if (!reach.on) {
+    return (
+      <div className="froam-collab__reach is-local" role="status">
+        <span className="froam-collab__reach-dot" />
+        <div>
+          <strong>Links open on this computer only</strong>
+          <p>Turn the public link on and they open on any device.</p>
+        </div>
+        <button type="button" className="froam-collab__link" onClick={() => onReach?.(true)}>Turn on</button>
+      </div>
+    )
+  }
+  if (reach.error) {
+    return (
+      <div className="froam-collab__reach is-error" role="alert">
+        <span className="froam-collab__reach-dot" />
+        <div>
+          <strong>Couldn’t make a public link</strong>
+          <p title={reach.error}>{reach.error}</p>
+          <div className="froam-collab__reach-actions">
+            <button type="button" className="froam-collab__link" onClick={() => onReach?.(true)}>Try again</button>
+            <button type="button" className="froam-collab__link" onClick={() => onReach?.(false)}>Use links for this computer</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  if (!reach.ready || reach.starting) {
+    return (
+      <div className="froam-collab__reach is-connecting" role="status">
+        <Loader2 size={14} className="froam-collab__reach-spin" />
+        <div>
+          <strong>Making a link that works anywhere…</strong>
+          <p>Your site runs on this computer, so Froam gives it a secure public address.</p>
         </div>
       </div>
     )
   }
   return (
-    <div className={`froam-collab__reach is-on${reach.online ? '' : ' is-connecting'}`}>
-      <Globe size={14} />
+    <div className={`froam-collab__reach ${reach.online ? 'is-ready' : 'is-connecting'}`} role="status">
+      <span className="froam-collab__reach-dot" />
       <div>
-        <strong>{reach.online ? 'Reachable from anywhere' : 'Connecting…'}</strong>
-        <p>{reach.online ? 'Links open on any computer while froam dev runs. People can look, talk and suggest — only you save changes.' : 'Links will open anywhere in a moment.'}</p>
-        <button type="button" className="froam-collab__link" onClick={() => onReach?.(false)}>Stop sharing</button>
+        <strong>{reach.online ? 'Links work on any device' : 'Connecting…'}</strong>
+        <p title={reach.url ?? undefined}>{reach.online ? `Through ${hostOf(reach.url)} while froam dev runs` : 'Links will open in a moment'}</p>
       </div>
+      <button type="button" className="froam-collab__link" onClick={() => onReach?.(false)} title="Stop sharing this computer's site — links only open here">Turn off</button>
     </div>
   )
 }
@@ -842,10 +892,13 @@ export function FroamCollaborate(props: Props) {
               {tab === 'share' && !isContributor && (
                 !inRoom ? (
                   <section className="froam-collab__section froam-collab__empty">
-                    <Link2 size={22} />
-                    <strong>Bring people in</strong>
-                    <p>Anyone with a link can join — no account needed. You choose what each link can do, and everyone can talk here in Chat.</p>
-                    {props.reach && <ReachNotice reach={props.reach} onReach={props.onReach} />}
+                    <Link2 size={20} />
+                    <strong>Invite people to this page</strong>
+                    <p>Anyone with a link can join — no account needed. You choose what each person can do, and everyone can talk in Chat.</p>
+                    {props.reach?.available && props.reach.on && (
+                      <p className="froam-collab__hint"><Globe size={14} /><span>Your site runs on this computer. Froam gives it a secure public link while froam dev runs, so invites open on any device.</span></p>
+                    )}
+                    {props.reach && !(props.reach.available && props.reach.on) && <LinkStatus reach={props.reach} onReach={props.onReach} />}
                     {props.shareUnavailable ? (
                       <div className="froam-collab__unavailable" role="status">
                         <strong>Sharing needs Froam running with your site</strong>
@@ -855,23 +908,24 @@ export function FroamCollaborate(props: Props) {
                       </div>
                     ) : (
                       <button type="button" className="froam-collab__primary" disabled={props.opening} onClick={() => props.onOpenRoom(false)}>
-                        {props.opening ? 'Opening…' : 'Create invite links'}
+                        {props.opening ? 'Creating links…' : 'Create invite links'}
                       </button>
                     )}
                   </section>
                 ) : (
                   <>
                     {isOwner && (props.me?.name ?? props.myName) === UNNAMED && (
-                      <p className="froam-collab__notice is-profile">
-                        People see you as “{UNNAMED}”.{' '}
-                        <button type="button" className="froam-collab__link" onClick={() => { setOpen(false); props.onEditProfile() }}>Add your name and photo</button>
-                      </p>
+                      <div className="froam-collab__profile-nudge">
+                        <PersonAvatar name={UNNAMED} color={props.me?.color} avatarUrl={props.me?.avatarUrl} size={28} />
+                        <span><strong>People see you as “{UNNAMED}”.</strong> Add your name and photo so they know it’s you.</span>
+                        <button type="button" className="froam-collab__secondary" onClick={() => { setOpen(false); props.onEditProfile() }}>Set up</button>
+                      </div>
                     )}
-                    {isOwner && props.reach && <ReachNotice reach={props.reach} onReach={props.onReach} />}
+                    {isOwner && props.reach && <LinkStatus reach={props.reach} onReach={props.onReach} />}
                     {props.expiresAt && (
                       <p className="froam-collab__expiry"><Clock size={11} /> This room ends {inDays(props.expiresAt)} — a demo room, kept for a week</p>
                     )}
-                    {needsFreshLinks && (
+                    {needsFreshLinks && !props.linksPending && (
                       <p className="froam-collab__notice">
                         This room predates “Can suggest changes”.{' '}
                         <button type="button" className="froam-collab__link" onClick={() => props.onOpenRoom(true)}>Create new links</button>
@@ -879,6 +933,7 @@ export function FroamCollaborate(props: Props) {
                     )}
                     {isOwner && (
                       <section className="froam-collab__section">
+                        <h4>Invite links</h4>
                         {INVITES.map((invite) => {
                           const link = props.links[invite.role]
                           return (
@@ -889,20 +944,28 @@ export function FroamCollaborate(props: Props) {
                               </div>
                               <button
                                 type="button"
-                                className="froam-collab__copy"
+                                className={`froam-collab__copy${copiedRole === invite.role ? ' is-done' : ''}`}
                                 disabled={!link}
                                 onClick={() => link && copy(link, invite.role)}
                                 aria-label={`Copy the “${invite.title}” link`}
+                                title={link ?? (props.linksPending ? 'The link is on its way' : undefined)}
                               >
-                                {copiedRole === invite.role ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy link</>}
+                                {copiedRole === invite.role ? <><Check size={13} /> Copied</> : props.linksPending ? <><Loader2 size={13} className="froam-collab__reach-spin" /> Preparing</> : <><Copy size={13} /> Copy link</>}
                               </button>
                             </div>
                           )
                         })}
-                        <button type="button" className="froam-collab__ghost" onClick={() => props.onOpenRoom(true)}>
-                          <RefreshCw size={12} /> Reset links (old ones stop working)
+                        <div className="froam-collab__footer">
+                        <button type="button" className="froam-collab__ghost" onClick={() => props.onOpenRoom(true)} title="Make new links — the ones you sent stop working">
+                          <RefreshCw size={13} /> New links
                         </button>
-                        {props.onEndRoom && (confirmEnd ? (
+                        {props.onEndRoom && !confirmEnd && (
+                          <button type="button" className="froam-collab__ghost is-danger" onClick={() => setConfirmEnd(true)}>
+                            <LogOut size={13} /> End collaboration
+                          </button>
+                        )}
+                        </div>
+                        {props.onEndRoom && confirmEnd && (
                           <div className="froam-collab__end" role="alertdialog" aria-label="End collaboration">
                             <strong>End this session for everyone?</strong>
                             <p>Every invite link stops working and everyone is signed out of the room. What you approved stays live.</p>
@@ -912,15 +975,11 @@ export function FroamCollaborate(props: Props) {
                             <div className="froam-collab__actions">
                               <button type="button" className="froam-collab__ghost" onClick={() => setConfirmEnd(false)}>Keep going</button>
                               <button type="button" className="froam-collab__danger" disabled={ending} onClick={() => void endRoom()}>
-                                <LogOut size={12} /> {ending ? 'Ending…' : 'End session'}
+                                <LogOut size={13} /> {ending ? 'Ending…' : 'End session'}
                               </button>
                             </div>
                           </div>
-                        ) : (
-                          <button type="button" className="froam-collab__ghost is-danger" onClick={() => setConfirmEnd(true)}>
-                            <LogOut size={12} /> End collaboration
-                          </button>
-                        ))}
+                        )}
                       </section>
                     )}
                     <section className="froam-collab__section">

@@ -31,9 +31,10 @@ const shareFor = (id) => {
 }
 const relay = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://relay')
-  const link = /^\/s\/([\w-]{16,64})\/?$/.exec(url.pathname)
+  const link = /^\/s\/([\w-]{16,64})(\/[^?#]*)?$/.exec(url.pathname)
   if (link) {
-    res.writeHead(302, { Location: `/${url.search}`, 'Set-Cookie': `${SHARE_COOKIE}=${link[1]}; Path=/; HttpOnly; SameSite=Lax` })
+    const page = link[2] && link[2] !== '/' ? link[2].replace(/\/{2,}/g, '/') : '/'
+    res.writeHead(302, { Location: `${page}${url.search}`, 'Set-Cookie': `${SHARE_COOKIE}=${link[1]}; Path=/; HttpOnly; SameSite=Lax` })
     return res.end()
   }
   const id = shareFromCookie(req.headers.cookie)
@@ -128,6 +129,30 @@ test('the editor and its modules come from the CDN, for the exact version', asyn
   assert.match(chunk.headers.get('content-type'), /javascript/)
   assert.equal(await editorFromCdn('/froam-modules/../../etc.mjs', '8.8.1', fake), null)
   assert.equal(await editorFromCdn('/froam.js', 'latest; rm -rf', fake), null)
+})
+
+test('FROAM_SHARE=off keeps every invite link on this machine', async () => {
+  assert.equal((await local('/__froam/share').then((r) => r.json())).available, true)
+  process.env.FROAM_SHARE = 'off'
+  try {
+    assert.equal((await local('/__froam/share').then((r) => r.json())).available, false)
+    const start = await local('/__froam/share/start', json({}))
+    assert.equal(start.status, 403)
+    assert.match((await start.json()).error, /FROAM_SHARE=off/)
+    assert.equal((await local('/__froam/share').then((r) => r.json())).active, false)
+  } finally {
+    delete process.env.FROAM_SHARE
+  }
+})
+
+test('a share link can open a page, and never another site (the real worker)', async () => {
+  const { default: worker } = await import('../templates/cloudflare-share/worker.js')
+  const env = { SHARES: { idFromName: (name) => name, get: () => ({ fetch: async () => new Response('site') }) } }
+  const open = (pathname) => worker.fetch(new Request(`https://share.test${pathname}`), env)
+  assert.equal((await open('/s/abcdefghijklmnopqrst?froam-room=r')).headers.get('location'), '/?froam-room=r')
+  assert.equal((await open('/s/abcdefghijklmnopqrst/pricing?froam-room=r')).headers.get('location'), '/pricing?froam-room=r')
+  assert.equal((await open('/s/abcdefghijklmnopqrst//elsewhere.example/x')).headers.get('location'), '/elsewhere.example/x')
+  assert.match((await open('/s/abcdefghijklmnopqrst/pricing')).headers.get('set-cookie'), /froam_share=abcdefghijklmnopqrst; Path=\/;.*HttpOnly/)
 })
 
 test('the owner starts sharing from the editor; the link is stable', async () => {

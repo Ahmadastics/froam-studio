@@ -1,5 +1,39 @@
 # Changelog
 
+## 8.9.0 - 2026-09-29
+
+**A new Froam: calmer, clearer, easier — and invite links that always work.**
+
+- **Invite links from a local site open anywhere.** On a site running on your
+  computer, creating invite links now makes its secure public link
+  automatically; copy buttons wait until that link is ready, so a
+  `localhost` link is never handed out (command search's "Copy a link for
+  comments" too). One line in Share says whether links work on any device,
+  with Turn off / Try again. Links open the page you shared, not just Home.
+  Ending a session stops the public link. `FROAM_SHARE=off` keeps every link
+  on your machine or network.
+- **One top bar.** The two rows are one: the Froam menu (commands,
+  shortcuts, customize, profile, minimize, exit), where you are, the tools,
+  a one-click Library, screen size, a zoom menu, undo/redo, Share, Quick Edit,
+  and Save — which says "Saved" — with Save to your code beside it.
+- **Panels with tabs.** Layers, Pages, Library and Reference are tabs on the
+  left panel; Design, Animate and Page map on the right. Both panels can be
+  open together on a wide screen.
+- **A small selection bar.** Half the width, one row: what you selected in
+  words ("Button", not `button.btn`), the type controls only when there are
+  words, colours from your own site first, Styles, and a More menu for the
+  rest. It no longer covers what you're editing, and on phones it stays on
+  screen even when a page is wider than the phone.
+- **One design system.** One accent colour, neutral surfaces, status colours
+  only where they mean something, sentence case everywhere (no more all
+  caps), text never smaller than 11px, and sizes in px so a site's own font
+  settings can't shrink or stretch the editor.
+- **Layers, Pages, Share, Chat, your profile, Quick Edit, command search,
+  shortcuts and the customizer, redone** in plain words: layers named by what
+  they are, rounded numbers in the design panel, no "Graph synced" or
+  "stable ID", a first-time hint, and Escape closes every dialog.
+- The launcher button is unchanged.
+
 ## 8.8.1 - 2026-09-28
 
 **Fast on real sites, and fast on share links — every time.**

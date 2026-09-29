@@ -32,7 +32,7 @@ html[data-froam-touch] [contenteditable='true'] {
   }
   .froam-context-menu__item {
     min-height: 44px;
-    font-size: 0.88rem;
+    font-size: 14px;
   }
   .froam-context-menu__item kbd {
     display: none;
@@ -106,22 +106,10 @@ html[data-froam-touch] [contenteditable='true'] {
     flex-shrink: 0;
   }
 
-  .froam-floating-bar.is-docked .froam-floating-bar__identity {
+  .froam-floating-bar.is-docked .froam-floating-bar__identity small {
     display: none;
   }
 
-  .froam-floating-bar.is-docked .froam-floating-bar__btn,
-  .froam-floating-bar.is-docked .froam-floating-bar__color-btn {
-    width: 38px;
-    height: 38px;
-  }
-
-  .froam-floating-bar.is-docked .froam-floating-bar__edit-text {
-    width: auto;
-    min-width: 38px;
-  }
-
-  .froam-floating-bar.is-docked .froam-floating-bar__advanced,
   .froam-floating-bar.is-docked .froam-floating-bar__pop {
     max-height: 44vh;
     overflow-y: auto;
@@ -179,8 +167,8 @@ html[data-froam-touch] [contenteditable='true'] {
   display: grid;
   min-width: 40px;
   min-height: 40px;
-  color: var(--fs-accent);
-  background: rgba(94, 234, 212, 0.1);
+  color: var(--fs-accent-text);
+  background: rgba(var(--fs-accent-rgb), 0.1);
 }
 
 /* Left panel (Plan / Layers) becomes a slide-over drawer */
@@ -261,7 +249,7 @@ html[data-froam-touch] [contenteditable='true'] {
   width: 40px;
   height: 4px;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.4);
+  background: rgba(255, 255, 255, 0.28);
 }
 
 .froam-sheet__titlebar {
@@ -274,8 +262,8 @@ html[data-froam-touch] [contenteditable='true'] {
 }
 
 .froam-sheet__title {
-  font-size: 0.84rem;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--fs-text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -283,7 +271,7 @@ html[data-froam-touch] [contenteditable='true'] {
 }
 
 .froam-sheet__subtitle {
-  font-size: 0.72rem;
+  font-size: 12px;
   color: var(--fs-text-tertiary);
   white-space: nowrap;
   overflow: hidden;
@@ -318,4 +306,11 @@ html[data-froam-touch] [contenteditable='true'] {
   .froam-sheet textarea {
     font-size: 16px !important;
   }
+}
+
+/* Editing on a phone: the page never scrolls sideways (see GlobalChefEditor),
+   so fixed controls sit on the screen, not past a widened layout viewport. */
+html[data-froam-phone-editing],
+html[data-froam-phone-editing] body {
+  overflow-x: hidden !important;
 }

@@ -1,5 +1,6 @@
 /* ===============================================================
    FROAM STUDIO — RIGHT PANEL — DESIGN (froam-dp)
+   Design · Animate · Page map, then the selection's sections.
    =============================================================== */
 
 .froam-dp {
@@ -7,114 +8,104 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: var(--fs-surface-panel);
+  background: var(--fs-surface-1);
   border-left: 1px solid var(--fs-border-muted);
   overflow: hidden;
   color: var(--fs-text-primary);
-  transition:
-    background var(--fs-transition-med),
-    border-color var(--fs-transition-med),
-    color var(--fs-transition-med);
+  font-size: 13px;
 }
 
 /* Tabs */
 .froam-dp__header {
   display: flex;
-  align-items: center;
-  gap: 0;
+  align-items: stretch;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 8px 8px 0;
   border-bottom: 1px solid var(--fs-border-muted);
 }
 
 .froam-dp__tab {
-  flex: 1;
-  appearance: none;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  font-family: inherit;
+  position: relative;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 36px;
-  font-size: 0.76rem;
-  font-weight: 600;
+  padding: 0 10px;
+  border-radius: 8px 8px 0 0;
   color: var(--fs-text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  transition:
-    color var(--fs-transition-fast),
-    border-color var(--fs-transition-fast),
-    background var(--fs-transition-fast);
-  border-bottom: 2px solid transparent;
+  transition: color var(--fs-transition-fast), background var(--fs-transition-fast);
 }
 
-.froam-dp__tab:hover { color: var(--fs-text-secondary); }
-.froam-dp__tab.is-active {
-  color: var(--fs-text-primary);
-  border-bottom-color: var(--fs-accent-control);
-}
+.froam-dp__tab:hover { color: var(--fs-text-primary); background: var(--fs-surface-control); }
+.froam-dp__tab.is-active { color: var(--fs-text-primary); }
+.froam-dp__tab.is-active::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--fs-accent); }
+.froam-dp__tab:focus-visible { outline: 2px solid var(--fs-accent); outline-offset: -2px; }
 
-/* Selection info */
+/* What's selected */
 .froam-dp__selection-info {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  gap: 8px;
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 8px 0 14px;
   border-bottom: 1px solid var(--fs-border-muted);
-  background: linear-gradient(90deg, rgba(var(--fs-accent-control-rgb), 0.08), transparent 72%);
-  transition:
-    background 160ms ease,
-    border-color 160ms ease;
 }
 
 .froam-dp__sel-tag {
-  font-size: 0.74rem;
-  font-weight: 700;
-  color: var(--fs-accent-control);
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.froam-dp__sel-tag strong { font-size: 14px; font-weight: 600; }
+.froam-dp__sel-tag small { min-width: 0; overflow: hidden; color: var(--fs-text-tertiary); font-family: var(--fs-font-mono); font-size: 11px; text-overflow: ellipsis; }
+
 .froam-dp__sel-clear {
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
-  border-radius: 4px;
-  border: none;
-  background: transparent;
+  flex-shrink: 0;
+  border-radius: 7px;
   color: var(--fs-text-tertiary);
   cursor: pointer;
-  transition:
-    background var(--fs-transition-fast),
-    color var(--fs-transition-fast),
-    box-shadow var(--fs-transition-fast);
+  transition: background var(--fs-transition-fast), color var(--fs-transition-fast);
 }
 
-.froam-dp__sel-clear:hover { color: var(--fs-warm); background: rgba(255, 108, 79, 0.08); }
+.froam-dp__sel-clear:hover { color: var(--fs-text-primary); background: var(--fs-surface-control-hover); }
 
-/* Empty state */
+/* Nothing selected */
 .froam-dp__empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 40px 24px;
+  gap: 8px;
+  padding: 48px 28px;
   text-align: center;
   color: var(--fs-text-tertiary);
-  font-size: 0.74rem;
+  font-size: 13px;
   line-height: 1.5;
   flex: 1;
 }
+
+.froam-dp__empty > svg { width: 44px; height: 44px; padding: 11px; border-radius: 12px; background: var(--fs-surface-control); color: var(--fs-text-secondary); box-sizing: border-box; }
+.froam-dp__empty strong { color: var(--fs-text-primary); font-size: 14px; font-weight: 600; }
 
 /* Scrollable content */
 .froam-dp__scroll {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(94, 234, 212, 0.2) transparent;
 }
 
 /* Sections */
@@ -127,98 +118,87 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 8px 12px;
-  border: none;
-  background: transparent;
-  color: var(--fs-text-secondary);
-  font: inherit;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  min-height: 40px;
+  padding: 0 12px 0 14px;
+  color: var(--fs-text-primary);
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  transition:
-    background var(--fs-transition-fast),
-    color var(--fs-transition-fast),
-    box-shadow var(--fs-transition-fast);
+  transition: background var(--fs-transition-fast);
 }
 
 .froam-dp__section-header:hover { background: var(--fs-surface-control-subtle); }
+.froam-dp__section-header:focus-visible { outline: 2px solid var(--fs-accent); outline-offset: -2px; }
 
 .froam-dp__section-title {
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-
-.froam-dp__section-body {
-  padding: 0 12px 10px;
-  display: grid;
   gap: 8px;
 }
 
-/* Compact fields (Figma-style) */
+.froam-dp__section-title svg { color: var(--fs-text-tertiary); }
+
+.froam-dp__section-body {
+  padding: 0 14px 14px;
+  display: grid;
+  gap: 10px;
+}
+
+/* Fields */
 .froam-dp__compact-field {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .froam-dp__compact-label {
-  font-size: 0.62rem;
-  font-weight: 600;
-  color: var(--fs-text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  color: var(--fs-text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .froam-dp__compact-input {
   width: 100%;
-  height: 28px;
-  padding: 0 6px;
-  border-radius: 6px;
-  border: 1px solid var(--fs-border-muted);
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: 1px solid transparent;
   background: var(--fs-surface-control);
   color: var(--fs-text-primary);
   font: inherit;
-  font-size: 0.74rem;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   outline: none;
-  transition:
-    border-color var(--fs-transition-fast),
-    background var(--fs-transition-fast),
-    box-shadow var(--fs-transition-fast);
+  transition: border-color var(--fs-transition-fast), background var(--fs-transition-fast);
 }
 
-.froam-dp__compact-input:focus { border-color: var(--fs-accent-control); box-shadow: var(--fs-focus-ring); }
+.froam-dp__compact-input:hover { background: var(--fs-surface-control-hover); }
+.froam-dp__compact-input:focus { border-color: var(--fs-accent); background: var(--fs-surface-1); }
 .froam-dp__compact-input::placeholder { color: var(--fs-text-tertiary); }
+.froam-dp__compact-input[readonly] { color: var(--fs-text-secondary); background: var(--fs-surface-control-subtle); }
 
 .froam-dp__compact-select {
   width: 100%;
-  height: 28px;
-  padding: 0 20px 0 6px;
-  border-radius: 6px;
-  border: 1px solid var(--fs-border-muted);
-  background: var(--fs-surface-control);
+  height: 30px;
+  padding: 0 22px 0 8px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: var(--fs-surface-control) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23a4a5ad' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center;
   color: var(--fs-text-primary);
   font: inherit;
-  font-size: 0.74rem;
+  font-size: 12px;
   outline: none;
   cursor: pointer;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='rgba(226,232,240,0.3)' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 6px center;
-  transition:
-    border-color var(--fs-transition-fast),
-    background var(--fs-transition-fast),
-    box-shadow var(--fs-transition-fast);
+  transition: border-color var(--fs-transition-fast), background-color var(--fs-transition-fast);
 }
 
-.froam-dp__compact-select:focus { border-color: var(--fs-accent-control); }
+.froam-dp__compact-select:hover { background-color: var(--fs-surface-control-hover); }
+.froam-dp__compact-select:focus { border-color: var(--fs-accent); }
 .froam-dp__compact-select option { background: var(--fs-option-bg); color: var(--fs-text-primary); }
 .froam-dp__full-width { width: 100%; }
 
@@ -226,13 +206,13 @@
 .froam-dp__pos-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 6px;
+  gap: 8px;
 }
 
 .froam-dp__row-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  gap: 8px;
 }
 
 .froam-dp__stack {
@@ -240,32 +220,29 @@
   gap: 8px;
 }
 
-/* Preset buttons */
+/* Presets: a segmented row */
 .froam-dp__preset-row {
   display: flex;
-  gap: 4px;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--fs-surface-control);
 }
 
 .froam-dp__preset-btn {
   flex: 1;
-  height: 24px;
-  border-radius: 5px;
-  border: 1px solid var(--fs-border-muted);
-  background: var(--fs-surface-control-subtle);
+  height: 26px;
+  border-radius: 6px;
   color: var(--fs-text-secondary);
   font: inherit;
-  font-size: 0.64rem;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  transition:
-    background var(--fs-transition-fast),
-    border-color var(--fs-transition-fast),
-    color var(--fs-transition-fast),
-    box-shadow var(--fs-transition-fast);
+  transition: background var(--fs-transition-fast), color var(--fs-transition-fast);
 }
 
-.froam-dp__preset-btn:hover { border-color: var(--fs-accent-control-border); color: var(--fs-text-primary); }
-.froam-dp__preset-btn.is-accent { color: var(--fs-accent-control); border-color: var(--fs-accent-control-border); background: var(--fs-accent-control-wash); }
+.froam-dp__preset-btn:hover { color: var(--fs-text-primary); background: var(--fs-surface-control-active); }
+.froam-dp__preset-btn.is-accent { color: var(--fs-text-primary); background: var(--fs-surface-4); }
 
 /* Color palette */
 .froam-dp__palette-shell {
@@ -287,11 +264,9 @@
 }
 
 .froam-dp__palette-title {
-  font-size: 0.68rem;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--fs-text-primary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .froam-dp__saved-colors {
@@ -313,8 +288,8 @@
   background: var(--fs-surface-control-subtle);
   color: var(--fs-text-tertiary);
   font: inherit;
-  font-size: 0.62rem;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
   transition:
     background var(--fs-transition-fast),
@@ -365,11 +340,9 @@
 }
 
 .froam-dp__palette-label {
-  font-size: 0.6rem;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--fs-text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .froam-dp__palette-grid {
@@ -414,7 +387,7 @@
   background: var(--fs-surface-control);
   color: var(--fs-text-primary);
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 12px;
   font-family: 'JetBrains Mono', monospace;
   outline: none;
 }
@@ -430,8 +403,8 @@
 }
 
 .froam-dp__opacity-wrap .froam-dp__compact-input { width: 40px; text-align: center; }
-.froam-dp__unit { font-size: 0.62rem; color: var(--fs-text-tertiary); }
-.froam-dp__fill-label { font-size: 0.62rem; color: var(--fs-text-tertiary); font-weight: 600; text-transform: uppercase; }
+.froam-dp__unit { font-size: 11px; color: var(--fs-text-tertiary); }
+.froam-dp__fill-label { font-size: 11px; color: var(--fs-text-tertiary); font-weight: 600; }
 
 /* Mini action buttons */
 .froam-dp__btn-row {
@@ -450,7 +423,7 @@
   background: var(--fs-surface-control-subtle);
   color: var(--fs-text-secondary);
   font: inherit;
-  font-size: 0.64rem;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -461,7 +434,7 @@
 }
 
 .froam-dp__mini-btn:hover { border-color: var(--fs-border-strong); color: var(--fs-text-primary); }
-.froam-dp__mini-btn.is-accent { color: var(--fs-accent-control); border-color: var(--fs-accent-control-border); }
+.froam-dp__mini-btn.is-accent { color: var(--fs-accent-text); border-color: var(--fs-accent-control-border); }
 .froam-dp__mini-btn.is-accent:hover { background: var(--fs-accent-control-soft); }
 
 /* Border radius row */
@@ -480,7 +453,7 @@
   background: var(--fs-surface-control);
   color: var(--fs-text-primary);
   font: inherit;
-  font-size: 0.68rem;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   text-align: center;
   outline: none;
@@ -505,7 +478,7 @@
     box-shadow var(--fs-transition-fast);
 }
 
-.froam-dp__link-btn.is-linked { color: var(--fs-accent-control); }
+.froam-dp__link-btn.is-linked { color: var(--fs-accent-text); }
 
 /* Formatting bar (B I U S + alignment) */
 .froam-dp__format-bar {
@@ -535,7 +508,7 @@
 }
 
 .froam-dp__fmt-btn:hover { color: var(--fs-text-primary); background: var(--fs-surface-control-hover); }
-.froam-dp__fmt-btn.is-active { color: var(--fs-accent-control); background: var(--fs-accent-control-soft); }
+.froam-dp__fmt-btn.is-active { color: var(--fs-accent-text); background: var(--fs-accent-control-soft); }
 
 .froam-dp__fmt-sep {
   width: 1px;
@@ -554,7 +527,7 @@
   background: var(--fs-surface-control);
   color: var(--fs-text-primary);
   font: inherit;
-  font-size: 0.74rem;
+  font-size: 12px;
   line-height: 1.4;
   resize: vertical;
   outline: none;
@@ -575,11 +548,9 @@
 }
 
 .froam-dp__spacing-label {
-  font-size: 0.62rem;
+  font-size: 11px;
   font-weight: 600;
   color: var(--fs-text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .froam-dp__spacing-inputs {
@@ -596,7 +567,7 @@
   background: var(--fs-surface-control);
   color: var(--fs-text-primary);
   font: inherit;
-  font-size: 0.68rem;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   text-align: center;
   outline: none;

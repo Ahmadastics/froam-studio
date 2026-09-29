@@ -24,9 +24,11 @@ import {
   Underline,
   Unlink,
   X,
+  MousePointer2,
 } from 'lucide-react'
 import { computeBlueprintData, BlueprintSheet, BLUEPRINT_CATEGORY_COLOR, BLUEPRINT_CATEGORY_LABEL } from './FroamBlueprint'
 import { froamStorageKey } from '../project/storage-scope'
+import { describeSelection, tidyLength } from './selection-name'
 import { findElementByPath } from '../collab/paths'
 import { PseudoElementsSection } from './chef/PseudoElementsSection'
 import type { PseudoElement } from './chef/pseudo'
@@ -130,6 +132,8 @@ type Props = {
   /** The selection's saved draft styles (for its ::before / ::after edits). */
   draftStyles?: Record<string, string>
   onApplyPseudoStyle?: (pseudo: PseudoElement, styles: Record<string, string>, label: string) => void
+  /** Open motion for the selection. */
+  onAnimate?: () => void
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -200,11 +204,12 @@ const paletteGroups = [
 /* ═══════════════════════════════════════════════════════════════
    Prototype tab — the Blueprint lives here (v4.5)
    ═══════════════════════════════════════════════════════════════ */
-function DesignPanelTabs({ tab, onTab }: { tab: 'design' | 'prototype'; onTab: (next: 'design' | 'prototype') => void }) {
+function DesignPanelTabs({ tab, onTab, onAnimate }: { tab: 'design' | 'prototype'; onTab: (next: 'design' | 'prototype') => void; onAnimate?: () => void }) {
   return (
-    <div className="froam-dp__header" data-chef-editor-root="true">
-      <button type="button" className={`froam-dp__tab ${tab === 'design' ? 'is-active' : ''}`} onClick={() => onTab('design')} data-chef-editor-root="true">Design</button>
-      <button type="button" className={`froam-dp__tab ${tab === 'prototype' ? 'is-active' : ''}`} onClick={() => onTab('prototype')} data-chef-editor-root="true">Prototype</button>
+    <div className="froam-dp__header" role="tablist" aria-label="Design panel" data-chef-editor-root="true">
+      <button type="button" role="tab" aria-selected={tab === 'design'} className={`froam-dp__tab ${tab === 'design' ? 'is-active' : ''}`} onClick={() => onTab('design')} data-chef-editor-root="true">Design</button>
+      {onAnimate && <button type="button" role="tab" aria-selected={false} className="froam-dp__tab" onClick={onAnimate} title="Motion and interactions for the selection" data-chef-editor-root="true">Animate</button>}
+      <button type="button" role="tab" aria-selected={tab === 'prototype'} className={`froam-dp__tab ${tab === 'prototype' ? 'is-active' : ''}`} onClick={() => onTab('prototype')} title="A map of the whole page" data-chef-editor-root="true">Page map</button>
     </div>
   )
 }
@@ -285,6 +290,7 @@ export default function FroamDesignPanel({
   onOpenBlueprint,
   draftStyles,
   onApplyPseudoStyle,
+  onAnimate,
 }: Props) {
   const [tab, setTab] = useState<'design' | 'prototype'>('design')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -324,13 +330,14 @@ export default function FroamDesignPanel({
   if (!selection) {
     return (
       <div className="froam-dp" data-chef-editor-root="true">
-        <DesignPanelTabs tab={tab} onTab={setTab} />
+        <DesignPanelTabs tab={tab} onTab={setTab} onAnimate={onAnimate} />
         {tab === 'prototype' ? (
           <BlueprintTabView getRootEl={getRootEl} onOpen={onOpenBlueprint} />
         ) : (
           <div className="froam-dp__empty">
-            <Square size={32} style={{ opacity: 0.2 }} />
-            <span>Select an element on the canvas to inspect and edit its design properties.</span>
+            <MousePointer2 size={22} />
+            <strong>Nothing selected</strong>
+            <span>Click anything on the page to change how it looks.</span>
           </div>
         )}
       </div>
@@ -360,23 +367,24 @@ export default function FroamDesignPanel({
   return (
     <div className="froam-dp" data-chef-editor-root="true">
       {/* Tabs */}
-      <DesignPanelTabs tab={tab} onTab={setTab} />
+      <DesignPanelTabs tab={tab} onTab={setTab} onAnimate={onAnimate} />
 
       {tab === 'prototype' ? (
         <BlueprintTabView getRootEl={getRootEl} onOpen={onOpenBlueprint} />
       ) : (
       <>
       {/* Selection info */}
-      <div className="froam-dp__selection-info" data-chef-editor-root="true">
-        <span className="froam-dp__sel-tag">{s.label}</span>
+      <div className="froam-dp__selection-info" title={s.label} data-chef-editor-root="true">
+        <span className="froam-dp__sel-tag"><strong>{describeSelection(s.label).kind}</strong>{describeSelection(s.label).detail && <small>{describeSelection(s.label).detail}</small>}</span>
         <button
           type="button"
           className="froam-dp__sel-clear"
           onClick={onClearSelectionDraft}
-          title="Clear styles"
+          title="Reset this element's styles"
+          aria-label="Reset styles"
           data-chef-editor-root="true"
         >
-          <Eraser size={11} />
+          <Eraser size={14} />
         </button>
       </div>
 
@@ -412,7 +420,7 @@ export default function FroamDesignPanel({
               <input
                 type="text"
                 className="froam-dp__compact-input"
-                value={s.width}
+                value={tidyLength(s.width)}
                 onChange={(e) => onApplyStyle({ width: e.target.value }, { width: e.target.value })}
                 data-chef-editor-root="true"
               />
@@ -422,7 +430,7 @@ export default function FroamDesignPanel({
               <input
                 type="text"
                 className="froam-dp__compact-input"
-                value={s.height}
+                value={tidyLength(s.height)}
                 onChange={(e) => onApplyStyle({ height: e.target.value }, { height: e.target.value })}
                 data-chef-editor-root="true"
               />
@@ -458,7 +466,7 @@ export default function FroamDesignPanel({
           <div className="froam-dp__preset-row">
             <button type="button" className="froam-dp__preset-btn" onClick={() => onApplySizePreset('auto')}>Auto</button>
             <button type="button" className="froam-dp__preset-btn" onClick={() => onApplySizePreset('hug')}>Hug</button>
-            <button type="button" className="froam-dp__preset-btn is-accent" onClick={() => onApplySizePreset('fill')}>Fill</button>
+            <button type="button" className="froam-dp__preset-btn" onClick={() => onApplySizePreset('fill')}>Fill</button>
             <button type="button" className="froam-dp__preset-btn" onClick={() => onApplySizePreset('fullBleed')}>Bleed</button>
           </div>
 
@@ -466,21 +474,21 @@ export default function FroamDesignPanel({
           <div className="froam-dp__row-2">
             <label className="froam-dp__compact-field">
               <span className="froam-dp__compact-label">Min W</span>
-              <input type="text" className="froam-dp__compact-input" value={s.minWidth} onChange={(e) => onApplyStyle({ minWidth: e.target.value }, { minWidth: e.target.value })} placeholder="—" data-chef-editor-root="true" />
+              <input type="text" className="froam-dp__compact-input" value={tidyLength(s.minWidth)} onChange={(e) => onApplyStyle({ minWidth: e.target.value }, { minWidth: e.target.value })} placeholder="—" data-chef-editor-root="true" />
             </label>
             <label className="froam-dp__compact-field">
               <span className="froam-dp__compact-label">Max W</span>
-              <input type="text" className="froam-dp__compact-input" value={s.maxWidth} onChange={(e) => onApplyStyle({ maxWidth: e.target.value }, { maxWidth: e.target.value })} placeholder="—" data-chef-editor-root="true" />
+              <input type="text" className="froam-dp__compact-input" value={tidyLength(s.maxWidth)} onChange={(e) => onApplyStyle({ maxWidth: e.target.value }, { maxWidth: e.target.value })} placeholder="—" data-chef-editor-root="true" />
             </label>
           </div>
           <div className="froam-dp__row-2">
             <label className="froam-dp__compact-field">
               <span className="froam-dp__compact-label">Min H</span>
-              <input type="text" className="froam-dp__compact-input" value={s.minHeight} onChange={(e) => onApplyStyle({ minHeight: e.target.value }, { minHeight: e.target.value })} placeholder="—" data-chef-editor-root="true" />
+              <input type="text" className="froam-dp__compact-input" value={tidyLength(s.minHeight)} onChange={(e) => onApplyStyle({ minHeight: e.target.value }, { minHeight: e.target.value })} placeholder="—" data-chef-editor-root="true" />
             </label>
             <label className="froam-dp__compact-field">
               <span className="froam-dp__compact-label">Max H</span>
-              <input type="text" className="froam-dp__compact-input" value={s.maxHeight} onChange={(e) => onApplyStyle({ maxHeight: e.target.value }, { maxHeight: e.target.value })} placeholder="—" data-chef-editor-root="true" />
+              <input type="text" className="froam-dp__compact-input" value={tidyLength(s.maxHeight)} onChange={(e) => onApplyStyle({ maxHeight: e.target.value }, { maxHeight: e.target.value })} placeholder="—" data-chef-editor-root="true" />
             </label>
           </div>
         </SectionHeader>
@@ -808,7 +816,7 @@ export default function FroamDesignPanel({
             <div className="froam-dp__row-2">
               <label className="froam-dp__compact-field">
                 <span className="froam-dp__compact-label">Size</span>
-                <input type="number" className="froam-dp__compact-input" min="8" max="200" value={s.fontSize} onChange={(e) => { const v = Number(e.target.value); onApplyStyle({ fontSize: `${v}px` }, { fontSize: v }) }} data-chef-editor-root="true" />
+                <input type="number" className="froam-dp__compact-input" min="8" max="200" value={Math.round(s.fontSize * 10) / 10} onChange={(e) => { const v = Number(e.target.value); onApplyStyle({ fontSize: `${v}px` }, { fontSize: v }) }} data-chef-editor-root="true" />
               </label>
               <label className="froam-dp__compact-field">
                 <span className="froam-dp__compact-label">Weight</span>

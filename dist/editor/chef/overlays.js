@@ -1,4 +1,5 @@
 import { jsxs as _jsxs, jsx as _jsx } from "react/jsx-runtime";
+import { describeSelection } from '../selection-name.js';
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, Sparkles, X, Zap } from 'lucide-react';
@@ -171,13 +172,13 @@ export function FroamScan({ active, onDone }) {
             }
             if (!reduce && t >= START_DELAY && t <= START_DELAY + SWEEP) {
                 const trailGrad = ctx.createLinearGradient(0, scanY - trail, 0, scanY);
-                trailGrad.addColorStop(0, 'rgba(94,234,212,0)');
-                trailGrad.addColorStop(1, 'rgba(94,234,212,0.18)');
+                trailGrad.addColorStop(0, 'rgba(53,114,239,0)');
+                trailGrad.addColorStop(1, 'rgba(53,114,239,0.18)');
                 ctx.fillStyle = trailGrad;
                 ctx.fillRect(0, scanY - trail, vw, trail);
                 ctx.strokeStyle = 'rgba(150,255,238,0.95)';
                 ctx.lineWidth = 2;
-                ctx.shadowColor = 'rgba(94,234,212,0.9)';
+                ctx.shadowColor = 'rgba(53,114,239,0.9)';
                 ctx.shadowBlur = 16;
                 ctx.beginPath();
                 ctx.moveTo(0, scanY);
@@ -241,6 +242,6 @@ export function SelectionHandoffOverlay({ rect, label, mode, count, pulseKey, })
         return null;
     const top = Math.max(10, rect.top - 36);
     const left = Math.min(Math.max(10, rect.left), Math.max(10, window.innerWidth - 210));
-    return (_jsxs("div", { className: "froam-selection-handoff", "data-chef-editor-root": "true", style: { left, top }, children: [_jsx("span", { className: "froam-selection-handoff__dot" }), _jsx("span", { className: "froam-selection-handoff__mode", children: mode }), _jsx("span", { className: "froam-selection-handoff__label", children: count > 1 ? `${count} selected` : label })] }, pulseKey));
+    return (_jsxs("div", { className: "froam-selection-handoff", "data-chef-editor-root": "true", style: { left, top }, children: [_jsx("span", { className: "froam-selection-handoff__dot" }), _jsx("span", { className: "froam-selection-handoff__mode", children: mode }), _jsx("span", { className: "froam-selection-handoff__label", title: label, children: count > 1 ? `${count} selected` : describeSelection(label).kind })] }, pulseKey));
 }
 //# sourceMappingURL=overlays.js.map

@@ -29,34 +29,35 @@
 }
 
 /* ─── Crisp text in all editor chrome ─── */
+#froam-editor-portal,
 .fs-command-palette,
 .fs-toast,
 .froam-tb,
 .froam-lp,
 .froam-dp {
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
-/* ─── Unified thin scrollbars across every editor surface ─── */
-.fs-command-palette__list,
-.froam-lp__tree,
-.froam-dp__scroll,
-.fs-layers {
+/* ─── One quiet scrollbar across every editor surface ─── */
+#froam-editor-portal *,
+.froam-floating-bar__pop--looks * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(94, 234, 212, 0.28) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
 }
 
-.fs-command-palette__list::-webkit-scrollbar,
-.froam-lp__tree::-webkit-scrollbar,
-.froam-dp__scroll::-webkit-scrollbar { width: 6px; }
-
-.fs-command-palette__list::-webkit-scrollbar-thumb,
-.froam-lp__tree::-webkit-scrollbar-thumb,
-.froam-dp__scroll::-webkit-scrollbar-thumb {
-  background: rgba(94, 234, 212, 0.24);
-  border-radius: var(--fs-radius-pill);
+#froam-editor-portal ::-webkit-scrollbar { width: 8px; height: 8px; }
+#froam-editor-portal ::-webkit-scrollbar-track { background: transparent; }
+#froam-editor-portal ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16) padding-box;
 }
+#froam-editor-portal ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.26) padding-box; }
+
+/* ─── Selected text inside the editor's own fields ─── */
+#froam-editor-portal ::selection { background: rgba(var(--fs-accent-rgb), 0.4); color: #fff; }
 
 /* ─── Dark native form controls ─── */
 .froam-studio,
