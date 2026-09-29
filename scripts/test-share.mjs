@@ -12,7 +12,7 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { createBridgeServer, isSameSite, keepLinksInside } from '../lib/dev-server.mjs'
-import { SHARE_COOKIE, createShareHub, editorFromCdn, isShareId, sha256Hex, shareFromCookie } from '../templates/cloudflare-share/share.js'
+import { PASS_COOKIE, SHARE_COOKIE, createShareHub, editorFromCdn, isShareId, sha256Hex, shareFromCookie, signPass } from '../templates/cloudflare-share/share.js'
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const require = createRequire(import.meta.url)
@@ -22,9 +22,10 @@ const { wsServer: WebSocketServer } = require('playwright-core/lib/utilsBundle')
 const shares = new Map()
 const shareFor = (id) => {
   if (!shares.has(id)) {
-    const entry = { socket: null, keyHash: null }
+    const entry = { socket: null, keyHash: null, passSecret: null }
     // As for a version not on the CDN yet: the editor comes through the tunnel.
-    entry.hub = createShareHub({ hostSocket: () => entry.socket, fetchImpl: (url, init) => (String(url).startsWith('https://cdn.jsdelivr.net/') ? Promise.resolve(new Response('not found', { status: 404 })) : fetch(url, init)) })
+    // Plain http here, so the pass cookie can't insist on https.
+    entry.hub = createShareHub({ hostSocket: () => entry.socket, passSecret: () => entry.passSecret, secureCookies: false, fetchImpl: (url, init) => (String(url).startsWith('https://cdn.jsdelivr.net/') ? Promise.resolve(new Response('not found', { status: 404 })) : fetch(url, init)) })
     shares.set(id, entry)
   }
   return shares.get(id)
@@ -46,7 +47,9 @@ const relay = http.createServer(async (req, res) => {
   for (const [name, value] of Object.entries(req.headers)) if (typeof value === 'string') headers.set(name, value)
   const response = await shareFor(id).hub.forward(new Request(`http://relay${req.url}`, { method: req.method, headers, body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body }))
   const out = {}
-  response.headers.forEach((value, name) => { out[name] = value })
+  response.headers.forEach((value, name) => { if (name !== 'set-cookie') out[name] = value })
+  const cookies = response.headers.getSetCookie()
+  if (cookies.length) out['set-cookie'] = cookies
   res.writeHead(response.status, out)
   if (!response.body) return res.end()
   const reader = response.body.getReader()
@@ -68,6 +71,7 @@ relay.on('upgrade', async (req, socket, head) => {
   const hash = await sha256Hex(key)
   if (entry.keyHash && entry.keyHash !== hash) { socket.destroy(); return }
   entry.keyHash = hash
+  entry.passSecret ??= await sha256Hex(`froam-pass:${key}`)
   wss.handleUpgrade(req, socket, head, (ws) => {
     entry.socket = ws
     ws.on('message', (data) => entry.hub.fromHost(String(data)))
@@ -91,12 +95,16 @@ const LOCAL = `http://127.0.0.1:${bridge.server.address().port}`
 
 const tests = []
 const test = (name, fn) => tests.push([name, fn])
-let jar = ''
-/** A browser somewhere else: talks only to the share service, keeps its cookie. */
+const cookies = new Map()
+/** A browser somewhere else: talks only to the share service, keeps its cookies. */
 async function remote(pathname, init = {}) {
+  const jar = [...cookies].map(([name, value]) => `${name}=${value}`).join('; ')
   const response = await fetch(`${RELAY}${pathname}`, { ...init, redirect: 'manual', headers: { ...(init.headers ?? {}), ...(jar ? { Cookie: jar } : {}), Origin: RELAY } })
-  const cookie = response.headers.get('set-cookie')
-  if (cookie) jar = cookie.split(';')[0]
+  for (const cookie of response.headers.getSetCookie()) {
+    const [pair] = cookie.split(';')
+    const at = pair.indexOf('=')
+    cookies.set(pair.slice(0, at), pair.slice(at + 1))
+  }
   return response
 }
 const local = (pathname, init = {}) => fetch(`${LOCAL}${pathname}`, init)
@@ -129,6 +137,18 @@ test('the editor and its modules come from the CDN, for the exact version', asyn
   assert.match(chunk.headers.get('content-type'), /javascript/)
   assert.equal(await editorFromCdn('/froam-modules/../../etc.mjs', '8.8.1', fake), null)
   assert.equal(await editorFromCdn('/froam.js', 'latest; rm -rf', fake), null)
+})
+
+test('locked means locked: even the editor’s files wait for an invite', async () => {
+  // The CDN has every file; a locked share still hands out none of them.
+  const hub = createShareHub({ hostSocket: () => null, site: { version: '9.0.0', gate: { epoch: 'e1', expiresAt: null } }, passSecret: () => 'secret', fetchImpl: async () => new Response('editor', { status: 200 }) })
+  for (const pathname of ['/froam.js', '/froam.css', '/froam-modules/froam-editor.mjs']) {
+    assert.equal((await hub.forward(new Request(`https://share.test${pathname}`))).status, 403, pathname)
+  }
+  const pass = await signPass('secret', String(Date.now() + 60_000), 'e1')
+  const allowed = await hub.forward(new Request('https://share.test/froam.js', { headers: { cookie: `${PASS_COOKIE}=${pass}` } }))
+  assert.equal(allowed.status, 200)
+  assert.equal(await allowed.text(), 'editor')
 })
 
 test('FROAM_SHARE=off keeps every invite link on this machine', async () => {
@@ -167,10 +187,26 @@ test('the owner starts sharing from the editor; the link is stable', async () =>
   state.url = status.url
 })
 
-test('someone elsewhere opens the link and gets the site, with the editor', async () => {
+test('without an invite, the share opens nothing — not a page, not a file', async () => {
   const hop = await remote(new URL(state.url).pathname)
   assert.equal(hop.status, 302)
-  assert.ok(jar.startsWith(`${SHARE_COOKIE}=`))
+  assert.ok(cookies.has(SHARE_COOKIE))
+  for (const pathname of ['/', '/index.html', '/froam.js', '/api/froam/rooms', '/__froam/share']) {
+    const refused = await remote(pathname)
+    assert.equal(refused.status, 403, `${pathname} answered ${refused.status}`)
+  }
+  assert.match(await (await remote('/')).text(), /needs an invite/)
+  // A made-up token is refused too.
+  assert.equal((await remote('/?froam-room=nope&froam-token=nope')).status, 403)
+  assert.equal(cookies.has(PASS_COOKIE), false)
+})
+
+test('someone elsewhere opens an invite link and gets the site, with the editor', async () => {
+  const created = await local('/api/froam/rooms', json({ name: 'Ahmad' })).then((r) => r.json())
+  state.room = { id: created.room.id, created }
+  const invited = await remote(`/?froam-room=${created.room.id}&froam-token=${created.invites.commenter}`)
+  assert.equal(invited.status, 200)
+  assert.ok(cookies.has(PASS_COOKIE), 'no pass for a real invite')
   const page = await remote('/')
   const html = await page.text()
   assert.equal(page.status, 200)
@@ -197,7 +233,7 @@ test('through the link, this machine’s files can’t be written', async () => 
 })
 
 test('a contributor joins and submits through the link; the owner approves at home', async () => {
-  const created = await local('/api/froam/rooms', json({ name: 'Ahmad' })).then((r) => r.json())
+  const { created } = state.room
   const id = created.room.id
   const joined = await remote(`/api/froam/rooms/${id}/join`, json({ token: created.invites.contributor, name: 'Maya' })).then((r) => r.json())
   assert.equal(joined.you.role, 'contributor')
@@ -213,7 +249,6 @@ test('a contributor joins and submits through the link; the owner approves at ho
   const approved = await local(`/api/froam/rooms/${id}/requests/${submitted.request.id}/decision`, json({ ...owner, decision: 'approved' })).then((r) => r.json())
   assert.equal(approved.request.status, 'approved')
   assert.ok(fs.readFileSync(path.join(site, 'index.html'), 'utf8').includes('Shared from anywhere.'))
-  state.room = { id, created }
 })
 
 test('the room’s live stream comes through the link as it happens', async () => {
@@ -243,6 +278,19 @@ test('a real browser opens an invite link through the share and gets the editor'
   } finally {
     await browser.close()
   }
+})
+
+test('links can expire, and new links end every pass handed out', async () => {
+  const lasting = await local('/__froam/share/access', json({ expiresIn: '24h' })).then((r) => r.json())
+  assert.ok(lasting.expiresAt > Date.now() && lasting.expiresAt <= Date.now() + 24 * 3600_000 + 1000)
+  assert.equal((await local('/__froam/share').then((r) => r.json())).expiresAt, lasting.expiresAt)
+  await local('/__froam/share/access', json({ reset: true, expiresIn: 'off' }))
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  assert.equal((await remote('/')).status, 403, 'an old pass still works after new links')
+  const { id, created } = state.room
+  const again = await remote(`/?froam-room=${id}&froam-token=${created.invites.commenter}`)
+  assert.equal(again.status, 200)
+  assert.equal((await remote('/')).status, 200)
 })
 
 test('when froam dev stops sharing, the link says the site is offline', async () => {

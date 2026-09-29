@@ -46,12 +46,15 @@ export default {
 export class FroamShare {
   constructor(state) {
     this.state = state
-    this.ready = this.state.storage.get('site').then((site) => {
+    this.ready = Promise.all([this.state.storage.get('site'), this.state.storage.get('passSecret')]).then(([site, passSecret]) => {
+      this.passSecret = passSecret ?? null
       this.hub = createShareHub({
         hostSocket: () => this.state.getWebSockets('host')[0] ?? null,
         cache: caches.default,
         site: site ?? null,
         onHello: (next) => { this.state.storage.put('site', next).catch(() => {}) },
+        // Derived from the owner's key: only this share can make or read its passes.
+        passSecret: () => this.passSecret,
       })
     })
   }
@@ -68,6 +71,10 @@ export class FroamShare {
       const claimed = await this.state.storage.get('keyHash')
       if (claimed && claimed !== hash) return new Response('This share belongs to another computer', { status: 403 })
       if (!claimed) await this.state.storage.put('keyHash', hash)
+      if (!this.passSecret) {
+        this.passSecret = await sha256Hex(`froam-pass:${key}`)
+        await this.state.storage.put('passSecret', this.passSecret)
+      }
       // One computer at a time: a reconnect replaces the old socket.
       for (const old of this.state.getWebSockets('host')) { try { old.close(1000, 'Replaced') } catch { /* gone */ } }
       const [client, server] = Object.values(new WebSocketPair())

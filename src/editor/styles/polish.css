@@ -44,7 +44,7 @@
 #froam-editor-portal *,
 .froam-floating-bar__pop--looks * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  scrollbar-color: rgba(var(--fs-ink-rgb), 0.16) transparent;
 }
 
 #froam-editor-portal ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -52,9 +52,9 @@
 #froam-editor-portal ::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16) padding-box;
+  background: rgba(var(--fs-ink-rgb), 0.16) padding-box;
 }
-#froam-editor-portal ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.26) padding-box; }
+#froam-editor-portal ::-webkit-scrollbar-thumb:hover { background: rgba(var(--fs-ink-rgb), 0.26) padding-box; }
 
 /* ─── Selected text inside the editor's own fields ─── */
 #froam-editor-portal ::selection { background: rgba(var(--fs-accent-rgb), 0.4); color: #fff; }

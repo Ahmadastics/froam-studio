@@ -1148,7 +1148,17 @@ data: ${JSON.stringify({ sequence })}
     }
   }
   const connectionFor = (roomId, actor) => realtime && actor ? realtime.connection(roomId, actor) : null;
-  return async function handleRoomRequest(req, res) {
+  async function checkToken(roomId, token) {
+    if (!roomId || !token || !/^[A-Za-z0-9_-]+$/.test(roomId)) return { ok: false, status: 400 };
+    const room = await store.get(roomId);
+    if (!room) return { ok: false, status: 404 };
+    if (room.endedAt || room.expiresAt && now() > room.expiresAt) return { ok: false, status: 410 };
+    const valid = Boolean(room.tokens?.[token]) || Object.values(room.members ?? {}).some((member) => member?.session === token);
+    return valid ? { ok: true, status: 200, expiresAt: room.expiresAt ?? null } : { ok: false, status: 403 };
+  }
+  handleRoomRequest.checkToken = checkToken;
+  return handleRoomRequest;
+  async function handleRoomRequest(req, res) {
     const url = new URL(req.url ?? "/", "http://froam.local");
     const at = url.pathname.indexOf("/rooms");
     if (at < 0) return false;
@@ -1894,7 +1904,7 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
     }
     sendJson(res, 405, { success: false, error: "Method not allowed" });
     return true;
-  };
+  }
 }
 function cleanText(value, max) {
   return typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;

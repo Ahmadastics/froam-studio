@@ -12,6 +12,10 @@
   border-bottom: 1px solid var(--fs-border-muted);
   z-index: 20;
 }
+/* An open menu sits above whatever is on the canvas — the selection's bar
+   and hover labels live outside the layout, so the layout itself steps up. */
+.froam-figma-layout:has(.froam-chrome .froam-tb__menu) { z-index: 1302; }
+.froam-chrome:has(.froam-tb__menu) { z-index: 1320; }
 
 .froam-tb {
   display: grid;
@@ -400,6 +404,51 @@
 
 .froam-tb__save-btn:hover { background: var(--fs-accent-hover); }
 .froam-tb__save-btn.is-saved { min-width: 82px; }
+/* Nothing to save: calm, not a call to action. */
+.froam-tb__save-btn.is-clean { background: var(--fs-surface-control); color: var(--fs-text-secondary); }
+.froam-tb__save-btn.is-clean:hover { background: var(--fs-surface-control-active); color: var(--fs-text-primary); }
+.froam-tb__save:has(.froam-tb__save-btn.is-clean) .froam-tb__save-btn--repo { background: var(--fs-surface-control); color: var(--fs-text-secondary); box-shadow: inset 1px 0 0 var(--fs-border); }
+.froam-tb__save:has(.froam-tb__save-btn.is-clean) .froam-tb__save-btn--repo:hover { background: var(--fs-surface-control-active); color: var(--fs-text-primary); }
+.froam-tb__save:has(.froam-tb__save-btn.is-clean) .froam-tb__save-dot { box-shadow: 0 0 0 1.5px var(--fs-surface-1); }
+.froam-tb__unsaved {
+  min-width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  margin-left: 2px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.froam-tb__menu-item > .froam-tb__menu-check { flex: none; }
+.froam-tb__menu-check { width: 16px; height: 16px; display: grid; place-items: center; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--fs-border-strong); }
+.froam-tb__menu-check.is-on { background: var(--fs-accent); box-shadow: none; color: #fff; }
+
+/* History: every change on this page, each undoable on its own */
+.froam-tb__history-pop { width: 340px; max-height: min(520px, calc(100vh - 80px)); padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.froam-tb__history-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--fs-border-muted); }
+.froam-tb__history-head strong { font-size: 14px; font-weight: 600; }
+.froam-tb__history-head small { color: var(--fs-text-tertiary); font-size: 12px; }
+.froam-tb__history-empty { margin: 0; padding: 16px 14px 18px; color: var(--fs-text-secondary); font-size: 13px; line-height: 1.5; }
+.froam-tb__history-list { margin: 0; padding: 4px; overflow-y: auto; list-style: none; }
+.froam-tb__history-list li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; }
+.froam-tb__history-list li:hover { background: var(--fs-surface-control); }
+.froam-tb__history-list li > span { display: grid; flex: 1; gap: 1px; min-width: 0; }
+.froam-tb__history-list strong { overflow: hidden; font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.froam-tb__history-list em { color: var(--fs-text-secondary); font-style: normal; font-weight: 400; }
+.froam-tb__history-list small { color: var(--fs-text-tertiary); font-size: 12px; }
+.froam-tb__history-list li.is-undo strong { color: var(--fs-text-secondary); font-weight: 400; }
+.froam-tb__history-list button { flex: none; height: 26px; padding: 0 10px; border-radius: 6px; background: var(--fs-surface-control); color: var(--fs-text-primary); font-size: 12px; font-weight: 500; opacity: 0; }
+.froam-tb__history-list li:hover button,
+.froam-tb__history-list button:focus-visible { opacity: 1; }
+.froam-tb__history-list button:hover { background: var(--fs-surface-control-active); }
+@media (pointer: coarse) { .froam-tb__history-list button { opacity: 1; } }
 .froam-tb__save-btn:active { background: var(--fs-accent-pressed); }
 
 .froam-tb__save:has(.froam-tb__save-btn--repo) > .froam-tb__save-btn:first-child { border-radius: 8px 0 0 8px; }
@@ -593,7 +642,7 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(6, 7, 9, 0.62);
+  background: var(--fs-surface-veil);
   backdrop-filter: blur(6px);
   color: var(--fs-text-primary);
   font-family: var(--fs-font);
@@ -706,7 +755,7 @@
   flex: 0 0 auto;
   border-radius: 999px;
   cursor: pointer;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(var(--fs-ink-rgb), 0.12);
 }
 
 .froam-persona-modal__accent-swatch.is-selected {

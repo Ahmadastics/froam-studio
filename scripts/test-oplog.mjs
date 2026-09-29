@@ -710,6 +710,21 @@ test('reverting twice does nothing the second time', () => {
   assert.equal(session.size(), size, 'no dead entry in the list')
 })
 
+test('after taking back an older change, Ctrl+Z takes back the take-back', () => {
+  const session = createOpLogSession({ actor: 'ahmad' })
+  record(session, 'hero', {}, { text: 'Hey' }, { label: 'Rewrote copy' })
+  const older = session.changes()[0].id
+  record(session, 'footer', {}, { styles: { color: '#b' } }, { label: 'Fill' })
+  session.revert(older)
+  assert.equal(session.store()[SCOPE]?.hero, undefined)
+  assert.equal(session.canRedo(), false, 'nothing was undone by Ctrl+Z, so there is nothing to redo')
+  session.undo()
+  assert.equal(session.store()[SCOPE]?.hero?.text, 'Hey', 'the revert came back off')
+  assert.equal(session.store()[SCOPE]?.footer?.styles?.color, '#b', 'the latest edit was never touched')
+  session.redo()
+  assert.equal(session.store()[SCOPE]?.hero, undefined, 'and redo reverts it again')
+})
+
 test('reverting an unknown change is a no-op, not a throw', () => {
   const session = createOpLogSession({ actor: 'ahmad' })
   assert.deepEqual(session.revert('does-not-exist'), [])

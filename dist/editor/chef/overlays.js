@@ -1,11 +1,14 @@
 import { jsxs as _jsxs, jsx as _jsx } from "react/jsx-runtime";
 import { describeSelection } from '../selection-name.js';
 import { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, Sparkles, X, Zap } from 'lucide-react';
 import { getRoot } from './dom.js';
+/** In More tools, these live elsewhere now — the Design panel, Layers, Share, History in the top bar. */
+const COVERED_ELSEWHERE = new Set(['layout', 'spacing', 'typography', 'fill', 'borders', 'effects', 'transform', 'layers', 'share', 'history']);
 export function AccordionSection({ id, icon, title, isOpen, onToggle, children, }) {
-    return (_jsxs("div", { className: "froam-accordion", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: "froam-accordion__trigger", "aria-expanded": isOpen, "aria-controls": `froam-section-${id}`, onClick: onToggle, "data-chef-editor-root": "true", children: [_jsxs("span", { className: "froam-accordion__trigger-left", children: [icon, title] }), _jsx(ChevronDown, { size: 14, className: "froam-accordion__chevron", "aria-hidden": "true" })] }), _jsx(AnimatePresence, { initial: false, children: isOpen && (_jsx(motion.div, { className: "froam-accordion__body", id: `froam-section-${id}`, initial: { height: 0, opacity: 0 }, animate: { height: 'auto', opacity: 1 }, exit: { height: 0, opacity: 0 }, transition: { duration: 0.22, ease: [0.4, 0, 0.2, 1] }, children: _jsx("div", { className: "froam-accordion__content", "data-chef-editor-root": "true", children: children }) })) })] }));
+    if (COVERED_ELSEWHERE.has(id))
+        return null;
+    return (_jsxs("div", { className: "froam-accordion", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: "froam-accordion__trigger", "aria-expanded": isOpen, "aria-controls": `froam-section-${id}`, onClick: onToggle, "data-chef-editor-root": "true", children: [_jsxs("span", { className: "froam-accordion__trigger-left", children: [icon, title] }), _jsx(ChevronDown, { size: 14, className: "froam-accordion__chevron", "aria-hidden": "true" })] }), isOpen && (_jsx("div", { className: "froam-accordion__body is-opening", id: `froam-section-${id}`, children: _jsx("div", { className: "froam-accordion__content", "data-chef-editor-root": "true", children: children }) }))] }));
 }
 export function Toast({ message, visible }) {
     return (_jsxs("div", { className: `fs-toast ${visible ? 'is-visible' : ''}`, "data-chef-editor-root": "true", children: [_jsx(Zap, { size: 14, "aria-hidden": "true" }), message] }));

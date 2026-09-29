@@ -118,11 +118,30 @@ A link to `localhost` only opens on your machine. Under `froam dev`, Share
 offers **Make it reachable from anywhere** (or start with `froam dev --share`):
 Froam connects out to its share service and your invite links switch to a
 public address that opens your local site, with the editor and the room, on
-any computer — while `froam dev` runs (Node 22 or newer). People on the link can
-look, talk and suggest changes; nothing they send can write your files. Set
+any computer — while `froam dev` runs (Node 22 or newer). Only people you
+invite can open it: without a live invite the address shows nothing, not even
+the page. Links can stop working after 24 hours or 7 days, and **New links**
+shuts out everyone who came in on the old ones. People on the link can look,
+talk and suggest changes; nothing they send can write your files. Set
 `FROAM_SHARE_URL` to use your own deployment of `templates/cloudflare-share`.
 
 When you're done, **End collaboration** in Share stops every link.
+
+### AI in Quick Edit
+
+Quick Edit handles direct edits ("make it bolder", "add more space") on your
+computer, with nothing uploaded. For anything else, give `froam dev` an AI and
+turn on **AI** in Quick Edit:
+
+```sh
+ANTHROPIC_API_KEY=… froam dev            # Claude, through Anthropic's OpenAI-compatible API
+FROAM_AI_API_KEY=… FROAM_AI_MODEL=… FROAM_AI_BASE_URL=… froam dev   # any OpenAI-compatible API
+```
+
+The key stays with `froam dev`; the browser never sees it, and people on a
+share link can't use it. Froam asks before the first request, sends a
+description of the part you picked (layout, styles, words — never source code,
+cookies or screenshots), and shows a preview you keep or discard.
 
 ### Hosted: pull requests, notifications, realtime
 

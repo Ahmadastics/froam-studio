@@ -164,7 +164,7 @@
 
 .froam-context-menu__header {
   padding: 8px 10px 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(var(--fs-ink-rgb), 0.06);
   margin-bottom: 4px;
 }
 
@@ -187,7 +187,7 @@
 .froam-context-menu__divider {
   height: 1px;
   margin: 3px 8px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--fs-ink-rgb), 0.06);
 }
 
 .froam-context-menu__item {
@@ -258,11 +258,11 @@
 .froam-context-menu__item kbd {
   font-size: 11px;
   font-weight: 600;
-  color: rgba(226, 232, 240, 0.4);
+  color: var(--fs-text-tertiary);
   padding: 2px 5px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(var(--fs-ink-rgb), 0.06);
+  background: rgba(var(--fs-ink-rgb), 0.03);
   font-family: inherit;
   font-variant-numeric: tabular-nums;
 }
@@ -295,7 +295,7 @@
   z-index: 1400;
   display: grid;
   place-items: center;
-  background: rgba(6, 7, 9, 0.6);
+  background: var(--fs-surface-veil);
   backdrop-filter: blur(6px);
   animation: fs-fade-in 150ms ease;
   font-family: var(--fs-font);
@@ -319,7 +319,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 18px 22px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(var(--fs-ink-rgb), 0.06);
 }
 
 .froam-shortcut-overlay__title {
@@ -349,7 +349,7 @@
 }
 
 .froam-shortcut-overlay__close:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--fs-ink-rgb), 0.06);
   color: var(--fs-text-primary);
 }
 
@@ -390,7 +390,7 @@
 
 .froam-shortcut-row__plus {
   font-size: 11px;
-  color: rgba(226, 232, 240, 0.3);
+  color: var(--fs-text-tertiary);
   margin: 0 1px;
 }
 
@@ -414,9 +414,9 @@
 
 .froam-shortcut-overlay__footer {
   padding: 12px 22px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(var(--fs-ink-rgb), 0.06);
   font-size: 12px;
-  color: rgba(226, 232, 240, 0.4);
+  color: var(--fs-text-tertiary);
   text-align: center;
 }
 
@@ -428,9 +428,9 @@
   height: 18px;
   padding: 0 5px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(226, 232, 240, 0.55);
+  border: 1px solid rgba(var(--fs-ink-rgb), 0.08);
+  background: rgba(var(--fs-ink-rgb), 0.04);
+  color: var(--fs-text-secondary);
   font: inherit;
   font-size: 11px;
   font-weight: 600;
@@ -455,11 +455,11 @@ body.froam-drag-active * {
   max-width: min(320px, calc(100vw - 32px));
   padding: 10px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(var(--fs-ink-rgb), 0.1);
   background:
     radial-gradient(ellipse at top left, rgba(var(--fs-accent-control-rgb), 0.05), transparent 55%),
-    rgba(20, 24, 31, 0.97);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    var(--fs-surface-2);
+  box-shadow: inset 0 1px 0 rgba(var(--fs-ink-rgb), 0.06);
   animation: froam-ctx-in 140ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -471,7 +471,7 @@ body.froam-drag-active * {
   margin-bottom: 8px;
   font-size: 11px;
   font-weight: 600;
-  color: rgba(226, 232, 240, 0.55);
+  color: var(--fs-text-secondary);
 }
 
 .froam-floating-bar__pop-toggle {
@@ -479,7 +479,7 @@ body.froam-drag-active * {
   gap: 2px;
   padding: 2px;
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--fs-ink-rgb), 0.05);
 }
 
 .froam-floating-bar__pop-toggle button {
@@ -487,7 +487,7 @@ body.froam-drag-active * {
   border-radius: 5px;
   padding: 3px 10px;
   background: transparent;
-  color: rgba(226, 232, 240, 0.6);
+  color: var(--fs-text-secondary);
   font: inherit;
   font-size: 11px;
   font-weight: 600;
@@ -509,7 +509,7 @@ body.froam-drag-active * {
   position: relative;
   height: 38px;
   border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(var(--fs-ink-rgb), 0.14);
   background: var(--froam-chip);
   cursor: pointer;
   display: grid;
@@ -543,7 +543,7 @@ body.froam-drag-active * {
 .froam-floating-bar__pop-empty {
   grid-column: 1 / -1;
   font-size: 12px;
-  color: rgba(226, 232, 240, 0.45);
+  color: var(--fs-text-tertiary);
   text-align: center;
   padding: 8px 0;
 }
@@ -560,9 +560,9 @@ body.froam-drag-active * {
   justify-items: center;
   padding: 8px 4px 7px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(226, 232, 240, 0.82);
+  border: 1px solid rgba(var(--fs-ink-rgb), 0.07);
+  background: rgba(var(--fs-ink-rgb), 0.03);
+  color: var(--fs-text-primary);
   font: inherit;
   font-size: 11px;
   font-weight: 600;
@@ -588,7 +588,7 @@ body.froam-drag-active * {
 }
 
 .froam-floating-bar__looks button small {
-  color: rgba(226, 232, 240, 0.36);
+  color: var(--fs-text-tertiary);
   font-size: 11px;
   font-weight: 600;
 }
@@ -606,7 +606,7 @@ body.froam-drag-active * {
   box-shadow:
     0 18px 54px rgba(0, 0, 0, 0.46),
     0 0 0 1px rgba(var(--fs-accent-control-rgb), 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    inset 0 1px 0 rgba(var(--fs-ink-rgb), 0.06);
 }
 
 .froam-floating-bar__look-window-actions {
@@ -619,11 +619,11 @@ body.froam-drag-active * {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(var(--fs-ink-rgb), 0.1);
   border-radius: 7px;
   padding: 5px 8px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(226, 232, 240, 0.68);
+  background: rgba(var(--fs-ink-rgb), 0.04);
+  color: var(--fs-text-secondary);
   font: inherit;
   font-size: 11px;
   font-weight: 600;
@@ -649,7 +649,7 @@ body.froam-drag-active * {
   padding: 0 6px;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: rgba(var(--fs-ink-rgb), 0.18) transparent;
 }
 
 .froam-floating-bar__looks-scroll::-webkit-scrollbar {
@@ -658,7 +658,7 @@ body.froam-drag-active * {
 
 .froam-floating-bar__looks-scroll::-webkit-scrollbar-thumb {
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(var(--fs-ink-rgb), 0.16);
 }
 
 .froam-floating-bar__looks-section + .froam-floating-bar__looks-section {
@@ -669,13 +669,13 @@ body.froam-drag-active * {
   margin: 0 0 6px 2px;
   font-size: 11px;
   font-weight: 600;
-  color: rgba(226, 232, 240, 0.4);
+  color: var(--fs-text-tertiary);
 }
 
 /* Editable Look Studio — recipe discovery plus theme-variable overrides. */
 .froam-floating-bar__pop-head span small {
   margin-left: 5px;
-  color: rgba(226, 232, 240, 0.4);
+  color: var(--fs-text-tertiary);
   font-size: 11px;
   font-weight: 600;
 }
@@ -698,10 +698,10 @@ body.froam-drag-active * {
   gap: 6px;
   margin-bottom: 8px;
   padding: 6px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(var(--fs-ink-rgb), 0.1);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.035);
-  color: rgba(226, 232, 240, 0.46);
+  background: rgba(var(--fs-ink-rgb), 0.035);
+  color: var(--fs-text-tertiary);
 }
 
 .froam-floating-bar__look-search input {
@@ -727,11 +727,11 @@ body.froam-drag-active * {
 
 .froam-floating-bar__look-groups button {
   flex: 0 0 auto;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(var(--fs-ink-rgb), 0.08);
   border-radius: 999px;
   padding: 4px 7px;
-  background: rgba(255, 255, 255, 0.025);
-  color: rgba(226, 232, 240, 0.5);
+  background: rgba(var(--fs-ink-rgb), 0.025);
+  color: var(--fs-text-secondary);
   font: inherit;
   font-size: 11px;
   font-weight: 600;
@@ -749,16 +749,16 @@ body.froam-drag-active * {
   gap: 8px;
   margin: 10px -2px -2px;
   padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(var(--fs-ink-rgb), 0.08);
   border-radius: 10px;
-  background: rgba(2, 6, 12, 0.42);
+  background: var(--fs-surface-0);
 }
 
 .froam-floating-bar__look-editor-title {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: rgba(226, 232, 240, 0.76);
+  color: var(--fs-text-primary);
   font-size: 11px;
   font-weight: 600;
 }
@@ -769,7 +769,7 @@ body.froam-drag-active * {
   gap: 4px;
   padding: 3px;
   border-radius: 8px;
-  background: rgba(255,255,255,.035);
+  background: rgba(var(--fs-ink-rgb), .035);
 }
 
 .froam-floating-bar__look-states button {
@@ -777,7 +777,7 @@ body.froam-drag-active * {
   border-radius: 6px;
   padding: 5px;
   background: transparent;
-  color: rgba(226,232,240,.46);
+  color: var(--fs-text-tertiary);
   font: inherit;
   font-size: 11px;
   font-weight: 600;
@@ -803,14 +803,14 @@ body.froam-drag-active * {
   gap: 5px;
   min-height: 32px;
   padding: 4px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(var(--fs-ink-rgb), 0.08);
   border-radius: 8px;
-  color: rgba(226, 232, 240, 0.48);
+  color: var(--fs-text-tertiary);
   font-size: 11px;
 }
 
 .froam-floating-bar__look-colors label:first-child { grid-template-columns: 1fr 24px; }
-.froam-floating-bar__look-colors label.is-enabled { color: rgba(226, 232, 240, 0.8); }
+.froam-floating-bar__look-colors label.is-enabled { color: var(--fs-text-primary); }
 .froam-floating-bar__look-colors input[type='checkbox'] { width: 12px; height: 12px; accent-color: var(--fs-accent-control); }
 .froam-floating-bar__look-colors input[type='color'] { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
 .froam-floating-bar__look-colors input[type='color']:disabled { opacity: 0.25; }
@@ -820,16 +820,16 @@ body.froam-drag-active * {
   grid-template-columns: auto auto 1fr 35px;
   align-items: center;
   gap: 7px;
-  color: rgba(226, 232, 240, 0.45);
+  color: var(--fs-text-tertiary);
   font-size: 11px;
 }
 
-.froam-floating-bar__look-radius.is-enabled { color: rgba(226, 232, 240, 0.78); }
+.froam-floating-bar__look-radius.is-enabled { color: var(--fs-text-primary); }
 .froam-floating-bar__look-radius input[type='checkbox'] { width: 12px; height: 12px; accent-color: var(--fs-accent-control); }
 .froam-floating-bar__look-radius input[type='range'] { width: 100%; accent-color: var(--fs-accent-control); }
 .froam-floating-bar__look-radius output { text-align: right; font-variant-numeric: tabular-nums; }
-.froam-floating-bar__look-editor p { margin: 0; color: rgba(226, 232, 240, 0.34); font-size: 11px; line-height: 1.35; }
-.froam-floating-bar__look-save { border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:7px;background:rgba(255,255,255,.05);color:var(--fs-text-primary);font:inherit;font-size:11px;font-weight:600;cursor:pointer }
+.froam-floating-bar__look-editor p { margin: 0; color: var(--fs-text-tertiary); font-size: 11px; line-height: 1.35; }
+.froam-floating-bar__look-save { border:1px solid rgba(var(--fs-ink-rgb), .12);border-radius:8px;padding:7px;background:rgba(var(--fs-ink-rgb), .05);color:var(--fs-text-primary);font:inherit;font-size:11px;font-weight:600;cursor:pointer }
 .froam-floating-bar__look-save:hover { border-color:rgba(var(--fs-accent-control-rgb),.4);background:rgba(var(--fs-accent-control-rgb),.1) }
 
 @media (max-width: 520px) {

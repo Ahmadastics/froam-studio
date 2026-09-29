@@ -106,7 +106,7 @@ test('native presence is bounded and still fully announced', () => {
 test('only the current temporal owner receives the shared dock', () => {
   assert.equal(workspaceTemporalSurface(null), null)
   assert.deepEqual(workspaceTemporalSurface('replay'), { owner: 'replay', label: 'Replay timeline' })
-  assert.deepEqual(workspaceTemporalSurface('sampling'), { owner: 'sampling', label: 'Sampling timeline' })
+  assert.deepEqual(workspaceTemporalSurface('sampling'), { owner: 'sampling', label: 'Recording timeline' })
 })
 
 test('panel preferences persist, recover, and tolerate quota failure', () => {
@@ -243,11 +243,14 @@ test('simple shell, quick chat, mobile, reduced-motion, and advanced surfaces st
   assert.match(shell, /role="tablist"/)
   assert.match(editor, /searchFroamQuickEdits\(commandSearchTerm\)/)
   assert.match(editor, /hint: action\.category/)
-  assert.match(quickChat, /Run a quick local command/)
-  assert.match(quickChat, /Fast local edits first/)
+  assert.match(quickChat, /Simple edits run on this device/)
+  assert.match(quickChat, /nothing is uploaded/)
   assert.match(quickChat, /onClick=\{\(\) => submitIntent\(suggestion\)\}/)
   assert.doesNotMatch(`${shell}\n${quickChat}\n${toolbar}`, /Ask Froam|Edit with AI/)
-  assert.match(editor, /enableRemoteIntent: false/)
+  // AI only when froam dev has one, the owner is editing, and they switched it on.
+  assert.match(editor, /enableRemoteIntent: aiReady/)
+  assert.match(editor, /aiStatus\?\.configured && quickEditAi && !isContributor/)
+  assert.match(quickChat, /role="switch"/)
   assert.match(editor, /role="dialog"/)
   assert.match(editor, /workspacePreference\.advancedOpen/)
   assert.match(editor, /FroamBlueprint/)
@@ -269,7 +272,8 @@ test('simple shell, quick chat, mobile, reduced-motion, and advanced surfaces st
   assert.match(css, /prefers-reduced-motion:reduce/)
   assert.match(css, /max-width:768px/)
   assert.match(css, /position:fixed/)
-  assert.match(css, /froam-intelligence>nav,.froam-labs>nav\{display:none\}/)
+  // No second row any more: Understand and Experiments show their own tabs.
+  assert.doesNotMatch(css, /froam-intelligence>nav,.froam-labs>nav\{display:none\}/)
 })
 
 test('Pages and Library use the connected project while Reference owns screenshot reconstruction', () => {

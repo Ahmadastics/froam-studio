@@ -1,9 +1,10 @@
 import { Check, ChevronDown, RotateCw, Sparkles, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import type { FroamIntentState } from './froam-intent-model'
+import { describeSelection } from './selection-name'
 
-type Props = { state: FroamIntentState; onAllow: () => void; onNotNow: () => void; onKeep: () => void; onRetry: () => void; onCancel: () => void; onDismiss: () => void }
-const BUSY_COPY: Partial<Record<FroamIntentState['phase'], string>> = { preparing: 'Preparing Quick Edit...', requesting: 'Preparing Quick Edit...', retrying: 'Preparing another direction...', 'plan-ready': 'Preparing preview...', 'creating-prototype': 'Preparing preview...', adopting: 'Applying...' }
+type Props = { state: FroamIntentState; aiModel?: string | null; onAllow: () => void; onNotNow: () => void; onKeep: () => void; onRetry: () => void; onCancel: () => void; onDismiss: () => void }
+const BUSY_COPY: Partial<Record<FroamIntentState['phase'], string>> = { preparing: 'Working it out…', requesting: 'Working it out…', retrying: 'Trying another way…', 'plan-ready': 'Preparing a preview…', 'creating-prototype': 'Preparing a preview…', adopting: 'Applying…' }
 function score(value: number | undefined) { return value === undefined ? 'Not measured' : value >= .85 ? 'Strong' : value >= .7 ? 'Good' : value >= .5 ? 'Moderate' : 'Limited' }
 
 export default function FroamIntentResult(props: Props) {
@@ -25,18 +26,18 @@ export default function FroamIntentResult(props: Props) {
     return () => cancelAnimationFrame(frame)
   }, [state.phase])
   if (state.phase === 'idle') return null
-  if (state.phase === 'awaiting-consent') return <aside ref={surfaceRef} className="froam-intent-result is-consent" data-chef-editor-root="true" role="dialog" aria-label="Froam intelligence consent">
-    <header><Sparkles size={14}/><strong>Connected Edit</strong></header>
-    <p>Froam can use the configured intelligence provider to prepare this protected experiment.</p>
-    <small>It sends bounded interface observations, not source code, credentials, cookies or raw screenshots.</small>
-    <div className="froam-intent-result__actions"><button type="button" className="is-primary" data-froam-intent-primary onClick={props.onAllow}>Allow</button><button type="button" onClick={props.onNotNow}>Not now</button></div>
+  if (state.phase === 'awaiting-consent') return <aside ref={surfaceRef} className="froam-intent-result is-consent" data-chef-editor-root="true" role="dialog" aria-label="Use AI for this?">
+    <header><Sparkles size={14}/><strong>Use AI for this?</strong></header>
+    <p>To work this out, Froam sends {props.aiModel ?? 'your AI'} a description of the part you picked — its layout, styles and words.</p>
+    <small>Never your source code, passwords, cookies or screenshots. You see a preview before anything changes. Froam asks once.</small>
+    <div className="froam-intent-result__actions"><button type="button" className="is-primary" data-froam-intent-primary onClick={props.onAllow}>Use AI</button><button type="button" onClick={props.onNotNow}>Not now</button></div>
   </aside>
   const busy = BUSY_COPY[state.phase]
   if (busy) return <aside ref={surfaceRef} className="froam-intent-result is-busy" data-chef-editor-root="true" role="status" aria-live="polite" aria-atomic="true"><span className="froam-intent-result__pulse"/><strong>{busy}</strong><button type="button" onClick={props.onCancel}>Cancel</button></aside>
-  if (state.phase === 'previewing' && state.session) return <aside ref={surfaceRef} className="froam-intent-result is-preview" data-chef-editor-root="true" role="dialog" aria-label="Froam experiment result">
-    <header><div><span>Prototype</span><strong>{state.session.prototypeName}</strong></div><em>{state.session.attempt}/{state.session.maxAttempts}</em></header>
-    <p>Froam prepared {state.session.changeCount} change{state.session.changeCount === 1 ? '' : 's'}{state.session.targetLabel ? ` for ${state.session.targetLabel}` : ''}.</p>
-    {state.session.automaticTarget && <small>Froam chose the most relevant page region because nothing was selected.</small>}
+  if (state.phase === 'previewing' && state.session) return <aside ref={surfaceRef} className="froam-intent-result is-preview" data-chef-editor-root="true" role="dialog" aria-label="Quick Edit preview">
+    <header><div><span>Preview</span><strong>{state.session.intent}</strong></div>{state.session.maxAttempts > 1 && <em title="Try again gives a different take">Take {state.session.attempt} of {state.session.maxAttempts}</em>}</header>
+    <p>{state.session.changeCount} change{state.session.changeCount === 1 ? '' : 's'}{state.session.targetLabel ? ` to the ${describeSelection(state.session.targetLabel).kind.toLowerCase()}` : ''}. Keep it, or try another take.</p>
+    {state.session.automaticTarget && <small>Nothing was selected, so Froam picked the part that fit best.</small>}
     {state.session.referenceValidation && <section className="froam-intent-result__scorecard" aria-label="Reference candidate scorecard">
       <strong>Reference match</strong>
       {(['structure', 'geometry', 'responsive', 'visual', 'text'] as const).map((kind) => <span key={kind}><b>{kind}</b><em>{kind === 'visual' && state.session!.referenceValidation!.scorecard.visual !== undefined ? `${Math.round(state.session!.referenceValidation!.scorecard.visual * 100)}% measured` : score(state.session!.referenceValidation!.scorecard[kind])}</em></span>)}

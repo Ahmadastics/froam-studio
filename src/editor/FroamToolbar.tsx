@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   GitBranch,
   Hand,
+  History,
   Keyboard,
   LogOut,
   Minimize2,
@@ -28,6 +29,7 @@ import {
   X,
 } from 'lucide-react'
 import type { FroamPersona } from './froamPersona'
+import { relativeTime } from './chef/change-report'
 
 type ViewportMode = 'desktop' | 'tablet' | 'mobile'
 type ToolMode = 'pointer' | 'hand' | 'text' | 'frame' | 'shape' | 'move'
@@ -74,7 +76,16 @@ type Props = {
   onToggleRightPanel: () => void
   onMinimize: () => void
   onClose: () => void
+  /** Changes on this page not saved yet (0: everything's saved). */
+  unsavedCount?: number
+  autosave?: boolean
+  onToggleAutosave?: () => void
+  /** What happened on this page, newest first — each can be undone on its own. */
+  history?: HistoryItem[]
+  onUndoChange?: (id: string) => void
 }
+
+export type HistoryItem = { id: string; label: string; where: string; who: string; ts: number; isUndo: boolean }
 
 /** "Home", "Pricing", "Blog / First post" — a route, as a person says it. */
 export function pageName(routeKey: string) {
@@ -109,7 +120,7 @@ function FroamMark() {
   )
 }
 
-type MenuItem = { id: string; label: string; icon: ReactNode; shortcut?: string; onSelect: () => void; tone?: 'danger' } | 'divider'
+type MenuItem = { id: string; label: string; icon: ReactNode; shortcut?: string; onSelect: () => void; tone?: 'danger'; checked?: boolean } | 'divider'
 
 function Menu({ items, onDone, align = 'start', label }: { items: MenuItem[]; onDone: () => void; align?: 'start' | 'end'; label: string }) {
   return (
@@ -120,13 +131,15 @@ function Menu({ items, onDone, align = 'start', label }: { items: MenuItem[]; on
           <button
             key={item.id}
             type="button"
-            role="menuitem"
+            role={item.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+            aria-checked={item.checked}
             className={`froam-tb__menu-item${item.tone === 'danger' ? ' is-danger' : ''}`}
             onClick={() => { onDone(); item.onSelect() }}
             data-chef-editor-root="true"
           >
             {item.icon}
             <span>{item.label}</span>
+            {item.checked !== undefined && <span className={`froam-tb__menu-check${item.checked ? ' is-on' : ''}`} aria-hidden="true">{item.checked && <Check size={13} />}</span>}
             {item.shortcut && <kbd>{item.shortcut}</kbd>}
           </button>
         ))}
@@ -202,8 +215,14 @@ export default function FroamToolbar({
   onToggleRightPanel,
   onMinimize,
   onClose,
+  unsavedCount = 0,
+  autosave = false,
+  onToggleAutosave,
+  history = [],
+  onUndoChange,
 }: Props) {
-  const [menu, setMenu] = useState<'main' | 'zoom' | null>(null)
+  const [menu, setMenu] = useState<'main' | 'zoom' | 'history' | null>(null)
+  const historyRef = useRef<HTMLDivElement | null>(null)
   const [justSaved, setJustSaved] = useState(false)
   const savedTimer = useRef<number | undefined>(undefined)
   useEffect(() => () => window.clearTimeout(savedTimer.current), [])
@@ -218,6 +237,7 @@ export default function FroamToolbar({
   const closeMenu = useRef(() => setMenu(null)).current
   useDismiss(mainRef, menu === 'main', closeMenu)
   useDismiss(zoomRef, menu === 'zoom', closeMenu)
+  useDismiss(historyRef, menu === 'history', closeMenu)
 
   const page = pageName(routeKey)
   const repoDirty = repoStatus === 'dirty'
@@ -228,6 +248,7 @@ export default function FroamToolbar({
     { id: 'shortcuts', label: 'Keyboard shortcuts', icon: <Keyboard size={14} />, shortcut: '?', onSelect: onShortcutsOverlay },
     ...(onCustomize ? [{ id: 'customize', label: 'Customize the editor', icon: <SlidersHorizontal size={14} />, onSelect: onCustomize }] : []),
     { id: 'profile', label: 'Your profile', icon: <UserRound size={14} />, onSelect: onOpenPersonaEditor },
+    ...(onToggleAutosave ? [{ id: 'autosave', label: 'Save automatically', icon: <Save size={14} />, onSelect: onToggleAutosave, checked: autosave }] : []),
     'divider',
     { id: 'minimize', label: 'Minimize', icon: <Minimize2 size={14} />, shortcut: 'Ctrl .', onSelect: onMinimize },
     { id: 'exit', label: 'Exit editing', icon: <LogOut size={14} />, onSelect: onClose, tone: 'danger' },
@@ -424,6 +445,45 @@ export default function FroamToolbar({
           <button type="button" className="froam-tb__icon-btn" onClick={onRedo} disabled={!canRedo} title="Redo (Ctrl+Y)" aria-label="Redo" data-chef-editor-root="true">
             <Redo2 size={16} />
           </button>
+          <div className="froam-tb__menu-anchor" ref={historyRef}>
+            <button
+              type="button"
+              className={`froam-tb__icon-btn${menu === 'history' ? ' is-active' : ''}`}
+              onClick={() => setMenu((current) => (current === 'history' ? null : 'history'))}
+              title="History — every change on this page"
+              aria-label="History"
+              aria-haspopup="dialog"
+              aria-expanded={menu === 'history'}
+              data-chef-editor-root="true"
+            >
+              <History size={16} />
+            </button>
+            {menu === 'history' && (
+              <div className="froam-tb__menu froam-tb__history-pop is-end" role="dialog" aria-label="History" data-chef-editor-root="true">
+                <div className="froam-tb__history-head">
+                  <strong>History</strong>
+                  <small>{history.length ? `${history.length} change${history.length === 1 ? '' : 's'} on this page` : 'On this page'}</small>
+                </div>
+                {history.length === 0 ? (
+                  <p className="froam-tb__history-empty">Nothing has changed on this page yet. Every edit shows up here, and each one can be undone on its own.</p>
+                ) : (
+                  <ol className="froam-tb__history-list">
+                    {history.map((item) => (
+                      <li key={item.id} className={item.isUndo ? 'is-undo' : ''}>
+                        <span>
+                          <strong>{item.label}{item.where && <em> · {item.where}</em>}</strong>
+                          <small>{item.who} · {relativeTime(item.ts)}</small>
+                        </span>
+                        {!item.isUndo && onUndoChange && (
+                          <button type="button" onClick={() => onUndoChange(item.id)} title="Put this back as it was — later changes stay">Undo</button>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="froam-tb__sep" />
@@ -437,9 +497,17 @@ export default function FroamToolbar({
         </button>
 
         <div className="froam-tb__save" role="group" aria-label="Save">
-          <button type="button" className={`froam-tb__save-btn${justSaved ? ' is-saved' : ''}`} onClick={save} aria-label="Save draft (Ctrl+S)" title="Save (Ctrl+S)" data-chef-editor-root="true">
-            {justSaved ? <Check size={15} /> : <Save size={15} />}
-            <span>{justSaved ? 'Saved' : 'Save'}</span>
+          <button
+            type="button"
+            className={`froam-tb__save-btn${justSaved ? ' is-saved' : ''}${!justSaved && unsavedCount === 0 ? ' is-clean' : ''}`}
+            onClick={save}
+            aria-label="Save draft (Ctrl+S)"
+            title={unsavedCount ? `Save (Ctrl+S) — ${unsavedCount} change${unsavedCount === 1 ? '' : 's'} not saved yet` : 'Everything is saved (Ctrl+S)'}
+            data-chef-editor-root="true"
+          >
+            {justSaved || unsavedCount === 0 ? <Check size={15} /> : <Save size={15} />}
+            <span>{justSaved || unsavedCount === 0 ? 'Saved' : 'Save'}</span>
+            {!justSaved && unsavedCount > 0 && <i className="froam-tb__unsaved" aria-label={`${unsavedCount} unsaved`}>{unsavedCount > 99 ? '99+' : unsavedCount}</i>}
           </button>
           {/* Save to Repo — writes git-ready files via the dev bridge */}
           {onSaveRepo && (

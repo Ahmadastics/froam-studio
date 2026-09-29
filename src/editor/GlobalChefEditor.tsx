@@ -86,25 +86,21 @@ import FroamContextMenu from './FroamContextMenu'
 import FroamBottomSheet, { type SheetDetent } from './FroamBottomSheet'
 import FroamBlueprint from './FroamBlueprint'
 import { COARSE_POINTER_QUERY, MOBILE_UI_QUERY, useMediaQuery } from './froamMedia'
-import FroamExport from './FroamExport'
 import FroamShortcutOverlay from './FroamShortcutOverlay'
 import FroamSmartGuides, { type AlignmentGuide } from './FroamSmartGuides'
-import FroamVersionPanel from './FroamVersionPanel'
-import FroamSitePlanner, { type PlannerTab } from './FroamSitePlanner'
+import type { PlannerTab } from './FroamSitePlanner'
 import { createFroamLibraryComponent, FROAM_COMPONENTS } from './FroamComponentCatalog'
-import FroamDesignSystemPanel from './FroamDesignSystemPanel'
 import {
   FROAM_FRAME_PRESETS,
   type FroamFrameSpec,
   type FroamInsertPlacement,
   type FroamWireframeSection,
 } from './FroamPlannerTypes'
-import FroamToolbar from './FroamToolbar'
-import FroamIntel from './FroamIntel'
+import FroamToolbar, { type HistoryItem } from './FroamToolbar'
+import { describeSelection } from './selection-name'
 import FroamLayersPanel, { type LayerKnowledge } from './FroamLayersPanel'
 import FroamDesignPanel from './FroamDesignPanel'
 import FroamInspirationPanel from './FroamInspirationPanel'
-import FroamShapeLibrary from './FroamShapeLibrary'
 import FroamPersonaEditor from './FroamPersonaEditor'
 import { getFroamStudioConfig } from '../config'
 import { createOpLogSession, type OpLogSession } from '../collab/session'
@@ -113,15 +109,15 @@ import { readRoomFromLocation } from '../collab/room'
 import { scopesOf, type RoomComment, type RoomMemberView, type RoomRequest, type RoomRevision } from '../collab/room'
 import FroamNotePins from './FroamNotePins'
 import FroamPresenceLayer from './FroamPresenceLayer'
-import FroamConnectedCanvas, { type FroamConnectedCanvasTab } from './FroamConnectedCanvas'
-import FroamIntelligence, { type FroamIntelligenceTab } from './FroamIntelligence'
-import FroamReferenceWorkspace from './FroamReferenceWorkspace'
+import type { FroamConnectedCanvasTab } from './FroamConnectedCanvas'
+import type { FroamIntelligenceTab } from './FroamIntelligence'
 import FroamIntentResult from './FroamIntentResult'
 import FroamQuickChat from './FroamQuickChat'
 import { useFroamIntent } from './useFroamIntent'
 import { shouldOfferAskFroam } from './froam-intent-model'
 import { searchFroamQuickEdits } from './quick-edit-catalog'
-import FroamLabs, { type FroamLab } from './FroamLabs'
+import type { FroamLab } from './FroamLabs'
+import { lazyPanel } from './lazy-panel'
 import FroamWorkspaceShell, { FroamPanelTabs, LEFT_PANEL_TABS } from './FroamWorkspaceShell'
 import FroamUICustomizer from './FroamUICustomizer'
 import { froamUIPanelWidth, readFroamUIPreference, writeFroamUIPreference } from './froamUIPreferences'
@@ -142,7 +138,7 @@ import { sitePlanGraphRecords, type LegacySitePage } from '../project/adapters'
 import { useFroamProjectDocument } from './useFroamProjectDocument'
 import { diffStores, type FroamChange } from '../collab/oplog'
 import { loadOpLog, saveOpLog } from '../collab/persist'
-import { findElementByPath, getElementPath, isInPageScope, isPathElement, isSafeDraftPath } from '../collab/paths'
+import { findElementByPath, getElementPath, isInPageScope, isPathElement, isSafeDraftPath, tagOfPath } from '../collab/paths'
 import { usePageCanvasOffset } from './usePageCanvasOffset'
 import { createAnchor, resolveAnchor } from '../collab/anchor'
 import { fingerprintForDraft } from './draft-fingerprint'
@@ -171,7 +167,7 @@ import { usePatternDrop } from './library/pattern-drop'
 import { FroamCollaborate, type JoinProfile } from './collaborate/FroamCollaborate'
 import { useRoomMessages } from './collaborate/useRoomMessages'
 import { findPinned, RoomPins } from './collaborate/RoomPins'
-import { applyDraftText, pageTextOf } from './draft-text'
+import { applyDraftText, pageTextOf, rememberPageText } from './draft-text'
 import { TYPING } from './collaborate/RoomMessages'
 import { elementLabel, sourceClasses } from './collaborate/request-builder'
 import { shrinkAvatar } from './collaborate/avatar-image'
@@ -297,6 +293,18 @@ import {
   ClickPulseOverlay,
   SelectionHandoffOverlay,
 } from './chef/overlays'
+
+/* Loaded the first time they're opened — not with the editor. */
+const FroamExport = lazyPanel(() => import('./FroamExport'))
+const FroamVersionPanel = lazyPanel(() => import('./FroamVersionPanel'))
+const FroamSitePlanner = lazyPanel(() => import('./FroamSitePlanner'))
+const FroamDesignSystemPanel = lazyPanel(() => import('./FroamDesignSystemPanel'))
+const FroamIntel = lazyPanel(() => import('./FroamIntel'))
+const FroamShapeLibrary = lazyPanel(() => import('./FroamShapeLibrary'))
+const FroamReferenceWorkspace = lazyPanel(() => import('./FroamReferenceWorkspace'))
+const FroamConnectedCanvas = lazyPanel(() => import('./FroamConnectedCanvas'), { mountWhen: (props) => props.open })
+const FroamIntelligence = lazyPanel(() => import('./FroamIntelligence'), { mountWhen: (props) => props.open })
+const FroamLabs = lazyPanel(() => import('./FroamLabs'), { mountWhen: (props) => props.open })
 
 /* ═══════════════════════════════════════════════════════════════
    Main component
@@ -447,13 +455,24 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       commandPaletteReturnFocusRef.current = null
     }
   }, [commandPaletteOpen])
+  // "Match system" follows the computer as it changes, not just when the editor opens.
+  const [systemLight, setSystemLight] = useState(() => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-color-scheme: light)').matches))
+  useEffect(() => {
+    const query = window.matchMedia?.('(prefers-color-scheme: light)')
+    if (!query) return
+    const update = () => setSystemLight(query.matches)
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
+  const resolvedTheme = uiPreference.theme === 'system' ? (systemLight ? 'light' : 'dark') : uiPreference.theme
   useEffect(() => {
     if (!portalContainer) return
+    portalContainer.dataset.froamUiTheme = resolvedTheme
     portalContainer.dataset.froamUiAppearance = uiPreference.appearance
     portalContainer.dataset.froamUiAccent = uiPreference.accent
     portalContainer.dataset.froamUiDensity = uiPreference.density
     portalContainer.dataset.froamUiLabels = uiPreference.labels ? 'shown' : 'hidden'
-  }, [portalContainer, uiPreference])
+  }, [portalContainer, uiPreference, resolvedTheme])
   useEffect(() => { writeFroamLabsFlags(typeof localStorage === 'undefined' ? undefined : localStorage, labsFlags) }, [labsFlags])
 
   // v4: New feature state
@@ -614,6 +633,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const intelligencePreviewStyleRef = useRef<{ element: HTMLElement; width: string; maxWidth: string; marginInline: string } | null>(null)
 
   const isKitchenRoute = routeKey === '/kitchen'
+  /** The reference workspace mounts the first time it's shown, then stays. */
+  const referenceOpenedRef = useRef(false)
   // Each viewport gets its own isolated store bucket
   const viewportStoreKey = `${routeKey}@@${viewportMode}`
   const viewportStoreKeyRef = useRef(viewportStoreKey)
@@ -625,6 +646,39 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [logVersion, store, viewportStoreKey],
   )
+  const savedClocksKey = froamStorageKey('froam-saved-clock-v1', projectKey)
+  const [savedClocks, setSavedClocks] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(window.localStorage.getItem(savedClocksKey) ?? '{}') as Record<string, number> } catch { return {} }
+  })
+  const savedClock = savedClocks[viewportStoreKey] ?? 0
+  /** Changes on this page since the last Save. */
+  const unsavedCount = changeLog.filter((change) => change.clock > savedClock).length
+  const markSaved = (scope: string, clock: number) => {
+    setSavedClocks((current) => {
+      const next = { ...current, [scope]: clock }
+      try { window.localStorage.setItem(savedClocksKey, JSON.stringify(next)) } catch { /* storage full: the count just resets */ }
+      return next
+    })
+  }
+  const autosaveKey = froamStorageKey('froam-autosave-v1', projectKey)
+  const [autosave, setAutosave] = useState(() => {
+    try { return window.localStorage.getItem(autosaveKey) === 'on' } catch { return false }
+  })
+  const toggleAutosave = () => {
+    setAutosave((current) => {
+      try { window.localStorage.setItem(autosaveKey, current ? 'off' : 'on') } catch { /* this session only */ }
+      return !current
+    })
+  }
+  const autosaveWarnedRef = useRef(false)
+  const historyItems = useMemo<HistoryItem[]>(() => changeLog.map((change) => ({
+    id: change.id,
+    label: change.label,
+    where: change.paths.length ? `${describeSelection(tagOfPath(change.paths[0])).kind}${change.paths.length > 1 ? ` +${change.paths.length - 1}` : ''}` : '',
+    who: change.actor === LOCAL_ACTOR ? 'You' : change.actor,
+    ts: change.ts,
+    isUndo: change.kind !== 'edit' || change.label.startsWith('Undid'),
+  })), [changeLog])
   /**
    * The session, if this page is one. Inert without an invite in the URL:
    * no polling, no storage, nothing rendered.
@@ -930,6 +984,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       // the tokens that were sent stop working because the room they name is
       // no longer the one being shown.
       if (fresh || !room.owned) await room.openRoom(persona.name || 'Designer')
+      // New links on a shared local site: whoever already came in is out too.
+      if (fresh) void shareAccessRef.current({ reset: true })
       showToast(fresh ? 'New links — the old ones no longer work' : 'Invite links ready')
     } catch {
       // No room server here (a static preview, a site without Froam's
@@ -1334,6 +1390,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   }, [])
 
   const stopReachRef = useRef<() => void>(() => {})
+  const shareAccessRef = useRef<(change: { expiresIn?: '24h' | '7d' | 'off'; reset?: boolean }) => Promise<void>>(async () => {})
   /** The owner is done: every link stops working and Share starts fresh. */
   const endCollaboration = useCallback(async () => {
     try {
@@ -1363,7 +1420,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
    * the bridge opens a tunnel to the Froam share service, and invite links use
    * its address instead of localhost (lib/share-tunnel.mjs).
    */
-  const [reach, setReach] = useState<{ available: boolean; active: boolean; online: boolean; url: string | null; starting: boolean; error: string | null } | null>(null)
+  const [reach, setReach] = useState<{ available: boolean; active: boolean; online: boolean; url: string | null; starting: boolean; error: string | null; expiresAt: number | null } | null>(null)
   /** Whether the bridge has answered once — until then a local page has no link to give. */
   const [reachChecked, setReachChecked] = useState(false)
   /** The owner turned the public link off: links open on this computer only. */
@@ -1372,9 +1429,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const readReach = useCallback(async () => {
     try {
       const response = await window.fetch(bridgeUrl('/__froam/share'), { cache: 'no-store' })
-      const data = response.ok ? await response.json() as { available?: boolean; active?: boolean; online?: boolean; url?: string | null; viewer?: string } : null
+      const data = response.ok ? await response.json() as { available?: boolean; active?: boolean; online?: boolean; url?: string | null; viewer?: string; expiresAt?: number | null } : null
       if (!data || data.viewer === 'remote') { setReach(null); return }
-      setReach((current) => ({ available: data.available !== false, active: Boolean(data.active), online: Boolean(data.online), url: data.url ?? null, starting: current?.starting ?? false, error: current?.error ?? null }))
+      setReach((current) => ({ available: data.available !== false, active: Boolean(data.active), online: Boolean(data.online), url: data.url ?? null, starting: current?.starting ?? false, error: current?.error ?? null, expiresAt: typeof data.expiresAt === 'number' ? data.expiresAt : null }))
     } catch {
       setReach(null)
     } finally {
@@ -1404,6 +1461,20 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readReach])
+
+  const setShareAccess = useCallback(async (change: { expiresIn?: '24h' | '7d' | 'off'; reset?: boolean }) => {
+    try {
+      const response = await window.fetch(bridgeUrl('/__froam/share/access'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(change) })
+      if (!response.ok) throw new Error('Could not change the link')
+      if (change.expiresIn) showToast(change.expiresIn === 'off' ? 'Links work until you turn them off' : `Links stop working in ${change.expiresIn === '24h' ? '24 hours' : '7 days'}`)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not change the link')
+    } finally {
+      await readReach()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readReach])
+  shareAccessRef.current = setShareAccess
 
   // A site on this computer is shared through the share service whenever it
   // has a room: links sent earlier come back to life with froam dev, and new
@@ -1667,6 +1738,23 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     } finally { root.style.width = original.width; root.style.maxWidth = original.maxWidth; root.style.marginInline = original.marginInline }
     return validateReferenceBuildCandidate(plan, observations)
   }
+  // AI for Quick Edit: only when froam dev has one, only for the owner, off until turned on.
+  const [aiStatus, setAiStatus] = useState<{ configured: boolean; model: string | null } | null>(null)
+  const quickEditAiKey = froamStorageKey('froam-quick-edit-ai-v1', projectKey)
+  const [quickEditAi, setQuickEditAi] = useState(() => {
+    try { return window.localStorage.getItem(quickEditAiKey) === 'on' } catch { return false }
+  })
+  useEffect(() => {
+    if (!quickChatOpen || aiStatus || isContributor) return
+    let cancelled = false
+    void window.fetch(bridgeUrl('/__froam/intelligence'))
+      .then(async (response) => (response.ok ? await response.json() as { configured?: boolean; model?: string | null } : null))
+      .catch(() => null)
+      .then((data) => { if (!cancelled && data) setAiStatus({ configured: Boolean(data.configured), model: data.model ?? null }) })
+    return () => { cancelled = true }
+  }, [quickChatOpen, aiStatus, isContributor])
+  const aiReady = Boolean(aiStatus?.configured && quickEditAi && !isContributor)
+
   const froamIntent = useFroamIntent({
     project: projectSession.project,
     setProject: projectSession.setProject,
@@ -1683,7 +1771,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     onActivityChange: setWorkspaceActivity,
     onToast: showToast,
     onExecuteLocalCommand: executeLocalFroamCommand,
-    enableRemoteIntent: false,
+    enableRemoteIntent: aiReady,
+    aiHint: isContributor || !aiStatus ? 'none' : aiStatus.configured ? 'switch' : 'setup',
     onValidateReference: validateReferenceBuildOnCanvas,
   })
 
@@ -1764,6 +1853,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       originalRoute[editPath] = { text: target.innerText }
       originalsRef.current[viewportStoreKeyRef.current] = originalRoute
     }
+    // Typing changes the words in place, with no draft painted first — so the
+    // painter learns the page's own words now, or undo would put the typing back.
+    rememberPageText(target)
+    const textBefore = target.innerText
     const singleLine = SINGLE_LINE_TAGS.has(target.tagName.toLowerCase())
     target.contentEditable = 'true'
     target.focus({ preventScroll: true })
@@ -1794,6 +1887,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       if (!liveRoot || !isInPageScope(target, liveRoot)) return
       const path = getElementPath(target, liveRoot)
       const newText = target.innerText
+      // Clicked in and out without changing a word: nothing to record, nothing to save.
+      if (newText === textBefore) return
       opPendingLabelRef.current = 'Rewrote copy'
       setStore((currentStore) => {
         const vsk = viewportStoreKeyRef.current
@@ -2432,7 +2527,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const visualKeys = ['color','backgroundColor','borderColor','borderRadius','boxShadow','fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','padding','margin','gap','display','alignItems','justifyContent'] as const
     const styles = Object.fromEntries(visualKeys.map((key) => [key, computed[key]]).filter(([, value]) => Boolean(value)))
     const interaction = Object.values(activeProjectState.interactions).filter((item) => item.sourceId === nodeId || item.targetIds.includes(nodeId)).at(-1)
-    if (kind === 'motion' && !interaction) return showToast('This element has no saved motion yet. Apply it in Animator or Laboratory first.')
+    if (kind === 'motion' && !interaction) return showToast('This element has no saved motion yet. Add it in Animate or Experiments first.')
     const dna = activeProjectState.dna[nodeId] ?? minimalArchiveDna(nodeId, { role: element.getAttribute('role') ?? element.tagName.toLowerCase(), tagName: element.tagName.toLowerCase(), styles, motion: interaction })
     const suffix = kind === 'component' ? 'Component' : kind === 'style' ? 'Style' : kind === 'motion' ? 'Motion' : 'Pattern'
     const item = createArchiveItem({
@@ -2510,7 +2605,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       showToast('Already undone')
       return
     }
-    applyLogToStore(`Undid ${describeChange(change)}`)
+    applyLogToStore(`Undone — ${describeChange(change)}`)
   }
 
   function structureBaselineKey(sourcePath: string) {
@@ -3364,8 +3459,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
   }
 
-  async function saveToRunam() {
-    keepStudioPinned()
+  function saveToRunam() {
+    return saveDraft(false)
+  }
+
+  async function saveDraft(quiet: boolean) {
+    if (!quiet) keepStudioPinned()
+    const scope = viewportStoreKey
+    const upTo = changeLog[0]?.clock ?? 0
     const routeSnapshot = collectVersionRouteDrafts()
     const nextStore = { ...store, [viewportStoreKey]: stripPersonaDrafts(routeSnapshot) }
     const payload = {
@@ -3378,8 +3479,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     setStore(nextStore)
     saveStore(nextStore)
     window.localStorage.setItem(froamStorageKey(SAVE_META_KEY, projectKey), JSON.stringify(payload))
+    // Kept in this browser either way — so it counts as saved, and the toast says where.
+    markSaved(scope, upTo)
     if (room.role === 'contributor') {
-      showToast('Saved in this browser — Submit when you’re ready for approval')
+      if (!quiet) showToast('Saved in this browser — Submit when you’re ready for approval')
       return
     }
 
@@ -3389,10 +3492,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         viewportMode,
         store: routeSnapshot,
       })
-      showToast('Published')
+      if (!quiet) showToast('Published')
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : ''
-      showToast(message.includes('restricted') || message.includes('token') ? 'Saved locally. Admin sign-in needed to publish.' : 'Saved locally. Publish server unavailable.')
+      // Automatic saves say it once, not every five seconds.
+      if (!quiet || !autosaveWarnedRef.current) showToast(message.includes('restricted') || message.includes('token') ? 'Saved locally. Admin sign-in needed to publish.' : 'Saved locally. Publish server unavailable.')
+      if (quiet) autosaveWarnedRef.current = true
     }
   }
 
@@ -4806,8 +4911,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   contextMenuPosRef.current = contextMenuPos
   const moveModeRef = useRef(moveMode)
   moveModeRef.current = moveMode
-  const actionsRef = useRef({ saveToRunam, saveToRepo, undo, redo, clearSelectionDraft, applyStyle, openSelectedImageUpload, wrapInContainer })
-  actionsRef.current = { saveToRunam, saveToRepo, undo, redo, clearSelectionDraft, applyStyle, openSelectedImageUpload, wrapInContainer }
+  const actionsRef = useRef({ saveToRunam, saveDraft, saveToRepo, undo, redo, clearSelectionDraft, applyStyle, openSelectedImageUpload, wrapInContainer })
+  actionsRef.current = { saveToRunam, saveDraft, saveToRepo, undo, redo, clearSelectionDraft, applyStyle, openSelectedImageUpload, wrapInContainer }
+
+  /* Save automatically: a few seconds after the last change. */
+  useEffect(() => {
+    if (!autosave || isContributor || !showPanel || unsavedCount === 0) return
+    const timer = window.setTimeout(() => { void actionsRef.current.saveDraft(true) }, 5000)
+    return () => window.clearTimeout(timer)
+  }, [autosave, isContributor, showPanel, unsavedCount, changeLog])
 
   /* ─── CSS Vars refresh ─── */
   useEffect(() => {
@@ -5686,6 +5798,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
       <FroamIntentResult
         state={froamIntent.state}
+        aiModel={aiStatus?.model}
         onAllow={froamIntent.allow}
         onNotNow={froamIntent.notNow}
         onKeep={froamIntent.keep}
@@ -5701,6 +5814,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           busy={['preparing', 'awaiting-consent', 'requesting', 'plan-ready', 'creating-prototype', 'retrying', 'adopting'].includes(froamIntent.state.phase)}
           onSubmit={(intent) => { setQuickChatOpen(false); void froamIntent.submit({ origin: 'contextual', intent }) }}
           onClose={() => setQuickChatOpen(false)}
+          ai={aiStatus && !isContributor ? {
+            available: aiStatus.configured,
+            on: quickEditAi,
+            model: aiStatus.model,
+            onToggle: () => setQuickEditAi((current) => {
+              try { window.localStorage.setItem(quickEditAiKey, current ? 'off' : 'on') } catch { /* this session only */ }
+              return !current
+            }),
+          } : null}
         />
       )}
 
@@ -5819,7 +5941,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     url: reach?.url ?? null,
                     starting: Boolean(reach?.starting) || wantsReach,
                     error: reach?.error ?? null,
+                    expiresAt: reach?.expiresAt ?? null,
                   } : null}
+                  onShareExpiry={(expiresIn) => { void setShareAccess({ expiresIn }) }}
                   linksPending={linksPending}
                   onReach={(on) => { void setReachable(on) }}
                   ended={room.ended}
@@ -5888,6 +6012,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 setActive(false)
                 setStudioMinimized(false)
               }}
+              unsavedCount={unsavedCount}
+              autosave={autosave}
+              onToggleAutosave={isContributor ? undefined : () => {
+                toggleAutosave()
+                showToast(autosave ? 'Automatic saving is off — Save when you’re ready' : 'Saving automatically, a few seconds after each change')
+              }}
+              history={historyItems}
+              onUndoChange={(id) => {
+                const change = changeLog.find((entry) => entry.id === id)
+                if (change) revertChange(change)
+              }}
             />
           </FroamSectionBoundary>
           <div className="froam-figma-left" data-chef-editor-root="true" hidden={!leftPanelOpen}>
@@ -5927,7 +6062,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 </div>
               ) : null}
               <div className="froam-figma-left__view" hidden={leftWorkspaceMode !== 'reference'}>
-                <FroamSectionBoundary name="ReferenceWorkspace">
+                {(referenceOpenedRef.current ||= leftWorkspaceMode === 'reference') && <FroamSectionBoundary name="ReferenceWorkspace">
                   <FroamReferenceWorkspace
                     project={projectSession.project}
                     routeKey={routeKey}
@@ -5938,7 +6073,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     onToast={showToast}
                     onActivityChange={setWorkspaceActivity}
                   />
-                </FroamSectionBoundary>
+                </FroamSectionBoundary>}
               </div>
               {leftWorkspaceMode === 'layers' ? (
                 <div className="froam-figma-left__view">
@@ -6085,85 +6220,20 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               onPointerDown={handlePanelHeaderPointerDown}
             >
               <div className="froam-studio__brand">
-                <span className="froam-studio__version-dot" />
-                <span className="froam-studio__logo">{persona.name} Studio</span>
-                <span className="froam-studio__badge">v4</span>
-                {/* Only when this page is actually a session. */}
-                {roomPresence.length > 0 && (
-                  <span
-                    className="froam-studio__badge"
-                    title={roomPresence.map((m) => `${m.name} · ${m.role}`).join('\n')}
-                    style={{ background: 'var(--fs-accent-soft)', color: 'var(--fs-accent-text)' }}
-                  >
-                    {roomPresence.length === 1
-                      ? `${roomPresence[0].name} is here`
-                      : `${roomPresence.length} here`}
-                  </span>
-                )}
+                <span className="froam-studio__logo">More tools</span>
+                <small className="froam-studio__subtitle">Versions, history, checks, export and more</small>
               </div>
-              <div className="froam-studio__header-actions">
-                <button
-                  type="button"
-                  className={`froam-studio__icon-btn${moveMode ? ' is-active' : ''}`}
-                  data-chef-editor-root="true"
-                  onClick={() => { setMoveMode((v) => !v); showToast(moveMode ? 'Move mode off' : 'Move mode on — drag any element freely') }}
-                  title="Move mode — drag elements to reposition (Ctrl+Shift+L)"
-                  style={moveMode ? { background: 'var(--fs-accent-soft)', color: 'var(--fs-accent-text)' } : {}}
-                >
-                  <Move size={14} />
-                </button>
-                <div className="froam-studio__header-divider" />
-                <div className="froam-viewport-switcher" data-chef-editor-root="true">
-                  <button type="button" className={`froam-studio__icon-btn ${viewportMode === 'desktop' ? 'is-active' : ''}`} onClick={() => setViewportMode('desktop')} title="Desktop">
-                    <Monitor size={14} />
-                  </button>
-                  <button type="button" className={`froam-studio__icon-btn ${viewportMode === 'tablet' ? 'is-active' : ''}`} onClick={() => setViewportMode('tablet')} title="Tablet (768px)">
-                    <Tablet size={14} />
-                  </button>
-                  <button type="button" className={`froam-studio__icon-btn ${viewportMode === 'mobile' ? 'is-active' : ''}`} onClick={() => setViewportMode('mobile')} title="Mobile (375px)">
-                    <Smartphone size={14} />
-                  </button>
-                </div>
-                <div className="froam-studio__header-divider" />
-                <button type="button" className="froam-studio__icon-btn" onClick={openCommandPalette} title="Command palette (Ctrl+K)">
-                  <Command size={14} />
-                </button>
-                <button type="button" className={`froam-studio__icon-btn ${connectedCanvasOpen ? 'is-active' : ''}`} onClick={() => setConnectedCanvasOpen((value) => !value)} title="Connected Canvas — replay, prototypes and inspectors">
-                  <Share2 size={14} />
-                </button>
-                <button type="button" className={`froam-studio__icon-btn ${intelligenceOpen ? 'is-active' : ''}`} onClick={() => setIntelligenceOpen((value) => !value)} title="Understand — Scan, DNA, Archive, Flow and responsive evidence">
-                  <Sparkles size={14} />
-                </button>
-                <button type="button" className={`froam-studio__icon-btn ${labsOpen ? 'is-active' : ''}`} onClick={() => setLabsOpen((value) => !value)} title="Experiments — optional Froam tools">
-                  <Zap size={14} />
-                </button>
-                <button type="button" className="froam-studio__icon-btn" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
-                  <Undo2 size={14} />
-                </button>
-                <button type="button" className="froam-studio__icon-btn" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)">
-                  <Redo2 size={14} />
-                </button>
-                <button type="button" className="froam-studio__icon-btn" onClick={() => setShowShortcutOverlay(true)} title="Keyboard shortcuts (?)">
-                  <Keyboard size={14} />
-                </button>
-              </div>
+              <button
+                type="button"
+                className="froam-studio__icon-btn"
+                onClick={() => setWorkspacePreference((current) => ({ ...current, advancedOpen: false }))}
+                onPointerDown={(event) => event.stopPropagation()}
+                aria-label="Close more tools"
+                title="Close"
+              >
+                <X size={16} />
+              </button>
             </div>
-
-            {/* Status bar */}
-            <div className="froam-studio__status" data-chef-editor-root="true">
-              <div className="froam-studio__status-left">
-                <span className={`froam-studio__status-dot ${showPanel ? '' : 'is-idle'}`} />
-                <span className="froam-studio__status-text">{showPanel ? 'Editing live' : 'Idle'}</span>
-              </div>
-              <span className="froam-studio__route">{routeKey}</span>
-              {viewportMode !== 'desktop' && (
-                <span className="froam-studio__viewport-badge" data-chef-editor-root="true">
-                  {viewportMode === 'mobile' ? '375px' : '768px'}
-                </span>
-              )}
-            </div>
-
-            <div className="froam-studio__divider" />
 
             {/* Inline editing indicator */}
             {inlineEditing && (
@@ -6173,30 +6243,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               </div>
             )}
 
-            {/* Selection banner */}
-            {selection ? (
-              <div className="froam-selection-banner" data-chef-editor-root="true">
-                <div className="froam-selection-banner__tag">
-                  <MousePointer2 size={12} aria-hidden="true" />
-                  {selection.label}
-                </div>
-                <span className="froam-selection-banner__path">{selection.path}</span>
-              </div>
-            ) : (
-              <div className="froam-empty-state" data-chef-editor-root="true">
-                <MousePointer2 size={28} className="froam-empty-state__icon" />
-                <strong>No element selected</strong>
-                <span>Click any element on the page to start designing. Double-click to edit text inline.</span>
-              </div>
-            )}
-
             {/* ═══ ACCORDION SECTIONS ═══ */}
 
             {/* ─── Quick Actions ─── */}
             <AccordionSection
               id="quickActions"
               icon={<Zap size={14} />}
-              title="Quick Actions"
+              title="Page"
               isOpen={openSections.quickActions}
               onToggle={() => toggleSection('quickActions')}
             >
@@ -6248,7 +6301,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             <AccordionSection
               id="intel"
               icon={<Sparkles size={14} />}
-              title="Design Intelligence"
+              title="Health check"
               isOpen={openSections.intel}
               onToggle={() => toggleSection('intel')}
             >
@@ -6267,7 +6320,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             <AccordionSection
               id="export"
               icon={<Download size={14} />}
-              title="Export / Capture"
+              title="Export"
               isOpen={openSections.export}
               onToggle={() => toggleSection('export')}
             >
@@ -6871,7 +6924,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             <AccordionSection
               id="container"
               icon={<Box size={14} />}
-              title="Add Structure"
+              title="Add a block"
               isOpen={openSections.container}
               onToggle={() => toggleSection('container')}
             >
@@ -6962,7 +7015,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             <AccordionSection
               id="gradient"
               icon={<Palette size={14} />}
-              title="Gradient Builder"
+              title="Gradients"
               isOpen={openSections.gradient}
               onToggle={() => toggleSection('gradient')}
             >
@@ -7063,7 +7116,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             <AccordionSection
               id="cssVars"
               icon={<Variable size={14} />}
-              title="CSS Variables"
+              title="CSS variables"
               isOpen={openSections.cssVars}
               onToggle={() => toggleSection('cssVars')}
             >
@@ -7291,7 +7344,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             <AccordionSection
               id="inspiration"
               icon={<ImagePlus size={14} />}
-              title="Inspiration Board"
+              title="Inspiration"
               isOpen={openSections.inspiration}
               onToggle={() => toggleSection('inspiration')}
             >

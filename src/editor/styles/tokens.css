@@ -25,6 +25,9 @@
   --fs-danger-rgb: 255, 110, 100;
   --fs-danger: #ff8a80;
 
+  /* Ink: what overlays are made of — white on graphite, near-black on paper */
+  --fs-ink-rgb: 255, 255, 255;
+
   /* Surfaces — graphite */
   --fs-surface-0: #0e0f11;
   --fs-surface-1: #151619;
@@ -115,4 +118,93 @@
 /* The launcher keeps its own colours — its ring is the brand. */
 .global-chef-button {
   --fs-accent: #5eead4;
+}
+
+/* ===============================================================
+   Light — the same system on paper. Customize → Appearance sets it;
+   everything drawn with tokens follows. The launcher keeps its look.
+   =============================================================== */
+#froam-editor-portal[data-froam-ui-theme='light'] {
+  color-scheme: light;
+  --fs-ink-rgb: 17, 24, 39;
+
+  --fs-accent-hover: #2c68e6;
+  --fs-accent-pressed: #2459c9;
+  --fs-accent-text: #245fd6;
+  --fs-accent-soft: rgba(53, 114, 239, 0.12);
+  --fs-accent-wash: rgba(53, 114, 239, 0.07);
+
+  --fs-success-rgb: 22, 150, 80;
+  --fs-success: #16924f;
+  --fs-warning-rgb: 180, 115, 20;
+  --fs-warning: #b37314;
+  --fs-danger-rgb: 214, 58, 47;
+  --fs-danger: #d63a2f;
+
+  --fs-surface-0: #f1f2f4;
+  --fs-surface-1: #ffffff;
+  --fs-surface-2: #ffffff;
+  --fs-surface-3: #f6f7f8;
+  --fs-surface-4: #ebedf0;
+
+  --fs-bg-primary: #ffffff;
+  --fs-bg-secondary: rgba(17, 24, 39, 0.03);
+  --fs-bg-tertiary: rgba(17, 24, 39, 0.05);
+  --fs-bg-hover: rgba(17, 24, 39, 0.05);
+  --fs-bg-active: rgba(53, 114, 239, 0.12);
+  --fs-bg-danger: rgba(214, 58, 47, 0.08);
+  --fs-surface-toolbar: #ffffff;
+  --fs-surface-panel: #ffffff;
+  --fs-surface-control-subtle: rgba(17, 24, 39, 0.025);
+  --fs-surface-control: rgba(17, 24, 39, 0.045);
+  --fs-surface-control-hover: rgba(17, 24, 39, 0.07);
+  --fs-surface-control-active: rgba(17, 24, 39, 0.1);
+  --fs-border: rgba(17, 24, 39, 0.1);
+  --fs-border-muted: rgba(17, 24, 39, 0.07);
+  --fs-border-strong: rgba(17, 24, 39, 0.16);
+  --fs-border-hover: rgba(17, 24, 39, 0.24);
+  --fs-border-danger: rgba(214, 58, 47, 0.35);
+
+  --fs-text-primary: #16171b;
+  --fs-text-secondary: #53565f;
+  --fs-text-tertiary: #7d808a;
+  --fs-text-accent: #245fd6;
+  --fs-text-warm: #53565f;
+  --fs-text-danger: #c7342a;
+  --fs-warm: #c7342a;
+
+  --fs-accent-control-soft: rgba(53, 114, 239, 0.11);
+  --fs-accent-control-wash: rgba(53, 114, 239, 0.06);
+
+  --fs-option-bg: #ffffff;
+  --fs-surface-header: linear-gradient(180deg, #ffffff 60%, rgba(255, 255, 255, 0));
+  --fs-surface-veil: rgba(15, 17, 21, 0.28);
+
+  --fs-shadow-panel: 0 16px 40px rgba(15, 23, 42, 0.12), 0 2px 8px rgba(15, 23, 42, 0.06);
+  --fs-shadow-pop: 0 12px 32px rgba(15, 23, 42, 0.14), 0 0 0 1px rgba(15, 23, 42, 0.06);
+  --fs-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.08);
+  --fs-shadow-button: 0 1px 2px rgba(15, 23, 42, 0.1);
+}
+/* Accent words need more weight on paper. */
+#froam-editor-portal[data-froam-ui-theme='light'][data-froam-ui-accent='teal'] { --fs-accent-text: #0b7d73; }
+#froam-editor-portal[data-froam-ui-theme='light'][data-froam-ui-accent='violet'] { --fs-accent-text: #6344d8; }
+#froam-editor-portal[data-froam-ui-theme='light'][data-froam-ui-accent='coral'] { --fs-accent-text: #c2463c; }
+#froam-editor-portal[data-froam-ui-theme='light'][data-froam-ui-accent='blue'] { --fs-accent-text: #245fd6; }
+#froam-editor-portal[data-froam-ui-theme='light'] .froam-studio,
+#froam-editor-portal[data-froam-ui-theme='light'] .fs-command-palette__card { color-scheme: light; }
+#froam-editor-portal[data-froam-ui-theme='light'] .froam-ui-customizer__preview i { background: #ffffff; box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.08); }
+#froam-editor-portal[data-froam-ui-theme='light'] .froam-ui-customizer__preview .is-canvas { background: #eef0f3; box-shadow: none; }
+/* Drawn over the page, not on Froam: these keep their dark look in either theme. */
+#froam-editor-portal[data-froam-ui-theme='light'] :is(.fs-measure, .froam-selection-handoff, .froam-resize-size-badge, .fs-scan, .froam-presence__rail, .froam-pin__count) {
+  --fs-ink-rgb: 255, 255, 255;
+  --fs-accent-text: #8fb3ff;
+  --fs-text-primary: #ececef;
+  --fs-text-secondary: #a4a5ad;
+  --fs-text-tertiary: #74757e;
+  --fs-surface-0: #0e0f11;
+  --fs-surface-1: #151619;
+  --fs-surface-2: #1b1c20;
+  --fs-border: rgba(255, 255, 255, 0.08);
+  --fs-border-strong: rgba(255, 255, 255, 0.12);
+  --fs-surface-control: rgba(255, 255, 255, 0.05);
 }

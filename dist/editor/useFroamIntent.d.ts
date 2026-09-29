@@ -30,6 +30,8 @@ type Props = {
     onToast: (message: string) => void;
     onExecuteLocalCommand?: (intent: string) => boolean;
     enableRemoteIntent?: boolean;
+    /** When AI is off, what would turn it on: the Quick Edit switch, setting up froam dev, or nothing here. */
+    aiHint?: 'switch' | 'setup' | 'none';
     onValidateReference?: (plan: FroamReferenceBuildPlan, signal: AbortSignal) => Promise<FroamReferenceBuildValidation>;
     request?: (request: Parameters<typeof requestIntelligencePlan>[0], signal: AbortSignal) => Promise<FroamIntelligenceResponse | FroamIntelligenceNotConfiguredResponse>;
 };

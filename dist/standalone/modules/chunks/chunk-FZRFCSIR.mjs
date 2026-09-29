@@ -1,0 +1,1 @@
+var o="default";function n(r){return String(r??"").trim()||o}function e(){return typeof window>"u"?o:n(window.location.origin)}function i(r){return r?n(r):e()}function c(r,t){return`${r}:project:${encodeURIComponent(n(t))}`}function u(r){return`project:${n(r)}`}export{i as a,c as b,u as c};

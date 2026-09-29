@@ -1,7 +1,7 @@
 import { type FroamChange } from '../../collab/oplog';
 import { type FroamPersona } from '../froamPersona';
 import { type ElementDraft, type ViewportMode } from './types';
-/** "Fill · h1" — what changed, and on what. */
+/** "Fill · Heading" — what changed, and on what. */
 export declare function describeChange(change: FroamChange): string;
 export declare function relativeTime(ts: number): string;
 /**

@@ -1,5 +1,41 @@
 # Changelog
 
+## 9.0.0 - 2026-09-29
+
+**Share links only your invitees can open, a History you can use, a light
+theme — and AI in Quick Edit when you want it.**
+
+- **Only people you invite.** A share link to a site on your computer shows
+  nothing — not the page, not a single file — without a live invite. Links
+  can stop working after 24 hours or 7 days (Share → "Links work"), and
+  **New links** shuts out everyone who came in on the old ones.
+- **Save says what's unsaved.** Save shows how many changes aren't saved yet
+  and goes calm ("Saved") when everything is. **Save automatically** (Froam
+  menu) saves a few seconds after each change.
+- **History, next to undo.** Every change on the page in plain words, with
+  who and when, and an Undo on each that takes back just that change. Ctrl+Z
+  after that takes back the take-back.
+- **AI in Quick Edit, if you want it.** Direct edits still run on your
+  computer. Start `froam dev` with `ANTHROPIC_API_KEY` (or any
+  OpenAI-compatible API through `FROAM_AI_*`) and switch on **AI** in Quick
+  Edit for everything else. Froam asks once, sends a description of the part
+  you picked (never source code, cookies or screenshots) and shows a preview
+  to keep or discard. The key stays with `froam dev`, and people on a share
+  link can't use it.
+- **A light theme.** Customize → Appearance: Dark, Light or Match system.
+- **Opens faster.** Versions, Animate, Experiments, Understand, Reference,
+  the site planner and a few more load the first time they're opened.
+  Opening the editor downloads a third less (195 KB instead of 290 KB,
+  compressed).
+- **Plain words, fewer oddities.** Animate, Understand and Experiments are
+  reworded; experiments are switches with a line saying what each does, and
+  the ones with no real use (test user, sound, trailer, reality) are gone.
+  More tools replaces the old advanced panel.
+- **Fixes.** Ctrl+Z after typing puts the page's own words back (it said
+  "Undone" and left the typing). Clicking in and out of copy no longer counts
+  as a change. Top-bar menus are no longer covered by the selection's bar or
+  a section's name tag.
+
 ## 8.9.0 - 2026-09-29
 
 **A new Froam: calmer, clearer, easier — and invite links that always work.**

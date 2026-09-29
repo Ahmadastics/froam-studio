@@ -115,7 +115,9 @@ html[data-chef-editing] :is(section, header, footer, main, article, nav, aside)[
   position: absolute;
   left: 0;
   top: 0;
-  z-index: 2147483000;
+  /* Over the page, under the editor (its layout is 1188): a section's name
+     never draws across a menu or a panel. */
+  z-index: 1187;
   max-width: min(220px, 100%);
   padding: 4px 6px;
   border-radius: 5px;

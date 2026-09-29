@@ -1,6 +1,7 @@
 import type { FroamIntentState } from './froam-intent-model';
 type Props = {
     state: FroamIntentState;
+    aiModel?: string | null;
     onAllow: () => void;
     onNotNow: () => void;
     onKeep: () => void;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { Activity, Boxes, Bug, GitBranch, History, Pause, Play, Plus, RotateCcw, Trash2, X, Zap } from 'lucide-react'
+import { Activity, Boxes, Bug, GitBranch, History, Pause, PencilLine, Play, Plus, RotateCcw, Trash2, X, Zap } from 'lucide-react'
 import type { EditorStore, FroamOp, FroamViewport } from '../collab/types'
 import { appendProjectEvents, createProjectBranch, createProjectDocument, createProjectEvent, deleteProjectBranch, deriveBranchState, emptyProjectState, renameProjectBranch, switchProjectBranch } from '../project/event-log'
 import { nodeRegistryGraphRecords, legacyOpsToProjectEvents } from '../project/adapters'
@@ -59,7 +59,7 @@ export default function FroamConnectedCanvas(props: Props) {
   const [speed, setSpeed] = useState(1)
   const [actorFilter, setActorFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<FroamReplayCategory | ''>('')
-  const [branchName, setBranchName] = useState('Prototype 01')
+  const [newBranchName, setNewBranchName] = useState('Prototype 01')
   const [draftInteraction, setDraftInteraction] = useState<FroamInteraction | null>(null)
   const previewing = useRef(false)
 
@@ -112,10 +112,10 @@ export default function FroamConnectedCanvas(props: Props) {
 
   function createBranch() {
     const id = `prototype-${Date.now().toString(36)}`
-    const next = createProjectBranch(project, { id, name: branchName, actorId: props.actorId })
+    const next = createProjectBranch(project, { id, name: newBranchName, actorId: props.actorId })
     setProject(next)
     props.onMaterializeBranch(deriveBranchState(next, id).legacyStore)
-    props.onToast(`Created ${branchName}`)
+    props.onToast(`Created ${newBranchName}`)
   }
 
   function switchBranch(branchId: string) {
@@ -158,16 +158,24 @@ export default function FroamConnectedCanvas(props: Props) {
 
   if (!props.open) return null
   const tabs: Array<[FroamConnectedCanvasTab, string, typeof History]> = [
-    ['replay', 'Replay', History], ['branches', 'Prototypes', GitBranch], ['node', 'Node', Bug], ['graph', 'Graph', Boxes], ['interaction', 'Interaction', Zap],
+    ['interaction', 'Animate', Zap], ['replay', 'Replay', History], ['branches', 'Prototypes', GitBranch], ['node', 'Identity', Bug], ['graph', 'Graph', Boxes],
   ]
+  const titles: Record<FroamConnectedCanvasTab, [string, string]> = {
+    interaction: ['Animate', 'Motion and interactions for the selection'],
+    replay: ['Replay', 'Watch every change to this page, in order'],
+    branches: ['Prototypes', 'Copies of the page to try ideas on'],
+    node: ['Identity', 'How Froam recognises this element (for developers)'],
+    graph: ['Graph', 'How the page is connected (for developers)'],
+  }
+  const branchName = project.branches[project.activeBranchId].name
   return (
-    <aside className="froam-connected" data-chef-editor-root="true" aria-label="Connected Canvas">
+    <aside className="froam-connected" data-chef-editor-root="true" aria-label={titles[tab][0]}>
       <header className="froam-connected__header">
-        <div><strong>Connected Canvas</strong><small>{project.branches[project.activeBranchId].name}</small></div>
-        <button type="button" onClick={() => { stopPreview(); props.onClose() }} aria-label="Close Connected Canvas"><X size={15} /></button>
+        <div><strong>{titles[tab][0]}</strong><small>{project.activeBranchId === 'main' ? titles[tab][1] : `On the prototype “${branchName}”`}</small></div>
+        <button type="button" onClick={() => { stopPreview(); props.onClose() }} aria-label={`Close ${titles[tab][0]}`} title="Close"><X size={16} /></button>
       </header>
-      <nav className="froam-connected__tabs">
-        {tabs.map(([id, label, Icon]) => <button type="button" key={id} className={tab === id ? 'is-active' : ''} onClick={() => setTab(id)} title={label}><Icon size={14} /><span>{label}</span></button>)}
+      <nav className="froam-connected__tabs" role="tablist" aria-label="Animate, replay and prototypes">
+        {tabs.map(([id, label, Icon]) => <button type="button" role="tab" aria-selected={tab === id} key={id} className={tab === id ? 'is-active' : ''} onClick={() => setTab(id)} title={titles[id][1]}><Icon size={14} /><span>{label}</span></button>)}
       </nav>
       <div className="froam-connected__body">
         {tab === 'replay' && <section className="froam-connected__section">
@@ -175,23 +183,23 @@ export default function FroamConnectedCanvas(props: Props) {
             <button type="button" onClick={() => cursor >= replayEvents.length ? previewAt(0) : setPlaying((value) => !value)}>{playing ? <Pause size={13} /> : <Play size={13} />}</button>
             <button type="button" onClick={() => previewAt(0)} title="Restart"><RotateCcw size={13} /></button>
             <select value={speed} onChange={(event) => setSpeed(Number(event.target.value))}>{[1, 4, 10, 20].map((value) => <option key={value} value={value}>{value}x</option>)}</select>
-            <button type="button" onClick={stopPreview}>Live</button>
+            <button type="button" onClick={stopPreview} title="Stop replaying and show the page as it is now">Back to now</button>
           </div>
           <input className="froam-connected__range" type="range" min={0} max={replayEvents.length} value={Math.min(cursor, replayEvents.length)} onChange={(event) => previewAt(Number(event.target.value))} />
           <div className="froam-connected__filters">
             <select value={actorFilter} onChange={(event) => { setActorFilter(event.target.value); setCursor(0) }}><option value="">Everyone</option>{actors.map((actor) => <option key={actor} value={actor}>{actor}</option>)}</select>
-            <select value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value as FroamReplayCategory | ''); setCursor(0) }}><option value="">All changes</option>{['structural', 'styling', 'text', 'interaction'].map((category) => <option key={category} value={category}>{category}</option>)}</select>
+            <select value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value as FroamReplayCategory | ''); setCursor(0) }}><option value="">All changes</option>{([['structural', 'Structure'], ['styling', 'Styles'], ['text', 'Text'], ['interaction', 'Motion']] as const).map(([category, name]) => <option key={category} value={category}>{name}</option>)}</select>
           </div>
           <div className="froam-connected__timeline">{replayEvents.map((event, index) => <button type="button" key={event.id} className={index < cursor ? 'is-past' : ''} onClick={() => previewAt(index + 1)}><span>{replayEventLabel(event)}</span><small>{event.actorId} · {replayCategory(event)}</small></button>)}</div>
-          {!replayEvents.length && <p className="froam-connected__empty">No replayable changes match this filter.</p>}
+          {!replayEvents.length && <p className="froam-connected__empty">No changes to replay yet{actorFilter || categoryFilter ? ' for this filter' : ' — edit the page and they appear here'}.</p>}
         </section>}
 
         {tab === 'branches' && <section className="froam-connected__section">
-          <div className="froam-connected__create"><input value={branchName} onChange={(event) => setBranchName(event.target.value)} maxLength={80} /><button type="button" onClick={createBranch}><Plus size={13} /> Fork</button></div>
+          <div className="froam-connected__create"><input value={newBranchName} onChange={(event) => setNewBranchName(event.target.value)} maxLength={80} aria-label="Name for the new prototype" /><button type="button" onClick={createBranch} title="Copy the page into a new prototype"><Plus size={13} /> New prototype</button></div>
           <div className="froam-connected__branches">{Object.values(project.branches).map((branch) => <div key={branch.id} className={branch.id === project.activeBranchId ? 'is-active' : ''}>
-            <button type="button" onClick={() => switchBranch(branch.id)}><strong>{branch.name}</strong><small>{branch.parentBranchId ? `from ${project.branches[branch.parentBranchId]?.name ?? branch.parentBranchId}` : 'Primary'}{branch.forkEventId ? ` · fork ${branch.forkEventId.slice(0, 7)}` : ''}</small></button>
-            <button type="button" title="Rename" onClick={() => { const name = window.prompt('Prototype name', branch.name); if (name) setProject(renameProjectBranch(project, branch.id, name)) }}>Aa</button>
-            {branch.id !== 'main' && <button type="button" title="Delete" onClick={() => removeBranch(branch.id)}><Trash2 size={12} /></button>}
+            <button type="button" onClick={() => switchBranch(branch.id)}><strong>{branch.name}</strong><small>{branch.parentBranchId ? `Copied from ${project.branches[branch.parentBranchId]?.name ?? branch.parentBranchId}` : 'Your page'}</small></button>
+            <button type="button" title="Rename" aria-label={`Rename ${branch.name}`} onClick={() => { const name = window.prompt('Prototype name', branch.name); if (name) setProject(renameProjectBranch(project, branch.id, name)) }}><PencilLine size={12} /></button>
+            {branch.id !== 'main' && <button type="button" title="Delete" aria-label={`Delete ${branch.name}`} onClick={() => removeBranch(branch.id)}><Trash2 size={12} /></button>}
           </div>)}</div>
         </section>}
 
@@ -221,13 +229,13 @@ export default function FroamConnectedCanvas(props: Props) {
         </section>}
 
         {tab === 'graph' && <section className="froam-connected__section">
-          <p className="froam-connected__hint">Experimental project-graph projection. Selection is synchronized with the canvas.</p>
+          <p className="froam-connected__hint">Every element Froam knows on this page and how they relate. Click one to select it on the page.</p>
           <div className="froam-connected__graph">{graphRows.map((row) => <button type="button" key={row.node.id} className={props.selection?.nodeId === row.node.id ? 'is-selected' : ''} style={{ paddingLeft: 10 + row.depth * 16 }} onClick={() => props.onSelectNode(row.node.id, row.node.locator?.path)}><span>{row.node.name ?? row.node.id}</span><small>{row.node.kind} · {row.outgoing.map((relation) => relation.kind).join(', ') || 'leaf'}</small></button>)}</div>
         </section>}
 
         {tab === 'interaction' && <section className="froam-connected__section">
           <FroamAnimator selectedElement={props.selectedElement} selectionLabel={props.selection?.label ?? 'node'} sourceNodeId={props.selection?.nodeId} savedInteractions={Object.values(projectState.interactions)} onInteractionChange={setDraftInteraction} onSaveToArchive={saveDraftToArchive} onApplyAnimation={commitAnimation} onToast={props.onToast} />
-          {draftInteraction && <pre className="froam-connected__interaction">{JSON.stringify(interactionInspectorRecord(draftInteraction), null, 2)}</pre>}
+          {draftInteraction && <details className="froam-connected__details"><summary>Technical details</summary><pre className="froam-connected__interaction">{JSON.stringify(interactionInspectorRecord(draftInteraction), null, 2)}</pre></details>}
         </section>}
       </div>
     </aside>

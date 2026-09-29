@@ -509,6 +509,80 @@ test('dragging a pattern onto the page drops it between sections, styled like th
   assert(seen.indicatorGone, 'the drop line stayed on the page')
 })
 
+const REAL_FILES = '#features li:nth-child(2) h3'
+const ANY_STACK = '#features li:nth-child(3) h3'
+async function typeInto(page, selector, text) {
+  await deselect(page)
+  await clickOn(page, selector, 0.02, 0.5)
+  await page.keyboard.type(text, { delay: 25 })
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(250)
+  await deselect(page)
+}
+async function openHistory(page) {
+  if (!(await page.locator('.froam-tb__history-pop').count())) await page.click('button[aria-label="History"]')
+  await page.waitForSelector('.froam-tb__history-pop', { timeout: 3000 })
+}
+
+test('Ctrl+Z after typing puts the page’s own words back; Ctrl+Y brings the typing back', async ({ page }) => {
+  await typeInto(page, REAL_FILES, 'Now ')
+  assert((await textOf(page, REAL_FILES)).startsWith('Now Real files'), `typed text is "${await textOf(page, REAL_FILES)}"`)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(400)
+  assert((await textOf(page, REAL_FILES)) === 'Real files', `after undo the heading reads "${await textOf(page, REAL_FILES)}"`)
+  await page.keyboard.press('Control+y')
+  await page.waitForTimeout(400)
+  assert((await textOf(page, REAL_FILES)).startsWith('Now Real files'), `after redo the heading reads "${await textOf(page, REAL_FILES)}"`)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(400)
+  assert((await textOf(page, REAL_FILES)) === 'Real files', 'the page was not left as it was')
+})
+
+test('clicking in and out of copy without typing changes nothing', async ({ page }) => {
+  await openHistory(page)
+  const before = await page.locator('.froam-tb__history-list li').count()
+  await page.click('button[aria-label="History"]')
+  await deselect(page)
+  await clickOn(page, ANY_STACK)
+  await clickOn(page, ANY_STACK, 0.3, 0.5)
+  await deselect(page)
+  await page.waitForTimeout(300)
+  await openHistory(page)
+  const after = await page.locator('.froam-tb__history-list li').count()
+  await page.click('button[aria-label="History"]')
+  assert(after === before, `an untouched click-in added ${after - before} change(s) to History`)
+})
+
+test('History takes back one older change and leaves the later one; Save counts what is unsaved', async ({ page }) => {
+  await typeInto(page, REAL_FILES, 'A ')
+  await typeInto(page, ANY_STACK, 'B ')
+  const save = page.locator('.froam-tb__save-btn:not(.froam-tb__save-btn--repo)')
+  const count = Number(await save.locator('.froam-tb__unsaved').innerText().catch(() => '0'))
+  assert(count >= 2, `Save shows ${count} unsaved changes after two edits`)
+  assert(/not saved yet/.test(await save.getAttribute('title') ?? ''), 'Save does not say what is unsaved')
+  await openHistory(page)
+  const rows = page.locator('.froam-tb__history-list li')
+  assert(/Rewrote copy/.test(await rows.nth(0).innerText()), `newest row reads "${await rows.nth(0).innerText()}"`)
+  await rows.nth(1).hover()
+  await rows.nth(1).locator('button').click()
+  await page.waitForTimeout(500)
+  assert((await textOf(page, REAL_FILES)) === 'Real files', `the older change was not taken back: "${await textOf(page, REAL_FILES)}"`)
+  assert((await textOf(page, ANY_STACK)).startsWith('B Any stack'), 'taking back the older change undid the later one too')
+  // Ctrl+Z now takes back the take-back — not the later edit.
+  await page.click('button[aria-label="History"]')
+  await deselect(page)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(400)
+  assert((await textOf(page, REAL_FILES)).startsWith('A Real files'), 'Ctrl+Z after a History undo did not restore it')
+  assert((await textOf(page, ANY_STACK)).startsWith('B Any stack'), 'Ctrl+Z after a History undo touched the later edit')
+  // Leave the page as it was.
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(250)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(400)
+  assert((await textOf(page, REAL_FILES)) === 'Real files' && (await textOf(page, ANY_STACK)) === 'Any stack', `left "${await textOf(page, REAL_FILES)}" / "${await textOf(page, ANY_STACK)}"`)
+})
+
 test('an edited page is quiet: drafts are painted once, not every frame', async ({ page }) => {
   await deselect(page)
   await page.mouse.move(4, 890)

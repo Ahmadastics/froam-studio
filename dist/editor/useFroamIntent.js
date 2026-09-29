@@ -9,12 +9,15 @@ import { readFroamIntelligenceConsent, writeFroamIntelligenceConsent } from './i
 import { createLocalFroamIntentProposals, FROAM_INTENT_MAX_ATTEMPTS, froamIntentPreferences, froamIntentPrototypeName, froamIntentReducer, froamIntentRetryFeedback, initialFroamIntentState } from './froam-intent-model.js';
 function safeIntentError(error) {
     const code = error instanceof Error ? error.message : 'provider_unavailable';
+    // No key names here: the browser bundle never mentions the server's secrets.
     if (code === 'not_configured')
-        return 'That request needs connected intelligence. Configure a provider for the Froam bridge, then restart Froam.';
+        return 'That one needs AI, and froam dev doesn’t have one set up yet — the README shows how.';
     if (code === 'remote_intent_disabled')
-        return 'Quick Edit is focused on safe local edits right now. Try a direct visual command like "make it bolder", "center the content", or "add more space".';
+        return 'That one needs AI — turn on AI in Quick Edit. Or try a direct edit like “make it bolder”, “center the content” or “add more space”.';
+    if (code === 'local_only')
+        return 'Quick Edit does direct edits here — try “make it bolder”, “center the content” or “add more space”.';
     if (code === 'provider_unavailable')
-        return 'The connected intelligence provider did not respond. Check the provider settings and try again.';
+        return 'The AI didn’t answer. Check its key and model, then try again.';
     if (code === 'no_valid_proposals')
         return "Froam couldn't find a safe change for that request.";
     if (code === 'provider_invalid_response' || code === 'invalid_request')
@@ -47,7 +50,8 @@ export function useFroamIntent(props) {
     const mountedRef = useRef(true);
     useEffect(() => () => { mountedRef.current = false; operationRef.current += 1; abortRef.current?.abort(); }, []);
     useEffect(() => {
-        if (state.phase === 'preparing' || state.phase === 'awaiting-consent' || state.phase === 'requesting' || state.phase === 'retrying')
+        // Waiting for a yes is not working: the chip would say it's busy while it asks.
+        if (state.phase === 'preparing' || state.phase === 'requesting' || state.phase === 'retrying')
             props.onActivityChange('intent-understanding');
         else if (state.phase === 'plan-ready' || state.phase === 'creating-prototype')
             props.onActivityChange('intent-creating');
@@ -163,7 +167,7 @@ export function useFroamIntent(props) {
         try {
             const localProposals = createLocalFroamIntentProposals(pending.snapshot, pending.session.intent);
             if (!localProposals.length && !props.enableRemoteIntent)
-                throw new Error('remote_intent_disabled');
+                throw new Error(props.aiHint === 'switch' ? 'remote_intent_disabled' : props.aiHint === 'setup' ? 'not_configured' : 'local_only');
             const response = localProposals.length
                 ? { schemaVersion: 1, purpose: 'mutate', provider: 'froam-local-command@1', proposals: localProposals, rationale: 'Prepared instantly on this device.', confidence: .98 }
                 : props.request ? await props.request(request, operation.controller.signal) : await requestIntelligencePlan(request, fetch, operation.controller.signal);
@@ -200,7 +204,7 @@ export function useFroamIntent(props) {
             if (abortRef.current === operation.controller)
                 abortRef.current = null;
         }
-    }, [contextIsCurrent, props.actorId, props.enableRemoteIntent, props.onPreviewStore, props.request, props.routeKey, props.setProject, props.viewport, startOperation]);
+    }, [contextIsCurrent, props.actorId, props.aiHint, props.enableRemoteIntent, props.onPreviewStore, props.request, props.routeKey, props.setProject, props.viewport, startOperation]);
     const performReference = useCallback(async (pending) => {
         const operation = startOperation(pending);
         let previewBranchId = null;

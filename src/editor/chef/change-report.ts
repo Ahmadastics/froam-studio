@@ -1,5 +1,6 @@
 import { type FroamChange } from '../../collab/oplog'
 import { tagOfPath } from '../../collab/paths'
+import { describeSelection } from '../selection-name'
 import { LOCAL_ACTOR } from '../../collab/types'
 import { type FroamPersona } from '../froamPersona'
 import { type ElementDraft, CANVAS_KEY, INJECTION_KEY, ROOT_PARENT_KEY, type ViewportMode } from './types'
@@ -8,10 +9,11 @@ import { readCssUrl } from './dom'
 
 /* ─── Reading a change back to the person who made it ─── */
 
-/** "Fill · h1" — what changed, and on what. */
+/** "Fill · Heading" — what changed, and on what. */
 export function describeChange(change: FroamChange) {
   const tag = tagOfPath(change.paths[0] ?? '')
-  const where = change.paths.length > 1 ? `${tag} +${change.paths.length - 1}` : tag
+  const kind = tag ? describeSelection(tag).kind : ''
+  const where = kind && change.paths.length > 1 ? `${kind} +${change.paths.length - 1}` : kind
   return where ? `${change.label} · ${where}` : change.label
 }
 

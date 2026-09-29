@@ -1,3 +1,4 @@
+import { describeSelection } from './selection-name'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   Play,
@@ -440,7 +441,7 @@ export default function FroamAnimator({ selectedElement, selectionLabel, onApply
     <div className="fs-animator" data-chef-editor-root="true">
       <div className="fs-export__section-title" style={{ marginBottom: 6 }}>
         <Zap size={12} />
-        {selectedElement ? `Animating ${selectionLabel}` : 'Select an element to animate'}
+        {selectedElement ? `Animating the ${describeSelection(selectionLabel).kind.toLowerCase()}` : 'Select something on the page to animate it'}
       </div>
 
       {/* Templates */}

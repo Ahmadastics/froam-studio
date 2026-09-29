@@ -458,7 +458,7 @@ export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJ
 
       {/* spec card — palette, type, page metrics */}
       <div className="fs-bp__spec" data-chef-editor-root="true">
-        <p className="fs-bp__spec-title">SPECIFICATIONS</p>
+        <p className="fs-bp__spec-title">Colours, type and size</p>
         <div className="fs-bp__swatches">
           {palette.map((hex) => (
             <span key={hex} className="fs-bp__swatch" style={{ background: hex }} title={hex} />
@@ -471,7 +471,7 @@ export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJ
 
       {/* title block — bottom right, like a real drawing sheet */}
       <div className="fs-bp__titleblock" data-chef-editor-root="true">
-        <p className="fs-bp__brand">FROAM BLUEPRINT</p>
+        <p className="fs-bp__brand">Page map</p>
         <p className="fs-bp__site">{title}</p>
         <p className="fs-bp__meta">{routeKey} · {stamp}</p>
         <div className="fs-bp__counts">
@@ -491,7 +491,7 @@ export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJ
         type="button"
         className={`fs-bp__mode ${threeD ? 'fs-bp__mode--3d' : ''}`}
         onClick={() => setThreeD((v) => !v)}
-        aria-label={threeD ? 'Switch to 2D blueprint' : 'Switch to 3D blueprint'}
+        aria-label={threeD ? 'Show as a flat map' : 'Show in 3D'}
         data-chef-editor-root="true"
       >
         {threeD ? <PenLine size={14} /> : <Box size={14} />}
@@ -500,7 +500,7 @@ export default function FroamBlueprint({ open, onClose, routeKey, getRootEl, onJ
 
       {onOpenLayers && <button type="button" className="fs-bp__layers" onClick={() => { onClose(); onOpenLayers() }} aria-label="Open Layers and DOM structure" data-chef-editor-root="true"><Layers size={14}/>Layers</button>}
 
-      <button type="button" className="fs-bp__close" onClick={onClose} aria-label="Close blueprint" data-chef-editor-root="true">
+      <button type="button" className="fs-bp__close" onClick={onClose} aria-label="Close page map" data-chef-editor-root="true">
         <X size={16} />
       </button>
     </div>

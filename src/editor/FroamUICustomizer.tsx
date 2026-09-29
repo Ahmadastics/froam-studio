@@ -9,6 +9,7 @@ const choices = {
   workspace: [['attached', 'In toolbar'], ['floating-bottom', 'Floating dock']],
   panels: [['standard', 'Left'], ['mirrored', 'Right']],
   density: [['comfortable', 'Comfortable'], ['compact', 'Compact']],
+  theme: [['dark', 'Dark'], ['light', 'Light'], ['system', 'Match system']],
   appearance: [['graphite', 'Graphite'], ['midnight', 'Midnight'], ['glass', 'Glass']],
   accent: [['blue', 'Blue'], ['teal', 'Teal'], ['violet', 'Violet'], ['coral', 'Coral']],
   leftSize: [['narrow', 'Narrow'], ['standard', 'Standard'], ['wide', 'Wide']],
@@ -46,7 +47,8 @@ export default function FroamUICustomizer({ open, value, onChange, onClose }: Pr
         {row('inspectorSize', 'Design panel width', 'How much room the Design panel takes.')}
         {row('density', 'Density', 'Compact fits more; comfortable breathes more.')}
         {row('scale', 'Size', 'Scale the editor without changing your page.')}
-        {row('appearance', 'Surface', 'The material of the editor.')}
+        {row('theme', 'Appearance', 'Dark or light — or follow your computer.')}
+        {value.theme !== 'light' && row('appearance', 'Dark surface', 'The material of the editor when it’s dark.')}
         {row('accent', 'Accent', 'The colour for selected things and the main action.')}
         <label className="froam-ui-customizer__toggle"><span><strong>Tab labels</strong><small>Show words on the panel tabs, or icons only.</small></span><input type="checkbox" checked={value.labels} onChange={(event) => set('labels', event.target.checked)}/></label>
       </main>

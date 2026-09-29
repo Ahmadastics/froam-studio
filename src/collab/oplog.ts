@@ -286,6 +286,16 @@ export function undoCursor(ops: readonly FroamOp[], actor: FroamActorId): UndoCu
       undoable.push(action)
       redoable.length = 0
     } else if (action.kind === 'undo') {
+      // Taking back one change from the history list, wherever it sits, is not
+      // a step of Ctrl+Z — unless it happens to be the latest. It's an action
+      // of its own, so Ctrl+Z takes back the take-back.
+      const targets = new Set(action.ops.map((op) => op.targets).filter(Boolean))
+      const top = undoable.at(-1)
+      if (targets.size && !top?.ops.some((op) => targets.has(op.id))) {
+        undoable.push(action)
+        redoable.length = 0
+        continue
+      }
       const popped = undoable.pop()
       if (popped) redoable.push(popped)
     } else {

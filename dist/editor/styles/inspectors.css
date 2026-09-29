@@ -1,0 +1,409 @@
+/* ===============================================================
+   Side inspectors — Animate & replay, Understand, Experiments.
+   One design: a header that names what's open, tabs, then plain
+   sections. Loaded after each panel's own sheet so this wins.
+   =============================================================== */
+
+.froam-connected,
+.froam-intelligence,
+.froam-labs {
+  border: 1px solid var(--fs-border);
+  border-radius: 12px;
+  background: var(--fs-surface-2);
+  box-shadow: var(--fs-shadow-panel);
+  backdrop-filter: none;
+  color: var(--fs-text-primary);
+  font: 400 13px/1.45 var(--fs-font);
+  -webkit-font-smoothing: antialiased;
+}
+
+.froam-connected { height: auto; }
+.froam-labs { max-height: none; }
+
+/* Header: what's open, in words */
+.froam-connected__header,
+.froam-intelligence > header,
+.froam-labs > header {
+  position: static;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 56px;
+  padding: 10px 10px 10px 16px;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.froam-connected__header > div,
+.froam-intelligence > header > div { display: grid; gap: 1px; min-width: 0; }
+.froam-labs > header > div { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.froam-labs > header > div > svg { flex: none; color: var(--fs-accent-text); }
+.froam-labs > header > div > span { display: grid; gap: 1px; min-width: 0; }
+
+.froam-connected__header strong,
+.froam-intelligence > header strong,
+.froam-labs > header strong { font-size: 15px; font-weight: 600; }
+
+.froam-connected__header small,
+.froam-intelligence > header small,
+.froam-labs > header small { overflow: hidden; color: var(--fs-text-tertiary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+
+.froam-connected__header button,
+.froam-intelligence > header button,
+.froam-labs > header button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fs-text-tertiary);
+}
+
+.froam-connected__header button:hover,
+.froam-intelligence > header button:hover,
+.froam-labs > header button:hover { background: var(--fs-surface-control-hover); color: var(--fs-text-primary); }
+
+/* Tabs */
+.froam-connected__tabs,
+.froam-intelligence > nav,
+.froam-labs > nav {
+  position: static;
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--fs-border-muted);
+  background: transparent;
+  scrollbar-width: none;
+}
+
+.froam-connected__tabs::-webkit-scrollbar,
+.froam-intelligence > nav::-webkit-scrollbar,
+.froam-labs > nav::-webkit-scrollbar { display: none; }
+
+.froam-connected__tabs button,
+.froam-intelligence > nav button,
+.froam-labs > nav button {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 0;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fs-text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.froam-connected__tabs button:hover,
+.froam-intelligence > nav button:hover,
+.froam-labs > nav button:hover { color: var(--fs-text-primary); background: transparent; }
+
+.froam-connected__tabs button.is-active,
+.froam-intelligence > nav button.is-active,
+.froam-labs > nav button.is-active { color: var(--fs-text-primary); background: transparent; border-color: transparent; }
+
+.froam-connected__tabs button.is-active::after,
+.froam-intelligence > nav button.is-active::after,
+.froam-labs > nav button.is-active::after { content: ''; position: absolute; left: 6px; right: 6px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--fs-accent); }
+
+.froam-connected__tabs button svg,
+.froam-intelligence > nav button svg { flex: none; }
+
+/* Sections */
+.froam-connected__section,
+.froam-intelligence section,
+.froam-labs section {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+}
+
+.froam-labs main { gap: 0; padding: 0; }
+.froam-labs main > section + section { border-top: 1px solid var(--fs-border-muted); }
+.froam-labs__flags { margin-top: 0; opacity: 1; }
+
+.froam-intelligence h3,
+.froam-labs h3,
+.froam-connected__section h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--fs-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.froam-intelligence h3 small,
+.froam-labs h3 small { padding: 1px 7px; border-radius: 999px; background: var(--fs-surface-control); color: var(--fs-text-secondary); font-size: 11px; font-weight: 500; }
+
+.froam-intelligence p,
+.froam-labs p,
+.froam-connected__hint,
+.froam-connected__empty { margin: 0; color: var(--fs-text-secondary); font-size: 13px; line-height: 1.5; }
+
+.froam-intelligence small,
+.froam-labs small { color: var(--fs-text-tertiary); font-size: 12px; }
+
+/* Buttons and fields */
+.froam-intelligence section > button,
+.froam-intelligence .froam-intelligence__row button,
+.froam-intelligence__grid button,
+.froam-labs button,
+.froam-connected__controls button,
+.froam-connected__create button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--fs-surface-control);
+  color: var(--fs-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.froam-intelligence section > button:hover:not(:disabled),
+.froam-labs button:hover:not(:disabled),
+.froam-connected__controls button:hover,
+.froam-connected__create button:hover { background: var(--fs-surface-control-active); }
+
+.froam-intelligence button.is-primary,
+.froam-labs section > button:first-of-type:not(.is-danger) {
+  background: var(--fs-accent);
+  color: var(--fs-text-on-accent);
+  font-weight: 600;
+}
+
+.froam-intelligence button.is-primary:hover:not(:disabled),
+.froam-labs section > button:first-of-type:not(.is-danger):hover:not(:disabled) { background: var(--fs-accent-hover); }
+
+.froam-labs button.is-danger { background: rgba(var(--fs-danger-rgb), 0.16); color: var(--fs-danger); }
+.froam-intelligence button:disabled,
+.froam-labs button:disabled { opacity: 0.4; cursor: default; }
+
+.froam-intelligence input:not([type='checkbox']):not([type='range']),
+.froam-intelligence select,
+.froam-labs input:not([type='checkbox']):not([type='range']):not([type='file']),
+.froam-labs select,
+.froam-connected__controls select,
+.froam-connected__filters select,
+.froam-connected__create input {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--fs-border);
+  border-radius: 8px;
+  background: var(--fs-surface-1);
+  color: var(--fs-text-primary);
+  font-size: 13px;
+}
+
+.froam-intelligence input:focus,
+.froam-intelligence select:focus,
+.froam-labs input:focus,
+.froam-labs select:focus,
+.froam-connected__create input:focus { border-color: var(--fs-accent); outline: none; }
+
+.froam-intelligence option,
+.froam-labs option,
+.froam-connected select option { background: var(--fs-option-bg); }
+
+.froam-intelligence input[type='checkbox'],
+.froam-labs input[type='checkbox'] { accent-color: var(--fs-accent); }
+
+/* Details, data */
+.froam-intelligence details,
+.froam-connected__details {
+  border: 1px solid var(--fs-border-muted);
+  border-radius: 8px;
+  background: var(--fs-surface-1);
+}
+
+.froam-intelligence summary,
+.froam-connected__details summary {
+  padding: 8px 12px;
+  color: var(--fs-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.froam-intelligence pre,
+.froam-connected__interaction {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 0 0 8px 8px;
+  background: var(--fs-surface-0);
+  color: var(--fs-text-secondary);
+  font: 400 11px/1.5 var(--fs-font-mono);
+  white-space: pre-wrap;
+}
+
+.froam-intelligence__stats {
+  grid-template-columns: auto 1fr;
+  gap: 6px 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--fs-surface-1);
+  font-size: 13px;
+}
+
+.froam-intelligence__stats b { color: var(--fs-text-primary); font-variant-numeric: tabular-nums; }
+.froam-intelligence__stats span { color: var(--fs-text-secondary); }
+
+/* Lists in the replay, prototypes and graph tabs */
+.froam-connected__timeline button,
+.froam-connected__graph button,
+.froam-intelligence__list article,
+.froam-intelligence__flow > div > button:first-child {
+  gap: 2px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--fs-surface-1);
+  color: var(--fs-text-primary);
+  font-size: 13px;
+  text-align: left;
+}
+
+.froam-connected__timeline button:hover,
+.froam-connected__graph button:hover { background: var(--fs-surface-3); }
+.froam-connected__timeline button.is-past { background: var(--fs-accent-wash); }
+.froam-connected__graph button.is-selected { background: var(--fs-accent-soft); }
+
+.froam-connected__timeline small,
+.froam-connected__graph small,
+.froam-connected__branches small,
+.froam-connected__diagnostics small { color: var(--fs-text-tertiary); font-size: 12px; }
+
+.froam-connected__branches > div {
+  border: 1px solid var(--fs-border-muted);
+  border-radius: 10px;
+  background: var(--fs-surface-1);
+}
+
+.froam-connected__branches > div.is-active { border-color: var(--fs-accent); }
+.froam-connected__branches button { padding: 10px 12px; color: var(--fs-text-primary); }
+.froam-connected__branches button:not(:first-child) { width: 34px; padding: 0; display: grid; place-items: center; color: var(--fs-text-tertiary); }
+.froam-connected__branches button:not(:first-child):hover { color: var(--fs-text-primary); background: var(--fs-surface-control-hover); }
+
+.froam-connected__inspector { gap: 8px 12px; font-size: 12px; }
+.froam-connected__inspector label > :first-child { color: var(--fs-text-tertiary); }
+.froam-connected__inspector code,
+.froam-connected__inspector strong { color: var(--fs-text-primary); font-weight: 500; }
+.froam-connected__inspector code { font-family: var(--fs-font-mono); }
+.froam-connected__range { accent-color: var(--fs-accent); }
+
+/* Experiment switches */
+.froam-labs__flag {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--fs-border-muted);
+}
+
+.froam-labs__flag > span { display: grid; gap: 1px; }
+.froam-labs__flag b { font-size: 13px; font-weight: 500; }
+.froam-labs__flag input[type='checkbox'] { width: 30px; height: 18px; flex: none; }
+.froam-labs__chips label { border-color: var(--fs-border); color: var(--fs-text-secondary); }
+.froam-labs__proposal p,
+.froam-labs__compare,
+.froam-labs__score { background: var(--fs-surface-1); border-radius: 8px; }
+
+@media (max-width: 768px) {
+  .froam-connected__tabs button span,
+  .froam-intelligence > nav button span { display: inline; }
+}
+
+/* ─── More tools (the older all-in-one panel, now only what's unique) ─── */
+.froam-studio.is-advanced-surface .froam-studio__card {
+  border: 1px solid var(--fs-border);
+  border-radius: 12px;
+  background: var(--fs-surface-2);
+  box-shadow: var(--fs-shadow-panel);
+}
+
+.froam-studio.is-advanced-surface .froam-studio__header {
+  min-height: 56px;
+  padding: 10px 10px 10px 16px;
+  border-bottom: 1px solid var(--fs-border-muted);
+  background: var(--fs-surface-2);
+  backdrop-filter: none;
+}
+
+.froam-studio.is-advanced-surface .froam-studio__brand { display: grid; gap: 1px; }
+
+.froam-studio.is-advanced-surface .froam-studio__logo {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  color: var(--fs-text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.froam-studio__subtitle { color: var(--fs-text-tertiary); font-size: 12px; }
+
+.froam-studio.is-advanced-surface .froam-studio__icon-btn { color: var(--fs-text-tertiary); }
+.froam-studio.is-advanced-surface .froam-studio__icon-btn:hover { color: var(--fs-text-primary); background: var(--fs-surface-control-hover); border-color: transparent; }
+.froam-studio.is-advanced-surface .froam-accordion { border-bottom-color: var(--fs-border-muted); }
+.froam-studio.is-advanced-surface .froam-accordion__trigger { min-height: 44px; font-weight: 500; }
+.froam-studio.is-advanced-surface .froam-accordion__trigger:hover { background: var(--fs-surface-control-subtle); }
+
+/* ─── A real on/off switch for experiments ─── */
+.froam-labs__flag input[type='checkbox'] {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  margin: 0;
+  flex: none;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 999px;
+  background: var(--fs-surface-4);
+  cursor: pointer;
+  transition: background var(--fs-transition-fast);
+}
+
+.froam-labs__flag input[type='checkbox']::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform var(--fs-transition-fast);
+}
+
+.froam-labs__flag input[type='checkbox']:checked { background: var(--fs-accent); }
+.froam-labs__flag input[type='checkbox']:checked::after { transform: translateX(14px); }
+.froam-labs__flag input[type='checkbox']:focus-visible { outline: 2px solid var(--fs-accent); outline-offset: 2px; }
+
+/* The Experiments header: the title and its line, stacked */
+.froam-labs > header small { grid-column: auto; }

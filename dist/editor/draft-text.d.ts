@@ -1,6 +1,8 @@
 /** The element's own words, from before Froam first painted a draft on it. */
 export declare function pageTextOf(element: HTMLElement): string | undefined;
 export declare function applyDraftText(element: HTMLElement, text: string): boolean;
+/** Before someone types into it: the page's own words, if nothing has painted over them yet. */
+export declare function rememberPageText(element: HTMLElement): void;
 /**
  * A text draft went away (undone, reverted, taken off by a teammate): put the
  * page's own words back — but only while the element still shows what Froam

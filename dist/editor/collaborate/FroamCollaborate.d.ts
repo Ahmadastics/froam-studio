@@ -31,6 +31,7 @@ export type Reach = {
     url: string | null;
     starting: boolean;
     error: string | null;
+    expiresAt?: number | null;
 };
 type Props = {
     role: FroamRole | null;
@@ -104,6 +105,8 @@ type Props = {
     /** The public link is on its way: there are no links to copy yet. */
     linksPending?: boolean;
     onReach?: (on: boolean) => void;
+    /** How long the public link works: 24 hours, 7 days, or until it's turned off. */
+    onShareExpiry?: (expiresIn: '24h' | '7d' | 'off') => void;
 };
 /**
  * Share, talk, and publishing without a developer — everything about working

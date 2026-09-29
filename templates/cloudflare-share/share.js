@@ -13,7 +13,7 @@
  *   relay → host   { t: 'req', id, method, path, headers, body }     body: base64 or null
  *   host → relay   { t: 'res', id, status, headers, body, more }     the first part of a response
  *   host → relay   { t: 'chunk', id, body, more }                     the rest, streamed
- *   host → relay   { t: 'hello', version, project, origin }             what's being shared
+ *   host → relay   { t: 'hello', version, project, origin, gate }       what's being shared, and who may see it
  *   either way     { t: 'ping' } / { t: 'pong' }
  *
  * Speed comes from sending as little as possible through the owner's
@@ -24,11 +24,22 @@
  *     straight from the site, at the edge — only Froam's own requests (the
  *     room, the bridge) go to the owner's computer;
  *   - a local site's files that say they can be cached are kept at the edge.
+ *
+ * A share is locked (when the owner's computer sends a `gate`): only a
+ * browser that opened a real invite link gets in. The relay asks the owner's
+ * computer whether the link's room and token are live, then gives the browser
+ * a signed pass (a cookie) that it checks on every request — pages, files and
+ * copies kept at the edge alike. Resetting links (a new epoch) or letting the
+ * share expire ends every pass.
  */
 
 /** A request body a browser may send through a share (room messages, profiles, requests). */
 export const MAX_REQUEST_BYTES = 700_000
 export const SHARE_COOKIE = 'froam_share'
+/** The signed pass a browser gets from a real invite link. */
+export const PASS_COOKIE = 'froam_pass'
+/** A pass lasts this long at most (less when the share or the room ends sooner). */
+export const PASS_MAX_MS = 7 * 24 * 60 * 60 * 1000
 const RESPONSE_TIMEOUT_MS = 30_000
 /** How long a request waits for the owner's computer to come back before calling the share offline. */
 const RECONNECT_WAIT_MS = 6_000
@@ -50,10 +61,39 @@ export function shareFromCookie(header) {
   return match && isShareId(match[1]) ? match[1] : null
 }
 
-/** The visitor's cookie header without the share's own cookie — the local site never sees it. */
+/** The visitor's cookie header without the share's own cookies — the local site never sees them. */
 function withoutShareCookie(header) {
-  return (header ?? '').split(/;\s*/).filter((part) => part && !part.startsWith(`${SHARE_COOKIE}=`)).join('; ')
+  return (header ?? '').split(/;\s*/).filter((part) => part && !part.startsWith(`${SHARE_COOKIE}=`) && !part.startsWith(`${PASS_COOKIE}=`)).join('; ')
 }
+
+const b64url = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+async function hmac(secret, message) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  return b64url(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message)))
+}
+
+/** "expiry.epoch.signature": good until `expiry`, for this epoch of the share's links. */
+export async function signPass(secret, expiry, epoch) {
+  return `${expiry}.${epoch}.${await hmac(secret, `${expiry}.${epoch}`)}`
+}
+
+export async function verifyPass(secret, value, epoch, now = Date.now()) {
+  if (!secret || typeof value !== 'string') return false
+  const [expiry, passEpoch, signature, ...rest] = value.split('.')
+  if (rest.length || !signature || passEpoch !== epoch || !(Number(expiry) > now)) return false
+  const expected = await hmac(secret, `${expiry}.${passEpoch}`)
+  if (expected.length !== signature.length) return false
+  let diff = 0
+  for (let i = 0; i < expected.length; i += 1) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i)
+  return diff === 0
+}
+
+const passFromCookie = (header) => new RegExp(`(?:^|;\\s*)${PASS_COOKIE}=([^;]+)`).exec(header ?? '')?.[1] ?? null
+
+const lockedPage = (reason) => new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>This link needs an invite</title>
+<body style="font:16px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;background:#0f1115;color:#e5e7eb">
+<main style="max-width:420px;padding:24px;text-align:center"><h1 style="font-size:20px">${reason === 'ended' ? 'This session has ended' : reason === 'expired' ? 'This link has expired' : 'This link needs an invite'}</h1>
+<p style="color:#9ca3af">${reason === 'ended' ? 'The owner ended it, so its links no longer work. Ask them for a new link.' : reason === 'expired' ? 'The owner set it to stop working after a while. Ask them for a new link.' : 'This site is shared only with people who have an invite. Open the full link you were sent, or ask the owner for one.'}</p></main></body>`, { status: 403, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } })
 
 export async function sha256Hex(text) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
@@ -68,7 +108,7 @@ const offlinePage = () => new Response(`<!doctype html><meta charset="utf-8"><me
 /**
  * @param {{ hostSocket: () => { send: (text: string) => void } | null, now?: () => number }} options
  */
-export function createShareHub({ hostSocket, now = () => Date.now(), fetchImpl = (...args) => fetch(...args), cache = null, onHello = null, site: initialSite = null }) {
+export function createShareHub({ hostSocket, now = () => Date.now(), fetchImpl = (...args) => fetch(...args), cache = null, onHello = null, site: initialSite = null, passSecret = () => null, secureCookies = true }) {
   const pending = new Map()
   let nextId = 1
   /** What the owner's computer said it's sharing: { version, project, origin }. */
@@ -88,11 +128,38 @@ export function createShareHub({ hostSocket, now = () => Date.now(), fetchImpl =
 
     get site() { return site },
 
-    /** A browser's request → the fastest place that can answer it. */
+    /** A browser's request → the fastest place that can answer it — once it's allowed in. */
     async forward(request) {
       const url = new URL(request.url)
+      // Locked means locked: without a pass, not even Froam's own files answer.
+      const gate = site?.gate
+      const secret = passSecret?.()
+      if (!gate || !secret) return this.serve(request, url)
+      if (await verifyPass(secret, passFromCookie(request.headers.get('cookie')), gate.epoch, now())) return this.serve(request, url)
+      // No pass yet: an invite link earns one, once the owner's computer says it's live.
+      const room = url.searchParams.get('froam-room')
+      const token = url.searchParams.get('froam-token')
+      if (gate.expiresAt && gate.expiresAt <= now()) return lockedPage('expired')
+      if (!room || !token || !/^[\w-]{1,80}$/.test(room) || !/^[\w-]{1,200}$/.test(token)) return lockedPage()
+      const admitUrl = new URL(`/__froam/share/admit?room=${encodeURIComponent(room)}&token=${encodeURIComponent(token)}`, url.origin)
+      const check = await this.tunnel(new Request(admitUrl, { method: 'GET' }), admitUrl)
+      if (check.status === 502) return check
+      const verdict = await check.json().catch(() => null)
+      if (check.status !== 200 || !verdict?.ok) return lockedPage(check.status === 410 ? 'ended' : verdict?.expired ? 'expired' : undefined)
+      const until = Math.min(now() + PASS_MAX_MS, gate.expiresAt ?? Infinity, Number(verdict.expiresAt) || Infinity)
+      const pass = await signPass(secret, String(Math.floor(until)), gate.epoch)
+      const response = await this.serve(request, url)
+      const headers = new Headers(response.headers)
+      headers.append('Set-Cookie', `${PASS_COOKIE}=${pass}; Path=/; Max-Age=${Math.max(1, Math.floor((until - now()) / 1000))}; HttpOnly; SameSite=Lax${secureCookies ? '; Secure' : ''}`)
+      headers.set('Cache-Control', 'no-store')
+      return new Response(response.body, { status: response.status, statusText: response.statusText, headers, ...(headers.get('content-encoding') ? { encodeBody: 'manual' } : {}) })
+    },
+
+    /** Allowed in: the site at the edge, a kept copy, or the owner's computer. */
+    async serve(request, url) {
       const froamOwn = FROAM_PATH.test(url.pathname)
       const editorAsked = Boolean(editorFile(url.pathname))
+      // The editor is on npm, so the CDN has it — the fastest copy there is.
       if (request.method === 'GET' && editorAsked) {
         const editor = await editorFromCdn(url.pathname, site?.version, fetchImpl)
         if (editor) return editor
@@ -162,7 +229,10 @@ export function createShareHub({ hostSocket, now = () => Date.now(), fetchImpl =
       if (frame?.t === 'ping') { try { hostSocket()?.send(JSON.stringify({ t: 'pong' })) } catch { /* gone */ } return }
       if (frame?.t === 'hello') {
         const origin = typeof frame.origin === 'string' && /^https:\/\/[^/]+$/i.test(frame.origin) ? frame.origin : null
-        site = { version: typeof frame.version === 'string' ? frame.version.slice(0, 40) : null, project: typeof frame.project === 'string' ? frame.project.slice(0, 80) : null, origin }
+        const gate = frame.gate && typeof frame.gate.epoch === 'string' && /^[\w-]{8,64}$/.test(frame.gate.epoch)
+          ? { epoch: frame.gate.epoch, expiresAt: Number.isFinite(frame.gate.expiresAt) ? frame.gate.expiresAt : null }
+          : null
+        site = { version: typeof frame.version === 'string' ? frame.version.slice(0, 40) : null, project: typeof frame.project === 'string' ? frame.project.slice(0, 80) : null, origin, gate }
         onHello?.(site)
         return
       }

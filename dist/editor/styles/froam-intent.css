@@ -10,7 +10,7 @@
   padding: 12px;
   border: 1px solid rgba(var(--fs-accent-rgb), 0.18);
   border-radius: 12px;
-  background: rgba(20, 21, 24, .97);
+  background: var(--fs-surface-2);
   box-shadow: 0 18px 55px rgba(0, 0, 0, .5);
   color: var(--fs-text-primary);
   font: 500 11px/1.45 Inter, system-ui, sans-serif;
@@ -18,9 +18,11 @@
 }
 
 .froam-intent-result header { display: flex; align-items: center; justify-content: space-between; gap: 9px; }
+.froam-intent-result.is-consent header { justify-content: flex-start; }
+.froam-intent-result.is-consent header svg { color: var(--fs-accent-text); }
 .froam-intent-result header > div { display: grid; gap: 1px; }
 .froam-intent-result header span { color: var(--fs-accent-text); font-size: 11px; }
-.froam-intent-result header em { color: #77838f; font-size: 11px; font-style: normal; }
+.froam-intent-result header em { color: var(--fs-text-tertiary); font-size: 11px; font-style: normal; }
 .froam-intent-result p { margin: 0; color: #b6c0c7; }
 .froam-intent-result small { color: #7f8b94; }
 .froam-intent-result__actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
@@ -31,16 +33,16 @@
   justify-content: center;
   gap: 5px;
   padding: 6px 11px;
-  border: 1px solid rgba(255, 255, 255, .1);
+  border: 1px solid rgba(var(--fs-ink-rgb), .1);
   border-radius: 7px;
-  background: #ffffff08;
+  background: rgba(var(--fs-ink-rgb), 0.031);
   color: inherit;
   font: inherit;
   cursor: pointer;
 }
 .froam-intent-result button:hover, .froam-intent-result button:focus-visible { border-color: rgba(var(--fs-accent-rgb), 0.45); outline: none; }
 .froam-intent-result button.is-primary { border-color: rgba(var(--fs-accent-rgb), 0.35); background: rgba(var(--fs-accent-rgb), 0.12); color: var(--fs-accent-text); }
-.froam-intent-result details { padding: 7px 8px; border-radius: 7px; background: #ffffff05; }
+.froam-intent-result details { padding: 7px 8px; border-radius: 7px; background: rgba(var(--fs-ink-rgb), 0.02); }
 .froam-intent-result summary { display: flex; align-items: center; gap: 5px; min-height: 28px; color: #9eabb4; cursor: pointer; }
 .froam-intent-result ul { margin: 5px 0 0; padding-left: 18px; color: #aab5bc; }
 .froam-intent-result.is-busy, .froam-intent-result.is-complete { grid-template-columns: auto 1fr auto; align-items: center; width: min(420px, calc(100vw - 28px)); }

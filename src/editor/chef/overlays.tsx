@@ -1,8 +1,10 @@
 import { describeSelection } from '../selection-name'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, Sparkles, X, Zap } from 'lucide-react'
 import { getRoot } from './dom'
+
+/** In More tools, these live elsewhere now — the Design panel, Layers, Share, History in the top bar. */
+const COVERED_ELSEWHERE = new Set(['layout', 'spacing', 'typography', 'fill', 'borders', 'effects', 'transform', 'layers', 'share', 'history'])
 
 export function AccordionSection({
   id,
@@ -19,6 +21,7 @@ export function AccordionSection({
   onToggle: () => void
   children: ReactNode
 }) {
+  if (COVERED_ELSEWHERE.has(id)) return null
   return (
     <div className="froam-accordion" data-chef-editor-root="true">
       <button
@@ -35,22 +38,13 @@ export function AccordionSection({
         </span>
         <ChevronDown size={14} className="froam-accordion__chevron" aria-hidden="true" />
       </button>
-      <AnimatePresence initial={false}>
-        {isOpen && (
-          <motion.div
-            className="froam-accordion__body"
-            id={`froam-section-${id}`}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-          >
-            <div className="froam-accordion__content" data-chef-editor-root="true">
-              {children}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isOpen && (
+        <div className="froam-accordion__body is-opening" id={`froam-section-${id}`}>
+          <div className="froam-accordion__content" data-chef-editor-root="true">
+            {children}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

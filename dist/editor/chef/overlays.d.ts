@@ -6,7 +6,7 @@ export declare function AccordionSection({ id, icon, title, isOpen, onToggle, ch
     isOpen: boolean;
     onToggle: () => void;
     children: ReactNode;
-}): import("react").JSX.Element;
+}): import("react").JSX.Element | null;
 export declare function Toast({ message, visible }: {
     message: string;
     visible: boolean;

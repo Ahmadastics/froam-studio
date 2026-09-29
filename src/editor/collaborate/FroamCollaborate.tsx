@@ -28,7 +28,7 @@ type InviteRole = 'editor' | 'contributor' | 'commenter' | 'viewer'
  * anywhere. `on`: wanted; `ready`: its address is known; `online`: the tunnel
  * is up right now.
  */
-export type Reach = { local: true; available: boolean; on: boolean; ready: boolean; online: boolean; url: string | null; starting: boolean; error: string | null }
+export type Reach = { local: true; available: boolean; on: boolean; ready: boolean; online: boolean; url: string | null; starting: boolean; error: string | null; expiresAt?: number | null }
 type Tab = 'share' | 'changes' | 'chat' | 'requests'
 
 const INVITES: Array<{ role: InviteRole; title: string; body: string }> = [
@@ -123,6 +123,8 @@ type Props = {
   /** The public link is on its way: there are no links to copy yet. */
   linksPending?: boolean
   onReach?: (on: boolean) => void
+  /** How long the public link works: 24 hours, 7 days, or until it's turned off. */
+  onShareExpiry?: (expiresIn: '24h' | '7d' | 'off') => void
 }
 
 const ROLE_WELCOME: Partial<Record<FroamRole, string>> = {
@@ -243,7 +245,14 @@ function hostOf(url: string | null) {
  * The site runs on this computer. Invite links go through Froam's share
  * service so they open on any device; this line says whether that's true yet.
  */
-function LinkStatus({ reach, onReach }: { reach: Reach; onReach?: (on: boolean) => void }) {
+/** "until Tue 14:05" — when a link stops working, the way a person says it. */
+function untilLabel(at: number) {
+  const date = new Date(at)
+  const sameDay = new Date().toDateString() === date.toDateString()
+  return `until ${sameDay ? '' : `${date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} `}${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+}
+
+function LinkStatus({ reach, onReach, onShareExpiry }: { reach: Reach; onReach?: (on: boolean) => void; onShareExpiry?: (expiresIn: '24h' | '7d' | 'off') => void }) {
   if (!reach.available) {
     return (
       <div className="froam-collab__reach is-local" role="status">
@@ -298,7 +307,22 @@ function LinkStatus({ reach, onReach }: { reach: Reach; onReach?: (on: boolean) 
       <span className="froam-collab__reach-dot" />
       <div>
         <strong>{reach.online ? 'Links work on any device' : 'Connecting…'}</strong>
-        <p title={reach.url ?? undefined}>{reach.online ? `Through ${hostOf(reach.url)} while froam dev runs` : 'Links will open in a moment'}</p>
+        <p title={reach.url ?? undefined}>{reach.online ? 'Only people you invite can open it, while froam dev runs' : 'Links will open in a moment'}</p>
+        {onShareExpiry && (
+          <label className="froam-collab__expiry-pick">
+            <span>Links work</span>
+            <select
+              value={reach.expiresAt ? 'set' : 'off'}
+              onChange={(event) => { if (event.target.value !== 'set') onShareExpiry(event.target.value as '24h' | '7d' | 'off') }}
+              aria-label="How long links work"
+            >
+              {reach.expiresAt && <option value="set">{untilLabel(reach.expiresAt)}</option>}
+              <option value="off">until you turn them off</option>
+              <option value="24h">for 24 hours</option>
+              <option value="7d">for 7 days</option>
+            </select>
+          </label>
+        )}
       </div>
       <button type="button" className="froam-collab__link" onClick={() => onReach?.(false)} title="Stop sharing this computer's site — links only open here">Turn off</button>
     </div>
@@ -921,7 +945,7 @@ export function FroamCollaborate(props: Props) {
                         <button type="button" className="froam-collab__secondary" onClick={() => { setOpen(false); props.onEditProfile() }}>Set up</button>
                       </div>
                     )}
-                    {isOwner && props.reach && <LinkStatus reach={props.reach} onReach={props.onReach} />}
+                    {isOwner && props.reach && <LinkStatus reach={props.reach} onReach={props.onReach} onShareExpiry={props.onShareExpiry} />}
                     {props.expiresAt && (
                       <p className="froam-collab__expiry"><Clock size={11} /> This room ends {inDays(props.expiresAt)} — a demo room, kept for a week</p>
                     )}

@@ -63,7 +63,7 @@
   object-fit: cover;
   cursor: zoom-in;
   display: block;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(var(--fs-ink-rgb), 0.03);
 }
 
 .fs-inspiration__item-bar {
@@ -112,8 +112,8 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(14, 17, 23, 0.9);
+  border: 1px solid rgba(var(--fs-ink-rgb), 0.12);
+  background: var(--fs-surface-2);
   color: var(--fs-text-secondary);
   cursor: pointer;
   transition: all var(--fs-transition-fast);
@@ -121,7 +121,7 @@
 }
 
 .fs-inspiration__lightbox-close:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(var(--fs-ink-rgb), 0.1);
   color: var(--fs-text-primary);
 }
 
@@ -141,7 +141,7 @@
   transform: translateX(-50%);
   padding: 6px 16px;
   border-radius: var(--fs-radius-pill);
-  background: rgba(14, 17, 23, 0.9);
+  background: var(--fs-surface-2);
   border: 1px solid var(--fs-border);
   color: var(--fs-text-secondary);
   font-size: 12px;
@@ -173,7 +173,7 @@
   height: 14px;
   border-radius: 3px;
   flex-shrink: 0;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid rgba(var(--fs-ink-rgb), 0.1);
 }
 
 .fs-token__name {

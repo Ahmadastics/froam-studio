@@ -1,5 +1,6 @@
 export type FroamUIDensity = 'compact' | 'comfortable';
 export type FroamUIAppearance = 'graphite' | 'midnight' | 'glass';
+export type FroamUITheme = 'dark' | 'light' | 'system';
 export type FroamUIAccent = 'blue' | 'teal' | 'violet' | 'coral';
 export type FroamUIPanelLayout = 'standard' | 'mirrored';
 export type FroamUIToolbarPosition = 'top' | 'bottom';
@@ -11,6 +12,7 @@ export type FroamUIPreference = {
     workspace: FroamUIWorkspacePosition;
     panels: FroamUIPanelLayout;
     density: FroamUIDensity;
+    theme: FroamUITheme;
     appearance: FroamUIAppearance;
     accent: FroamUIAccent;
     leftSize: FroamUIPanelSize;

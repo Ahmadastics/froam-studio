@@ -7,6 +7,7 @@ export const DEFAULT_FROAM_UI_PREFERENCE = {
     workspace: 'attached',
     panels: 'standard',
     density: 'comfortable',
+    theme: 'dark',
     appearance: 'graphite',
     accent: 'blue',
     leftSize: 'standard',
@@ -16,7 +17,7 @@ export const DEFAULT_FROAM_UI_PREFERENCE = {
 };
 const values = {
     toolbar: ['top', 'bottom'], workspace: ['attached', 'floating-bottom'], panels: ['standard', 'mirrored'],
-    density: ['compact', 'comfortable'], appearance: ['graphite', 'midnight', 'glass'], accent: ['blue', 'teal', 'violet', 'coral'],
+    density: ['compact', 'comfortable'], theme: ['dark', 'light', 'system'], appearance: ['graphite', 'midnight', 'glass'], accent: ['blue', 'teal', 'violet', 'coral'],
     leftSize: ['narrow', 'standard', 'wide'], inspectorSize: ['narrow', 'standard', 'wide'], scale: [0.9, 1, 1.1],
 };
 function allowed(list, value, fallback) { return list.includes(value) ? value : fallback; }
@@ -28,6 +29,7 @@ export function sanitizeFroamUIPreference(value) {
         workspace: allowed(values.workspace, input.workspace, DEFAULT_FROAM_UI_PREFERENCE.workspace),
         panels: allowed(values.panels, input.panels, DEFAULT_FROAM_UI_PREFERENCE.panels),
         density: allowed(values.density, input.density, DEFAULT_FROAM_UI_PREFERENCE.density),
+        theme: allowed(values.theme, input.theme, DEFAULT_FROAM_UI_PREFERENCE.theme),
         appearance: allowed(values.appearance, input.appearance, DEFAULT_FROAM_UI_PREFERENCE.appearance),
         accent: allowed(values.accent, input.accent === 'mint' ? 'blue' : input.accent, DEFAULT_FROAM_UI_PREFERENCE.accent),
         leftSize: allowed(values.leftSize, input.leftSize, DEFAULT_FROAM_UI_PREFERENCE.leftSize),
