@@ -45,13 +45,18 @@ type Props = {
     canUndo?: boolean;
     onWalk?: (direction: WalkDirection) => void;
     onAction: (action: FloatingAction, value?: string) => void;
-    onStyle: (styles: Record<string, string>, selectionPatch?: SelectionPatch, label?: string) => void;
+    /** asWritten: a look's own recipe for words — apply it as it is, without translating box styles to text. */
+    onStyle: (styles: Record<string, string>, selectionPatch?: SelectionPatch, label?: string, options?: {
+        asWritten?: boolean;
+    }) => void;
+    /** Which element is selected: a new one starts a fresh round of trying looks. */
+    selectionKey?: string;
     onSaveLook?: (look: {
         name: string;
         states: Partial<Record<FroamStyleState, Record<string, string>>>;
     }) => void;
 };
 export declare function collectPagePalette(): string[];
-export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, radius, opacity, isHidden, fontOptions, selectionCount, isTextLayer, hasText, isImage, docked, canUndo, onWalk, onAction, onStyle, onSaveLook, }: Props): import("react").JSX.Element | null;
+export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, radius, opacity, isHidden, fontOptions, selectionCount, isTextLayer, hasText, isImage, docked, canUndo, onWalk, onAction, onStyle, selectionKey, onSaveLook, }: Props): import("react").JSX.Element | null;
 export {};
 //# sourceMappingURL=FroamFloatingBar.d.ts.map

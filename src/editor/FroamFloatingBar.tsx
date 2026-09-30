@@ -4,6 +4,7 @@ import type { FroamStyleState } from '../project/types'
 import { FONT_GROUP_LABELS, groupFontOptions, type FontOption } from './fontSources'
 import { describeSelection } from './selection-name'
 import type { Look, LookGroup, LookOverrides } from './floating-bar-looks'
+import { sampleAccent, toHex as brandHex } from './library/site-theme'
 import {
   AlignCenter,
   AlignJustify,
@@ -110,7 +111,10 @@ type Props = {
   canUndo?: boolean
   onWalk?: (direction: WalkDirection) => void
   onAction: (action: FloatingAction, value?: string) => void
-  onStyle: (styles: Record<string, string>, selectionPatch?: SelectionPatch, label?: string) => void
+  /** asWritten: a look's own recipe for words — apply it as it is, without translating box styles to text. */
+  onStyle: (styles: Record<string, string>, selectionPatch?: SelectionPatch, label?: string, options?: { asWritten?: boolean }) => void
+  /** Which element is selected: a new one starts a fresh round of trying looks. */
+  selectionKey?: string
   onSaveLook?: (look: { name: string; states: Partial<Record<FroamStyleState, Record<string, string>>> }) => void
 }
 
@@ -226,6 +230,16 @@ function saturationOf(hex: string): number {
   return max === 0 ? 0 : (max - min) / max
 }
 
+/** The site's brand colour, the way the Library and the smart Quick Edits read it; null when the page has no clear one. */
+function siteAccent() {
+  try {
+    const color = sampleAccent(document.body)
+    return color ? brandHex(color) : null
+  } catch {
+    return null
+  }
+}
+
 function pickAccent(palette: string[]): string {
   return palette.find((hex) => {
     const lum = relativeLuminance(hex)
@@ -246,6 +260,16 @@ function pickAccent(palette: string[]): string {
    unrelated recipes, so each moved to the group its CSS actually belongs to. */
 /* Look Studio's recipes live in floating-bar-looks.ts, loaded the first time Styles opens. */
 const NO_LOOKS: Look[] = []
+/** Names of the looks that answer the pointer, worked out once per recipe list. */
+const LIVING = new WeakMap<Look[], Set<string>>()
+function livingLooks(looks: Look[]) {
+  let names = LIVING.get(looks)
+  if (!names) {
+    names = new Set(looks.filter((look) => Object.keys(look.styles('#6366f1')).some((key) => /^__froamState:(?:hover|active|focus):/.test(key))).map((look) => look.name))
+    LIVING.set(looks, names)
+  }
+  return names
+}
 const NO_NOTES: Record<string, string> = {}
 const NO_GROUPS: readonly LookGroup[] = []
 // Uniform corner-radius patch so the editor's own radius controls stay in sync.
@@ -280,6 +304,7 @@ export default function FroamFloatingBar({
   onWalk,
   onAction,
   onStyle,
+  selectionKey,
   onSaveLook,
 }: Props) {
   const barRef = useRef<HTMLDivElement>(null)
@@ -303,6 +328,7 @@ export default function FroamFloatingBar({
   const LOOK_GROUPS = recipes?.LOOK_GROUPS ?? NO_GROUPS
   const [selectedLookName, setSelectedLookName] = useState('Lift')
   const [lookAccent, setLookAccent] = useState('#14b8a6')
+  const lookAccentPickedRef = useRef(false)
   const [lookFill, setLookFill] = useState(() => normalizeToHex(background) ?? '#ffffff')
   const [lookText, setLookText] = useState(() => normalizeToHex(color) ?? '#111827')
   const [overrideLookFill, setOverrideLookFill] = useState(false)
@@ -311,6 +337,8 @@ export default function FroamFloatingBar({
   const [lookRadius, setLookRadius] = useState(Math.max(0, Math.round(radius)))
   const [lookState, setLookState] = useState<FroamStyleState>('base')
   const [lookStateDrafts, setLookStateDrafts] = useState<Partial<Record<FroamStyleState, Record<string, string>>>>({})
+  // Another element: the looks tried on the last one aren't this one's to take off.
+  useEffect(() => { setLookStateDrafts({}) }, [selectionKey])
   const [lookDockSide, setLookDockSide] = useState<'left' | 'right'>('right')
   const [lookDockStyle, setLookDockStyle] = useState<CSSProperties>({})
 
@@ -440,10 +468,12 @@ export default function FroamFloatingBar({
     if (mode) setPaletteMode(mode)
     setOpenPop((current) => {
       const next = current === which && (!mode || mode === paletteMode) ? null : which
-      if ((next === 'palette' || next === 'looks') && palette.length === 0) {
-        const pagePalette = collectPagePalette()
-        setPalette(pagePalette)
-        if (which === 'looks') setLookAccent(pickAccent(pagePalette))
+      if ((next === 'palette' || next === 'looks') && palette.length === 0) setPalette(collectPagePalette())
+      // The looks' accent is the site's brand colour — read from its buttons,
+      // links and logo, not whichever colour is most common on the page.
+      if (next === 'looks' && !lookAccentPickedRef.current) {
+        lookAccentPickedRef.current = true
+        setLookAccent(siteAccent() ?? pickAccent(palette.length ? palette : collectPagePalette()))
       }
       if (next === 'looks') {
         setLookFill(normalizeToHex(background) ?? '#ffffff')
@@ -471,7 +501,9 @@ export default function FroamFloatingBar({
     const shouldOverrideFill = overrides.overrideFill ?? overrideLookFill
     const shouldOverrideText = overrides.overrideText ?? overrideLookText
     const shouldOverrideRadius = overrides.overrideRadius ?? overrideLookRadius
-    const styles = { ...look.styles(accent) }
+    // On words, a look's own text recipe when it has one, applied as written.
+    const asWritten = Boolean(isTextLayer && look.text)
+    const styles = { ...(isTextLayer && look.text ? look.text : look.styles)(accent) }
     const patch = isTextLayer ? {} : { ...(look.patch ?? {}) }
     if (shouldOverrideFill && look.group !== 'Reset') {
       styles.background = fill
@@ -485,15 +517,20 @@ export default function FroamFloatingBar({
       styles.borderRadius = `${nextRadius}px`
       Object.assign(patch, corners(nextRadius))
     }
-    return { styles, patch }
+    return { styles, patch, asWritten }
   }
 
   function applyLook(look: Look, overrides: LookOverrides = {}) {
-    const { styles, patch } = customizedLook(look, overrides)
+    const { styles, patch, asWritten } = customizedLook(look, overrides)
+    // Trying looks one after another: whatever the last one set and this one
+    // doesn't comes off — its hover, its ::after arrow — so each is seen as itself.
+    const previous = lookStateDrafts[lookState] ?? {}
+    const next = { ...Object.fromEntries(Object.keys(previous).filter((key) => !(key in styles)).map((key) => [key, ''])), ...styles }
     setSelectedLookName(look.name)
     setLookStateDrafts((current) => ({ ...current, [lookState]: styles }))
-    if (lookState === 'base') onStyle(styles, patch, `Look: ${look.name}`)
-    else onStyle(Object.fromEntries(Object.entries(styles).map(([property, value]) => [`__froamState:${lookState}:${property}`, value])), undefined, `Look: ${look.name} · ${lookState}`)
+    if (lookState === 'base') onStyle(next, patch, `Look: ${look.name}`, { asWritten })
+    // On a state tab the look's plain styles become that state's; a living look's own states stay out of it.
+    else onStyle(Object.fromEntries(Object.entries(next).filter(([property]) => !property.startsWith('__froamState:')).map(([property, value]) => [`__froamState:${lookState}:${property}`, value])), undefined, `Look: ${look.name} · ${lookState}`, { asWritten })
     if ('vibrate' in navigator) navigator.vibrate?.(6)
   }
 
@@ -503,8 +540,12 @@ export default function FroamFloatingBar({
     // Search the description too, so "shadow" finds the shadows and
     // "uppercase" finds Eyebrow — the names alone are not searchable words.
     return (lookGroup === 'All' || look.group === lookGroup)
+      && (!isTextLayer || look.text !== null)
       && (!query || `${look.name} ${look.group} ${LOOK_NOTES[look.name] ?? ''}`.toLowerCase().includes(query))
   })
+  const lookCount = isTextLayer ? LOOKS.filter((look) => look.text !== null).length : LOOKS.length
+  // Looks that answer the pointer: their tiles move when hovered, too.
+  const aliveLooks = livingLooks(LOOKS)
 
   const alignIcon = textAlign === 'center' ? <AlignCenter size={15} /> : textAlign === 'right' || textAlign === 'end' ? <AlignRight size={15} /> : textAlign === 'justify' ? <AlignJustify size={15} /> : <AlignLeft size={15} />
   const act = (action: FloatingAction, value?: string) => { setOpenPop(null); onAction(action, value) }
@@ -779,7 +820,7 @@ export default function FroamFloatingBar({
           style={lookDockStyle}
         >
           <div className="froam-floating-bar__pop-head">
-            <span>Styles <small>{LOOKS.length} {isTextLayer ? 'text-safe ' : ''}looks · live preview</small></span>
+            <span>Styles <small>{lookCount} {isTextLayer ? 'text-safe ' : ''}looks · live preview</small></span>
             <div className="froam-floating-bar__look-window-actions">
               <button type="button" onClick={() => setLookDockSide((side) => side === 'left' ? 'right' : 'left')} title="Move to the other side" aria-label="Move to the other side">
                 {lookDockSide === 'left' ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
@@ -799,7 +840,7 @@ export default function FroamFloatingBar({
           <div className="froam-floating-bar__looks-scroll">
             <div className="froam-floating-bar__looks">
               {visibleLooks.map((look) => (
-                <button key={look.name} type="button" className={selectedLookName === look.name ? 'is-active' : ''} onClick={() => applyLook(look)} title={LOOK_NOTES[look.name] ?? `${look.group} · ${look.name}`}>
+                <button key={look.name} type="button" className={`${selectedLookName === look.name ? 'is-active' : ''}${aliveLooks.has(look.name) ? ' is-alive' : ''}`} onClick={() => applyLook(look)} title={LOOK_NOTES[look.name] ?? `${look.group} · ${look.name}`}>
                   <i style={look.swatch} />
                   <span>{look.name}</span>
                   <small>{look.group}</small>

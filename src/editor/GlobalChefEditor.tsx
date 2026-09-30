@@ -3147,11 +3147,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   }
 
-  function applyStyle(styles: Record<string, string>, nextSel?: Partial<SelectionState>, label?: string) {
+  /** asWritten: the styles are already written for words (a look's text recipe), so they aren't translated from box styles. */
+  function applyStyle(styles: Record<string, string>, nextSel?: Partial<SelectionState>, label?: string, asWritten = false) {
     const root = getRoot()
     const selectedElements = root ? (selections.length ? selections : selection ? [selection] : []).map((item) => findElementByPath(root, item.path)).filter((item): item is HTMLElement => item !== null) : []
     const textOnlySelection = selectedElements.length > 0 && selectedElements.every(isTextVisualLayer)
-    const projectedStyles = textOnlySelection ? projectTextLayerStyles(styles) : styles
+    const projectedStyles = textOnlySelection && !asWritten ? projectTextLayerStyles(styles) : styles
     const projectedSelection = textOnlySelection ? { ...(nextSel ?? {}) } : nextSel
     if (textOnlySelection && projectedSelection) {
       delete projectedSelection.background
@@ -3167,7 +3168,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       if (projectedStyles.textShadow !== undefined) projectedSelection.textShadow = projectedStyles.textShadow === 'none' ? '' : projectedStyles.textShadow
     }
     updateDraft(
-      (draft, target) => ({ ...draft, styles: { ...(draft.styles ?? {}), ...(isTextVisualLayer(target) ? projectTextLayerStyles(styles) : styles) } }),
+      (draft, target) => ({ ...draft, styles: { ...(draft.styles ?? {}), ...(isTextVisualLayer(target) && !asWritten ? projectTextLayerStyles(styles) : styles) } }),
       projectedSelection,
       label ?? `Style: ${Object.keys(styles).join(', ')}`,
     )
@@ -3182,25 +3183,38 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     updateDraft((draft) => ({ ...draft, styles: { ...(draft.styles ?? {}), ...encoded } }), undefined, label)
   }
 
-  function previewEncodedStateStyles(styles: Record<string, string>) {
+  /**
+   * Shows hover, focus and press styles on the selection while they're being
+   * styled. Styled from a state tab, that state is held on so you can see it;
+   * a living look (styled from Normal) only shows its states when you hover,
+   * press or focus it. ::before/::after are painted with the drafts.
+   */
+  function previewEncodedStateStyles(styles: Record<string, string>, asWritten = false) {
     const target = currentSelectionRef.current
     if (!target) return
-    const previewStyles = isTextVisualLayer(target) ? projectTextLayerStyles(styles) : styles
-    const encoded = Object.entries(previewStyles).filter(([key]) => key.startsWith('__froamState:'))
-    if (!encoded.length) return
-    const state = encoded[0][0].split(':')[1] as Exclude<FroamStyleState, 'base'>
+    const previewStyles = isTextVisualLayer(target) && !asWritten ? projectTextLayerStyles(styles) : styles
+    const byState = new Map<string, string[]>()
+    for (const [key, value] of Object.entries(previewStyles)) {
+      const [, state, ...rest] = key.split(':')
+      if (!key.startsWith('__froamState:') || !['hover', 'focus', 'active'].includes(state)) continue
+      const property = rest.join(':')
+      if (!value || !/^-{0,2}[a-zA-Z][a-zA-Z0-9-]*$/.test(property) || /[{}]/.test(value)) continue
+      byState.set(state, [...(byState.get(state) ?? []), `${camelToKebab(property)}:${value}!important`])
+    }
+    if (!byState.size) return
+    const onlyStates = Object.keys(previewStyles).every((key) => key.startsWith('__froamState:'))
+    const held = onlyStates && byState.size === 1 ? [...byState.keys()][0] as Exclude<FroamStyleState, 'base'> : null
     const id = target.dataset.froamStateTarget || ensureFroamNodeId(target)
     target.dataset.froamStateTarget = id
-    target.dataset.froamPreviewState = state
+    if (held) target.dataset.froamPreviewState = held
+    else delete target.dataset.froamPreviewState
     let style = document.querySelector<HTMLStyleElement>('style[data-froam-state-preview="true"]')
     if (!style) { style = document.createElement('style'); style.dataset.froamStatePreview = 'true'; document.head.appendChild(style) }
-    const declarations = encoded.map(([key, value]) => {
-      const property = key.split(':').slice(2).join(':')
-      if (!/^[a-zA-Z][a-zA-Z0-9-]*$/.test(property) || /[{}]/.test(value)) return ''
-      return `${camelToKebab(property)}:${value}!important`
-    }).filter(Boolean).join(';')
     const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id.replace(/[^a-zA-Z0-9_-]/g, '\\$&')
-    style.textContent = `[data-froam-state-target="${escaped}"]:${state},[data-froam-state-target="${escaped}"][data-froam-preview-state="${state}"]{${declarations}}`
+    style.textContent = ['hover', 'focus', 'active']
+      .filter((state) => byState.has(state))
+      .map((state) => `[data-froam-state-target="${escaped}"]:${state},[data-froam-state-target="${escaped}"][data-froam-preview-state="${state}"]{${byState.get(state)!.join(';')}}`)
+      .join('\n')
   }
 
   /* ─── Design Intelligence bridges ─── */
@@ -8002,9 +8016,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             replaceDesignSystem(saveReusableStyle(activeProjectState.designSystem, style), `Saved reusable style: ${style.name}`)
             showToast(`${style.name} saved to Design System`)
           }}
-          onStyle={(styles, selectionPatch, label) => {
-            applyStyle(styles, selectionPatch as Partial<SelectionState>, label)
-            previewEncodedStateStyles(styles)
+          selectionKey={selection.path}
+          onStyle={(styles, selectionPatch, label, options) => {
+            applyStyle(styles, selectionPatch as Partial<SelectionState>, label, options?.asWritten)
+            previewEncodedStateStyles(styles, options?.asWritten)
             const root = getRoot()
             const target = root ? findElementByPath(root, selection.path) : null
             if (target) window.requestAnimationFrame(() => setSelectionRect(target.getBoundingClientRect()))

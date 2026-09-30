@@ -365,7 +365,7 @@ test('Look Studio stays docked beside the canvas and previews variable edits liv
   const recipes = fs.readFileSync(new URL('../src/editor/floating-bar-looks.ts', import.meta.url), 'utf8')
   const lookBlock = recipes.slice(recipes.indexOf('export const LOOKS: Look[] = ['), recipes.indexOf('export const LOOK_NOTES'))
   const recipeNames = [...lookBlock.matchAll(/\n\s+name: '([^']+)'/g)].map((match) => match[1])
-  assert.equal(recipeNames.length, 205)
+  assert.equal(recipeNames.length, 253)
   for (const name of ['Pricing card', 'Feature tile', 'Testimonial', 'Launch CTA', 'Trust badge', 'Conversion strip', 'Success state', 'Warning state']) assert.ok(recipeNames.includes(name), `${name} recipe missing`)
   assert.match(floatingBar, /createPortal/)
   assert.match(floatingBar, /Look Studio live editor/)

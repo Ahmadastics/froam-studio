@@ -23,8 +23,8 @@ export function pseudoKey(pseudo: PseudoElement, property: string) {
   return `__froamState:${pseudo}:${property}`
 }
 
-/** This pseudo-element's edits in a draft, as `{ property: value }`. */
-export function pseudoStyles(styles: Record<string, string> | undefined, pseudo: PseudoElement) {
+/** This pseudo-element's (or hover/focus/active state's) edits in a draft, as `{ property: value }`. */
+export function pseudoStyles(styles: Record<string, string> | undefined, pseudo: PseudoElement | 'hover' | 'focus' | 'active') {
   const prefix = `__froamState:${pseudo}:`
   const out: Record<string, string> = {}
   for (const [key, value] of Object.entries(styles ?? {})) {
@@ -69,23 +69,29 @@ function declarationsFor(styles: Record<string, string>) {
     .join(';')
 }
 
+/* Hover, focus and press, in the order the generated stylesheet writes them:
+   pressing a hovered button shows :active. */
+const INTERACTION_STATES = ['hover', 'focus', 'active'] as const
+
 /**
- * Shows this route's ::before/::after edits in the editor. Hosts are stamped
- * with their path so one stylesheet can address them; stamps and rules are
- * only rewritten when they change (the page's observers see every write).
+ * Shows this route's ::before/::after edits in the editor — and its hover,
+ * focus and press styles, so a living look answers the pointer as you work,
+ * the way it will on the site. Hosts are stamped with their path so one
+ * stylesheet can address them; stamps and rules are only rewritten when they
+ * change (the page's observers see every write).
  */
 export function paintPseudoElements(root: HTMLElement, routeDrafts: Record<string, ElementDraft>) {
   const rules: string[] = []
   const hosts = new Set<Element>()
   for (const [path, draft] of Object.entries(routeDrafts)) {
-    for (const pseudo of PSEUDO_ELEMENTS) {
-      const declarations = declarationsFor(pseudoStyles(draft.styles, pseudo))
+    for (const [part, selector] of [...INTERACTION_STATES.map((state) => [state, `:${state}`] as const), ...PSEUDO_ELEMENTS.map((pseudo) => [pseudo, `::${pseudo}`] as const)]) {
+      const declarations = declarationsFor(pseudoStyles(draft.styles, part))
       if (!declarations) continue
       const host = findElementByPath(root, path)
       if (!host) continue
       if (host.getAttribute(PSEUDO_HOST_ATTR) !== path) host.setAttribute(PSEUDO_HOST_ATTR, path)
       hosts.add(host)
-      rules.push(`[${PSEUDO_HOST_ATTR}="${path.replace(/["\\]/g, '\\$&')}"]::${pseudo}{${declarations}}`)
+      rules.push(`[${PSEUDO_HOST_ATTR}="${path.replace(/["\\]/g, '\\$&')}"]${selector}{${declarations}}`)
     }
   }
   document.querySelectorAll(`[${PSEUDO_HOST_ATTR}]`).forEach((element) => {

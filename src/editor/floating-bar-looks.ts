@@ -1,5 +1,5 @@
 /**
- * Look Studio's recipes: 205 styles and what each one does. Loaded the first
+ * Look Studio's recipes: 253 styles and what each one does. Loaded the first
  * time Styles is opened — most sessions never open it, and they shouldn't
  * download it with the editor.
  */
@@ -7,7 +7,7 @@ import type { CSSProperties } from 'react'
 
 type SelectionPatch = Record<string, string | number>
 
-export const LOOK_GROUPS = ['Accent', 'Surface', 'Depth', 'Shape', 'Line', 'Type', 'Pattern', 'Vibe', 'Reset'] as const
+export const LOOK_GROUPS = ['Alive', 'Signature', 'Photo', 'Accent', 'Surface', 'Depth', 'Shape', 'Line', 'Type', 'Pattern', 'Vibe', 'Reset'] as const
 export type LookGroup = (typeof LOOK_GROUPS)[number]
 
 export type Look = {
@@ -15,6 +15,12 @@ export type Look = {
   group: LookGroup
   swatch: CSSProperties
   styles: (accent: string) => Record<string, string>
+  /**
+   * On words (a heading, a paragraph): a recipe written for text, applied as
+   * it is — or null when the look only makes sense on a box, and Styles hides
+   * it for text. Left out, the box recipe is translated for text.
+   */
+  text?: ((accent: string) => Record<string, string>) | null
   patch?: SelectionPatch
 }
 
@@ -31,7 +37,682 @@ export type LookOverrides = {
 // Uniform corner-radius patch so the editor's own radius controls stay in sync.
 const corners = (n: number): SelectionPatch => ({ borderRadiusTL: n, borderRadiusTR: n, borderRadiusBR: n, borderRadiusBL: n })
 
+/* ─── Living looks: the parts that answer the pointer ───
+   Hover, press and focus, and ::before/::after layers, stored the way the
+   state tabs store them (`__froamState:hover:transform`). The generated
+   stylesheet carries them to the live site as :hover / ::after rules, and the
+   editor paints them as you work. Everything moves with transitions only: no
+   keyframes, nothing to load, and `prefers-reduced-motion` still applies to
+   the site's own animations. */
+type StyleState = 'hover' | 'active' | 'focus' | 'before' | 'after'
+const on = (state: StyleState, styles: Record<string, string>) =>
+  Object.fromEntries(Object.entries(styles).map(([property, value]) => [`__froamState:${state}:${property}`, value]))
+const EASE = 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+const mix = (color: string, percent: number, other = 'transparent') => `color-mix(in srgb, ${color} ${percent}%, ${other})`
+/* A look written for words: the same recipe on a heading as on a link. */
+const words = (recipe: (accent: string) => Record<string, string>) => ({ styles: recipe, text: recipe })
+const PHOTO = 'linear-gradient(160deg, #7dd3fc, #fbbf24 60%, #f472b6)'
+
+/** A hex colour's hue in degrees, to tint a photo in the brand colour. */
+function hueOf(hex: string) {
+  const digits = hex.trim().replace(/^#/, '')
+  const full = digits.length === 3 ? digits.split('').map((digit) => digit + digit).join('') : digits
+  if (!/^[0-9a-f]{6}$/i.test(full)) return 230
+  const [r, g, b] = [0, 2, 4].map((index) => parseInt(full.slice(index, index + 2), 16) / 255)
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const range = max - min
+  if (!range) return 230
+  const h = max === r ? (g - b) / range + (g < b ? 6 : 0) : max === g ? (b - r) / range + 2 : (r - g) / range + 4
+  return Math.round(h * 60)
+}
+
 export const LOOKS: Look[] = [
+  /* ─── Alive — looks that answer the pointer ─── */
+  {
+    name: 'Shine sweep',
+    group: 'Alive',
+    swatch: { background: 'linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.6) 46%, transparent 62%), #334155', borderRadius: 6 },
+    // Three widths wide, the band sits in the middle third: out of sight at
+    // rest (right third showing) and gone again after the sweep (left third).
+    styles: () => ({
+      backgroundImage: 'linear-gradient(115deg, transparent 36%, rgba(255, 255, 255, 0.55) 47%, rgba(255, 255, 255, 0.15) 53%, transparent 64%)',
+      backgroundSize: '300% 100%',
+      backgroundPosition: '100% 0',
+      backgroundRepeat: 'no-repeat',
+      transition: `background-position 0.9s ${EASE}, transform 0.35s ${EASE}`,
+      ...on('hover', { backgroundPosition: '0% 0', transform: 'translateY(-1px)' }),
+    }),
+    // On words the glint runs through the letters, in their own colour.
+    text: () => ({
+      backgroundImage: 'linear-gradient(115deg, currentColor 40%, rgba(255, 255, 255, 0.95) 50%, currentColor 60%)',
+      backgroundSize: '250% 100%',
+      backgroundPosition: '100% 0',
+      backgroundRepeat: 'no-repeat',
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      transition: `background-position 0.9s ${EASE}`,
+      ...on('hover', { backgroundPosition: '0% 0' }),
+    }),
+  },
+  {
+    name: 'Levitate',
+    group: 'Alive',
+    swatch: { background: '#e2e8f0', borderRadius: 6, boxShadow: '0 10px 14px -8px rgba(99,102,241,0.9)', transform: 'translateY(-3px)' },
+    styles: (accent) => ({
+      transition: `transform 0.4s ${EASE}, box-shadow 0.4s ${EASE}`,
+      transform: 'translateY(0)',
+      boxShadow: '0 1px 2px rgba(15, 23, 42, 0.08), 0 2px 8px -4px rgba(15, 23, 42, 0.12)',
+      ...on('hover', { transform: 'translateY(-6px)', boxShadow: `0 22px 44px -16px ${mix(accent, 55)}, 0 6px 14px -8px rgba(15, 23, 42, 0.18)` }),
+      ...on('active', { transform: 'translateY(-2px) scale(0.99)' }),
+    }),
+  },
+  {
+    name: 'Clicky',
+    group: 'Alive',
+    swatch: { background: '#6366f1', borderRadius: 8, boxShadow: '0 4px 0 #3730a3' },
+    styles: (accent) => ({
+      background: accent,
+      color: '#ffffff',
+      border: 'none',
+      borderRadius: '14px',
+      textShadow: '0 1px 0 rgba(0, 0, 0, 0.2)',
+      boxShadow: `0 6px 0 ${mix(accent, 62, '#000000')}, 0 12px 20px -8px ${mix(accent, 60)}`,
+      transform: 'translateY(0)',
+      transition: 'transform 0.12s ease, box-shadow 0.12s ease',
+      ...on('hover', { transform: 'translateY(-1px)', boxShadow: `0 7px 0 ${mix(accent, 62, '#000000')}, 0 16px 24px -8px ${mix(accent, 60)}` }),
+      ...on('active', { transform: 'translateY(5px)', boxShadow: `0 1px 0 ${mix(accent, 62, '#000000')}, 0 3px 8px -4px ${mix(accent, 50)}` }),
+    }),
+    text: null,
+    patch: corners(14),
+  },
+  {
+    name: 'Tilt',
+    group: 'Alive',
+    swatch: { background: 'linear-gradient(135deg,#e2e8f0,#cbd5e1)', borderRadius: 6, transform: 'perspective(120px) rotateX(10deg) rotateY(-14deg)', boxShadow: '-6px 8px 12px -6px rgba(15,23,42,0.5)' },
+    styles: () => ({
+      transform: 'perspective(900px) rotateX(0deg) rotateY(0deg) translateY(0)',
+      transition: `transform 0.5s ${EASE}, box-shadow 0.5s ${EASE}`,
+      ...on('hover', { transform: 'perspective(900px) rotateX(7deg) rotateY(-9deg) translateY(-4px)', boxShadow: '-18px 26px 44px -22px rgba(15, 23, 42, 0.45)' }),
+    }),
+  },
+  {
+    name: 'Springy',
+    group: 'Alive',
+    swatch: { background: '#f472b6', borderRadius: 999, transform: 'scale(0.92, 1.06)' },
+    styles: () => ({
+      transform: 'scale(1)',
+      transition: `transform 0.5s ${SPRING}`,
+      ...on('hover', { transform: 'scale(1.045)' }),
+      ...on('active', { transform: 'scale(0.94)' }),
+    }),
+  },
+  {
+    name: 'Brutal press',
+    group: 'Alive',
+    swatch: { background: '#fde68a', border: '2px solid #111', borderRadius: 6, boxShadow: '3px 3px 0 #111' },
+    styles: (accent) => ({
+      background: mix(accent, 24, '#fff8dc'),
+      color: '#111111',
+      border: '2px solid #111111',
+      borderRadius: '10px',
+      boxShadow: '5px 5px 0 #111111',
+      transform: 'translate(0, 0)',
+      transition: 'transform 0.12s ease, box-shadow 0.12s ease',
+      ...on('hover', { transform: 'translate(-2px, -2px)', boxShadow: '7px 7px 0 #111111' }),
+      ...on('active', { transform: 'translate(4px, 4px)', boxShadow: '1px 1px 0 #111111' }),
+    }),
+    text: null,
+    patch: corners(10),
+  },
+  {
+    name: 'Bloom',
+    group: 'Alive',
+    swatch: { background: '#1f2937', borderRadius: 8, boxShadow: '0 0 0 3px rgba(99,102,241,0.35), 0 0 14px 2px rgba(99,102,241,0.6)' },
+    styles: (accent) => ({
+      transition: `box-shadow 0.35s ${EASE}`,
+      boxShadow: `0 0 0 0 ${mix(accent, 0)}`,
+      ...on('hover', { boxShadow: `0 0 0 4px ${mix(accent, 22)}, 0 0 36px 4px ${mix(accent, 40)}` }),
+      ...on('focus', { boxShadow: `0 0 0 4px ${mix(accent, 35)}` }),
+    }),
+  },
+  {
+    name: 'Wipe',
+    group: 'Alive',
+    swatch: { background: 'linear-gradient(90deg, #6366f1 55%, transparent 55%)', border: '1.5px solid #6366f1', borderRadius: 6 },
+    styles: (accent) => ({
+      color: accent,
+      backgroundColor: 'transparent',
+      backgroundImage: `linear-gradient(${accent}, ${accent})`,
+      backgroundSize: '0% 100%',
+      backgroundPosition: '0 0',
+      backgroundRepeat: 'no-repeat',
+      border: `1.5px solid ${accent}`,
+      borderRadius: '12px',
+      transition: `background-size 0.45s ${EASE}, color 0.3s ease`,
+      ...on('hover', { backgroundSize: '100% 100%', color: '#ffffff' }),
+    }),
+    // On words the colour washes in instead.
+    text: (accent) => ({ transition: 'color 0.35s ease', ...on('hover', { color: accent }) }),
+    patch: corners(12),
+  },
+  {
+    name: 'Arrow nudge',
+    group: 'Alive',
+    swatch: {
+      background: 'linear-gradient(90deg, transparent 18%, #94a3b8 18% 70%, transparent 70%) 0 50% / 100% 2px no-repeat, linear-gradient(135deg, transparent 42%, #94a3b8 42% 58%, transparent 58%) 72% 38% / 7px 7px no-repeat, linear-gradient(45deg, transparent 42%, #94a3b8 42% 58%, transparent 58%) 72% 62% / 7px 7px no-repeat',
+      borderRadius: 6,
+    },
+    styles: () => ({
+      ...on('after', { content: '"→"', display: 'inline-block', marginLeft: '0.45em', transform: 'translateX(var(--fx-nudge, 0px))', transition: `transform 0.3s ${EASE}` }),
+      ...on('hover', { '--fx-nudge': '5px' }),
+    }),
+  },
+  {
+    name: 'Underline rise',
+    group: 'Alive',
+    swatch: { background: 'linear-gradient(transparent 55%, rgba(99,102,241,0.45) 55% 85%, transparent 85%)', borderRadius: 4 },
+    ...words((accent) => ({
+      textDecorationLine: 'underline',
+      textDecorationColor: mix(accent, 70),
+      textDecorationThickness: '2px',
+      textUnderlineOffset: '0.2em',
+      textDecorationSkipInk: 'none',
+      transition: `text-decoration-thickness 0.35s ${EASE}, text-underline-offset 0.35s ${EASE}, text-decoration-color 0.35s ease`,
+      ...on('hover', { textDecorationThickness: '0.5em', textUnderlineOffset: '-0.34em', textDecorationColor: mix(accent, 45) }),
+    })),
+  },
+  {
+    name: 'Light up',
+    group: 'Alive',
+    swatch: { background: 'radial-gradient(circle at 50% 50%, rgba(250,204,21,0.9), rgba(250,204,21,0) 60%), #1f2937', borderRadius: 6 },
+    ...words((accent) => ({
+      transition: 'color 0.3s ease, text-shadow 0.3s ease, -webkit-text-fill-color 0.3s ease',
+      ...on('hover', { color: accent, WebkitTextFillColor: accent, textShadow: `0 0 22px ${mix(accent, 45)}` }),
+    })),
+  },
+  {
+    name: 'Ink in',
+    group: 'Alive',
+    swatch: { background: 'linear-gradient(90deg, #6366f1 0 45%, transparent 45%)', boxShadow: 'inset 0 0 0 2px #6366f1', borderRadius: 6 },
+    ...words((accent) => ({
+      WebkitTextStroke: `1.5px ${accent}`,
+      WebkitTextFillColor: 'transparent',
+      transition: '-webkit-text-fill-color 0.35s ease',
+      ...on('hover', { WebkitTextFillColor: accent }),
+    })),
+  },
+  {
+    name: 'Glitch',
+    group: 'Alive',
+    swatch: { background: '#111827', borderRadius: 4, boxShadow: '3px 0 0 #ff2bd6, -3px 0 0 #00e5ff' },
+    ...words(() => ({
+      transition: 'text-shadow 0.14s steps(2), transform 0.14s steps(2)',
+      ...on('hover', { textShadow: '2px 0 #ff2bd6, -2px 0 #00e5ff', transform: 'skewX(-4deg)' }),
+    })),
+  },
+  {
+    name: 'Focus beam',
+    group: 'Alive',
+    swatch: { background: '#ffffff', border: '1.5px solid #6366f1', borderRadius: 6, boxShadow: '0 0 0 3px rgba(99,102,241,0.3)' },
+    styles: (accent) => ({
+      border: '1.5px solid rgba(15, 23, 42, 0.18)',
+      borderRadius: '12px',
+      outline: 'none',
+      transition: 'border-color 0.2s ease, box-shadow 0.25s ease',
+      ...on('hover', { borderColor: mix(accent, 55, 'rgba(15, 23, 42, 0.18)') }),
+      ...on('focus', { borderColor: accent, boxShadow: `0 0 0 4px ${mix(accent, 25)}` }),
+    }),
+    text: null,
+    patch: corners(12),
+  },
+  {
+    name: 'Twist',
+    group: 'Alive',
+    swatch: { background: '#14b8a6', borderRadius: 6, transform: 'rotate(-8deg) scale(0.9)' },
+    styles: () => ({
+      transform: 'rotate(0deg) scale(1)',
+      transition: `transform 0.5s ${SPRING}`,
+      ...on('hover', { transform: 'rotate(-6deg) scale(1.06)' }),
+      ...on('active', { transform: 'rotate(0deg) scale(0.95)' }),
+    }),
+  },
+
+  /* ─── Signature — showpiece materials ─── */
+  {
+    name: 'Liquid glass',
+    group: 'Signature',
+    swatch: { background: 'linear-gradient(135deg, rgba(255,255,255,0.55), rgba(255,255,255,0.08) 45%), linear-gradient(120deg,#60a5fa,#f472b6)', border: '1px solid rgba(255,255,255,0.6)', borderRadius: 10, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)' },
+    styles: () => ({
+      background: 'rgba(255, 255, 255, 0.14)',
+      backgroundImage: 'linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 42%)',
+      backdropFilter: 'blur(22px) saturate(180%)',
+      WebkitBackdropFilter: 'blur(22px) saturate(180%)',
+      border: '1px solid rgba(255, 255, 255, 0.35)',
+      borderRadius: '28px',
+      boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.65), inset 0 -1px 0 rgba(255, 255, 255, 0.15), 0 14px 40px -14px rgba(15, 23, 42, 0.35)',
+      transform: 'translateY(0)',
+      transition: `box-shadow 0.4s ${EASE}, transform 0.4s ${EASE}`,
+      ...on('hover', { transform: 'translateY(-2px)', boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.75), inset 0 -1px 0 rgba(255, 255, 255, 0.2), 0 22px 50px -16px rgba(15, 23, 42, 0.4)' }),
+    }),
+    text: null,
+    patch: corners(28),
+  },
+  {
+    name: 'Smoked glass',
+    group: 'Signature',
+    swatch: { background: 'linear-gradient(rgba(12,14,18,0.6), rgba(12,14,18,0.6)), linear-gradient(120deg,#60a5fa,#f472b6)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8 },
+    styles: () => ({
+      background: 'rgba(12, 14, 18, 0.55)',
+      backdropFilter: 'blur(18px) saturate(160%)',
+      WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+      color: '#f5f7fa',
+      border: '1px solid rgba(255, 255, 255, 0.1)',
+      borderRadius: '22px',
+      boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 24px 60px -24px rgba(0, 0, 0, 0.7)',
+    }),
+    text: null,
+    patch: corners(22),
+  },
+  {
+    name: 'Holo foil',
+    group: 'Signature',
+    swatch: { background: 'linear-gradient(115deg,#ffb3e6,#a8e8ff 25%,#c7b5ff 45%,#fff3a8 65%,#a8ffd9 85%)', borderRadius: 6, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.7)' },
+    styles: () => ({
+      backgroundImage: 'linear-gradient(115deg, #ffb3e6 0%, #a8e8ff 20%, #c7b5ff 38%, #fff3a8 56%, #a8ffd9 74%, #ffb3e6 100%)',
+      backgroundSize: '300% 300%',
+      backgroundPosition: '0% 50%',
+      color: '#1b1033',
+      border: '1px solid rgba(255, 255, 255, 0.7)',
+      borderRadius: '18px',
+      boxShadow: 'inset 0 0 0 1px rgba(255, 255, 255, 0.4), inset 0 1px 12px rgba(255, 255, 255, 0.55), 0 14px 34px -14px rgba(124, 58, 237, 0.5)',
+      transform: 'translateY(0)',
+      transition: `background-position 1.4s ${EASE}, transform 0.5s ${EASE}`,
+      ...on('hover', { backgroundPosition: '100% 50%', transform: 'translateY(-2px)' }),
+    }),
+    // Deeper inks so the letters read; the spectrum still slides as the pointer arrives.
+    text: () => ({
+      backgroundImage: 'linear-gradient(115deg, #d63a93 0%, #1f9fd4 20%, #6f4cf0 38%, #c98a00 56%, #0f9f6e 74%, #d63a93 100%)',
+      backgroundSize: '300% 100%',
+      backgroundPosition: '0% 50%',
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      transition: `background-position 1.4s ${EASE}`,
+      ...on('hover', { backgroundPosition: '100% 50%' }),
+    }),
+    patch: corners(18),
+  },
+  {
+    name: 'Chrome',
+    group: 'Signature',
+    swatch: { background: 'linear-gradient(180deg,#f5f7fa,#c3cad4 22%,#7b8594 46%,#e9edf2 52%,#a7b0bc 78%,#eef1f5)', borderRadius: 6, border: '1px solid #8d96a3' },
+    styles: () => ({
+      backgroundImage: 'linear-gradient(180deg, #f5f7fa 0%, #c3cad4 22%, #7b8594 46%, #e9edf2 52%, #a7b0bc 78%, #eef1f5 100%)',
+      color: '#1b1f24',
+      border: '1px solid #8d96a3',
+      borderRadius: '12px',
+      textShadow: '0 1px 0 rgba(255, 255, 255, 0.7)',
+      boxShadow: 'inset 0 1px 0 #ffffff, inset 0 -1px 0 rgba(0, 0, 0, 0.25), 0 6px 16px -6px rgba(0, 0, 0, 0.45)',
+    }),
+    // Polished metal lettering, with a hard horizon line through the middle.
+    text: () => ({
+      backgroundImage: 'linear-gradient(180deg, #eef1f5 0%, #9aa3ad 40%, #2f3640 52%, #b9c0c8 64%, #59626d 100%)',
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      filter: 'drop-shadow(0 1px 0 rgba(255, 255, 255, 0.35))',
+    }),
+    patch: corners(12),
+  },
+  {
+    name: 'Aurora halo',
+    group: 'Signature',
+    swatch: { background: '#0f172a', borderRadius: 8, boxShadow: '-6px -3px 12px -2px rgba(236,72,153,0.8), 6px 4px 12px -2px rgba(34,211,238,0.8)' },
+    styles: (accent) => ({
+      borderRadius: '20px',
+      // Pink and cyan light either side, the accent beneath: the aurora is the site's own.
+      boxShadow: `0 0 0 1px ${mix(accent, 35)}, -30px -18px 70px -10px rgba(255, 79, 216, 0.55), 30px 22px 70px -10px rgba(34, 211, 238, 0.55), 0 30px 80px -18px ${mix(accent, 70)}`,
+    }),
+    text: (accent) => ({ textShadow: `0 0 22px ${mix(accent, 70)}, -10px -4px 34px rgba(255, 79, 216, 0.7), 10px 6px 34px rgba(34, 211, 238, 0.7)` }),
+    patch: corners(20),
+  },
+  {
+    name: 'Prism edge',
+    group: 'Signature',
+    swatch: { background: 'linear-gradient(#0b0d12,#0b0d12) padding-box, conic-gradient(from 210deg,#6366f1,#ff4fd8,#ffd166,#22d3ee,#6366f1) border-box', border: '2px solid transparent', borderRadius: 8 },
+    styles: (accent) => ({
+      background: `linear-gradient(#0b0d12, #0b0d12) padding-box, conic-gradient(from 210deg, ${accent}, #ff4fd8, #ffd166, #22d3ee, ${accent}) border-box`,
+      border: '1.5px solid transparent',
+      color: '#f4f6fb',
+      borderRadius: '16px',
+      boxShadow: `0 18px 40px -20px ${mix(accent, 60)}`,
+    }),
+    text: (accent) => ({
+      backgroundImage: `linear-gradient(90deg, ${accent}, #ff4fd8, #f5a300, #0fb5d4)`,
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+    }),
+    patch: corners(16),
+  },
+  {
+    name: 'Aqua gloss',
+    group: 'Signature',
+    swatch: { background: 'linear-gradient(180deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.2) 48%, rgba(255,255,255,0) 50%), linear-gradient(180deg,#7fd3ff,#1d7fd6)', borderRadius: 999, border: '1px solid #155fa0' },
+    styles: (accent) => ({
+      backgroundImage: `linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.2) 48%, rgba(255, 255, 255, 0) 50%), linear-gradient(180deg, ${mix(accent, 55, '#ffffff')}, ${accent} 60%, ${mix(accent, 80, '#000000')})`,
+      color: '#ffffff',
+      textShadow: `0 1px 1px ${mix(accent, 70, '#000000')}`,
+      border: `1px solid ${mix(accent, 70, '#000000')}`,
+      borderRadius: '999px',
+      boxShadow: `inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 -2px 6px ${mix(accent, 40, '#ffffff')}, 0 8px 18px -8px ${mix(accent, 65)}`,
+    }),
+    text: (accent) => ({
+      backgroundImage: `linear-gradient(180deg, ${mix(accent, 55, '#ffffff')} 0%, ${accent} 52%, ${mix(accent, 70, '#000000')} 100%)`,
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      filter: `drop-shadow(0 1px 0 ${mix(accent, 25, '#ffffff')})`,
+    }),
+    patch: corners(999),
+  },
+  {
+    name: 'Bento',
+    group: 'Signature',
+    swatch: { background: '#ffffff', border: '1px solid rgba(15,23,42,0.1)', borderRadius: 10, boxShadow: '0 8px 14px -10px rgba(15,23,42,0.5)' },
+    styles: () => ({
+      background: '#ffffff',
+      color: '#0f172a',
+      border: '1px solid rgba(15, 23, 42, 0.08)',
+      borderRadius: '28px',
+      padding: '28px',
+      boxShadow: '0 1px 0 rgba(15, 23, 42, 0.04), 0 30px 60px -40px rgba(15, 23, 42, 0.45)',
+      transform: 'translateY(0)',
+      transition: `transform 0.4s ${EASE}, box-shadow 0.4s ${EASE}`,
+      ...on('hover', { transform: 'translateY(-3px)', boxShadow: '0 1px 0 rgba(15, 23, 42, 0.04), 0 40px 70px -40px rgba(15, 23, 42, 0.55)' }),
+    }),
+    text: null,
+    patch: corners(28),
+  },
+  {
+    name: 'Enamel pin',
+    group: 'Signature',
+    swatch: { background: '#e11d48', border: '2px solid #d9b45a', borderRadius: 999, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4)' },
+    styles: (accent) => ({
+      background: accent,
+      color: '#ffffff',
+      fontWeight: '800',
+      letterSpacing: '0.02em',
+      border: '3px solid #d9b45a',
+      borderRadius: '999px',
+      textShadow: '0 1px 0 rgba(0, 0, 0, 0.25)',
+      boxShadow: 'inset 0 2px 0 rgba(255, 255, 255, 0.35), inset 0 -3px 0 rgba(0, 0, 0, 0.18), 0 0 0 1px #9c7a2c, 0 8px 16px -8px rgba(0, 0, 0, 0.5)',
+    }),
+    text: null,
+    patch: corners(999),
+  },
+  {
+    name: 'Stitched',
+    group: 'Signature',
+    swatch: { background: '#1e3a8a', borderRadius: 6, outline: '1px dashed rgba(255,255,255,0.7)', outlineOffset: -4 },
+    styles: (accent) => ({
+      background: mix(accent, 82, '#000000'),
+      color: '#ffffff',
+      border: 'none',
+      borderRadius: '14px',
+      outline: '2px dashed rgba(255, 255, 255, 0.55)',
+      outlineOffset: '-7px',
+      boxShadow: 'inset 0 0 0 1px rgba(0, 0, 0, 0.2), 0 8px 18px -10px rgba(0, 0, 0, 0.5)',
+    }),
+    text: null,
+    patch: corners(14),
+  },
+  {
+    name: 'Receipt',
+    group: 'Signature',
+    swatch: { background: '#fffdf7', WebkitMaskImage: 'conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg)', WebkitMaskSize: '8px 100%', maskImage: 'conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg)', maskSize: '8px 100%' },
+    styles: () => ({
+      background: '#fffdf7',
+      color: '#23262b',
+      fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+      letterSpacing: '0.01em',
+      borderRadius: '0',
+      paddingBottom: '26px',
+      // The mask would cut an outer shadow away; hairlines inside keep the paper's edge.
+      boxShadow: 'inset 1px 0 0 rgba(15, 23, 42, 0.1), inset -1px 0 0 rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(15, 23, 42, 0.1)',
+      maskImage: 'conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg)',
+      WebkitMaskImage: 'conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg)',
+      maskSize: '18px 100%',
+      WebkitMaskSize: '18px 100%',
+      maskPosition: '50% 0',
+      WebkitMaskPosition: '50% 0',
+    }),
+    text: null,
+    patch: corners(0),
+  },
+  {
+    name: 'Book plate',
+    group: 'Signature',
+    swatch: { background: '#2a2019', borderRadius: 3, boxShadow: 'inset 0 0 0 3px #2a2019, inset 0 0 0 4px #b08d57' },
+    styles: () => ({
+      background: '#2a2019',
+      color: '#efe4cc',
+      fontFamily: 'Georgia, "Times New Roman", serif',
+      letterSpacing: '0.01em',
+      border: '1px solid #7a6547',
+      borderRadius: '4px',
+      boxShadow: 'inset 0 0 0 5px #2a2019, inset 0 0 0 6px #7a6547, 0 18px 36px -20px rgba(0, 0, 0, 0.6)',
+    }),
+    text: null,
+    patch: corners(4),
+  },
+  {
+    name: 'Paper cut',
+    group: 'Signature',
+    swatch: { background: '#6366f1', borderRadius: 6, boxShadow: '0 2px 0 #a5b4fc, 0 4px 0 #c7d2fe, 0 6px 0 #e0e7ff' },
+    styles: (accent) => ({
+      background: accent,
+      color: '#ffffff',
+      border: 'none',
+      borderRadius: '18px',
+      boxShadow: `0 4px 0 ${mix(accent, 60, '#ffffff')}, 0 8px 0 ${mix(accent, 36, '#ffffff')}, 0 12px 0 ${mix(accent, 18, '#ffffff')}, 0 22px 30px -12px rgba(15, 23, 42, 0.35)`,
+    }),
+    text: null,
+    patch: corners(18),
+  },
+
+  /* ─── Photo — treatments for images ─── */
+  {
+    name: 'Polaroid',
+    group: 'Photo',
+    swatch: { background: `${PHOTO} content-box, #ffffff`, padding: '3px 3px 8px', boxSizing: 'border-box', transform: 'rotate(-4deg)', boxShadow: '0 4px 8px -2px rgba(0,0,0,0.4)' },
+    styles: () => ({
+      padding: '10px 10px 36px',
+      background: '#ffffff',
+      borderRadius: '3px',
+      boxShadow: '0 16px 34px -14px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.12)',
+      transform: 'rotate(-2.5deg)',
+      transition: `transform 0.45s ${SPRING}, box-shadow 0.45s ${EASE}`,
+      ...on('hover', { transform: 'rotate(0deg) scale(1.03)', boxShadow: '0 24px 46px -16px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.12)' }),
+    }),
+    text: null,
+    patch: corners(3),
+  },
+  {
+    name: 'Film stock',
+    group: 'Photo',
+    swatch: { background: PHOTO, filter: 'contrast(1.12) saturate(0.82) sepia(0.25)', borderRadius: 4 },
+    styles: () => ({ filter: 'contrast(1.12) saturate(0.82) sepia(0.2) brightness(1.03)', borderRadius: '4px', boxShadow: '0 10px 24px -12px rgba(0, 0, 0, 0.4)' }),
+    text: null,
+    patch: corners(4),
+  },
+  {
+    name: 'Silver gelatin',
+    group: 'Photo',
+    swatch: { background: PHOTO, filter: 'grayscale(1) contrast(1.3)', borderRadius: 3 },
+    styles: () => ({ filter: 'grayscale(1) contrast(1.28) brightness(0.96)', borderRadius: '2px' }),
+    text: null,
+    patch: corners(2),
+  },
+  {
+    name: 'Color reveal',
+    group: 'Photo',
+    swatch: { background: `linear-gradient(90deg, #9ca3af 50%, transparent 50%), ${PHOTO}`, borderRadius: 4 },
+    styles: () => ({
+      filter: 'grayscale(1) contrast(1.05)',
+      transform: 'scale(1)',
+      transition: `filter 0.6s ease, transform 0.9s ${EASE}`,
+      ...on('hover', { filter: 'grayscale(0) saturate(1.12)', transform: 'scale(1.03)' }),
+    }),
+    text: null,
+  },
+  {
+    name: 'Brand tint',
+    group: 'Photo',
+    swatch: { background: 'linear-gradient(160deg,#c7d2fe,#4f46e5)', borderRadius: 4 },
+    // Sepia sits near 38°; turned to the brand hue it becomes a duotone in the site's colour.
+    styles: (accent) => ({ filter: `grayscale(1) sepia(1) saturate(2.4) hue-rotate(${hueOf(accent) - 38}deg) contrast(1.04) brightness(0.98)`, borderRadius: '6px' }),
+    text: null,
+    patch: corners(6),
+  },
+  {
+    name: 'Fade out',
+    group: 'Photo',
+    swatch: { background: 'linear-gradient(180deg, #7dd3fc, #fbbf24 55%, rgba(251,191,36,0))', borderRadius: 4 },
+    styles: () => ({ maskImage: 'linear-gradient(to bottom, #000 55%, transparent)', WebkitMaskImage: 'linear-gradient(to bottom, #000 55%, transparent)' }),
+    text: null,
+  },
+  {
+    name: 'Vignette',
+    group: 'Photo',
+    swatch: { background: 'radial-gradient(ellipse at center, #fbbf24 30%, #7dd3fc 60%, transparent 90%)', borderRadius: 4 },
+    styles: () => ({ maskImage: 'radial-gradient(ellipse 72% 72% at 50% 50%, #000 58%, transparent 100%)', WebkitMaskImage: 'radial-gradient(ellipse 72% 72% at 50% 50%, #000 58%, transparent 100%)' }),
+    text: null,
+  },
+  {
+    name: 'Gallery frame',
+    group: 'Photo',
+    swatch: { background: `${PHOTO} content-box, #f7f2e8`, padding: 4, border: '4px solid #1c1712', boxSizing: 'border-box' },
+    styles: () => ({
+      border: '12px solid #1c1712',
+      padding: '16px',
+      background: '#f7f2e8',
+      borderRadius: '2px',
+      boxShadow: 'inset 0 0 0 1px rgba(0, 0, 0, 0.06), 0 22px 40px -20px rgba(0, 0, 0, 0.55)',
+    }),
+    text: null,
+    patch: corners(2),
+  },
+  {
+    name: 'Photo stack',
+    group: 'Photo',
+    swatch: { background: PHOTO, border: '2px solid #fff', width: '78%', boxShadow: '4px 4px 0 -1px #fff, 4px 4px 0 0 rgba(0,0,0,0.25), 8px 8px 0 -2px #fff, 8px 8px 0 -1px rgba(0,0,0,0.2)' },
+    styles: () => ({
+      border: '6px solid #ffffff',
+      borderRadius: '4px',
+      boxShadow: '8px 8px 0 -3px #ffffff, 8px 8px 0 -2px rgba(15, 23, 42, 0.14), 16px 16px 0 -6px #ffffff, 16px 16px 0 -5px rgba(15, 23, 42, 0.1), 0 20px 30px -18px rgba(15, 23, 42, 0.35)',
+    }),
+    text: null,
+    patch: corners(4),
+  },
+  {
+    name: 'Cinemascope',
+    group: 'Photo',
+    swatch: { background: `linear-gradient(#000 0 18%, transparent 18% 82%, #000 82%), ${PHOTO}`, borderRadius: 3 },
+    // Height gives way to the ratio; a set height would otherwise win.
+    styles: () => ({ aspectRatio: '2.39 / 1', height: 'auto', objectFit: 'cover', borderRadius: '6px', filter: 'contrast(1.08) saturate(1.08)' }),
+    text: null,
+    patch: corners(6),
+  },
+
+  /* ─── Type — showpiece lettering ─── */
+  {
+    name: '3D type',
+    group: 'Type',
+    swatch: { background: '#6366f1', borderRadius: 4, boxShadow: '1px 1px 0 #3730a3, 2px 2px 0 #3730a3, 3px 3px 0 #3730a3, 4px 4px 0 #3730a3' },
+    ...words((accent) => ({
+      color: accent,
+      WebkitTextFillColor: accent,
+      textShadow: `${[1, 2, 3, 4, 5, 6].map((n) => `${n}px ${n}px 0 ${mix(accent, 62, '#000000')}`).join(', ')}, 8px 10px 18px rgba(0, 0, 0, 0.28)`,
+    })),
+  },
+  {
+    name: 'Long shadow',
+    group: 'Type',
+    swatch: { background: 'linear-gradient(135deg, #334155 0 40%, rgba(51,65,85,0.25) 40% 100%)', borderRadius: 4 },
+    ...words(() => ({
+      textShadow: Array.from({ length: 14 }, (_, index) => `${index + 1}px ${index + 1}px 0 rgba(15, 23, 42, ${(0.18 - index * 0.012).toFixed(3)})`).join(', '),
+    })),
+  },
+  {
+    name: 'Riso',
+    group: 'Type',
+    swatch: { background: '#0078bf', borderRadius: 4, boxShadow: '4px 3px 0 rgba(255,72,176,0.85)' },
+    ...words(() => ({ color: '#0078bf', WebkitTextFillColor: '#0078bf', textShadow: '3px 2px 0 rgba(255, 72, 176, 0.9)', mixBlendMode: 'multiply' })),
+  },
+  {
+    name: 'Knockout',
+    group: 'Type',
+    swatch: { background: `radial-gradient(circle at 30% 50%, transparent 0 22%, #fff 23%), ${PHOTO}`, borderRadius: 4 },
+    ...words(() => ({ background: '#ffffff', color: '#000000', WebkitTextFillColor: '#000000', mixBlendMode: 'screen', padding: '0.05em 0.25em' })),
+  },
+  {
+    name: 'Speed',
+    group: 'Type',
+    swatch: { background: 'linear-gradient(90deg, rgba(51,65,85,0) 0%, rgba(51,65,85,0.35) 45%, #334155 70%)', borderRadius: 4, transform: 'skewX(-12deg)' },
+    ...words(() => ({ fontStyle: 'italic', textShadow: '-6px 0 8px color-mix(in srgb, currentColor 30%, transparent), -14px 0 16px color-mix(in srgb, currentColor 14%, transparent)' })),
+  },
+  {
+    name: 'Fat underline',
+    group: 'Type',
+    swatch: { background: 'linear-gradient(transparent 50%, rgba(99,102,241,0.45) 50% 82%, transparent 82%)', borderRadius: 3 },
+    ...words((accent) => ({ textDecorationLine: 'underline', textDecorationColor: mix(accent, 40), textDecorationThickness: '0.5em', textUnderlineOffset: '-0.36em', textDecorationSkipInk: 'none' })),
+  },
+  {
+    name: 'Live dot',
+    group: 'Type',
+    swatch: { background: 'radial-gradient(circle at 22% 50%, #22c55e 0 12%, rgba(34,197,94,0.25) 13% 20%, transparent 21%), linear-gradient(90deg, transparent 38%, #94a3b8 38% 92%, transparent 92%) 0 50% / 100% 3px no-repeat', borderRadius: 4 },
+    ...words(() => ({
+      ...on('before', { content: '""', display: 'inline-block', width: '0.55em', height: '0.55em', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 0 0.22em rgba(34, 197, 94, 0.22)', marginRight: '0.6em', verticalAlign: '0.06em' }),
+    })),
+  },
+  {
+    name: 'Sparkle',
+    group: 'Type',
+    swatch: { background: 'radial-gradient(circle at 78% 35%, #facc15 0 10%, transparent 11%), linear-gradient(90deg, transparent 8%, #94a3b8 8% 64%, transparent 64%) 0 60% / 100% 3px no-repeat', borderRadius: 4 },
+    ...words((accent) => ({
+      ...on('after', { content: '"✦"', display: 'inline-block', marginLeft: '0.3em', fontSize: '0.7em', verticalAlign: 'super', color: accent, WebkitTextFillColor: accent, transform: 'rotate(var(--fx-spin, 0deg)) scale(var(--fx-pop, 1))', transition: `transform 0.5s ${SPRING}` }),
+      ...on('hover', { '--fx-spin': '90deg', '--fx-pop': '1.25' }),
+    })),
+  },
+  {
+    name: 'Rule kicker',
+    group: 'Type',
+    swatch: { background: 'linear-gradient(90deg, #6366f1 0 30%, transparent 30% 40%, #94a3b8 40% 92%, transparent 92%) 0 50% / 100% 2px no-repeat', borderRadius: 4 },
+    ...words((accent) => ({
+      color: accent,
+      WebkitTextFillColor: accent,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: '0.14em',
+      ...on('before', { content: '""', display: 'inline-block', width: '1.75em', height: '2px', background: accent, verticalAlign: 'middle', marginRight: '0.6em' }),
+    })),
+  },
+  {
+    name: 'Two-tone',
+    group: 'Type',
+    swatch: { background: 'linear-gradient(180deg, #6366f1 55%, #312e81 55%)', borderRadius: 4 },
+    ...words((accent) => ({
+      backgroundImage: `linear-gradient(180deg, ${accent} 56%, ${mix(accent, 55, '#000000')} 56%)`,
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+    })),
+  },
+
   /* ─── Depth — shadows & elevation ─── */
   {
     name: 'Lift',
@@ -1622,15 +2303,103 @@ export const LOOKS: Look[] = [
       WebkitBackgroundClip: 'border-box',
       backgroundClip: 'border-box',
       mixBlendMode: 'normal',
+      // What the living looks, photo treatments and signature materials add.
+      WebkitBackdropFilter: 'none',
+      transition: '',
+      transform: '',
+      backgroundSize: '',
+      backgroundPosition: '',
+      backgroundRepeat: '',
+      outline: '',
+      outlineOffset: '',
+      maskImage: '',
+      WebkitMaskImage: '',
+      maskSize: '',
+      WebkitMaskSize: '',
+      maskPosition: '',
+      WebkitMaskPosition: '',
+      WebkitTextStroke: '',
+      textDecorationThickness: '',
+      textUnderlineOffset: '',
+      textDecorationColor: '',
+      textDecorationSkipInk: '',
+      aspectRatio: '',
+      objectFit: '',
+      ...lookStateKeys(),
     }),
   },
 ]
+
+/** Every hover, press, focus and ::before/::after property a look can set, cleared — so Reset look takes a living look all the way off. */
+function lookStateKeys() {
+  const keys = new Set<string>()
+  for (const look of LOOKS) {
+    if (look.group === 'Reset') continue
+    for (const recipe of [look.styles, look.text]) {
+      if (!recipe) continue
+      for (const key of Object.keys(recipe('#6366f1'))) if (key.startsWith('__froamState:')) keys.add(key)
+    }
+  }
+  return Object.fromEntries([...keys].map((key) => [key, '']))
+}
 
 /* What each recipe actually does, in a designer's terms. A swatch the size of
    a thumbnail and a word like "Echo" or "Punch" don't tell you enough to pick
    with; this is what the card's tooltip says. Kept beside LOOKS rather than
    inside it so the recipes stay readable — `npm test` fails if the two drift. */
 export const LOOK_NOTES: Record<string, string> = {
+  /* Alive */
+  'Shine sweep': 'A band of light sweeps across as the pointer arrives. On words, the glint runs through the letters in their own colour.',
+  Levitate: 'Rises off the page on hover, with a shadow tinted in the accent colour, and settles a little when pressed.',
+  Clicky: 'A chunky keycap button that physically presses down when clicked. Tactile, fun, impossible not to click.',
+  Tilt: 'Leans back in 3D on hover, like a card picked up off the table.',
+  Springy: 'Grows with a springy overshoot on hover and squishes when pressed.',
+  'Brutal press': 'Hard black outline and offset shadow; it lifts toward the pointer and slams flat when clicked.',
+  Bloom: 'A soft ring of the accent colour blooms around it on hover, and holds as a focus ring.',
+  Wipe: 'Outlined in the accent colour; the fill wipes in from the left on hover and the text flips to white.',
+  'Arrow nudge': 'Adds an arrow after the label that slides forward on hover. The classic “go” button micro-interaction.',
+  'Underline rise': 'A thin accent underline that swells into a highlighter behind the words on hover. Works on whole headings.',
+  'Light up': 'The words light up in the accent colour, with a soft glow, as the pointer passes.',
+  'Ink in': 'Outlined letters that fill with solid ink on hover.',
+  Glitch: 'On hover the letters split into magenta and cyan and jolt sideways, like a signal dropping out.',
+  'Focus beam': 'For inputs and fields: a calm border that turns to the accent colour with a soft beam when focused.',
+  Twist: 'Twists and grows with a spring on hover, and springs back when clicked. Made for icons and badges.',
+  /* Signature */
+  'Liquid glass': 'Clear, glossy glass with a bright upper edge and heavy blur. The current Apple-era material, best over colour or photos.',
+  'Smoked glass': 'Dark tinted glass with pale text. It keeps what is behind it just visible.',
+  'Holo foil': 'Iridescent foil whose colours slide as the pointer arrives, like tilting a trading card. On words, the spectrum runs through the letters.',
+  Chrome: 'Polished metal with a hard horizon line and an engraved label. On words, chrome lettering.',
+  'Aurora halo': 'A glow of pink, cyan and the accent colour spills out around it like northern lights.',
+  'Prism edge': 'A dark card with a rainbow edge that bends through the accent colour.',
+  'Aqua gloss': 'The glossy, candy-like pill button of early Mac OS X, in the accent colour.',
+  Bento: 'A generous, soft-cornered tile for bento grids that lifts gently on hover.',
+  'Enamel pin': 'A glossy enamel badge with a gold rim.',
+  Stitched: 'A fabric patch with a dashed stitch line just inside the edge.',
+  Receipt: 'Monospaced receipt paper with a torn, zig-zag bottom edge.',
+  'Book plate': 'A leather book plate with a gold inset rule and a serif face.',
+  'Paper cut': 'Stacked layers of card stock in lighter and lighter tints, like cut paper.',
+  /* Photo */
+  Polaroid: 'An instant photo: a white border with a deep bottom, slightly askew. It straightens up on hover.',
+  'Film stock': 'Warm, lightly faded colour with a touch more contrast, like a roll of film.',
+  'Silver gelatin': 'Rich black-and-white with deep blacks, like a darkroom print.',
+  'Color reveal': 'Black and white until the pointer arrives, then the colour floods in with a slow push-in.',
+  'Brand tint': 'Turns a photo into a duotone in the accent colour, so any stock image looks on-brand.',
+  'Fade out': 'The image fades away toward the bottom, into whatever is behind it.',
+  Vignette: 'The edges fall away softly, so the eye goes to the middle.',
+  'Gallery frame': 'A dark wooden frame with a cream mat, like a print on a gallery wall.',
+  'Photo stack': 'A white-bordered print on top of a small pile of others.',
+  Cinemascope: 'Crops to the 2.39:1 widescreen ratio of cinema, with a little more punch.',
+  /* Type — showpiece lettering */
+  '3D type': 'Solid letters extruded in a darker shade of the accent colour, with a drop shadow underneath.',
+  'Long shadow': 'A long, fading diagonal shadow cast from every letter. Flat design at its boldest.',
+  Riso: 'Blue ink with a pink layer printed slightly off, like a risograph misprint.',
+  Knockout: 'The words are cut out of a white band, so the photo or colour behind shows through the letters.',
+  Speed: 'Leaning letters with a motion blur trailing behind them.',
+  'Fat underline': 'A thick, low highlighter underline behind the words, in the accent colour.',
+  'Live dot': 'A glowing green status dot before the words. For “Live”, “Open now” and “Available”.',
+  Sparkle: 'A small sparkle after the words that twirls when the pointer arrives.',
+  'Rule kicker': 'An uppercase label in the accent colour, led by a short rule. For section kickers.',
+  'Two-tone': 'The letters split horizontally into the accent colour over a deeper shade.',
   /* Depth */
   Lift: 'A modest drop shadow — the default way to raise a card off the page.',
   Float: 'Tall and soft, so it reads as further off the page than Lift.',

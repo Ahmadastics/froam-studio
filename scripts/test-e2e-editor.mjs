@@ -26,6 +26,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright-core'
 import { INJECTION_KEY, writeArtifacts } from '../lib/codegen.mjs'
+const { LOOKS } = await import('../dist/editor/floating-bar-looks.js')
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const FIXTURE = path.join(ROOT, 'test', 'e2e', 'site')
@@ -740,6 +741,16 @@ test('in the phone preview the page’s scroll scripts follow the phone screen, 
 })
 
 const ctaLook = (page) => page.evaluate(() => { const s = getComputedStyle(document.getElementById('cta')); return `${s.backgroundColor}|${s.boxShadow}|${s.borderRadius}|${s.color}|${s.backgroundImage}` })
+/** A Styles tile by its exact name. */
+const lookTile = (page, name) => page.locator('.froam-floating-bar__pop--looks .froam-floating-bar__looks button', { has: page.locator('span', { hasText: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) }) })
+async function openStyles(page) {
+  if (!(await page.locator('.froam-floating-bar__pop--looks').count())) await page.click('.froam-floating-bar__looks-btn')
+  await page.waitForSelector('.froam-floating-bar__pop--looks .froam-floating-bar__looks button', { timeout: 10000 })
+}
+async function closeStyles(page) {
+  await page.click('.froam-floating-bar__pop--looks .froam-floating-bar__look-apply')
+  await page.waitForTimeout(200)
+}
 
 test('Styles fetches its looks the first time it opens, and a look applies and undoes', async ({ page }) => {
   await deselect(page)
@@ -756,7 +767,7 @@ test('Styles fetches its looks the first time it opens, and a look applies and u
   await page.waitForSelector('.froam-floating-bar__pop--looks .froam-floating-bar__looks button', { timeout: 10000 })
   const looks = page.locator('.froam-floating-bar__pop--looks .froam-floating-bar__looks button')
   const count = await looks.count()
-  await looks.nth(4).click()
+  await lookTile(page, 'Lift').click()
   await page.waitForTimeout(500)
   await page.click('.froam-floating-bar__pop--looks .froam-floating-bar__look-apply')
   const after = await unselected()
@@ -774,6 +785,94 @@ test('Styles fetches its looks the first time it opens, and a look applies and u
   assert(after !== before, 'the look changed nothing on the button')
   assert(undone === before, 'Ctrl+Z did not take the look back')
   assert(undos === 1, `taking one look back took ${undos} presses of Ctrl+Z`)
+})
+
+test('all 253 looks write CSS a real browser accepts — every property, every hover and ::after', async ({ page }) => {
+  const recipes = LOOKS.flatMap((look) => [['', look.styles('#6366f1')], ...(look.text ? [[' (words)', look.text('#6366f1')]] : [])].map(([kind, recipe]) => [`${look.name}${kind}`, recipe]))
+  const rejected = await page.evaluate((all) => {
+    const probe = document.createElement('div')
+    const out = []
+    for (const [name, recipe] of all) {
+      for (const [key, value] of Object.entries(recipe)) {
+        if (!value) continue
+        const property = key.replace(/^__froamState:[^:]+:/, '').replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
+        // A vendor alias this engine doesn't have (-webkit-backdrop-filter is Safari's) isn't a mistake.
+        if (property.startsWith('-webkit-') && !CSS.supports(property, 'inherit')) continue
+        probe.removeAttribute('style')
+        probe.style.setProperty(property, value)
+        // Shorthands (border: none) set longhands and may not read back as themselves.
+        if (!probe.style.length) out.push(`${name}: ${property}: ${value}`)
+      }
+    }
+    return out
+  }, recipes)
+  assert(recipes.length > 253, `only ${recipes.length} recipes checked`)
+  assert(rejected.length === 0, `the browser drops ${rejected.length} declaration(s): ${rejected.slice(0, 6).join(' | ')}`)
+})
+
+test('a living look answers the pointer in the editor — and trying the next look leaves nothing of it behind', async ({ page }) => {
+  const transformY = () => page.evaluate(() => new DOMMatrix(getComputedStyle(document.getElementById('cta')).transform).f)
+  const arrow = () => page.evaluate(() => { const s = getComputedStyle(document.getElementById('cta'), '::after'); return { content: s.content, x: new DOMMatrix(s.transform === 'none' ? '' : s.transform).e } })
+  const hoverCta = async () => { const box = await page.locator('#cta').boundingBox(); await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.waitForTimeout(700) }
+  const away = async () => { await page.mouse.move(4, 890); await page.waitForTimeout(600) }
+  await deselect(page)
+  await clickOn(page, '#cta')
+  await openStyles(page)
+  // The looks come in the site's own brand colour, not the most common colour on the page.
+  const accent = await page.evaluate(() => document.querySelector('.froam-floating-bar__look-editor input[type=color]')?.value)
+  assert(accent === '#2563eb', `Styles' accent is ${accent}, not the site's blue`)
+  await lookTile(page, 'Levitate').click()
+  await away()
+  const restY = await transformY()
+  await hoverCta()
+  const liftedY = await transformY()
+  await away()
+  // Trying the next look: Levitate's lift and shadow come off; the arrow arrives.
+  await lookTile(page, 'Arrow nudge').click()
+  await away()
+  const arrowAtRest = await arrow()
+  await hoverCta()
+  const hoveredY = await transformY()
+  const arrowOnHover = await arrow()
+  await away()
+  await closeStyles(page)
+  await deselect(page)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(400)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(500)
+  const cleared = await arrow()
+  assert(Math.abs(restY) < 0.5, `Levitate at rest is moved ${restY}px`)
+  assert(Math.abs(liftedY + 6) < 0.6, `hovering Levitate in the editor lifts it ${-liftedY}px, not 6px`)
+  assert(Math.abs(hoveredY) < 0.5, `after switching to Arrow nudge, hover still lifts the button ${-hoveredY}px`)
+  assert(arrowAtRest.content === '"→"' && Math.abs(arrowAtRest.x) < 0.5, `Arrow nudge at rest: ${JSON.stringify(arrowAtRest)}`)
+  assert(Math.abs(arrowOnHover.x - 5) < 0.6, `on hover the arrow moved ${arrowOnHover.x}px, not 5px`)
+  assert(cleared.content === 'none' || cleared.content === 'normal', `two Ctrl+Z left the arrow: ${cleared.content}`)
+})
+
+test('on words, box-only looks are hidden and a look’s own text recipe is applied as written', async ({ page }) => {
+  await deselect(page)
+  const box = await page.evaluate(() => { const range = document.createRange(); const text = [...document.getElementById('headline').childNodes].find((node) => node.nodeType === 3 && node.textContent.trim()); range.setStart(text, 0); range.setEnd(text, 3); const r = range.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })
+  await page.mouse.click(box.x, box.y)
+  await page.waitForTimeout(250)
+  assert((await selectedId(page)) === 'headline', `clicking "Discover" selected ${await selectedId(page)}`)
+  await openStyles(page)
+  const boxOnly = await lookTile(page, 'Clicky').count()
+  const holo = lookTile(page, 'Holo foil')
+  const offered = await holo.count()
+  await holo.click()
+  await page.waitForTimeout(400)
+  await closeStyles(page)
+  const seen = await page.evaluate(() => { const s = getComputedStyle(document.getElementById('headline')); return { clip: s.webkitBackgroundClip || s.backgroundClip, fill: s.webkitTextFillColor, image: s.backgroundImage } })
+  await deselect(page)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(500)
+  const after = await page.evaluate(() => getComputedStyle(document.getElementById('headline')).backgroundImage)
+  assert(boxOnly === 0, 'a box-only look (Clicky) is offered for a heading')
+  assert(offered === 1, 'Holo foil is not offered for a heading')
+  assert(seen.clip === 'text' && seen.fill === 'rgba(0, 0, 0, 0)', `the heading's letters are not foil-filled: ${JSON.stringify(seen)}`)
+  assert(/214, 58, 147/.test(seen.image), 'the words recipe (deep inks) was not the one applied')
+  assert(after === 'none', 'Ctrl+Z left the foil on the heading')
 })
 
 /* Smart Quick Edits: open Quick Edit on a selection, take a smart chip, read the preview. */

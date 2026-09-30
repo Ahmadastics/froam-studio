@@ -587,6 +587,19 @@ body.froam-drag-active * {
   height: 28px;
 }
 
+/* Living looks: the tile moves on hover, a hint of what the look does. */
+.froam-floating-bar__looks button.is-alive i {
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.froam-floating-bar__looks button.is-alive:hover i {
+  transform: translateY(-2px) scale(1.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .froam-floating-bar__looks button.is-alive i { transition: none; }
+}
+
 .froam-floating-bar__looks button small {
   color: var(--fs-text-tertiary);
   font-size: 11px;
@@ -640,6 +653,18 @@ body.froam-drag-active * {
   border-color: rgba(var(--fs-accent-control-rgb), 0.38);
   background: rgba(var(--fs-accent-control-rgb), 0.14);
   color: var(--fs-accent-control-hover);
+}
+
+/* In a short window the studio's column squeezed the tiles to nothing, leaving
+   only the controls. The tiles keep a couple of rows; the rest keep their size,
+   and the studio scrolls as a whole instead. */
+.froam-floating-bar__pop--looks > * {
+  flex-shrink: 0;
+}
+
+.froam-floating-bar__pop--looks > .froam-floating-bar__looks-scroll {
+  flex: 1 1 auto;
+  min-height: 148px;
 }
 
 .froam-floating-bar__looks-scroll {
@@ -840,6 +865,7 @@ body.froam-drag-active * {
     border-radius: 14px 14px 10px 10px;
   }
   .froam-floating-bar__looks-scroll { max-height: 132px; }
+  .froam-floating-bar__pop--looks > .froam-floating-bar__looks-scroll { min-height: 120px; }
   .froam-floating-bar__pop-head { align-items: flex-start; }
   .froam-floating-bar__pop-head > span { max-width: 150px; }
 }

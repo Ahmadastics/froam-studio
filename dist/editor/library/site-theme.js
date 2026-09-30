@@ -61,6 +61,8 @@ const isVisible = (el) => {
     const rect = el.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0;
 };
+/* Froam's own toolbar and panels share the page; they are not the site's brand. */
+const isSite = (el) => !el.closest('[data-chef-editor-root="true"]');
 /** The first background up the tree that isn't transparent. */
 function effectiveBackground(start) {
     for (let el = start; el; el = el.parentElement) {
@@ -88,7 +90,7 @@ export function sampleAccent(scope) {
         entry.weight += weight;
         votes.set(key, entry);
     };
-    const controls = Array.from(scope.querySelectorAll('button, a, [role="button"], input[type="submit"]')).filter(isVisible).slice(0, 200);
+    const controls = Array.from(scope.querySelectorAll('button, a, [role="button"], input[type="submit"]')).filter((el) => isSite(el) && isVisible(el)).slice(0, 200);
     for (const control of controls) {
         const style = getComputedStyle(control);
         const rect = control.getBoundingClientRect();
@@ -99,14 +101,14 @@ export function sampleAccent(scope) {
     }
     // Brand colour also shows up in headings' highlighted words — often as a
     // gradient clipped to the text, whose stops are the colours that count.
-    for (const accent of Array.from(scope.querySelectorAll('h1 *, h2 *, [class*="accent"], [class*="brand"], [class*="primary"], [class*="gradient"]')).slice(0, 80)) {
+    for (const accent of Array.from(scope.querySelectorAll('h1 *, h2 *, [class*="accent"], [class*="brand"], [class*="primary"], [class*="gradient"]')).filter(isSite).slice(0, 80)) {
         const style = getComputedStyle(accent);
         vote(parseColor(style.color), 1.5);
         for (const stop of style.backgroundImage.match(/rgba?\([^)]*\)/g) ?? [])
             vote(parseColor(stop), 2);
     }
     // …and in the logo and icons: the SVG fills and strokes in the header and controls.
-    for (const shape of Array.from(scope.querySelectorAll('header svg *, nav svg *, a svg *, button svg *, [class*="logo" i] svg *')).slice(0, 80)) {
+    for (const shape of Array.from(scope.querySelectorAll('header svg *, nav svg *, a svg *, button svg *, [class*="logo" i] svg *')).filter(isSite).slice(0, 80)) {
         const style = getComputedStyle(shape);
         vote(parseColor(style.fill), 2.5);
         vote(parseColor(style.stroke), 1.5);

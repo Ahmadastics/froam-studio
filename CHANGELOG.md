@@ -1,5 +1,38 @@
 # Changelog
 
+## 9.3.0 - 2026-09-30
+
+**48 new looks in Styles, and looks that move.**
+
+- **Alive.** Fifteen looks that answer the pointer, with CSS hover, press and
+  focus states and transitions only, carried to the live site as `:hover` and
+  `::after` rules. **Clicky** is a keycap that sinks when pressed. **Shine
+  sweep** runs a band of light across. **Tilt** leans back in 3D.
+  **Levitate** rises with a glow in the brand colour. **Arrow nudge** adds an
+  arrow that slides forward. **Underline rise** swells into a highlighter.
+  The rest: Brutal press, Springy, Bloom, Wipe, Light up, Ink in, Glitch,
+  Twist and Focus beam.
+- **Signature.** Liquid glass, Smoked glass, a Holo foil whose colours slide
+  like a tilted trading card, Chrome, Aurora halo, Prism edge, Aqua gloss,
+  Bento, Enamel pin, Stitched, a Receipt with a torn edge, Book plate and
+  Paper cut.
+- **Photo.** Polaroid, Film stock, Silver gelatin, Color reveal (black and
+  white until hovered), Brand tint (a duotone in the site's colour), Fade
+  out, Vignette, Gallery frame, Photo stack and Cinemascope.
+- **Type.** 3D type, Long shadow, Riso, Knockout (the photo shows through the
+  letters), Speed, Fat underline, Live dot, Sparkle, Rule kicker and Two-tone.
+- **Looks fit what's selected.** Box-only looks are hidden for headings and
+  paragraphs. Looks with a recipe written for words use it as written instead
+  of a translation, so nothing turns invisible.
+- **The site's own brand colour.** Styles' accent used to be the most common
+  colour on the page, often the browser's default link blue. It is now read
+  from the site's buttons, links and logo, never from Froam's own toolbar.
+- **Hover and press show while you edit,** on every element, not only the
+  selected one. Trying one look after another shows each on its own; Reset
+  look takes every living part off.
+- **Styles fits a short window.** The tiles used to shrink to nothing,
+  leaving only the controls.
+
 ## 9.2.0 - 2026-09-30
 
 **Smart Quick Edits that read the page, one History, an honest Save, and

@@ -6,7 +6,7 @@ const PAINT_STYLE_ID = 'froam-pseudo-paint';
 export function pseudoKey(pseudo, property) {
     return `__froamState:${pseudo}:${property}`;
 }
-/** This pseudo-element's edits in a draft, as `{ property: value }`. */
+/** This pseudo-element's (or hover/focus/active state's) edits in a draft, as `{ property: value }`. */
 export function pseudoStyles(styles, pseudo) {
     const prefix = `__froamState:${pseudo}:`;
     const out = {};
@@ -51,17 +51,22 @@ function declarationsFor(styles) {
         .map(([property, value]) => `${camelToKebab(property)}:${value}!important`)
         .join(';');
 }
+/* Hover, focus and press, in the order the generated stylesheet writes them:
+   pressing a hovered button shows :active. */
+const INTERACTION_STATES = ['hover', 'focus', 'active'];
 /**
- * Shows this route's ::before/::after edits in the editor. Hosts are stamped
- * with their path so one stylesheet can address them; stamps and rules are
- * only rewritten when they change (the page's observers see every write).
+ * Shows this route's ::before/::after edits in the editor — and its hover,
+ * focus and press styles, so a living look answers the pointer as you work,
+ * the way it will on the site. Hosts are stamped with their path so one
+ * stylesheet can address them; stamps and rules are only rewritten when they
+ * change (the page's observers see every write).
  */
 export function paintPseudoElements(root, routeDrafts) {
     const rules = [];
     const hosts = new Set();
     for (const [path, draft] of Object.entries(routeDrafts)) {
-        for (const pseudo of PSEUDO_ELEMENTS) {
-            const declarations = declarationsFor(pseudoStyles(draft.styles, pseudo));
+        for (const [part, selector] of [...INTERACTION_STATES.map((state) => [state, `:${state}`]), ...PSEUDO_ELEMENTS.map((pseudo) => [pseudo, `::${pseudo}`])]) {
+            const declarations = declarationsFor(pseudoStyles(draft.styles, part));
             if (!declarations)
                 continue;
             const host = findElementByPath(root, path);
@@ -70,7 +75,7 @@ export function paintPseudoElements(root, routeDrafts) {
             if (host.getAttribute(PSEUDO_HOST_ATTR) !== path)
                 host.setAttribute(PSEUDO_HOST_ATTR, path);
             hosts.add(host);
-            rules.push(`[${PSEUDO_HOST_ATTR}="${path.replace(/["\\]/g, '\\$&')}"]::${pseudo}{${declarations}}`);
+            rules.push(`[${PSEUDO_HOST_ATTR}="${path.replace(/["\\]/g, '\\$&')}"]${selector}{${declarations}}`);
         }
     }
     document.querySelectorAll(`[${PSEUDO_HOST_ATTR}]`).forEach((element) => {

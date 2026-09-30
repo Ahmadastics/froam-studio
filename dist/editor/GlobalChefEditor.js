@@ -3085,11 +3085,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             setSelections((current) => current.map((s) => ({ ...s, ...nextSelection })));
         }
     }
-    function applyStyle(styles, nextSel, label) {
+    /** asWritten: the styles are already written for words (a look's text recipe), so they aren't translated from box styles. */
+    function applyStyle(styles, nextSel, label, asWritten = false) {
         const root = getRoot();
         const selectedElements = root ? (selections.length ? selections : selection ? [selection] : []).map((item) => findElementByPath(root, item.path)).filter((item) => item !== null) : [];
         const textOnlySelection = selectedElements.length > 0 && selectedElements.every(isTextVisualLayer);
-        const projectedStyles = textOnlySelection ? projectTextLayerStyles(styles) : styles;
+        const projectedStyles = textOnlySelection && !asWritten ? projectTextLayerStyles(styles) : styles;
         const projectedSelection = textOnlySelection ? { ...(nextSel ?? {}) } : nextSel;
         if (textOnlySelection && projectedSelection) {
             delete projectedSelection.background;
@@ -3106,7 +3107,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             if (projectedStyles.textShadow !== undefined)
                 projectedSelection.textShadow = projectedStyles.textShadow === 'none' ? '' : projectedStyles.textShadow;
         }
-        updateDraft((draft, target) => ({ ...draft, styles: { ...(draft.styles ?? {}), ...(isTextVisualLayer(target) ? projectTextLayerStyles(styles) : styles) } }), projectedSelection, label ?? `Style: ${Object.keys(styles).join(', ')}`);
+        updateDraft((draft, target) => ({ ...draft, styles: { ...(draft.styles ?? {}), ...(isTextVisualLayer(target) && !asWritten ? projectTextLayerStyles(styles) : styles) } }), projectedSelection, label ?? `Style: ${Object.keys(styles).join(', ')}`);
     }
     /**
      * ::before / ::after of the selection. No text-layer projection: a badge's
@@ -3116,32 +3117,48 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         const encoded = Object.fromEntries(Object.entries(styles).map(([property, value]) => [pseudoKey(pseudo, property), value]));
         updateDraft((draft) => ({ ...draft, styles: { ...(draft.styles ?? {}), ...encoded } }), undefined, label);
     }
-    function previewEncodedStateStyles(styles) {
+    /**
+     * Shows hover, focus and press styles on the selection while they're being
+     * styled. Styled from a state tab, that state is held on so you can see it;
+     * a living look (styled from Normal) only shows its states when you hover,
+     * press or focus it. ::before/::after are painted with the drafts.
+     */
+    function previewEncodedStateStyles(styles, asWritten = false) {
         const target = currentSelectionRef.current;
         if (!target)
             return;
-        const previewStyles = isTextVisualLayer(target) ? projectTextLayerStyles(styles) : styles;
-        const encoded = Object.entries(previewStyles).filter(([key]) => key.startsWith('__froamState:'));
-        if (!encoded.length)
+        const previewStyles = isTextVisualLayer(target) && !asWritten ? projectTextLayerStyles(styles) : styles;
+        const byState = new Map();
+        for (const [key, value] of Object.entries(previewStyles)) {
+            const [, state, ...rest] = key.split(':');
+            if (!key.startsWith('__froamState:') || !['hover', 'focus', 'active'].includes(state))
+                continue;
+            const property = rest.join(':');
+            if (!value || !/^-{0,2}[a-zA-Z][a-zA-Z0-9-]*$/.test(property) || /[{}]/.test(value))
+                continue;
+            byState.set(state, [...(byState.get(state) ?? []), `${camelToKebab(property)}:${value}!important`]);
+        }
+        if (!byState.size)
             return;
-        const state = encoded[0][0].split(':')[1];
+        const onlyStates = Object.keys(previewStyles).every((key) => key.startsWith('__froamState:'));
+        const held = onlyStates && byState.size === 1 ? [...byState.keys()][0] : null;
         const id = target.dataset.froamStateTarget || ensureFroamNodeId(target);
         target.dataset.froamStateTarget = id;
-        target.dataset.froamPreviewState = state;
+        if (held)
+            target.dataset.froamPreviewState = held;
+        else
+            delete target.dataset.froamPreviewState;
         let style = document.querySelector('style[data-froam-state-preview="true"]');
         if (!style) {
             style = document.createElement('style');
             style.dataset.froamStatePreview = 'true';
             document.head.appendChild(style);
         }
-        const declarations = encoded.map(([key, value]) => {
-            const property = key.split(':').slice(2).join(':');
-            if (!/^[a-zA-Z][a-zA-Z0-9-]*$/.test(property) || /[{}]/.test(value))
-                return '';
-            return `${camelToKebab(property)}:${value}!important`;
-        }).filter(Boolean).join(';');
         const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id.replace(/[^a-zA-Z0-9_-]/g, '\\$&');
-        style.textContent = `[data-froam-state-target="${escaped}"]:${state},[data-froam-state-target="${escaped}"][data-froam-preview-state="${state}"]{${declarations}}`;
+        style.textContent = ['hover', 'focus', 'active']
+            .filter((state) => byState.has(state))
+            .map((state) => `[data-froam-state-target="${escaped}"]:${state},[data-froam-state-target="${escaped}"][data-froam-preview-state="${state}"]{${byState.get(state).join(';')}}`)
+            .join('\n');
     }
     /* ─── Design Intelligence bridges ─── */
     // Select an arbitrary element (used by the Health scanner to jump to an issue).
@@ -6238,9 +6255,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     const style = createReusableStyle({ id: `style:look:${Date.now().toString(36)}`, name: `${name} custom`, states });
                     replaceDesignSystem(saveReusableStyle(activeProjectState.designSystem, style), `Saved reusable style: ${style.name}`);
                     showToast(`${style.name} saved to Design System`);
-                }, onStyle: (styles, selectionPatch, label) => {
-                    applyStyle(styles, selectionPatch, label);
-                    previewEncodedStateStyles(styles);
+                }, selectionKey: selection.path, onStyle: (styles, selectionPatch, label, options) => {
+                    applyStyle(styles, selectionPatch, label, options?.asWritten);
+                    previewEncodedStateStyles(styles, options?.asWritten);
                     const root = getRoot();
                     const target = root ? findElementByPath(root, selection.path) : null;
                     if (target)
