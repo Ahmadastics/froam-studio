@@ -43,15 +43,23 @@ const contextRequest = (overrides = {}) => assembleFroamIntelligenceRequest({ pr
 const session = (attempt = 1) => ({ id: 'intent-1', origin: 'command-palette', intent: 'Make this premium', selectedNodeId: 'cta', selectedPath: snapshot.path, sourceBranchId: 'main', attempt, maxAttempts: FROAM_INTENT_MAX_ATTEMPTS })
 
 test('known commands remain first-class', () => assert.equal(shouldOfferAskFroam('Blueprint', 1), false))
-test('Quick Edit contribution contains exactly 100 unique searchable actions', () => {
-  assert.equal(FROAM_QUICK_EDIT_CONTRIBUTION_COUNT, 100)
+test('Quick Edit contribution contains exactly 109 unique searchable actions', () => {
+  assert.equal(FROAM_QUICK_EDIT_CONTRIBUTION_COUNT, 109)
   assert.equal(FROAM_QUICK_EDIT_ACTIONS.length, FROAM_QUICK_EDIT_CONTRIBUTION_COUNT)
+  assert.equal(FROAM_QUICK_EDIT_ACTIONS.filter(({ category }) => category === 'Smart').length, 9)
   assert.equal(new Set(FROAM_QUICK_EDIT_ACTIONS.map(({ id }) => id)).size, FROAM_QUICK_EDIT_ACTIONS.length)
   assert.equal(new Set(FROAM_QUICK_EDIT_ACTIONS.map(({ label }) => label)).size, FROAM_QUICK_EDIT_ACTIONS.length)
 })
-test('all 100 Quick Edits produce bounded local mutation proposals', () => {
+// Smart edits read the page, so they're checked on a heading on a real-looking
+// page: a brand colour, a white background, two look-alike headings.
+const pageSnapshot = {
+  ...snapshot,
+  dna: { ...snapshot.dna, visual: { color: 'rgb(148, 163, 184)', backgroundColor: 'rgba(0, 0, 0, 0)', fontSize: '48px', fontWeight: '700', borderRadius: '0px', boxShadow: 'none' }, structure: { tag: 'h2' } },
+  page: { behind: '#ffffff', accent: '#2563eb', radius: '14px', text: true, tag: 'h2', lookAlikes: { count: 2, noun: 'heading', styles: { fontWeight: '800', letterSpacing: '-0.5px' } } },
+}
+test('all 109 Quick Edits produce bounded local mutation proposals', () => {
   for (const action of FROAM_QUICK_EDIT_ACTIONS) {
-    const proposals = createLocalFroamIntentProposals(snapshot, action.intent)
+    const proposals = createLocalFroamIntentProposals(action.category === 'Smart' ? pageSnapshot : snapshot, action.intent)
     assert.ok(proposals.length > 0, `${action.id} did not produce a proposal`)
     assert.ok(proposals.every(({ targetIds }) => targetIds.length === 1 && targetIds[0] === snapshot.node.id), `${action.id} escaped selection scope`)
   }
@@ -119,6 +127,22 @@ test('unknown requests stay provider-eligible instead of inventing a local edit'
 function createExperiment(project = fixtureProject(), plan = proposal(), preserveDimensions = true) {
   return createMutationPrototypeFromProposals(project, { branchId: `intent-branch-${Date.now()}-${Math.random()}`, name: 'Froam Premium CTA', actorId: 'tester', level: 'safe', scopeNodeIds: ['cta'], proposals: [plan], constraints: normalizeMutationConstraints('safe', { protect: ['navigation', 'logo', 'brand-colors'] }), provider: 'fixture-provider', selectionSnapshot: snapshot, preserveDimensions, now: 10, idFactory: ids('intent-event') })
 }
+
+test('smart edits compile into live design operations — glass, gradient text, balanced lines and all', () => {
+  for (const [intent, properties] of [
+    ['Make it frosted glass', ['backdropFilter', 'WebkitBackdropFilter', 'backgroundColor', 'border', 'boxShadow', 'borderRadius']],
+    ['Add a gradient in the brand colour', ['backgroundImage', 'WebkitBackgroundClip', 'backgroundClip', 'WebkitTextFillColor', 'color']],
+    ['Balance the lines', ['textWrap']],
+    ['Make it glow in the brand colour', ['textShadow']],
+    ['Make the size fluid', ['fontSize']],
+  ]) {
+    const plans = createLocalFroamIntentProposals(pageSnapshot, intent)
+    const result = createMutationPrototypeFromProposals(fixtureProject(), { branchId: `smart-${properties[0]}`, actorId: 'tester', level: 'safe', scopeNodeIds: ['cta'], proposals: plans, constraints: normalizeMutationConstraints('safe'), provider: 'froam-local-command@1', selectionSnapshot: pageSnapshot, now: 10, idFactory: ids(`smart-${properties[0]}`) })
+    const styles = deriveBranchState(result.project).legacyStore[viewportKey][pageSnapshot.path].styles
+    for (const property of properties) assert.ok(styles[property], `${intent}: ${property} did not reach the design (${JSON.stringify(styles)})`)
+    assert.ok(plans.every(({ rationale }) => !/^Applied locally/.test(rationale)), `${intent} carries no explanation`)
+  }
+})
 
 test('valid plan creates an isolated live-design branch', () => { const project = fixtureProject(); const before = JSON.stringify(deriveBranchState(project, 'main')); const result = createExperiment(project); assert.notEqual(result.project.activeBranchId, 'main'); assert.equal(JSON.stringify(deriveBranchState(result.project, 'main')), before); assert.equal(result.compiledDesignOperationCount, 1); assert.notEqual(deriveBranchState(result.project).legacyStore[viewportKey][snapshot.path].styles.boxShadow, 'none') })
 test('prototype has lineage and provider provenance', () => { const result = createExperiment(); assert.equal(result.provenance.sourceBranchId, 'main'); assert.equal(result.provenance.provider, 'fixture-provider'); assert.deepEqual(result.provenance.targetScope, ['cta']); assert.ok(result.provenance.operationIds.length >= 3) })

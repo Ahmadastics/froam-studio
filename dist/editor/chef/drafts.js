@@ -11,9 +11,36 @@ export function sanitizeDraftForElement(element, draft) {
     delete safeDraft.text;
     return safeDraft;
 }
+/* Each element's own style attribute, as the site wrote it, from before Froam
+   first painted on it. Taking Froam's edits away puts exactly this back, so a
+   site's own inline styles (a positioned caption, a sized hero) survive Undo,
+   Cancel and Clear instead of being wiped with the edits. */
+const pageStyles = new WeakMap();
+/**
+ * Take Froam's styles off an element: back to the style attribute the site
+ * gave it. For an element Froam hasn't seen being painted (the page replaced
+ * it since), only the properties in `styles` — Froam's — are removed.
+ */
+export function restorePageStyle(element, styles) {
+    if (pageStyles.has(element)) {
+        const own = pageStyles.get(element);
+        if (own === null || own === undefined)
+            element.removeAttribute('style');
+        else
+            element.setAttribute('style', own);
+        return;
+    }
+    for (const key of Object.keys(styles ?? {}))
+        if (!key.startsWith('__froamState:'))
+            element.style.removeProperty(camelToKebab(key));
+    if (!element.getAttribute('style')?.trim())
+        element.removeAttribute('style');
+}
 export function applyDraft(element, draft) {
     try {
         const safeDraft = sanitizeDraftForElement(element, draft);
+        if (safeDraft.styles && !pageStyles.has(element))
+            pageStyles.set(element, element.getAttribute('style'));
         if (safeDraft.text !== undefined && !isBeingWritten(element)) {
             applyDraftText(element, safeDraft.text);
         }

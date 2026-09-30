@@ -4,6 +4,7 @@ import {
   ChevronDown,
   Command,
   LayoutGrid,
+  Bookmark,
   GitBranch,
   Hand,
   History,
@@ -83,7 +84,15 @@ type Props = {
   /** What happened on this page, newest first — each can be undone on its own. */
   history?: HistoryItem[]
   onUndoChange?: (id: string) => void
+  /** Named moments on this page (versions), in the same timeline as the changes. */
+  versions?: TimelineVersion[]
+  onHistoryOpen?: () => void
+  onNameMoment?: (name: string) => void | Promise<void>
+  onRestoreVersion?: (id: string, name: string) => void
+  onOpenAllVersions?: () => void
 }
+
+export type TimelineVersion = { id: string; name: string; ts: number; local: boolean }
 
 export type HistoryItem = { id: string; label: string; where: string; who: string; ts: number; isUndo: boolean }
 
@@ -220,7 +229,13 @@ export default function FroamToolbar({
   onToggleAutosave,
   history = [],
   onUndoChange,
+  versions = [],
+  onHistoryOpen,
+  onNameMoment,
+  onRestoreVersion,
+  onOpenAllVersions,
 }: Props) {
+  const [naming, setNaming] = useState<string | null>(null)
   const [menu, setMenu] = useState<'main' | 'zoom' | 'history' | null>(null)
   const historyRef = useRef<HTMLDivElement | null>(null)
   const [justSaved, setJustSaved] = useState(false)
@@ -449,8 +464,13 @@ export default function FroamToolbar({
             <button
               type="button"
               className={`froam-tb__icon-btn${menu === 'history' ? ' is-active' : ''}`}
-              onClick={() => setMenu((current) => (current === 'history' ? null : 'history'))}
-              title="History — every change on this page"
+              onClick={() => setMenu((current) => {
+                const next = current === 'history' ? null : 'history'
+                if (next) onHistoryOpen?.()
+                else setNaming(null)
+                return next
+              })}
+              title="History — every change on this page, and the moments you named"
               aria-label="History"
               aria-haspopup="dialog"
               aria-expanded={menu === 'history'}
@@ -464,22 +484,68 @@ export default function FroamToolbar({
                   <strong>History</strong>
                   <small>{history.length ? `${history.length} change${history.length === 1 ? '' : 's'} on this page` : 'On this page'}</small>
                 </div>
-                {history.length === 0 ? (
+                {prototypeName && (
+                  <div className="froam-tb__history-proto">
+                    <GitBranch size={13} />
+                    <span>You're on the prototype <strong>{prototypeName}</strong>. Its changes stay on it.</span>
+                    <button type="button" onClick={() => { closeMenu(); onOpenPrototypes?.() }}>Prototypes</button>
+                  </div>
+                )}
+                {onNameMoment && (naming === null ? (
+                  <button type="button" className="froam-tb__history-name" onClick={() => setNaming('')}>
+                    <Bookmark size={13} /> Name this moment
+                    <small>so you can come back to it</small>
+                  </button>
+                ) : (
+                  <form
+                    className="froam-tb__history-naming"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      const name = (naming ?? '').trim()
+                      if (!name) return
+                      void onNameMoment(name)
+                      setNaming(null)
+                    }}
+                  >
+                    <input autoFocus value={naming} onChange={(event) => setNaming(event.target.value)} placeholder="e.g. Before the launch" aria-label="Name for this moment" maxLength={80} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); setNaming(null) } }} />
+                    <button type="submit" disabled={!naming?.trim()}>Keep</button>
+                  </form>
+                ))}
+                {history.length === 0 && versions.length === 0 ? (
                   <p className="froam-tb__history-empty">Nothing has changed on this page yet. Every edit shows up here, and each one can be undone on its own.</p>
                 ) : (
                   <ol className="froam-tb__history-list">
-                    {history.map((item) => (
-                      <li key={item.id} className={item.isUndo ? 'is-undo' : ''}>
+                    {[
+                      ...history.map((item) => ({ kind: 'change' as const, ts: item.ts, item })),
+                      ...versions.map((version) => ({ kind: 'version' as const, ts: version.ts, version })),
+                    ].sort((a, b) => b.ts - a.ts).map((entry) => entry.kind === 'change' ? (
+                      <li key={entry.item.id} className={entry.item.isUndo ? 'is-undo' : ''}>
                         <span>
-                          <strong>{item.label}{item.where && <em> · {item.where}</em>}</strong>
-                          <small>{item.who} · {relativeTime(item.ts)}</small>
+                          <strong>{entry.item.label}{entry.item.where && <em> · {entry.item.where}</em>}</strong>
+                          <small>{entry.item.who} · {relativeTime(entry.item.ts)}</small>
                         </span>
-                        {!item.isUndo && onUndoChange && (
-                          <button type="button" onClick={() => onUndoChange(item.id)} title="Put this back as it was — later changes stay">Undo</button>
+                        {!entry.item.isUndo && onUndoChange && (
+                          <button type="button" onClick={() => onUndoChange(entry.item.id)} title="Put this back as it was — later changes stay">Undo</button>
+                        )}
+                      </li>
+                    ) : (
+                      <li key={entry.version.id} className="is-version">
+                        <Bookmark size={13} aria-hidden="true" />
+                        <span>
+                          <strong>{entry.version.name}</strong>
+                          <small>{entry.version.local ? 'Kept in this browser' : 'Version'} · {relativeTime(entry.version.ts)}</small>
+                        </span>
+                        {onRestoreVersion && (
+                          <button type="button" onClick={() => { closeMenu(); onRestoreVersion(entry.version.id, entry.version.name) }} title="Put the page back the way it was here — you can undo this">Restore</button>
                         )}
                       </li>
                     ))}
                   </ol>
+                )}
+                {onOpenAllVersions && (
+                  <button type="button" className="froam-tb__history-foot" onClick={() => { closeMenu(); onOpenAllVersions() }}>
+                    Tags, notes, compare and going live — all versions
+                  </button>
                 )}
               </div>
             )}

@@ -11,6 +11,7 @@
    (`BlueprintSheet`) are exported so the design panel's Prototype tab
    can show the same full-page picture as a persistent thumbnail.
    =============================================================== */
+import { nativeWindowScroll } from './chef/viewport-emulation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Layers, PenLine, X } from 'lucide-react'
 import { collectPagePalette } from './FroamFloatingBar'
@@ -97,8 +98,7 @@ function domDepth(el: HTMLElement, root: HTMLElement): number {
 function collectBlueprintNodes(root: HTMLElement, nodeIdOf?: (element: HTMLElement) => string | undefined): BlueprintNode[] {
   const selector = 'h1,h2,h3,h4,h5,h6,p,img,svg,picture,video,canvas,button,a,input,select,textarea,section,header,footer,main,article,nav,aside,form,ul,ol,li,blockquote,div'
   const elements = root.querySelectorAll<HTMLElement>(selector)
-  const scrollX = window.scrollX
-  const scrollY = window.scrollY
+  const { x: scrollX, y: scrollY } = nativeWindowScroll()
   const nodes: BlueprintNode[] = []
   for (const el of elements) {
     if (el.closest('[data-chef-editor-root]')) continue

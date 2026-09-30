@@ -63,6 +63,36 @@ export type FroamAdoptionResult = {
         reason: string;
     }>;
 };
+/**
+ * What the editor read off the page around the selection, for the edits that
+ * depend on it (smart Quick Edits). It stays on this device: it is not part of
+ * any AI request's evidence.
+ */
+export type FroamPageContext = {
+    /** The element's own solid fill, when it has one. */
+    surface?: string;
+    /** The solid colour behind the element. */
+    behind?: string;
+    /** A photo, video or gradient is behind its text. */
+    overImage?: boolean;
+    /** Which: a photo's contrast can't be measured; a gradient's can, against each of its colours. */
+    imageKind?: 'photo' | 'gradient';
+    /** A gradient's colours, when that's what is behind. */
+    behindStops?: string[];
+    /** The site's brand colour, when the page has a clear one. */
+    accent?: string;
+    /** The corner radius the site's cards and images mostly use. */
+    radius?: string;
+    /** It reads as text (a heading, a paragraph, a link) rather than a box. */
+    text?: boolean;
+    tag?: string;
+    /** The other elements of its kind on the page, and the styles most of them share where this one differs. */
+    lookAlikes?: {
+        count: number;
+        noun: string;
+        styles: Record<string, string>;
+    };
+};
 export type FroamMutationSelectionSnapshot = {
     node: FroamNode;
     scan?: FroamScanRecord;
@@ -71,6 +101,7 @@ export type FroamMutationSelectionSnapshot = {
     routeKey: string;
     viewport: FroamViewport;
     path: string;
+    page?: FroamPageContext;
 };
 export declare function normalizeMutationConstraints(level: FroamMutationLevel, input?: Partial<FroamMutationConstraints>): FroamMutationConstraints;
 export declare const deterministicMutationProvider: FroamMutationProvider;

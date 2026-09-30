@@ -21,7 +21,7 @@ const {
   createMutationPrototypeFromProposals,
   normalizeMutationConstraints,
 } = await import('../dist/project/mutation.js')
-const { createFroamIntelligenceApi, createOpenAICompatibleProvider } = await import('../lib/intelligence-store.mjs')
+const { createFroamIntelligenceApi, createOpenAICompatibleProvider, createAnthropicProvider, createProviderFromEnv, checkIntelligenceProvider } = await import('../lib/intelligence-store.mjs')
 const { createBridgeServer } = await import('../lib/dev-server.mjs')
 
 const tests = []
@@ -222,6 +222,40 @@ test('two compatible provider configurations use only the claimed wire contract'
 test('compatible provider timeout is bounded and sanitized by the API', async () => { const provider = createOpenAICompatibleProvider({ baseUrl: 'https://slow.test/v1', apiKey: 'server-only', model: 'slow', timeout: 5, fetchImpl: (_url, init) => new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('private timeout detail')), { once: true })) }); const result = await callApi(createFroamIntelligenceApi({ provider }), { ...makeMutationRequest(), consent: true }); assert.equal(result.status, 502); assert.equal(result.body.error.code, 'provider_unavailable'); assert.equal(JSON.stringify(result.body).includes('private timeout detail'), false) })
 test('compatible provider respects a caller AbortSignal', async () => { const controller = new AbortController(); const provider = createOpenAICompatibleProvider({ baseUrl: 'https://slow.test/v1', apiKey: 'server-only', model: 'slow', timeout: 30_000, fetchImpl: (_url, init) => new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted upstream')), { once: true })) }); const pending = provider.plan(makeMutationRequest(), { signal: controller.signal }); controller.abort(); await assert.rejects(pending, (error) => error.message === 'aborted') })
 test('compatible provider rejects non-2xx without exposing body', async () => { const provider = createOpenAICompatibleProvider({ baseUrl: 'https://compatible.test', apiKey: 'key', model: 'm', fetchImpl: compatibleFetch('sk-leak', 500) }); await assert.rejects(provider.plan(makeMutationRequest()), (error) => error.message === 'http_status' && !error.message.includes('sk-leak')) })
+test('Claude is asked for the plan as a forced tool call, and its tool input is the plan', async () => {
+  let captured
+  const provider = createAnthropicProvider({ apiKey: 'server-key', fetchImpl: compatibleFetch({ content: [{ type: 'text', text: 'Here you go.' }, { type: 'tool_use', name: 'froam_plan', input: makePlan() }] }, 200, (url, init) => { captured = { url, init, body: JSON.parse(init.body) } }) })
+  const output = await provider.plan({ ...makeMutationRequest(), consent: true })
+  assert.equal(captured.url, 'https://api.anthropic.com/v1/messages')
+  assert.equal(captured.init.headers['x-api-key'], 'server-key')
+  assert.equal(captured.init.headers['anthropic-version'], '2023-06-01')
+  assert.equal(captured.body.model, 'claude-sonnet-5')
+  assert.deepEqual(captured.body.tool_choice, { type: 'tool', name: 'froam_plan' })
+  assert.equal(captured.body.tools[0].name, 'froam_plan')
+  assert.equal(JSON.parse(captured.body.messages[0].content).consent, undefined, "consent is Froam’s, not the model’s")
+  assert.deepEqual(output, makePlan())
+  const checked = await checkIntelligenceProvider(provider, { ...makeMutationRequest(), consent: true })
+  assert.equal(checked.ok, true)
+})
+test('a refused Claude key reads as auth, and the key never appears in the error', async () => {
+  const provider = createAnthropicProvider({ apiKey: 'sk-ant-secret', fetchImpl: compatibleFetch('{"error":"sk-ant-secret"}', 401) })
+  await assert.rejects(provider.plan(makeMutationRequest()), (error) => error.message === 'auth' && !error.message.includes('sk-ant'))
+})
+test('Claude answering in prose still goes through the same JSON boundary', async () => {
+  const provider = createAnthropicProvider({ apiKey: 'k', fetchImpl: compatibleFetch({ content: [{ type: 'text', text: '```json\n' + JSON.stringify(makePlan()) + '\n```' }] }) })
+  const checked = await checkIntelligenceProvider(provider, { ...makeMutationRequest(), consent: true })
+  assert.equal(checked.ok, true)
+})
+test('the environment picks the AI: Claude natively, any compatible API, or none', () => {
+  assert.equal(createProviderFromEnv({}), null)
+  const claude = createProviderFromEnv({ ANTHROPIC_API_KEY: 'k' })
+  assert.equal(claude.kind, 'anthropic'); assert.equal(claude.model, 'claude-sonnet-5'); assert.equal(claude.host, 'api.anthropic.com')
+  assert.equal(createProviderFromEnv({ ANTHROPIC_API_KEY: 'k', FROAM_AI_MODEL: 'claude-opus-5-5' }).model, 'claude-opus-5-5')
+  const compatible = createProviderFromEnv({ FROAM_AI_API_KEY: 'k', FROAM_AI_MODEL: 'm', FROAM_AI_BASE_URL: 'https://llm.test/v1', ANTHROPIC_API_KEY: 'other' })
+  assert.equal(compatible.kind, 'openai-compatible', 'FROAM_AI_* wins over a stray ANTHROPIC_API_KEY'); assert.equal(compatible.host, 'llm.test')
+  assert.equal(createProviderFromEnv({ FROAM_AI_PROVIDER: 'anthropic', FROAM_AI_API_KEY: 'k' }).kind, 'anthropic')
+  assert.equal(createProviderFromEnv({ FROAM_AI_API_KEY: 'k' }), null, 'a compatible API needs a model')
+})
 test('compatible provider maps network failure', async () => { const provider = createOpenAICompatibleProvider({ baseUrl: 'https://compatible.test', apiKey: 'key', model: 'm', fetchImpl: async () => { throw new Error('network secret') } }); await assert.rejects(provider.plan(makeMutationRequest()), (error) => error.message === 'network') })
 test('compatible provider rejects invalid JSON envelope', async () => { const provider = createOpenAICompatibleProvider({ baseUrl: 'https://compatible.test', apiKey: 'key', model: 'm', fetchImpl: compatibleFetch('{bad') }); await assert.rejects(provider.plan(makeMutationRequest()), (error) => error.message === 'invalid_envelope') })
 test('compatible provider rejects array envelope', async () => { const provider = createOpenAICompatibleProvider({ baseUrl: 'https://compatible.test', apiKey: 'key', model: 'm', fetchImpl: compatibleFetch([]) }); await assert.rejects(provider.plan(makeMutationRequest()), (error) => error.message === 'invalid_envelope') })

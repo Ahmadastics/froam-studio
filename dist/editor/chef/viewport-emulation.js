@@ -455,4 +455,87 @@ export function restoreViewport() {
     if (wasOn)
         announceResize();
 }
+/* ── Scrolling: the page's scripts see the frame's scroll as the window's ──
+ * In a preview the page scrolls inside its screen, not the window — so a
+ * header that shrinks "on scroll", a reveal wired to window.scrollY, never
+ * moved. While a preview is on, the window's scroll position, scroll events
+ * and scrollTo() are the screen's. The editor reads the real ones
+ * (nativeWindowScroll) for its own layout.
+ */
+const SCROLL_PROPS = ['scrollY', 'pageYOffset', 'scrollX', 'pageXOffset'];
+const savedScroll = new Map();
+let scrollTarget = null;
+const nativeScrollTo = typeof window !== 'undefined' ? window.scrollTo : null;
+const nativeScrollBy = typeof window !== 'undefined' ? window.scrollBy : null;
+const nativeScroll = typeof window !== 'undefined' ? window.scroll : null;
+function forwardScroll() {
+    window.dispatchEvent(new Event('scroll'));
+    document.dispatchEvent(new Event('scroll'));
+}
+/** The window's own scroll, preview or not. */
+export function nativeWindowScroll() {
+    const read = (prop) => {
+        const descriptor = savedScroll.get(prop);
+        return descriptor?.get ? Number(descriptor.get.call(window)) : Number(window[prop]);
+    };
+    return { x: read('scrollX'), y: read('scrollY') };
+}
+export function emulateScroll(target) {
+    if (typeof window === 'undefined')
+        return;
+    restoreScroll();
+    scrollTarget = target;
+    const define = (object, prop, get, set) => {
+        savedScroll.set(`${object === window ? 'w' : object === document ? 'd' : object === document.documentElement ? 'h' : 'b'}:${prop}`, Object.getOwnPropertyDescriptor(object, prop));
+        if (object === window && (prop === 'scrollX' || prop === 'scrollY'))
+            savedScroll.set(prop, Object.getOwnPropertyDescriptor(window, prop) ?? Object.getOwnPropertyDescriptor(Object.getPrototypeOf(window), prop));
+        Object.defineProperty(object, prop, { configurable: true, get, ...(set ? { set } : {}) });
+    };
+    define(window, 'scrollY', () => target.scrollTop);
+    define(window, 'pageYOffset', () => target.scrollTop);
+    define(window, 'scrollX', () => target.scrollLeft);
+    define(window, 'pageXOffset', () => target.scrollLeft);
+    define(document, 'scrollingElement', () => target);
+    for (const element of [document.documentElement, document.body]) {
+        define(element, 'scrollTop', () => target.scrollTop, (value) => { target.scrollTop = value; });
+        define(element, 'scrollLeft', () => target.scrollLeft, (value) => { target.scrollLeft = value; });
+    }
+    const toTarget = (method) => function (x, y) {
+        if (typeof x === 'object' && x !== null)
+            target[method](x);
+        else
+            target[method](Number(x ?? 0), Number(y ?? 0));
+    };
+    window.scrollTo = toTarget('scrollTo');
+    window.scroll = toTarget('scrollTo');
+    window.scrollBy = toTarget('scrollBy');
+    target.addEventListener('scroll', forwardScroll, { passive: true });
+}
+export function restoreScroll() {
+    if (typeof window === 'undefined' || !scrollTarget)
+        return;
+    scrollTarget.removeEventListener('scroll', forwardScroll);
+    const put = (object, key, prop) => {
+        const descriptor = savedScroll.get(`${key}:${prop}`);
+        if (descriptor)
+            Object.defineProperty(object, prop, descriptor);
+        else
+            delete object[prop];
+    };
+    for (const prop of SCROLL_PROPS)
+        put(window, 'w', prop);
+    put(document, 'd', 'scrollingElement');
+    for (const [element, key] of [[document.documentElement, 'h'], [document.body, 'b']]) {
+        put(element, key, 'scrollTop');
+        put(element, key, 'scrollLeft');
+    }
+    if (nativeScrollTo)
+        window.scrollTo = nativeScrollTo;
+    if (nativeScroll)
+        window.scroll = nativeScroll;
+    if (nativeScrollBy)
+        window.scrollBy = nativeScrollBy;
+    savedScroll.clear();
+    scrollTarget = null;
+}
 //# sourceMappingURL=viewport-emulation.js.map

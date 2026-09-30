@@ -6,9 +6,12 @@ import { adoptMutationChanges, compareMutationBranches, createMutationPrototypeF
 import { createDeterministicReferenceBuildPlan, createReferenceBuildPrototype, referenceBuildRetryFeedback } from '../project/reference-build.js';
 import { dnaFromScan, scanDomTree } from '../project/scan.js';
 import { readFroamIntelligenceConsent, writeFroamIntelligenceConsent } from './intelligence-consent.js';
-import { createLocalFroamIntentProposals, FROAM_INTENT_MAX_ATTEMPTS, froamIntentPreferences, froamIntentPrototypeName, froamIntentReducer, froamIntentRetryFeedback, initialFroamIntentState } from './froam-intent-model.js';
+import { readSmartContext } from './smart-styles.js';
+import { createLocalFroamIntentProposals, explainLocalFroamIntent, FROAM_INTENT_MAX_ATTEMPTS, froamIntentPreferences, froamIntentPrototypeName, froamIntentReducer, froamIntentRetryFeedback, initialFroamIntentState } from './froam-intent-model.js';
 function safeIntentError(error) {
     const code = error instanceof Error ? error.message : 'provider_unavailable';
+    if (code.startsWith('smart:'))
+        return code.slice('smart:'.length);
     // No key names here: the browser bundle never mentions the server's secrets.
     if (code === 'not_configured')
         return 'That one needs AI, and froam dev doesn’t have one set up yet — the README shows how.';
@@ -75,7 +78,15 @@ export function useFroamIntent(props) {
         if (!scan || !node || !scan.node.path)
             return null;
         const evidenceIds = new Set([node.id, ...scan.childNodeIds, ...scan.siblingNodeIds]);
-        return { node, scan, dna: dnaFromScan(scan), relationships: bundle.relations.filter((relation) => evidenceIds.has(relation.from) || evidenceIds.has(relation.to)).slice(0, 16), routeKey: props.routeKey, viewport: props.viewport, path: scan.node.path };
+        // For the smart edits; it stays here, it's not part of any AI request.
+        let page;
+        try {
+            page = readSmartContext(element, root);
+        }
+        catch {
+            page = undefined;
+        }
+        return { node, scan, dna: dnaFromScan(scan), relationships: bundle.relations.filter((relation) => evidenceIds.has(relation.from) || evidenceIds.has(relation.to)).slice(0, 16), routeKey: props.routeKey, viewport: props.viewport, path: scan.node.path, page };
     }, [props.root, props.routeKey, props.viewport, props.onRegistryChange]);
     const resolveAutomaticTarget = useCallback((intent) => {
         const root = props.root;
@@ -165,7 +176,10 @@ export function useFroamIntent(props) {
             return;
         }
         try {
-            const localProposals = createLocalFroamIntentProposals(pending.snapshot, pending.session.intent);
+            const localProposals = createLocalFroamIntentProposals(pending.snapshot, pending.session.intent, pending.session.attempt);
+            const nothingToDo = localProposals.length ? null : explainLocalFroamIntent(pending.snapshot, pending.session.intent);
+            if (nothingToDo)
+                throw new Error(`smart:${nothingToDo}`);
             if (!localProposals.length && !props.enableRemoteIntent)
                 throw new Error(props.aiHint === 'switch' ? 'remote_intent_disabled' : props.aiHint === 'setup' ? 'not_configured' : 'local_only');
             const response = localProposals.length
@@ -281,7 +295,7 @@ export function useFroamIntent(props) {
         const pending = { kind: 'intelligence', session, snapshot, source: sourceContext(), targetElement, targetLabel, automaticTarget, elementFingerprint: fingerprint(targetElement), feedback: null };
         pendingRef.current = pending;
         dispatch({ type: 'submit', session });
-        if (props.enableRemoteIntent && createLocalFroamIntentProposals(snapshot, intent).length === 0 && readFroamIntelligenceConsent(typeof localStorage === 'undefined' ? undefined : localStorage) !== 'allowed') {
+        if (props.enableRemoteIntent && createLocalFroamIntentProposals(snapshot, intent).length === 0 && !explainLocalFroamIntent(snapshot, intent) && readFroamIntelligenceConsent(typeof localStorage === 'undefined' ? undefined : localStorage) !== 'allowed') {
             dispatch({ type: 'require-consent' });
             return;
         }

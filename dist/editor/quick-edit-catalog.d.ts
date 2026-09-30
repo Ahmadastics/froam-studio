@@ -1,4 +1,4 @@
-export type FroamQuickEditCategory = 'Typography' | 'Text style' | 'Layout' | 'Spacing' | 'Surface' | 'Sizing' | 'Motion' | 'Cleanup';
+export type FroamQuickEditCategory = 'Smart' | 'Typography' | 'Text style' | 'Layout' | 'Spacing' | 'Surface' | 'Sizing' | 'Motion' | 'Cleanup';
 export type FroamQuickEditAction = {
     id: string;
     label: string;
@@ -7,6 +7,6 @@ export type FroamQuickEditAction = {
     keywords: string;
 };
 export declare const FROAM_QUICK_EDIT_ACTIONS: FroamQuickEditAction[];
-export declare const FROAM_QUICK_EDIT_CONTRIBUTION_COUNT = 100;
+export declare const FROAM_QUICK_EDIT_CONTRIBUTION_COUNT = 109;
 export declare function searchFroamQuickEdits(query: string, limit?: number): FroamQuickEditAction[];
 //# sourceMappingURL=quick-edit-catalog.d.ts.map

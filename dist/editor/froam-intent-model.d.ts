@@ -71,6 +71,10 @@ export declare function froamIntentRetryFeedback(state: FroamIntentState): strin
  * Fast, browser-local commands for the edits people ask for most often.
  * They use the same native proposal validation and protected branch workflow
  * as remote intelligence, but never require a provider or network request.
+ * `take` is the Quick Edit attempt: smart edits vary with it, the rest are
+ * the same every time.
  */
-export declare function createLocalFroamIntentProposals(snapshot: FroamMutationSelectionSnapshot, intent: string): FroamMutationProposal[];
+export declare function createLocalFroamIntentProposals(snapshot: FroamMutationSelectionSnapshot, intent: string, take?: number): FroamMutationProposal[];
+/** When a smart edit has nothing to do here ("already passes AAA"), the reason — so Quick Edit can say it instead of a vague "couldn't". */
+export declare function explainLocalFroamIntent(snapshot: FroamMutationSelectionSnapshot, intent: string): string | null;
 //# sourceMappingURL=froam-intent-model.d.ts.map

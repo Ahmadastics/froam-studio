@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 import { isFroamPersonaPath } from '../froamPersona.js';
 import { findElementByPath, isFroamOwnedNode, STAGE_ATTR } from '../../collab/paths.js';
 import { getRoot } from './dom.js';
-import { applyCanvasDraftStyles, applyDraft, clearCanvasDraftStyles, isInjectionPath } from './drafts.js';
-import { emulateViewport, restoreViewport } from './viewport-emulation.js';
+import { applyCanvasDraftStyles, applyDraft, clearCanvasDraftStyles, isInjectionPath, restorePageStyle } from './drafts.js';
+import { emulateScroll, emulateViewport, restoreScroll, restoreViewport } from './viewport-emulation.js';
 import { CANVAS_KEY, DEVICE_SHELL_ID, } from './types.js';
 const CANVAS_SELECTOR = '#froam-editor-portal .froam-figma-layout__canvas';
 const CHROME_SELECTOR = '#froam-editor-portal .froam-chrome';
@@ -83,7 +83,7 @@ export function useDeviceShell({ routeKey, store, viewportMode, deviceSize, zoom
                 return;
             const el = findElementByPath(appRoot, path);
             if (el)
-                el.removeAttribute('style');
+                restorePageStyle(el, prevDrafts[path]?.styles);
         });
         if (prevDrafts[CANVAS_KEY])
             clearCanvasDraftStyles();
@@ -171,8 +171,9 @@ export function useDeviceShell({ routeKey, store, viewportMode, deviceSize, zoom
         const theme = document.getElementById('froam-editor-portal')?.dataset.froamUiTheme;
         body.style.overflow = 'hidden';
         body.style.background = theme === 'light' ? '#e7e9ed' : '#0b0c0f';
-        // The device, in the page's eyes.
+        // The device, in the page's eyes — its size, and its scrolling.
         emulateViewport({ width: deviceW, height: deviceH, touch: true });
+        emulateScroll(inPlace ? appRoot : scroller);
         const bezel = document.createElement('div');
         bezel.id = DEVICE_SHELL_ID;
         bezel.setAttribute('data-chef-editor-root', 'true');
@@ -236,6 +237,7 @@ export function useDeviceShell({ routeKey, store, viewportMode, deviceSize, zoom
             resize.disconnect();
             window.removeEventListener('resize', schedule);
             adopt?.disconnect();
+            restoreScroll();
             restoreViewport();
             bezel.remove();
             if (inPlace)

@@ -16,6 +16,7 @@ import FroamSmartGuides from './FroamSmartGuides.js';
 import { createFroamLibraryComponent, FROAM_COMPONENTS } from './FroamComponentCatalog.js';
 import { FROAM_FRAME_PRESETS, } from './FroamPlannerTypes.js';
 import FroamToolbar from './FroamToolbar.js';
+import { createVersion, fetchVersionStore, listRouteVersions } from './versions-store.js';
 import { describeSelection } from './selection-name.js';
 import FroamLayersPanel from './FroamLayersPanel.js';
 import FroamDesignPanel from './FroamDesignPanel.js';
@@ -84,9 +85,9 @@ import { intelligenceTabs, labTabs, CHEF_BUTTON_START, CANVAS_KEY, INJECTION_KEY
 import { cursorOptions, displayOptions, flexDirectionOptions, justifyOptions, alignOptions, positionOptions, overflowOptions, borderStyleOptions, blendModeOptions, textTransformOptions, persistedStyleKeys, } from './chef/style-options.js';
 import { MAX_PERSONA_IMAGE_BYTES, SAVE_META_KEY, BRAND_FONT_MAX_BYTES, loadBrandFonts, saveBrandFontsForProject, loadStore, saveStoreForProject, loadNodeRegistry, saveNodeRegistryForProject, loadPersonaPreference, savePersonaPreference, personasEqual, stripPersonaDrafts, withPersonaDraft, countRenderableDrafts, } from './chef/storage.js';
 import { getRoot, getCanvasHost, applyGlobalCSS, isSvgInternal, shouldSkipElement, readNumber, camelToKebab, readImageUrl, buildSelection, } from './chef/dom.js';
-import { describeChange, relativeTime, changeByline, buildFroamChangeReport } from './chef/change-report.js';
+import { describeChange, relativeTime, changeByline, buildFroamChangeReport, smallHash } from './chef/change-report.js';
 import { SINGLE_LINE_TAGS, isWritableElement, placeCaret, isEditableField, isTextVisualLayer, } from './chef/writing.js';
-import { sanitizeDraftForElement, applyDraft, isInjectionPath, isSectionStructurePath, readInjectionDraft, readLiveElementDraft, applyCanvasDraftStyles, clearCanvasDraftStyles, } from './chef/drafts.js';
+import { sanitizeDraftForElement, applyDraft, restorePageStyle, isInjectionPath, isSectionStructurePath, readInjectionDraft, readLiveElementDraft, applyCanvasDraftStyles, clearCanvasDraftStyles, } from './chef/drafts.js';
 import { ensureFroamNodeId, isStructuralLayerElement, syncStructureBoundaryLabel, buildLayerNode, collectLayers, } from './chef/layers.js';
 import { collectCSSVars, readCanvasState, capturePageThumb, syncFroamArtboardMetadata, buildGradientCSS, } from './chef/canvas.js';
 import { AccordionSection, Toast, FroamWelcomeTips, SCAN_DONE_KEY, BLUEPRINT_SEEN_KEY, FroamScan, MeasurementOverlay, ClickPulseOverlay, SelectionHandoffOverlay, } from './chef/overlays.js';
@@ -101,6 +102,27 @@ const FroamReferenceWorkspace = lazyPanel(() => import('./FroamReferenceWorkspac
 const FroamConnectedCanvas = lazyPanel(() => import('./FroamConnectedCanvas.js'), { mountWhen: (props) => props.open });
 const FroamIntelligence = lazyPanel(() => import('./FroamIntelligence.js'), { mountWhen: (props) => props.open });
 const FroamLabs = lazyPanel(() => import('./FroamLabs.js'), { mountWhen: (props) => props.open });
+/** A page's edits as a short fingerprint: equal when the page is the same, whatever order it was built in. */
+function stableJson(value) {
+    if (Array.isArray(value))
+        return `[${value.map(stableJson).join(',')}]`;
+    if (value && typeof value === 'object')
+        return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+    return JSON.stringify(value) ?? 'null';
+}
+function pageFingerprint(drafts) {
+    // Save tags each edit with how to find its element again; Undo rebuilds
+    // without the tags. They're bookkeeping, not the page's design.
+    const design = Object.fromEntries(Object.entries(stripPersonaDrafts(drafts)).map(([path, draft]) => {
+        if (!draft?.fingerprint)
+            return [path, draft];
+        const untagged = { ...draft };
+        delete untagged.fingerprint;
+        return [path, untagged];
+    }));
+    return smallHash(stableJson(design));
+}
+const EMPTY_PAGE = smallHash(stableJson({}));
 /**
  * What the room sees of your studio profile. The colour is sent only once you
  * have picked one, so everyone keeping the default still gets a distinct one.
@@ -246,6 +268,25 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             commandPaletteReturnFocusRef.current = null;
         };
     }, [commandPaletteOpen]);
+    // A phone's on-screen keyboard covers the bottom of the page without resizing
+    // it (iOS): what sits at the bottom — Quick Edit, the selection bar — moves up.
+    useEffect(() => {
+        const viewport = window.visualViewport;
+        if (!viewport)
+            return;
+        const update = () => {
+            const covered = Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop));
+            document.documentElement.style.setProperty('--froam-keyboard', `${covered > 80 ? covered : 0}px`);
+        };
+        update();
+        viewport.addEventListener('resize', update);
+        viewport.addEventListener('scroll', update);
+        return () => {
+            viewport.removeEventListener('resize', update);
+            viewport.removeEventListener('scroll', update);
+            document.documentElement.style.removeProperty('--froam-keyboard');
+        };
+    }, []);
     // "Match system" follows the computer as it changes, not just when the editor opens.
     const [systemLight, setSystemLight] = useState(() => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-color-scheme: light)').matches));
     useEffect(() => {
@@ -429,15 +470,36 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         }
     });
     const savedClock = savedClocks[viewportStoreKey] ?? 0;
-    /** Changes on this page since the last Save. */
-    const unsavedCount = changeLog.filter((change) => change.clock > savedClock).length;
-    const markSaved = (scope, clock) => {
+    // What the page looked like when it was last saved — so a change undone, or
+    // a version restored to what's saved, reads as saved again.
+    const savedPagesKey = froamStorageKey('froam-saved-page-v1', projectKey);
+    const [savedPages, setSavedPages] = useState(() => {
+        try {
+            return JSON.parse(window.localStorage.getItem(savedPagesKey) ?? '{}');
+        }
+        catch {
+            return {};
+        }
+    });
+    const pageNow = useMemo(() => pageFingerprint(routeDrafts), [routeDrafts]);
+    const pageClean = savedPages[viewportStoreKey] !== undefined ? savedPages[viewportStoreKey] === pageNow : pageNow === EMPTY_PAGE;
+    /** Changes on this page since the last Save — none if the page is back to what was saved. */
+    const unsavedCount = pageClean ? 0 : changeLog.filter((change) => change.clock > savedClock).length;
+    const markSaved = (scope, clock, fingerprint) => {
         setSavedClocks((current) => {
             const next = { ...current, [scope]: clock };
             try {
                 window.localStorage.setItem(savedClocksKey, JSON.stringify(next));
             }
             catch { /* storage full: the count just resets */ }
+            return next;
+        });
+        setSavedPages((current) => {
+            const next = { ...current, [scope]: fingerprint };
+            try {
+                window.localStorage.setItem(savedPagesKey, JSON.stringify(next));
+            }
+            catch { /* storage full */ }
             return next;
         });
     };
@@ -460,6 +522,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         });
     };
     const autosaveWarnedRef = useRef(false);
+    const [timelineVersions, setTimelineVersions] = useState([]);
     const historyItems = useMemo(() => changeLog.map((change) => ({
         id: change.id,
         label: change.label,
@@ -1132,7 +1195,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         // Back to the page's own words. What the painter saw before it first
                         // wrote wins over the editor's snapshot, which a reload can take
                         // after the approved text was already on screen.
-                        target.removeAttribute('style');
+                        restorePageStyle(target, scope.expect[path]?.styles);
                         const words = pageTextOf(target) ?? originalsRef.current[key]?.[path]?.text;
                         if (words !== undefined)
                             applyDraftText(target, words);
@@ -2537,6 +2600,19 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
      * "take back that one", and it is how undoing someone else's work will work
      * once a room has two people in it.
      */
+    /** Put a version back. No snapshot needed: the reconcile effect turns the store swap into ops, so it's undoable. */
+    function loadVersionIntoPage(versionStore, versionName) {
+        opPendingLabelRef.current = `Restored “${versionName}”`;
+        const nextStore = { ...store, [viewportStoreKey]: versionStore };
+        setStore(nextStore);
+        saveStore(nextStore);
+        applyStoreToDOM(nextStore, { clearCurrent: true });
+        showToast(`Restored “${versionName}” — Undo puts it back`);
+    }
+    async function refreshTimelineVersions() {
+        const list = await listRouteVersions(projectKey, routeKey, viewportMode);
+        setTimelineVersions(list.map((version) => ({ id: version.id, name: version.name, ts: Date.parse(version.createdAt), local: Boolean(version.localOnly) })));
+    }
     function revertChange(change) {
         const ops = opLog.revert(change.id);
         if (!ops.length) {
@@ -2813,11 +2889,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             const target = findElementByPath(root, path);
             if (!target)
                 return;
+            restorePageStyle(target, drafts[path]?.styles);
             const original = originalsRef.current[viewportStoreKey]?.[path];
-            if (original)
-                applyDraft(target, original);
-            else
-                target.removeAttribute('style');
+            if (original && (original.text !== undefined || original.imageUrl !== undefined))
+                applyDraft(target, { text: original.text, imageUrl: original.imageUrl });
         });
         if (drafts[CANVAS_KEY])
             clearCanvasDraftStyles();
@@ -3203,10 +3278,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         const root = getRoot();
         const target = root ? findElementByPath(root, selection.path) : null;
         const original = originalsRef.current[viewportStoreKey]?.[selection.path];
-        if (target && original)
-            applyDraft(target, original);
-        else if (target)
-            target.removeAttribute('style');
+        if (target) {
+            restorePageStyle(target, routeDrafts[selection.path]?.styles);
+            if (original && (original.text !== undefined || original.imageUrl !== undefined))
+                applyDraft(target, { text: original.text, imageUrl: original.imageUrl });
+        }
         setStore((current) => {
             const routeEntries = { ...(current[viewportStoreKey] ?? {}) };
             delete routeEntries[selection.path];
@@ -3224,11 +3300,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     return;
                 const target = findElementByPath(root, path);
                 if (target) {
+                    restorePageStyle(target, routeDrafts[path]?.styles);
                     const original = originalsRef.current[viewportStoreKey]?.[path];
-                    if (original)
-                        applyDraft(target, original);
-                    else
-                        target.removeAttribute('style');
+                    if (original && (original.text !== undefined || original.imageUrl !== undefined))
+                        applyDraft(target, { text: original.text, imageUrl: original.imageUrl });
                 }
             });
         }
@@ -3397,7 +3472,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         saveStore(nextStore);
         window.localStorage.setItem(froamStorageKey(SAVE_META_KEY, projectKey), JSON.stringify(payload));
         // Kept in this browser either way — so it counts as saved, and the toast says where.
-        markSaved(scope, upTo);
+        markSaved(scope, upTo, pageFingerprint(routeSnapshot));
         if (room.role === 'contributor') {
             if (!quiet)
                 showToast('Saved in this browser — Submit when you’re ready for approval');
@@ -5823,7 +5898,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 const change = changeLog.find((entry) => entry.id === id);
                                 if (change)
                                     revertChange(change);
-                            } }) }), _jsxs("div", { className: "froam-figma-left", "data-chef-editor-root": "true", hidden: !leftPanelOpen, children: [_jsx(FroamPanelTabs, { tabs: LEFT_PANEL_TABS, active: leftTab, onSelect: (tab) => openLeftTab(tab.id), label: "Layers, pages and library" }), _jsxs("div", { className: "froam-figma-left__body", "data-chef-editor-root": "true", children: [leftWorkspaceMode === 'plan' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "SitePlanner", children: _jsx(FroamSitePlanner, { projectKey: projectKey, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, requestedTab: plannerRequestedTab, selection: selection ? { nodeId: selection.nodeId, label: selection.label } : null, archiveItems: plannerArchiveItems, assets: assets, onRenameProject: renameProject, onAddAsset: addAssetEntry, onApplyAsset: applyAssetToSelection, onRemoveAsset: removeAsset, onTabChange: (nextTab) => {
+                            }, versions: timelineVersions, onHistoryOpen: () => { void refreshTimelineVersions(); }, onNameMoment: isContributor ? undefined : async (name) => {
+                                const kept = await createVersion(projectKey, routeKey, viewportMode, collectVersionRouteDrafts(), name);
+                                showToast(kept.local ? `Kept “${name}” in this browser` : `Kept “${name}”`);
+                                await refreshTimelineVersions();
+                            }, onRestoreVersion: async (id, name) => {
+                                const versionStore = await fetchVersionStore(projectKey, id);
+                                if (versionStore)
+                                    loadVersionIntoPage(versionStore, name);
+                                else
+                                    showToast('That version could not be found');
+                            }, onOpenAllVersions: () => { setWorkspacePreference((current) => ({ ...current, advancedOpen: true })); setOpenSections((p) => ({ ...p, versions: true })); } }) }), _jsxs("div", { className: "froam-figma-left", "data-chef-editor-root": "true", hidden: !leftPanelOpen, children: [_jsx(FroamPanelTabs, { tabs: LEFT_PANEL_TABS, active: leftTab, onSelect: (tab) => openLeftTab(tab.id), label: "Layers, pages and library" }), _jsxs("div", { className: "froam-figma-left__body", "data-chef-editor-root": "true", children: [leftWorkspaceMode === 'plan' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "SitePlanner", children: _jsx(FroamSitePlanner, { projectKey: projectKey, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, requestedTab: plannerRequestedTab, selection: selection ? { nodeId: selection.nodeId, label: selection.label } : null, archiveItems: plannerArchiveItems, assets: assets, onRenameProject: renameProject, onAddAsset: addAssetEntry, onApplyAsset: applyAssetToSelection, onRemoveAsset: removeAsset, onTabChange: (nextTab) => {
                                                     setPlannerRequestedTab(nextTab);
                                                     const section = nextTab === 'library' ? 'library' : 'plan';
                                                     setWorkspacePreference((current) => ({ ...current, mode: 'create', sections: { ...current.sections, create: section } }));
@@ -5944,17 +6029,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                                         setGradStops(next);
                                                     } }), _jsx("span", { className: "fs-range-value", children: "%" }), gradStops.length > 2 && (_jsx("button", { type: "button", className: "fs-gradient-stop__remove", onClick: () => setGradStops(gradStops.filter((_, j) => j !== i)), children: _jsx(X, { size: 12 }) }))] }, i))) }), _jsxs("div", { className: "fs-pill-group", children: [_jsxs("button", { type: "button", className: "fs-pill", onClick: () => setGradStops([...gradStops, { color: '#ffffff', position: 50 }]), children: [_jsx(Plus, { size: 12 }), " Add stop"] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: applyGradient, disabled: !selection, children: [_jsx(Paintbrush, { size: 12 }), " Apply gradient"] })] })] }) }), _jsxs(AccordionSection, { id: "layers", icon: _jsx(Layers, { size: 14 }), title: "Layers", isOpen: openSections.layers, onToggle: () => toggleSection('layers'), children: [_jsx("div", { className: "fs-layers", "data-chef-editor-root": "true", children: layers.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "No layers detected" })) : (layers.map((node) => (_jsxs("div", { className: `fs-layers__node ${selection?.path === node.path ? 'is-selected' : ''}`, style: { paddingLeft: `${8 + node.depth * 14}px` }, onClick: () => selectLayerNode(node), children: [_jsx(Code, { size: 11, style: { opacity: 0.5, flexShrink: 0 } }), _jsx("span", { className: "fs-layers__node-tag", children: node.tag }), node.className && _jsxs("span", { className: "fs-layers__node-class", children: [".", node.className.replace(/ /g, '.')] }), _jsx("button", { type: "button", className: `fs-layers__eye ${node.hidden ? 'is-hidden' : ''}`, onClick: (e) => { e.stopPropagation(); toggleLayerVisibility(node); }, title: node.hidden ? 'Show' : 'Hide', children: node.hidden ? _jsx(EyeOff, { size: 12 }) : _jsx(Eye, { size: 12 }) })] }, node.path)))) }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => { const root = getRoot(); if (root)
                                         setLayers(collectLayers(root)); }, children: [_jsx(Search, { size: 12 }), " Refresh layers"] })] }), _jsx(AccordionSection, { id: "cssVars", icon: _jsx(Variable, { size: 14 }), title: "CSS variables", isOpen: openSections.cssVars, onToggle: () => toggleSection('cssVars'), children: _jsxs("div", { className: "fs-stack", children: [cssVars.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "No custom properties found on :root" })) : (cssVars.map((v) => (_jsxs("div", { className: "fs-css-var", "data-chef-editor-root": "true", children: [_jsx("span", { className: "fs-css-var__name", title: v.name, children: v.name }), _jsx("input", { type: "text", className: "fs-input fs-css-var__value", value: v.value, onChange: (e) => updateCSSVar(v.name, e.target.value) }), _jsx("button", { type: "button", className: "fs-gradient-stop__remove", onClick: () => removeCSSVar(v.name), title: "Remove", children: _jsx(X, { size: 12 }) })] }, v.name)))), _jsxs("div", { className: "fs-row", style: { gap: 6 }, children: [_jsx("input", { type: "text", className: "fs-input", value: newVarName, onChange: (e) => setNewVarName(e.target.value), placeholder: "--my-color", style: { flex: 1 } }), _jsx("input", { type: "text", className: "fs-input", value: newVarValue, onChange: (e) => setNewVarValue(e.target.value), placeholder: "#ff0000", style: { flex: 1 } }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: addCSSVar, children: [_jsx(Plus, { size: 12 }), " Add"] })] })] }) }), _jsx(AccordionSection, { id: "versions", icon: _jsx(GitCommit, { size: 14 }), title: "Versions", isOpen: openSections.versions, onToggle: () => toggleSection('versions'), children: _jsx(FroamVersionPanel, { projectKey: projectKey, routeKey: routeKey, viewportMode: viewportMode, currentStore: routeDrafts, getCurrentStore: () => collectVersionRouteDrafts(), captureThumb: capturePageThumb, onLoadVersion: (versionStore, versionName) => {
-                                    // No snapshot needed: the reconcile effect turns this store
-                                    // swap into ops, so loading a version is undoable by itself.
-                                    opPendingLabelRef.current = `Loaded “${versionName}”`;
-                                    const nextStore = {
-                                        ...store,
-                                        [viewportStoreKey]: versionStore,
-                                    };
-                                    setStore(nextStore);
-                                    saveStore(nextStore);
-                                    applyStoreToDOM(nextStore, { clearCurrent: true });
-                                    showToast(`Loaded "${versionName}"`);
+                                    loadVersionIntoPage(versionStore, versionName);
                                     toggleSection('versions');
                                 }, onClose: () => toggleSection('versions') }) }), _jsx(AccordionSection, { id: "history", icon: _jsx(Clock, { size: 14 }), title: "History", isOpen: openSections.history, onToggle: () => toggleSection('history'), children: changeLog.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Nothing changed here yet" })) : (_jsx("ul", { className: "fs-history-list", children: changeLog.map((change) => (_jsxs("li", { className: "fs-history-item", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "fs-history-meta", children: [_jsx("span", { children: describeChange(change) }), _jsx("small", { children: changeByline(change) })] }), _jsx("button", { type: "button", className: "fs-pill is-accent", title: `Undo ${describeChange(change)}`, onClick: () => revertChange(change), children: "Undo" })] }, change.id))) })) }), _jsx(AccordionSection, { id: "share", icon: _jsx(Share2, { size: 14 }), title: room.inRoom ? 'Shared for review' : 'Share for review', isOpen: openSections.share, onToggle: () => toggleSection('share'), children: !shareLink ? (_jsxs("div", { className: "froam-notes", children: [_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Open a room and send the link. They need no account \u2014 the link is the way in." }), _jsx("button", { type: "button", className: "fs-pill is-accent", disabled: sharing, onClick: () => void startSharing(), children: sharing ? 'Opening…' : 'Get a review link' })] })) : (_jsxs("div", { className: "froam-notes", children: [_jsx("div", { className: "froam-share__link", title: shareLink, children: shareLink }), _jsxs("div", { className: "froam-note__row", children: [_jsx("button", { type: "button", className: "fs-pill is-accent", onClick: () => void copyShareLink(), children: copied ? 'Copied' : 'Copy link' }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => void copyEditorLink(), title: "Invite another designer who can edit", children: "Invite editor" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => void startSharing(true), children: "New link" })] }), _jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.7rem' }, children: roomPresence.length
                                             ? `${roomPresence.map((m) => m.name).join(', ')} ${roomPresence.length === 1 ? 'is' : 'are'} here`

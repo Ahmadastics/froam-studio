@@ -41,4 +41,11 @@ export declare function resolveViewportUnits(value: string, size: EmulatedViewpo
 export declare function emulateViewport(size: EmulatedViewport): void;
 /** Back to the real window: every rule, unit and list as it was. */
 export declare function restoreViewport(): void;
+/** The window's own scroll, preview or not. */
+export declare function nativeWindowScroll(): {
+    x: number;
+    y: number;
+};
+export declare function emulateScroll(target: HTMLElement): void;
+export declare function restoreScroll(): void;
 //# sourceMappingURL=viewport-emulation.d.ts.map

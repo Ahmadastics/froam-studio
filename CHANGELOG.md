@@ -1,5 +1,55 @@
 # Changelog
 
+## 9.2.0 - 2026-09-30
+
+**Smart Quick Edits that read the page, one History, an honest Save, and
+Claude built in.**
+
+- **Smart Quick Edits.** Nine edits that look at the page before they change
+  anything, run on your computer with no AI, and say in the preview what they
+  worked out. **Fix the contrast** measures the colour actually behind the
+  text, including every colour of a gradient, and picks the nearest shade of
+  the same hue that passes WCAG ("Contrast 1.3:1 → 3.1:1"). Over a photo it
+  adds a soft shadow behind the letters instead. **Fluid size** is exactly the
+  phone size at 375px and the desktop size at 1440px, with no breakpoints.
+  **Frosted glass** is tuned to the light or dark behind it and uses the
+  site's corner radius. **Brand gradient**, **Brand glow**, **Brand colour**
+  and **Make it pop** use the site's own brand colour, read from its buttons,
+  links and logo, deepened only as far as it takes to stay readable.
+  **Balance the lines** stops a word being left alone on the last line.
+  **Match the others** copies what its look-alikes on the page share. Quick
+  Edit offers the ones that suit what's selected, **Try again** gives a
+  different take (another hue pairing, a softer glow, heavier frost), and
+  when there's nothing to fix it says so.
+- **A site's own inline styles survive.** Cancelling a Quick Edit preview,
+  undoing, clearing styles or switching to a phone preview used to wipe an
+  element's whole `style` attribute, the site's own values included. A
+  caption positioned by its own `style` jumped out of place. Now only
+  Froam's styles come off.
+- **One History.** Changes and named moments share one timeline. **Name this
+  moment** keeps the page as it is, **Restore** puts it back, and Ctrl+Z takes
+  the restore back. Tags, notes, compare and going live are one click away in
+  Versions.
+- **Save tells the truth.** Undo back to what you saved, or take a change back
+  from History, and Save reads as saved. It used to keep counting changes
+  that were no longer on the page.
+- **Claude, natively.** `ANTHROPIC_API_KEY` alone now uses Anthropic's own
+  Messages API, and Claude has to answer in Froam's plan format.
+  `froam ai-check` sends one sample request to the AI `froam dev` would use
+  and says in plain words whether it worked. It never prints the key.
+- **Scrolling reaches the page in phone and tablet previews.** The page's
+  `scroll` listeners fire, and `window.scrollY` and `scrollTo()` follow the
+  device screen, so sticky headers and scroll effects behave.
+- **On a phone,** the bottom bars stay above the on-screen keyboard, the
+  selection bar puts font and weight before the rest, and the first-time hint
+  no longer covers the phone preview.
+- **A lighter editor.** Styles' 205 looks download the first time Styles
+  opens, not with the editor.
+- **For maintainers:** `npm run release` goes from publish to a live site in
+  one run (checks, the live share checks, publish, waiting for npm, jsDelivr,
+  git push and tag, site deploy). `--dry-run` only checks.
+  `npm run smoke:share` runs the live share checks on their own.
+
 ## 9.1.0 - 2026-09-29
 
 **Smooth scrolling, real phone and tablet previews, and an editor that fits a phone.**

@@ -153,8 +153,8 @@ export function adoptMutationChanges(document, input) {
 }
 export function materializeMutationPreview(state, proposals) { return proposals.reduce((current, proposal, index) => applyProjectEvent(current, { schemaVersion: 2, id: `preview-${index}`, projectId: 'preview', branchId: 'preview', actorId: 'preview', clock: index + 1, createdAt: 0, type: proposal.type, targetIds: proposal.targetIds, payload: proposal.payload }), structuredClone(state)); }
 const COMPILED_STYLE_FIELDS = {
-    visual: ['color', 'backgroundColor', 'border', 'borderColor', 'borderRadius', 'boxShadow', 'opacity'],
-    typography: ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign', 'textTransform', 'textDecorationLine'],
+    visual: ['color', 'backgroundColor', 'border', 'borderColor', 'borderRadius', 'boxShadow', 'opacity', 'backgroundImage', 'backgroundClip', 'WebkitBackgroundClip', 'WebkitTextFillColor', 'backdropFilter', 'WebkitBackdropFilter', 'textShadow'],
+    typography: ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign', 'textTransform', 'textDecorationLine', 'textWrap'],
     spacing: ['margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'gap', 'rowGap', 'columnGap'],
     motion: ['transition', 'animation', 'transform'],
     layout: ['display', 'position', 'top', 'right', 'bottom', 'left', 'zIndex', 'overflow', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'aspectRatio', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'gridTemplateColumns', 'gridTemplateRows'], navigation: [], interactions: [], responsive: [], composition: [],

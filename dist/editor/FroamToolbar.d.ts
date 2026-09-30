@@ -51,6 +51,18 @@ type Props = {
     /** What happened on this page, newest first — each can be undone on its own. */
     history?: HistoryItem[];
     onUndoChange?: (id: string) => void;
+    /** Named moments on this page (versions), in the same timeline as the changes. */
+    versions?: TimelineVersion[];
+    onHistoryOpen?: () => void;
+    onNameMoment?: (name: string) => void | Promise<void>;
+    onRestoreVersion?: (id: string, name: string) => void;
+    onOpenAllVersions?: () => void;
+};
+export type TimelineVersion = {
+    id: string;
+    name: string;
+    ts: number;
+    local: boolean;
 };
 export type HistoryItem = {
     id: string;
@@ -62,6 +74,6 @@ export type HistoryItem = {
 };
 /** "Home", "Pricing", "Blog / First post" — a route, as a person says it. */
 export declare function pageName(routeKey: string): string;
-export default function FroamToolbar({ workspace, collaborate, viewportMode, onViewportChange, activeTool, onToolChange, canUndo, canRedo, onUndo, onRedo, onSave, onSaveRepo, repoStatus, repoDirtyCount, onAskFroam, onCommandPalette, onShortcutsOverlay, onCustomize, routeKey, projectName, prototypeName, onOpenPages, onOpenLibrary, libraryOpen, onOpenPrototypes, persona, onOpenPersonaEditor, moveMode, onToggleMoveMode, zoom, setZoom, leftPanelOpen, rightPanelOpen, onToggleLeftPanel, onToggleRightPanel, onMinimize, onClose, unsavedCount, autosave, onToggleAutosave, history, onUndoChange, }: Props): import("react").JSX.Element;
+export default function FroamToolbar({ workspace, collaborate, viewportMode, onViewportChange, activeTool, onToolChange, canUndo, canRedo, onUndo, onRedo, onSave, onSaveRepo, repoStatus, repoDirtyCount, onAskFroam, onCommandPalette, onShortcutsOverlay, onCustomize, routeKey, projectName, prototypeName, onOpenPages, onOpenLibrary, libraryOpen, onOpenPrototypes, persona, onOpenPersonaEditor, moveMode, onToggleMoveMode, zoom, setZoom, leftPanelOpen, rightPanelOpen, onToggleLeftPanel, onToggleRightPanel, onMinimize, onClose, unsavedCount, autosave, onToggleAutosave, history, onUndoChange, versions, onHistoryOpen, onNameMoment, onRestoreVersion, onOpenAllVersions, }: Props): import("react").JSX.Element;
 export type { ToolMode };
 //# sourceMappingURL=FroamToolbar.d.ts.map

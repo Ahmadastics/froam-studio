@@ -118,7 +118,7 @@ function effectiveBackground(start: Element | null): Rgba {
  * and links (backgrounds first — a filled button is the loudest statement of
  * a brand), weighted by how much of it there is on screen.
  */
-function sampleAccent(scope: ParentNode): Rgba | null {
+export function sampleAccent(scope: ParentNode): Rgba | null {
   const votes = new Map<string, { color: Rgba; weight: number }>()
   const vote = (color: Rgba | null, weight: number) => {
     if (!color || color.a < 0.6 || chroma(color) < 0.3) return
@@ -156,7 +156,7 @@ function sampleAccent(scope: ParentNode): Rgba | null {
   return best?.color ?? null
 }
 
-function sampleRadius(elements: HTMLElement[], fallback: string) {
+export function sampleRadius(elements: HTMLElement[], fallback: string) {
   const values = elements
     .filter(isVisible)
     .map((el) => Number.parseFloat(getComputedStyle(el).borderTopLeftRadius))

@@ -45,6 +45,13 @@ export declare function toHex({ r, g, b }: Rgba): string;
 /** WCAG relative luminance. */
 export declare function luminance({ r, g, b }: Rgba): number;
 export declare function contrast(a: Rgba, b: Rgba): number;
+/**
+ * The brand colour: the most-used saturated colour across the page's buttons
+ * and links (backgrounds first — a filled button is the loudest statement of
+ * a brand), weighted by how much of it there is on screen.
+ */
+export declare function sampleAccent(scope: ParentNode): Rgba | null;
+export declare function sampleRadius(elements: HTMLElement[], fallback: string): string;
 /** Reads the live page. Anything it can't find falls back to a calm default. */
 export declare function sampleSiteTheme(scope?: HTMLElement): SiteTheme;
 /** The theme as the custom properties the Library's patterns are written against. */

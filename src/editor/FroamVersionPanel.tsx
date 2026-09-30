@@ -18,42 +18,24 @@ import {
 import { apiGetFresh, apiPost, apiDelete } from '../lib/api'
 import { getFroamRootElement } from '../config'
 import { froamStorageKey } from '../project/storage-scope'
+import {
+  LOCAL_VERSION_PREFIX,
+  LOCAL_VERSIONS_KEY,
+  deleteLocalVersion,
+  extractImageRefs,
+  findLocalVersion,
+  getScopedLocalVersions,
+  readLocalVersions,
+  saveLocalVersion,
+  summarizeStore,
+  writeLocalVersions,
+  type FroamChangeSummary,
+  type FroamVersionMeta,
+} from './versions-store'
+
+export type { FroamVersionMeta } from './versions-store'
 
 /* ── Types ───────────────────────────────────────────────────── */
-export type FroamVersionMeta = {
-  id: string
-  name: string
-  description?: string | null
-  tags?: string[]
-  notes?: string | null
-  changeSummary?: FroamChangeSummary | null
-  imageRefs?: FroamImageRef[]
-  isLive: boolean
-  parentVersionId?: string | null
-  createdAt: string
-  localOnly?: boolean
-  routeKey?: string
-  viewportMode?: string
-}
-
-type FroamChangeSummary = {
-  draftCount: number
-  insertedBlockCount: number
-  textCount: number
-  styleCount: number
-  imageCount: number
-  changedPaths?: string[]
-}
-
-type FroamImageRef = {
-  path: string
-  kind: 'image' | 'background'
-  sha256?: string
-  size?: number
-  mime?: string | null
-  preview?: string
-}
-
 type DiffEntry = {
   path: string
   kind: 'added' | 'removed' | 'changed'
@@ -79,15 +61,6 @@ type Props = {
   captureThumb?: () => Promise<string | null>
 }
 
-type LocalFroamVersion = FroamVersionMeta & {
-  routeKey: string
-  viewportMode: string
-  store: Record<string, unknown>
-  localOnly: true
-}
-
-const LOCAL_VERSION_PREFIX = 'local:'
-const LOCAL_VERSIONS_KEY = 'froam:local-versions:v1'
 const LOCAL_THUMBS_KEY = 'froam:thumbs:v1'
 
 /* Migrate versions saved under pre-3.1 (Run'Am-branded) localStorage keys. */
@@ -182,89 +155,6 @@ function getErrorMessage(error: unknown) {
   return 'Server sync failed'
 }
 
-function readLocalVersions(projectKey: string) {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = window.localStorage.getItem(froamStorageKey(LOCAL_VERSIONS_KEY, projectKey))
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.filter(isLocalVersion) : []
-  } catch {
-    return []
-  }
-}
-
-function writeLocalVersions(projectKey: string, versions: LocalFroamVersion[]) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(froamStorageKey(LOCAL_VERSIONS_KEY, projectKey), JSON.stringify(versions.slice(0, 80)))
-}
-
-function isLocalVersion(value: unknown): value is LocalFroamVersion {
-  if (!value || typeof value !== 'object') return false
-  const candidate = value as Partial<LocalFroamVersion>
-  return (
-    typeof candidate.id === 'string' &&
-    candidate.id.startsWith(LOCAL_VERSION_PREFIX) &&
-    typeof candidate.name === 'string' &&
-    typeof candidate.routeKey === 'string' &&
-    typeof candidate.viewportMode === 'string' &&
-    typeof candidate.createdAt === 'string' &&
-    !!candidate.store &&
-    typeof candidate.store === 'object' &&
-    !Array.isArray(candidate.store)
-  )
-}
-
-function getScopedLocalVersions(projectKey: string, routeKey: string, viewportMode: string) {
-  return readLocalVersions(projectKey)
-    .filter((version) => version.routeKey === routeKey && version.viewportMode === viewportMode)
-    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
-}
-
-function saveLocalVersion(
-  projectKey: string,
-  routeKey: string,
-  viewportMode: string,
-  store: Record<string, unknown>,
-  name: string,
-  description?: string,
-  tags: string[] = [],
-  notes?: string,
-  changeSummary?: FroamChangeSummary,
-  imageRefs?: FroamImageRef[],
-) {
-  const version: LocalFroamVersion = {
-    id: `${LOCAL_VERSION_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    routeKey,
-    viewportMode,
-    store,
-    name,
-    description: description || null,
-    tags,
-    notes: notes || null,
-    changeSummary: changeSummary ?? summarizeStore(store),
-    imageRefs: imageRefs ?? extractImageRefs(store),
-    isLive: false,
-    parentVersionId: null,
-    createdAt: new Date().toISOString(),
-    localOnly: true,
-  }
-  writeLocalVersions(projectKey, [version, ...readLocalVersions(projectKey)])
-  return version
-}
-
-function findLocalVersion(projectKey: string, versionId: string) {
-  return readLocalVersions(projectKey).find((version) => version.id === versionId) ?? null
-}
-
-function deleteLocalVersion(projectKey: string, versionId: string) {
-  writeLocalVersions(projectKey, readLocalVersions(projectKey).filter((version) => version.id !== versionId))
-}
-
-function countInsertedBlocks(store: Record<string, unknown>) {
-  return Object.keys(store).filter((key) => key.startsWith('__froam_injection__:')).length
-}
-
 function parseTags(value: string) {
   const tags: string[] = []
   for (const raw of value.split(',')) {
@@ -278,61 +168,6 @@ function parseTags(value: string) {
     if (tags.length >= 12) break
   }
   return tags
-}
-
-function isDraft(value: unknown): value is { text?: unknown; imageUrl?: unknown; styles?: unknown } {
-  return !!value && typeof value === 'object' && !Array.isArray(value)
-}
-
-function readBackgroundImageUrl(value: string) {
-  const match = value.match(/url\((['"]?)(.*?)\1\)/i)
-  return match?.[2] ?? null
-}
-
-function summarizeStore(store: Record<string, unknown>): FroamChangeSummary {
-  const changedPaths = Object.keys(store)
-  let textCount = 0
-  let styleCount = 0
-  let imageCount = 0
-  for (const draftValue of Object.values(store)) {
-    if (!isDraft(draftValue)) continue
-    if (typeof draftValue.text === 'string') textCount += 1
-    if (typeof draftValue.imageUrl === 'string') imageCount += 1
-    if (draftValue.styles && typeof draftValue.styles === 'object' && !Array.isArray(draftValue.styles)) {
-      const styles = draftValue.styles as Record<string, unknown>
-      styleCount += Object.keys(styles).length
-      if (typeof styles.backgroundImage === 'string' && readBackgroundImageUrl(styles.backgroundImage)) {
-        imageCount += 1
-      }
-    }
-  }
-  return {
-    draftCount: changedPaths.length,
-    insertedBlockCount: countInsertedBlocks(store),
-    textCount,
-    styleCount,
-    imageCount,
-    changedPaths: changedPaths.slice(0, 120),
-  }
-}
-
-function extractImageRefs(store: Record<string, unknown>): FroamImageRef[] {
-  const refs: FroamImageRef[] = []
-  for (const [path, draftValue] of Object.entries(store)) {
-    if (!isDraft(draftValue)) continue
-    if (typeof draftValue.imageUrl === 'string') {
-      refs.push({ path, kind: 'image', size: draftValue.imageUrl.length, preview: draftValue.imageUrl.slice(0, 120) })
-    }
-    if (draftValue.styles && typeof draftValue.styles === 'object' && !Array.isArray(draftValue.styles)) {
-      const styles = draftValue.styles as Record<string, unknown>
-      if (typeof styles.backgroundImage === 'string') {
-        const src = readBackgroundImageUrl(styles.backgroundImage)
-        if (src) refs.push({ path, kind: 'background', size: src.length, preview: src.slice(0, 120) })
-      }
-    }
-    if (refs.length >= 80) break
-  }
-  return refs
 }
 
 function summaryParts(summary?: FroamChangeSummary | null) {

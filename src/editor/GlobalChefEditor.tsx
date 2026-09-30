@@ -96,7 +96,8 @@ import {
   type FroamInsertPlacement,
   type FroamWireframeSection,
 } from './FroamPlannerTypes'
-import FroamToolbar, { type HistoryItem } from './FroamToolbar'
+import FroamToolbar, { type HistoryItem, type TimelineVersion } from './FroamToolbar'
+import { createVersion, fetchVersionStore, listRouteVersions } from './versions-store'
 import { describeSelection } from './selection-name'
 import FroamLayersPanel, { type LayerKnowledge } from './FroamLayersPanel'
 import FroamDesignPanel from './FroamDesignPanel'
@@ -251,7 +252,7 @@ import {
   readImageUrl,
   buildSelection,
 } from './chef/dom'
-import { describeChange, relativeTime, changeByline, buildFroamChangeReport } from './chef/change-report'
+import { describeChange, relativeTime, changeByline, buildFroamChangeReport, smallHash } from './chef/change-report'
 import {
   SINGLE_LINE_TAGS,
   isWritableElement,
@@ -263,6 +264,7 @@ import {
 import {
   sanitizeDraftForElement,
   applyDraft,
+  restorePageStyle,
   isInjectionPath,
   isSectionStructurePath,
   readInjectionDraft,
@@ -307,6 +309,25 @@ const FroamReferenceWorkspace = lazyPanel(() => import('./FroamReferenceWorkspac
 const FroamConnectedCanvas = lazyPanel(() => import('./FroamConnectedCanvas'), { mountWhen: (props) => props.open })
 const FroamIntelligence = lazyPanel(() => import('./FroamIntelligence'), { mountWhen: (props) => props.open })
 const FroamLabs = lazyPanel(() => import('./FroamLabs'), { mountWhen: (props) => props.open })
+
+/** A page's edits as a short fingerprint: equal when the page is the same, whatever order it was built in. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`).join(',')}}`
+  return JSON.stringify(value) ?? 'null'
+}
+function pageFingerprint(drafts: Record<string, ElementDraft>) {
+  // Save tags each edit with how to find its element again; Undo rebuilds
+  // without the tags. They're bookkeeping, not the page's design.
+  const design = Object.fromEntries(Object.entries(stripPersonaDrafts(drafts)).map(([path, draft]) => {
+    if (!draft?.fingerprint) return [path, draft]
+    const untagged = { ...draft }
+    delete untagged.fingerprint
+    return [path, untagged]
+  }))
+  return smallHash(stableJson(design))
+}
+const EMPTY_PAGE = smallHash(stableJson({}))
 
 /* ═══════════════════════════════════════════════════════════════
    Main component
@@ -457,6 +478,25 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       commandPaletteReturnFocusRef.current = null
     }
   }, [commandPaletteOpen])
+  // A phone's on-screen keyboard covers the bottom of the page without resizing
+  // it (iOS): what sits at the bottom — Quick Edit, the selection bar — moves up.
+  useEffect(() => {
+    const viewport = window.visualViewport
+    if (!viewport) return
+    const update = () => {
+      const covered = Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop))
+      document.documentElement.style.setProperty('--froam-keyboard', `${covered > 80 ? covered : 0}px`)
+    }
+    update()
+    viewport.addEventListener('resize', update)
+    viewport.addEventListener('scroll', update)
+    return () => {
+      viewport.removeEventListener('resize', update)
+      viewport.removeEventListener('scroll', update)
+      document.documentElement.style.removeProperty('--froam-keyboard')
+    }
+  }, [])
+
   // "Match system" follows the computer as it changes, not just when the editor opens.
   const [systemLight, setSystemLight] = useState(() => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-color-scheme: light)').matches))
   useEffect(() => {
@@ -653,12 +693,25 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     try { return JSON.parse(window.localStorage.getItem(savedClocksKey) ?? '{}') as Record<string, number> } catch { return {} }
   })
   const savedClock = savedClocks[viewportStoreKey] ?? 0
-  /** Changes on this page since the last Save. */
-  const unsavedCount = changeLog.filter((change) => change.clock > savedClock).length
-  const markSaved = (scope: string, clock: number) => {
+  // What the page looked like when it was last saved — so a change undone, or
+  // a version restored to what's saved, reads as saved again.
+  const savedPagesKey = froamStorageKey('froam-saved-page-v1', projectKey)
+  const [savedPages, setSavedPages] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(window.localStorage.getItem(savedPagesKey) ?? '{}') as Record<string, string> } catch { return {} }
+  })
+  const pageNow = useMemo(() => pageFingerprint(routeDrafts), [routeDrafts])
+  const pageClean = savedPages[viewportStoreKey] !== undefined ? savedPages[viewportStoreKey] === pageNow : pageNow === EMPTY_PAGE
+  /** Changes on this page since the last Save — none if the page is back to what was saved. */
+  const unsavedCount = pageClean ? 0 : changeLog.filter((change) => change.clock > savedClock).length
+  const markSaved = (scope: string, clock: number, fingerprint: string) => {
     setSavedClocks((current) => {
       const next = { ...current, [scope]: clock }
       try { window.localStorage.setItem(savedClocksKey, JSON.stringify(next)) } catch { /* storage full: the count just resets */ }
+      return next
+    })
+    setSavedPages((current) => {
+      const next = { ...current, [scope]: fingerprint }
+      try { window.localStorage.setItem(savedPagesKey, JSON.stringify(next)) } catch { /* storage full */ }
       return next
     })
   }
@@ -673,6 +726,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     })
   }
   const autosaveWarnedRef = useRef(false)
+  const [timelineVersions, setTimelineVersions] = useState<TimelineVersion[]>([])
   const historyItems = useMemo<HistoryItem[]>(() => changeLog.map((change) => ({
     id: change.id,
     label: change.label,
@@ -1289,7 +1343,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             // Back to the page's own words. What the painter saw before it first
             // wrote wins over the editor's snapshot, which a reload can take
             // after the approved text was already on screen.
-            target.removeAttribute('style')
+            restorePageStyle(target, (scope.expect[path] as ElementDraft | undefined)?.styles)
             const words = pageTextOf(target) ?? originalsRef.current[key]?.[path]?.text
             if (words !== undefined) applyDraftText(target, words)
           }
@@ -2611,6 +2665,21 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
    * "take back that one", and it is how undoing someone else's work will work
    * once a room has two people in it.
    */
+  /** Put a version back. No snapshot needed: the reconcile effect turns the store swap into ops, so it's undoable. */
+  function loadVersionIntoPage(versionStore: Record<string, unknown>, versionName: string) {
+    opPendingLabelRef.current = `Restored “${versionName}”`
+    const nextStore: EditorStore = { ...store, [viewportStoreKey]: versionStore as Record<string, ElementDraft> }
+    setStore(nextStore)
+    saveStore(nextStore)
+    applyStoreToDOM(nextStore, { clearCurrent: true })
+    showToast(`Restored “${versionName}” — Undo puts it back`)
+  }
+
+  async function refreshTimelineVersions() {
+    const list = await listRouteVersions(projectKey, routeKey, viewportMode)
+    setTimelineVersions(list.map((version) => ({ id: version.id, name: version.name, ts: Date.parse(version.createdAt), local: Boolean(version.localOnly) })))
+  }
+
   function revertChange(change: FroamChange) {
     const ops = opLog.revert(change.id)
     if (!ops.length) {
@@ -2885,9 +2954,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       if (path === CANVAS_KEY || isInjectionPath(path) || isSectionStructurePath(path) || isFroamPersonaPath(path)) return
       const target = findElementByPath(root, path)
       if (!target) return
+      restorePageStyle(target, drafts[path]?.styles)
       const original = originalsRef.current[viewportStoreKey]?.[path]
-      if (original) applyDraft(target, original)
-      else target.removeAttribute('style')
+      if (original && (original.text !== undefined || original.imageUrl !== undefined)) applyDraft(target, { text: original.text, imageUrl: original.imageUrl })
     })
 
     if (drafts[CANVAS_KEY]) clearCanvasDraftStyles()
@@ -3297,8 +3366,10 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const root = getRoot()
     const target = root ? findElementByPath(root, selection.path) : null
     const original = originalsRef.current[viewportStoreKey]?.[selection.path]
-    if (target && original) applyDraft(target, original)
-    else if (target) target.removeAttribute('style')
+    if (target) {
+      restorePageStyle(target, routeDrafts[selection.path]?.styles)
+      if (original && (original.text !== undefined || original.imageUrl !== undefined)) applyDraft(target, { text: original.text, imageUrl: original.imageUrl })
+    }
     setStore((current) => {
       const routeEntries = { ...(current[viewportStoreKey] ?? {}) }
       delete routeEntries[selection.path]
@@ -3316,9 +3387,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         if (path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path)) return
         const target = findElementByPath(root, path)
         if (target) {
+          restorePageStyle(target, routeDrafts[path]?.styles)
           const original = originalsRef.current[viewportStoreKey]?.[path]
-          if (original) applyDraft(target, original)
-          else target.removeAttribute('style')
+          if (original && (original.text !== undefined || original.imageUrl !== undefined)) applyDraft(target, { text: original.text, imageUrl: original.imageUrl })
         }
       })
     }
@@ -3492,7 +3563,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     saveStore(nextStore)
     window.localStorage.setItem(froamStorageKey(SAVE_META_KEY, projectKey), JSON.stringify(payload))
     // Kept in this browser either way — so it counts as saved, and the toast says where.
-    markSaved(scope, upTo)
+    markSaved(scope, upTo, pageFingerprint(routeSnapshot))
     if (room.role === 'contributor') {
       if (!quiet) showToast('Saved in this browser — Submit when you’re ready for approval')
       return
@@ -6053,6 +6124,19 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 const change = changeLog.find((entry) => entry.id === id)
                 if (change) revertChange(change)
               }}
+              versions={timelineVersions}
+              onHistoryOpen={() => { void refreshTimelineVersions() }}
+              onNameMoment={isContributor ? undefined : async (name) => {
+                const kept = await createVersion(projectKey, routeKey, viewportMode, collectVersionRouteDrafts() as Record<string, unknown>, name)
+                showToast(kept.local ? `Kept “${name}” in this browser` : `Kept “${name}”`)
+                await refreshTimelineVersions()
+              }}
+              onRestoreVersion={async (id, name) => {
+                const versionStore = await fetchVersionStore(projectKey, id)
+                if (versionStore) loadVersionIntoPage(versionStore, name)
+                else showToast('That version could not be found')
+              }}
+              onOpenAllVersions={() => { setWorkspacePreference((current) => ({ ...current, advancedOpen: true })); setOpenSections((p) => ({ ...p, versions: true })) }}
             />
           </FroamSectionBoundary>
           <div className="froam-figma-left" data-chef-editor-root="true" hidden={!leftPanelOpen}>
@@ -7195,17 +7279,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 getCurrentStore={() => collectVersionRouteDrafts() as Record<string, unknown>}
                 captureThumb={capturePageThumb}
                 onLoadVersion={(versionStore, versionName) => {
-                  // No snapshot needed: the reconcile effect turns this store
-                  // swap into ops, so loading a version is undoable by itself.
-                  opPendingLabelRef.current = `Loaded “${versionName}”`
-                  const nextStore: EditorStore = {
-                    ...store,
-                    [viewportStoreKey]: versionStore as Record<string, ElementDraft>,
-                  }
-                  setStore(nextStore)
-                  saveStore(nextStore)
-                  applyStoreToDOM(nextStore, { clearCurrent: true })
-                  showToast(`Loaded "${versionName}"`)
+                  loadVersionIntoPage(versionStore, versionName)
                   toggleSection('versions')
                 }}
                 onClose={() => toggleSection('versions')}

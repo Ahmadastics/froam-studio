@@ -75,7 +75,7 @@ function effectiveBackground(start) {
  * and links (backgrounds first — a filled button is the loudest statement of
  * a brand), weighted by how much of it there is on screen.
  */
-function sampleAccent(scope) {
+export function sampleAccent(scope) {
     const votes = new Map();
     const vote = (color, weight) => {
         if (!color || color.a < 0.6 || chroma(color) < 0.3)
@@ -117,7 +117,7 @@ function sampleAccent(scope) {
             best = entry;
     return best?.color ?? null;
 }
-function sampleRadius(elements, fallback) {
+export function sampleRadius(elements, fallback) {
     const values = elements
         .filter(isVisible)
         .map((el) => Number.parseFloat(getComputedStyle(el).borderTopLeftRadius))

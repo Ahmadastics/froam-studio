@@ -11,7 +11,8 @@ import type { FroamNodeRegistry } from '../project/node-registry'
 import type { FroamIntelligenceResponse, FroamIntelligenceNotConfiguredResponse } from '../project/intelligence-transport'
 import type { FroamProjectDocument } from '../project/types'
 import { readFroamIntelligenceConsent, writeFroamIntelligenceConsent } from './intelligence-consent'
-import { createLocalFroamIntentProposals, FROAM_INTENT_MAX_ATTEMPTS, froamIntentPreferences, froamIntentPrototypeName, froamIntentReducer, froamIntentRetryFeedback, initialFroamIntentState, type FroamIntentOrigin, type FroamIntentSession } from './froam-intent-model'
+import { readSmartContext } from './smart-styles'
+import { createLocalFroamIntentProposals, explainLocalFroamIntent, FROAM_INTENT_MAX_ATTEMPTS, froamIntentPreferences, froamIntentPrototypeName, froamIntentReducer, froamIntentRetryFeedback, initialFroamIntentState, type FroamIntentOrigin, type FroamIntentSession } from './froam-intent-model'
 
 type Selection = { nodeId?: string; path: string; label: string } | null
 type Activity = 'intent-understanding' | 'intent-creating' | 'intent-applying' | null
@@ -45,6 +46,7 @@ type Props = {
 
 function safeIntentError(error: unknown) {
   const code = error instanceof Error ? error.message : 'provider_unavailable'
+  if (code.startsWith('smart:')) return code.slice('smart:'.length)
   // No key names here: the browser bundle never mentions the server's secrets.
   if (code === 'not_configured') return 'That one needs AI, and froam dev doesn’t have one set up yet — the README shows how.'
   if (code === 'remote_intent_disabled') return 'That one needs AI — turn on AI in Quick Edit. Or try a direct edit like “make it bolder”, “center the content” or “add more space”.'
@@ -94,7 +96,10 @@ export function useFroamIntent(props: Props) {
     const node = bundle.nodes.find((candidate) => candidate.id === bundle.rootNodeId)
     if (!scan || !node || !scan.node.path) return null
     const evidenceIds = new Set([node.id, ...scan.childNodeIds, ...scan.siblingNodeIds])
-    return { node, scan, dna: dnaFromScan(scan), relationships: bundle.relations.filter((relation) => evidenceIds.has(relation.from) || evidenceIds.has(relation.to)).slice(0, 16), routeKey: props.routeKey, viewport: props.viewport, path: scan.node.path }
+    // For the smart edits; it stays here, it's not part of any AI request.
+    let page: FroamMutationSelectionSnapshot['page']
+    try { page = readSmartContext(element, root) } catch { page = undefined }
+    return { node, scan, dna: dnaFromScan(scan), relationships: bundle.relations.filter((relation) => evidenceIds.has(relation.from) || evidenceIds.has(relation.to)).slice(0, 16), routeKey: props.routeKey, viewport: props.viewport, path: scan.node.path, page }
   }, [props.root, props.routeKey, props.viewport, props.onRegistryChange])
 
   const resolveAutomaticTarget = useCallback((intent: string) => {
@@ -168,7 +173,9 @@ export function useFroamIntent(props: Props) {
     const request = assembleFroamIntelligenceRequest({ project: projectRef.current, intent: pending.session.intent, scope: { selectedNodeId: pending.session.selectedNodeId, selectedDomPath: pending.session.selectedPath, routeKey: props.routeKey, viewport: props.viewport }, priorAttemptFeedback: pending.feedback, requestId: `${pending.session.id}:${pending.session.attempt}`, consent: true, selectionEvidence: { node: pending.snapshot.node, scan: pending.snapshot.scan, dna: pending.snapshot.dna, relationships: pending.snapshot.relationships } })
     if (!request) { if (abortRef.current === operation.controller) abortRef.current = null; dispatch({ type: 'fail', message: 'Froam couldn\'t identify that element reliably. Select it again and retry.' }); return }
     try {
-      const localProposals = createLocalFroamIntentProposals(pending.snapshot, pending.session.intent)
+      const localProposals = createLocalFroamIntentProposals(pending.snapshot, pending.session.intent, pending.session.attempt)
+      const nothingToDo = localProposals.length ? null : explainLocalFroamIntent(pending.snapshot, pending.session.intent)
+      if (nothingToDo) throw new Error(`smart:${nothingToDo}`)
       if (!localProposals.length && !props.enableRemoteIntent) throw new Error(props.aiHint === 'switch' ? 'remote_intent_disabled' : props.aiHint === 'setup' ? 'not_configured' : 'local_only')
       const response: FroamIntelligenceResponse | FroamIntelligenceNotConfiguredResponse = localProposals.length
         ? { schemaVersion: 1, purpose: 'mutate', provider: 'froam-local-command@1', proposals: localProposals, rationale: 'Prepared instantly on this device.', confidence: .98 }
@@ -247,7 +254,7 @@ export function useFroamIntent(props: Props) {
     const session: FroamIntentSession = { id: `intent:${Date.now().toString(36)}`, origin: input.origin, intent, selectedNodeId: snapshot.node.id, selectedPath: snapshot.path, targetLabel, automaticTarget, sourceBranchId: projectRef.current.activeBranchId, attempt: 1, maxAttempts: FROAM_INTENT_MAX_ATTEMPTS }
     const pending: PendingIntelligenceIntent = { kind: 'intelligence', session, snapshot, source: sourceContext(), targetElement, targetLabel, automaticTarget, elementFingerprint: fingerprint(targetElement), feedback: null }; pendingRef.current = pending
     dispatch({ type: 'submit', session })
-    if (props.enableRemoteIntent && createLocalFroamIntentProposals(snapshot, intent).length === 0 && readFroamIntelligenceConsent(typeof localStorage === 'undefined' ? undefined : localStorage) !== 'allowed') { dispatch({ type: 'require-consent' }); return }
+    if (props.enableRemoteIntent && createLocalFroamIntentProposals(snapshot, intent).length === 0 && !explainLocalFroamIntent(snapshot, intent) && readFroamIntelligenceConsent(typeof localStorage === 'undefined' ? undefined : localStorage) !== 'allowed') { dispatch({ type: 'require-consent' }); return }
     await performRequest(pending)
   }, [fingerprint, observeTarget, performRequest, props.enableRemoteIntent, props.onExecuteLocalCommand, props.root, resolveAutomaticTarget, sourceContext])
 

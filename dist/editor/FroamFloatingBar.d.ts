@@ -52,7 +52,6 @@ type Props = {
     }) => void;
 };
 export declare function collectPagePalette(): string[];
-export declare const LOOK_NOTES: Record<string, string>;
 export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, radius, opacity, isHidden, fontOptions, selectionCount, isTextLayer, hasText, isImage, docked, canUndo, onWalk, onAction, onStyle, onSaveLook, }: Props): import("react").JSX.Element | null;
 export {};
 //# sourceMappingURL=FroamFloatingBar.d.ts.map

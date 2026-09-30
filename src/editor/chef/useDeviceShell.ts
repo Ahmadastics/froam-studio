@@ -2,8 +2,8 @@ import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import { isFroamPersonaPath } from '../froamPersona'
 import { findElementByPath, isFroamOwnedNode, STAGE_ATTR } from '../../collab/paths'
 import { getRoot } from './dom'
-import { applyCanvasDraftStyles, applyDraft, clearCanvasDraftStyles, isInjectionPath } from './drafts'
-import { emulateViewport, restoreViewport } from './viewport-emulation'
+import { applyCanvasDraftStyles, applyDraft, clearCanvasDraftStyles, isInjectionPath, restorePageStyle } from './drafts'
+import { emulateScroll, emulateViewport, restoreScroll, restoreViewport } from './viewport-emulation'
 import type { DeviceFrame, DeviceSize } from './device-sizes'
 import {
   CANVAS_KEY,
@@ -111,7 +111,7 @@ export function useDeviceShell({ routeKey, store, viewportMode, deviceSize, zoom
     Object.keys(prevDrafts).forEach((path) => {
       if (path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path)) return
       const el = findElementByPath(appRoot, path)
-      if (el) el.removeAttribute('style')
+      if (el) restorePageStyle(el, prevDrafts[path]?.styles)
     })
     if (prevDrafts[CANVAS_KEY]) clearCanvasDraftStyles()
 
@@ -200,8 +200,9 @@ export function useDeviceShell({ routeKey, store, viewportMode, deviceSize, zoom
     body.style.overflow = 'hidden'
     body.style.background = theme === 'light' ? '#e7e9ed' : '#0b0c0f'
 
-    // The device, in the page's eyes.
+    // The device, in the page's eyes — its size, and its scrolling.
     emulateViewport({ width: deviceW, height: deviceH, touch: true })
+    emulateScroll(inPlace ? appRoot : scroller)
 
     const bezel = document.createElement('div')
     bezel.id = DEVICE_SHELL_ID
@@ -267,6 +268,7 @@ export function useDeviceShell({ routeKey, store, viewportMode, deviceSize, zoom
       resize.disconnect()
       window.removeEventListener('resize', schedule)
       adopt?.disconnect()
+      restoreScroll()
       restoreViewport()
       bezel.remove()
       if (inPlace) clearInline(appRoot, ROOT_PROPS)

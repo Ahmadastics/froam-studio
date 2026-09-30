@@ -7,7 +7,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
-const source = fs.readFileSync(path.join(ROOT, 'src/editor/FroamFloatingBar.tsx'), 'utf8')
+const source = fs.readFileSync(path.join(ROOT, 'src/editor/floating-bar-looks.ts'), 'utf8')
 
 const tests = []
 const test = (name, fn) => tests.push([name, fn])
@@ -20,12 +20,12 @@ function sliceBetween(startMarker, endMarker) {
   return source.slice(start, end)
 }
 
-const looksBlock = sliceBetween('const LOOKS: Look[] = [', '\n]')
+const looksBlock = sliceBetween('export const LOOKS: Look[] = [', '\n]')
 const notesBlock = sliceBetween('export const LOOK_NOTES: Record<string, string> = {', '\n}')
 
 const lookNames = [...looksBlock.matchAll(/name:\s*'([^']+)'/g)].map((match) => match[1])
 const lookGroups = [...looksBlock.matchAll(/group:\s*'([^']+)'/g)].map((match) => match[1])
-const declaredGroups = [...sliceBetween('const LOOK_GROUPS = [', '] as const')
+const declaredGroups = [...sliceBetween('export const LOOK_GROUPS = [', '] as const')
   .matchAll(/'([^']+)'/g)].map((match) => match[1])
 const noteKeys = [...notesBlock.matchAll(/^\s{2}(?:'([^']+)'|([A-Za-z][A-Za-z0-9]*)):\s/gm)]
   .map((match) => match[1] ?? match[2])

@@ -2,6 +2,7 @@ import { looksLikeNaturalLanguageIntent } from '../project/intelligence-context'
 import type { FroamReferenceBuildValidation } from '../project/reference-build'
 import type { FroamMutationDomain, FroamMutationProposal, FroamMutationSelectionSnapshot } from '../project/mutation'
 import type { FroamDNA } from '../project/types'
+import { smartStyleEdit } from './smart-styles'
 
 export const FROAM_INTENT_MAX_ATTEMPTS = 3
 export type FroamIntentOrigin = 'command-palette' | 'reference' | 'responsive' | 'contextual'
@@ -112,8 +113,10 @@ function replacementText(intent: string) {
  * Fast, browser-local commands for the edits people ask for most often.
  * They use the same native proposal validation and protected branch workflow
  * as remote intelligence, but never require a provider or network request.
+ * `take` is the Quick Edit attempt: smart edits vary with it, the rest are
+ * the same every time.
  */
-export function createLocalFroamIntentProposals(snapshot: FroamMutationSelectionSnapshot, intent: string): FroamMutationProposal[] {
+export function createLocalFroamIntentProposals(snapshot: FroamMutationSelectionSnapshot, intent: string, take = 1): FroamMutationProposal[] {
   const normalized = intent.toLocaleLowerCase().trim()
   const dna = snapshot.dna ?? ({ schemaVersion: 1, nodeId: snapshot.node.id, capturedAt: Date.now() } as FroamDNA)
   const visual = { ...(dna.visual as Record<string, unknown> | undefined) }
@@ -121,6 +124,23 @@ export function createLocalFroamIntentProposals(snapshot: FroamMutationSelection
   const motion = { ...(dna.motion as Record<string, unknown> | undefined) }
   const changes = new Map<FroamMutationDomain, Record<string, unknown>>()
   const add = (domain: FroamMutationDomain, property: string, value: string) => changes.set(domain, { ...(changes.get(domain) ?? {}), [property]: value })
+  const proposals = (rationale: string): FroamMutationProposal[] => [...changes].map(([domain, record]) => ({
+    type: 'dna.captured',
+    domain,
+    targetIds: [snapshot.node.id],
+    confidence: .98,
+    rationale,
+    payload: { dna: { ...dna, nodeId: snapshot.node.id, capturedAt: Date.now(), visual: domain === 'visual' || domain === 'typography' ? { ...visual, ...Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'textContent')) } : visual, layout: domain === 'spacing' || domain === 'layout' ? { ...layout, ...record } : layout, motion: domain === 'motion' ? { ...motion, ...record } : motion, semantics: record.textContent ? { ...dna.semantics, textContent: record.textContent } : dna.semantics } },
+  }))
+
+  // Smart edits read the page (its brand colour, what's behind the element,
+  // its look-alikes) and answer on their own — the phrase-by-phrase rules
+  // below would only add noise to "fix the contrast".
+  const smart = smartStyleEdit(intent, { visual, layout, tag: String((dna.structure as Record<string, unknown> | undefined)?.tag ?? ''), page: snapshot.page }, take)
+  if (smart) {
+    for (const change of smart.changes) add(change.domain, change.property, change.value)
+    return proposals(smart.note)
+  }
 
   const colorName = Object.keys(LOCAL_COLORS).find((name) => new RegExp(`\\b${name}\\b`).test(normalized))
   const hex = normalized.match(/#[0-9a-f]{3,8}\b/i)?.[0]
@@ -238,12 +258,12 @@ export function createLocalFroamIntentProposals(snapshot: FroamMutationSelection
   const nextText = replacementText(intent)
   if (nextText) add('typography', 'textContent', nextText)
 
-  return [...changes].map(([domain, record]) => ({
-    type: 'dna.captured',
-    domain,
-    targetIds: [snapshot.node.id],
-    confidence: .98,
-    rationale: `Applied locally: ${intent.slice(0, 120)}`,
-    payload: { dna: { ...dna, nodeId: snapshot.node.id, capturedAt: Date.now(), visual: domain === 'visual' || domain === 'typography' ? { ...visual, ...Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'textContent')) } : visual, layout: domain === 'spacing' || domain === 'layout' ? { ...layout, ...record } : layout, motion: domain === 'motion' ? { ...motion, ...record } : motion, semantics: record.textContent ? { ...dna.semantics, textContent: record.textContent } : dna.semantics } },
-  }))
+  return proposals(`Applied locally: ${intent.slice(0, 120)}`)
+}
+
+/** When a smart edit has nothing to do here ("already passes AAA"), the reason — so Quick Edit can say it instead of a vague "couldn't". */
+export function explainLocalFroamIntent(snapshot: FroamMutationSelectionSnapshot, intent: string): string | null {
+  const dna = snapshot.dna
+  const smart = smartStyleEdit(intent, { visual: { ...(dna?.visual as Record<string, unknown> | undefined) }, layout: { ...(dna?.layout as Record<string, unknown> | undefined) }, tag: String((dna?.structure as Record<string, unknown> | undefined)?.tag ?? ''), page: snapshot.page })
+  return smart && smart.changes.length === 0 ? smart.note : null
 }

@@ -25,6 +25,8 @@
 .froam-quick-chat__suggestions{display:flex;flex-wrap:wrap;gap:6px}
 .froam-quick-chat__suggestions button{min-height:28px;padding:0 10px;border-radius:999px;background:var(--fs-surface-control);color:var(--fs-text-secondary);font:500 12px/1 var(--fs-font);cursor:pointer}
 .froam-quick-chat__suggestions button:hover,.froam-quick-chat__suggestions button:focus-visible{background:var(--fs-surface-control-active);color:var(--fs-text-primary);outline:0}
+.froam-quick-chat__suggestions button.is-smart{display:inline-flex;align-items:center;gap:5px;background:rgba(var(--fs-accent-rgb),.12);color:var(--fs-accent-text,var(--fs-text-primary));box-shadow:inset 0 0 0 1px rgba(var(--fs-accent-rgb),.28)}
+.froam-quick-chat__suggestions button.is-smart:hover,.froam-quick-chat__suggestions button.is-smart:focus-visible{background:rgba(var(--fs-accent-rgb),.2)}
 .froam-quick-chat small{color:var(--fs-text-tertiary);font-size:11px;line-height:1.45}
-@media(max-width:520px){.froam-quick-chat{bottom:10px}.froam-quick-chat header>button,.froam-quick-chat__suggestions button,.froam-quick-chat .is-send{min-height:44px}.froam-quick-chat form{grid-template-columns:minmax(0,1fr) 44px}.froam-quick-chat input{height:44px;font-size:16px}.froam-quick-chat .is-send{width:44px;height:44px}}
+@media(max-width:520px){.froam-quick-chat{bottom:calc(10px + var(--froam-keyboard, 0px))}.froam-quick-chat header>button,.froam-quick-chat__suggestions button,.froam-quick-chat .is-send{min-height:44px}.froam-quick-chat form{grid-template-columns:minmax(0,1fr) 44px}.froam-quick-chat input{height:44px;font-size:16px}.froam-quick-chat .is-send{width:44px;height:44px}}
 @media(prefers-reduced-motion:reduce){.froam-quick-chat,.froam-quick-chat *{animation:none!important;transition:none!important}}

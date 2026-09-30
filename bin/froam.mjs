@@ -971,6 +971,7 @@ function help() {
   log(`      ${dim('--serve [dir]')}      check against a built/static folder`)
   log(`      ${dim('--fix')}              re-anchor the edits that merely moved`)
   log(`  ${teal('doctor')}             health-check the setup`)
+  log(`  ${teal('ai-check')}           send one test request to the AI froam dev would use`)
   log(`  ${teal('migrate')}            upgrade froam.design.json to v${DESIGN_VERSION}`)
   log(`  ${teal('version')}            print the installed Froam package version`)
   log()
@@ -978,8 +979,55 @@ function help() {
 }
 
 /* ── shorthand ───────────────────────────────────────────────── */
+
+/**
+ * `froam ai-check`: the AI froam dev would use (the same environment, the
+ * same provider), sent one small Quick Edit request, and its answer checked
+ * the way froam dev checks it. Prints what it found — never the key.
+ */
+async function aiCheck() {
+  const { createProviderFromEnv, checkIntelligenceProvider } = await import('../lib/intelligence-store.mjs')
+  const { normalizeMutationConstraints } = await import('../dist/project/mutation.js')
+  let configured = null
+  try { configured = createProviderFromEnv(process.env) } catch (error) { log(`${red('✗')} AI isn't set up: ${error.message}`); process.exitCode = 1; return }
+  if (!configured) {
+    log(`${red('✗')} No AI set up for froam dev.`)
+    log(`  Set ${teal('ANTHROPIC_API_KEY')} (Claude), or ${teal('FROAM_AI_API_KEY')} and ${teal('FROAM_AI_MODEL')} (any OpenAI-compatible API), then run this again.`)
+    process.exitCode = 1
+    return
+  }
+  log(`Asking ${configured.model} at ${configured.host}…`)
+  const request = {
+    schemaVersion: 1,
+    purpose: 'mutate',
+    intent: 'Make this button look like a sticker',
+    context: { projectId: 'froam-ai-check', activeBranchId: 'main', routeKey: '/', viewport: 'desktop' },
+    constraints: normalizeMutationConstraints('safe'),
+    scopeNodeIds: ['cta'],
+    consent: true,
+    requestId: 'ai-check-1',
+  }
+  const result = await checkIntelligenceProvider(configured.provider, request)
+  const why = {
+    auth: 'the key was refused — check it, and that it can use this model',
+    http_status: 'the API answered with an error — check the model name and your account',
+    network: "couldn't reach it — check the connection and the base URL",
+    timeout: 'no answer in time — try again, or try a faster model',
+    provider_invalid_response: "it answered, but not with a plan Froam can read",
+    no_valid_proposals: "it answered, but none of its changes were safe to use",
+  }
+  if (!result.ok) {
+    log(`${red('✗')} ${why[result.code] ?? result.code}${result.detail ? ` (${result.detail})` : ''}.`)
+    process.exitCode = 1
+    return
+  }
+  const proposals = result.response.proposals ?? []
+  log(`${teal('✓')} ${configured.model} works with Quick Edit — ${proposals.length} change${proposals.length === 1 ? '' : 's'} proposed in ${(result.ms / 1000).toFixed(1)}s.`)
+  if (result.response.rationale) log(dim(`  "${String(result.response.rationale).slice(0, 160)}"`))
+  log(dim('  Turn on AI in Quick Edit to use it.'))
+}
 const KNOWN_COMMANDS = new Set([
-  'init', 'dev', 'build', 'status', 'check', 'doctor', 'migrate',
+  'init', 'dev', 'build', 'status', 'check', 'doctor', 'migrate', 'ai-check',
   'version', '--version', '-v', 'help', '--help', '-h',
 ])
 
@@ -1036,6 +1084,7 @@ switch (resolvedCommand) {
   case 'status': status(flags); break
   case 'check': await check(flags); break
   case 'doctor': doctor(flags); break
+  case 'ai-check': await aiCheck(); break
   case 'migrate': migrate(flags); break
   case 'version':
   case '--version':

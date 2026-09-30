@@ -127,6 +127,26 @@ talk and suggest changes; nothing they send can write your files. Set
 
 When you're done, **End collaboration** in Share stops every link.
 
+### Smart Quick Edits
+
+Some Quick Edits read the page before they change anything. They run on your
+computer with no AI, and the preview says what each one worked out:
+
+| Say | What it works out |
+| --- | --- |
+| **Fix the contrast** | The colour actually behind the text, including every colour of a gradient, then the nearest shade of the same hue that passes WCAG AA. It says the ratio before and after. Over a photo it adds a soft shadow behind the letters instead. |
+| **Make the size fluid** | A `clamp()` that is exactly the phone size at 375px and the current size at 1440px, with no breakpoints. It still follows the reader's text-size setting. |
+| **Make it frosted glass** | Glass tuned to what's behind it, light or dark, using the site's own corner radius. |
+| **Add a gradient in the brand colour** | The site's brand colour, read from its buttons, links and logo, flowing into a neighbouring hue. On text it's clipped to the letters and deepened until it reads. |
+| **Make it glow in the brand colour** | A glow in that colour: a text glow on words, a halo on boxes. |
+| **Balance the lines** | `text-wrap: balance` for headings and `pretty` for paragraphs, so no word is left alone on a line. |
+| **Match the others like it** | The styles its look-alikes on the page share (corners, padding, weight, …) wherever this one differs. |
+| **Use the brand colour** | Text in the brand colour, darkened just enough to pass. A button filled with it, with readable text. |
+
+Selecting something offers the ones that suit it. **Try again** gives a
+different take, such as another hue pairing, a softer glow or heavier frost.
+When there's nothing to fix, it says so ("Already easy to read: 12.6:1").
+
 ### AI in Quick Edit
 
 Quick Edit handles direct edits ("make it bolder", "add more space") on your
@@ -134,9 +154,20 @@ computer, with nothing uploaded. For anything else, give `froam dev` an AI and
 turn on **AI** in Quick Edit:
 
 ```sh
-ANTHROPIC_API_KEY=… froam dev            # Claude, through Anthropic's OpenAI-compatible API
+ANTHROPIC_API_KEY=… froam dev            # Claude (claude-sonnet-5 unless FROAM_AI_MODEL says otherwise)
 FROAM_AI_API_KEY=… FROAM_AI_MODEL=… FROAM_AI_BASE_URL=… froam dev   # any OpenAI-compatible API
 ```
+
+Claude is called through Anthropic's own Messages API. It has to answer with
+Froam's plan format, so its replies can't come back as loose prose. If both kinds of
+key are set, `FROAM_AI_*` wins; `FROAM_AI_PROVIDER=anthropic` sends
+`FROAM_AI_API_KEY` to Claude instead.
+
+Before opening the editor, `froam ai-check` sends one sample request to the AI
+`froam dev` would use and says in plain words what happened: it worked (and
+how long it took), the key was refused, the API returned an error (often a
+wrong model name), it couldn't be reached, or no AI is set. It never prints
+the key.
 
 The key stays with `froam dev`; the browser never sees it, and people on a
 share link can't use it. Froam asks before the first request, sends a
@@ -336,7 +367,10 @@ Local deterministic Quick Edit does not require remote AI.
 ## Known limitations
 
 - Phone and tablet previews answer CSS media queries, viewport units and
-  `matchMedia()` for the device, on the page itself. A script that reads
+  `matchMedia()` for the device, on the page itself. Scrolling inside the
+  device reaches the page's scripts: `scroll` listeners fire and
+  `window.scrollY` and `scrollTo()` follow the device screen, so sticky headers
+  and scroll effects behave. A script that reads
   `window.innerWidth` directly still sees the real window, and a script that
   listened to a media query before the preview opened hears about the change
   on its next resize.
@@ -380,6 +414,7 @@ froam dev                 start the universal development bridge
     --open                open the browser
     --host [addr]         expose on a trusted local network
     --allow-origin <o>    let a custom dev domain (e.g. http://app.test) use the bridge
+    --share               a link that opens this local site on any computer
     --no-write-source     keep copy edits as Froam edits instead of writing them to source
 froam build               rebuild CSS/runtime from the design file
 froam status              summarize the design and generated files
@@ -388,6 +423,7 @@ froam check               report edits that no longer match the page
     --serve [dir]         check against a built or static folder
     --fix                 re-anchor the edits that only moved
 froam doctor              check setup health
+froam ai-check            send one test request to the AI froam dev would use
 froam migrate             migrate the design format to v3
 froam version             print the installed package version
 ```

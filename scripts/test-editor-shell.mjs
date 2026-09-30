@@ -247,7 +247,9 @@ test('simple shell, quick chat, mobile, reduced-motion, and advanced surfaces st
   assert.match(editor, /hint: action\.category/)
   assert.match(quickChat, /Simple edits run on this device/)
   assert.match(quickChat, /nothing is uploaded/)
-  assert.match(quickChat, /onClick=\{\(\) => submitIntent\(suggestion\)\}/)
+  assert.match(quickChat, /onClick=\{\(\) => submitIntent\(suggestion\.intent\)\}/)
+  // What's selected decides which smart edits it's offered.
+  assert.match(quickChat, /smartSuggestions\(kind\)/)
   assert.doesNotMatch(`${shell}\n${quickChat}\n${toolbar}`, /Ask Froam|Edit with AI/)
   // AI only when froam dev has one, the owner is editing, and they switched it on.
   assert.match(editor, /enableRemoteIntent: aiReady/)
@@ -360,7 +362,8 @@ test('Pages and Library use the connected project while Reference owns screensho
 test('Look Studio stays docked beside the canvas and previews variable edits live', () => {
   const floatingBar = fs.readFileSync(new URL('../src/editor/FroamFloatingBar.tsx', import.meta.url), 'utf8')
   const canvasTools = fs.readFileSync(new URL('../src/editor/styles/canvas-tools.css', import.meta.url), 'utf8')
-  const lookBlock = floatingBar.slice(floatingBar.indexOf('const LOOKS: Look[] = ['), floatingBar.indexOf('\nfunction NumericField'))
+  const recipes = fs.readFileSync(new URL('../src/editor/floating-bar-looks.ts', import.meta.url), 'utf8')
+  const lookBlock = recipes.slice(recipes.indexOf('export const LOOKS: Look[] = ['), recipes.indexOf('export const LOOK_NOTES'))
   const recipeNames = [...lookBlock.matchAll(/\n\s+name: '([^']+)'/g)].map((match) => match[1])
   assert.equal(recipeNames.length, 205)
   for (const name of ['Pricing card', 'Feature tile', 'Testimonial', 'Launch CTA', 'Trust badge', 'Conversion strip', 'Success state', 'Warning state']) assert.ok(recipeNames.includes(name), `${name} recipe missing`)

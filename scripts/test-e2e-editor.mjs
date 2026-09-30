@@ -583,6 +583,61 @@ test('History takes back one older change and leaves the later one; Save counts 
   assert((await textOf(page, REAL_FILES)) === 'Real files' && (await textOf(page, ANY_STACK)) === 'Any stack', `left "${await textOf(page, REAL_FILES)}" / "${await textOf(page, ANY_STACK)}"`)
 })
 
+const unsavedCount = (page) => page.evaluate(() => Number(document.querySelector('.froam-tb__save-btn:not(.froam-tb__save-btn--repo) .froam-tb__unsaved')?.textContent ?? 0))
+
+test('Save reads as saved again when the page is back to what was saved — by Ctrl+Z or from History', async ({ page }) => {
+  await deselect(page)
+  await page.click('.froam-tb__save-btn:not(.froam-tb__save-btn--repo)')
+  await page.waitForTimeout(800)
+  assert((await unsavedCount(page)) === 0, `right after Save, ${await unsavedCount(page)} unsaved`)
+  await typeInto(page, REAL_FILES, 'Soon ')
+  assert((await unsavedCount(page)) >= 1, 'an edit after Save is not counted as unsaved')
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(500)
+  assert((await textOf(page, REAL_FILES)) === 'Real files', `undo left "${await textOf(page, REAL_FILES)}"`)
+  assert((await unsavedCount(page)) === 0, `with the only edit since Save undone, Save still shows ${await unsavedCount(page)} unsaved`)
+  // Taking it back from History is a new change, but it puts the page back as saved.
+  await page.keyboard.press('Control+y')
+  await page.waitForTimeout(500)
+  assert((await unsavedCount(page)) >= 1, 'redoing the edit is not counted as unsaved')
+  await openHistory(page)
+  const newest = page.locator('.froam-tb__history-list li:not(.is-version):not(.is-undo)').first()
+  assert(/Soon|Rewrote copy/.test(await newest.innerText()), `the newest change reads "${await newest.innerText()}"`)
+  await newest.hover()
+  await newest.locator('button').click()
+  await page.waitForTimeout(500)
+  await page.click('button[aria-label="History"]')
+  assert((await textOf(page, REAL_FILES)) === 'Real files', `History left "${await textOf(page, REAL_FILES)}"`)
+  assert((await unsavedCount(page)) === 0, `back to the saved page from History, Save shows ${await unsavedCount(page)} unsaved`)
+})
+
+test('History keeps a named moment beside the changes, restores it, and Ctrl+Z takes the restore back', async ({ page }) => {
+  await deselect(page)
+  await openHistory(page)
+  await page.click('.froam-tb__history-name')
+  await page.fill('.froam-tb__history-naming input', 'Before the rewrite')
+  await page.press('.froam-tb__history-naming input', 'Enter')
+  const moment = page.locator('.froam-tb__history-list li.is-version', { hasText: 'Before the rewrite' })
+  await moment.waitFor({ timeout: 5000 })
+  await page.click('button[aria-label="History"]')
+  await typeInto(page, ANY_STACK, 'Later ')
+  assert((await textOf(page, ANY_STACK)).startsWith('Later Any stack'), `typed text is "${await textOf(page, ANY_STACK)}"`)
+  await openHistory(page)
+  const order = await page.locator('.froam-tb__history-list li').evaluateAll((rows) => rows.map((row) => (row.classList.contains('is-version') ? 'moment' : 'change')))
+  assert(order[0] === 'change' && order.indexOf('moment') > 0, `History is not newest first: ${order.join(', ')}`)
+  await moment.locator('button', { hasText: 'Restore' }).click()
+  await page.waitForTimeout(800)
+  assert((await textOf(page, ANY_STACK)) === 'Any stack', `restoring the moment left "${await textOf(page, ANY_STACK)}"`)
+  assert(/Restored “Before the rewrite”/.test(await page.evaluate(() => document.body.innerText)), 'no word that the moment was restored')
+  await deselect(page)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(500)
+  assert((await textOf(page, ANY_STACK)).startsWith('Later Any stack'), `Ctrl+Z after a restore left "${await textOf(page, ANY_STACK)}"`)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(500)
+  assert((await textOf(page, ANY_STACK)) === 'Any stack', `the page was not left as it was: "${await textOf(page, ANY_STACK)}"`)
+})
+
 test('scrolling with the editor on leaves the page alone: no hover restyling mid-scroll', async ({ page }) => {
   await deselect(page)
   await page.evaluate(() => { document.documentElement.style.minHeight = '4000px'; window.scrollTo(0, 0) })
@@ -643,6 +698,182 @@ test('the phone preview shows the page’s phone layout — header included — 
   assert(back.frames === 0, 'the phone frame was left behind')
   assert(back.color === desktop.color, `desktop CSS did not come back (headline ${back.color})`)
   assert(back.order === desktop.order, `the page did not go back in its place: ${back.order}`)
+})
+
+test('in the phone preview the page’s scroll scripts follow the phone screen, and the window gets its own scroll back after', async ({ page }) => {
+  await deselect(page)
+  const style = await page.addStyleTag({ content: '#features { min-height: 2400px }' })
+  await page.evaluate(() => {
+    window.__froamHeard = { events: 0, y: -1 }
+    window.__froamOnScroll = () => { window.__froamHeard.events += 1; window.__froamHeard.y = window.scrollY }
+    window.addEventListener('scroll', window.__froamOnScroll, { passive: true })
+  })
+  await page.click('button[aria-label*="Mobile" i], button[title*="Mobile" i], button[title*="Phone" i]')
+  await page.waitForTimeout(900)
+  const screen = await page.locator('[data-froam-stage="scroll"]').boundingBox()
+  await page.mouse.move(screen.x + screen.width / 2, screen.y + screen.height / 2)
+  for (let i = 0; i < 6; i += 1) { await page.mouse.wheel(0, 150); await page.waitForTimeout(40) }
+  await page.waitForTimeout(400)
+  const phone = await page.evaluate(() => {
+    const scroller = document.querySelector('[data-froam-stage="scroll"]')
+    const seen = { top: scroller.scrollTop, scrollY: window.scrollY, element: document.scrollingElement === scroller, heard: { ...window.__froamHeard } }
+    window.scrollTo(0, 0)
+    seen.afterScrollTo = scroller.scrollTop
+    return seen
+  })
+  await page.click('button[aria-label*="Desktop" i], button[title*="Desktop" i]')
+  await page.waitForTimeout(700)
+  const desktop = await page.evaluate(() => {
+    window.scrollTo(0, 120)
+    const seen = { scrollY: window.scrollY, real: document.documentElement.scrollTop, element: document.scrollingElement === document.documentElement }
+    window.scrollTo(0, 0)
+    window.removeEventListener('scroll', window.__froamOnScroll)
+    return seen
+  })
+  await style.evaluate((node) => node.remove())
+  assert(phone.top > 200, `the phone screen scrolled ${phone.top}px`)
+  assert(phone.heard.events > 0, 'the page’s scroll listener never heard the phone screen scroll')
+  assert(phone.scrollY === phone.top && phone.heard.y === phone.top, `window.scrollY reads ${phone.scrollY} (listener saw ${phone.heard.y}) with the phone screen at ${phone.top}`)
+  assert(phone.element, 'document.scrollingElement is not the phone screen')
+  assert(phone.afterScrollTo === 0, `window.scrollTo(0, 0) left the phone screen at ${phone.afterScrollTo}`)
+  assert(desktop.scrollY === 120 && desktop.real === 120 && desktop.element, `after the preview the window scrolls as ${JSON.stringify(desktop)}`)
+})
+
+const ctaLook = (page) => page.evaluate(() => { const s = getComputedStyle(document.getElementById('cta')); return `${s.backgroundColor}|${s.boxShadow}|${s.borderRadius}|${s.color}|${s.backgroundImage}` })
+
+test('Styles fetches its looks the first time it opens, and a look applies and undoes', async ({ page }) => {
+  await deselect(page)
+  const asked = []
+  const listen = (request) => { if (/floating-bar-looks/.test(request.url())) asked.push(request.url()) }
+  page.on('request', listen)
+  // Read the button unselected and unhovered: the selection ring is the editor's, not the look's.
+  const unselected = async () => { await deselect(page); await page.mouse.move(4, 890); await page.waitForTimeout(250); return ctaLook(page) }
+  const before = await unselected()
+  await clickOn(page, '#cta')
+  assert((await selectedId(page)) === 'cta', `clicking the button selected ${await selectedId(page)}`)
+  const earlyAsks = asked.length
+  await page.click('.froam-floating-bar__looks-btn')
+  await page.waitForSelector('.froam-floating-bar__pop--looks .froam-floating-bar__looks button', { timeout: 10000 })
+  const looks = page.locator('.froam-floating-bar__pop--looks .froam-floating-bar__looks button')
+  const count = await looks.count()
+  await looks.nth(4).click()
+  await page.waitForTimeout(500)
+  await page.click('.froam-floating-bar__pop--looks .froam-floating-bar__look-apply')
+  const after = await unselected()
+  let undone = after
+  let undos = 0
+  for (; undos < 4 && undone !== before; undos += 1) {
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(400)
+    undone = await unselected()
+  }
+  page.off('request', listen)
+  assert(earlyAsks === 0, 'the looks were downloaded before Styles was opened')
+  assert(asked.length === 1, `opening Styles fetched the looks ${asked.length} time(s)`)
+  assert(count > 100, `Styles shows ${count} looks`)
+  assert(after !== before, 'the look changed nothing on the button')
+  assert(undone === before, 'Ctrl+Z did not take the look back')
+  assert(undos === 1, `taking one look back took ${undos} presses of Ctrl+Z`)
+})
+
+/* Smart Quick Edits: open Quick Edit on a selection, take a smart chip, read the preview. */
+async function smartQuickEdit(page, selector, chip, at = [0.5, 0.5]) {
+  await deselect(page)
+  if (at === 'first-word') {
+    // On the element's own words, not a <span> inside it.
+    const box = await page.evaluate((s) => { const range = document.createRange(); const text = [...document.querySelector(s).childNodes].find((node) => node.nodeType === 3 && node.textContent.trim()); range.setStart(text, 0); range.setEnd(text, 3); const r = range.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } }, selector)
+    await page.mouse.click(box.x, box.y)
+    await page.waitForTimeout(250)
+  } else await clickOn(page, selector, at[0], at[1])
+  await page.click('.froam-tb__ask-btn')
+  await page.waitForSelector('.froam-quick-chat', { timeout: 5000 })
+  const chips = await page.locator('.froam-quick-chat__suggestions button.is-smart').allInnerTexts()
+  assert(chips.includes(chip), `Quick Edit on ${await selectedId(page) || 'the selection'} (${await page.locator('.froam-quick-chat').getAttribute('aria-label')}) offers ${chips.join(', ') || 'no smart edits'}`)
+  await page.locator('.froam-quick-chat__suggestions button.is-smart', { hasText: chip }).click()
+  await page.waitForSelector('.froam-intent-result.is-preview, .froam-intent-result.is-error', { timeout: 10000 })
+  const why = await page.locator('.froam-intent-result__why, .froam-intent-result.is-error strong').first().innerText().catch(() => '')
+  return { chips, why }
+}
+const cancelPreview = async (page) => { await page.locator('.froam-intent-result button', { hasText: 'Cancel' }).click(); await page.waitForTimeout(400) }
+const contrastOn = (page, selector, ground) => page.evaluate(([s, bg]) => {
+  const channel = (v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 }
+  const lum = (rgb) => { const [r, g, b] = rgb.match(/[\d.]+/g).map(Number); return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b) }
+  const [hi, lo] = [lum(getComputedStyle(document.querySelector(s)).color), lum(bg)].sort((a, b) => b - a)
+  return (hi + 0.05) / (lo + 0.05)
+}, [selector, ground])
+
+test('smart Quick Edit: Fix contrast reads the real background, passes WCAG, says so — and Keep then Ctrl+Z works', async ({ page }) => {
+  const style = await page.addStyleTag({ content: '#subtitle { color: #b8c2cc }' })
+  const pageGround = 'rgb(253, 249, 245)'
+  const before = await contrastOn(page, '#subtitle', pageGround)
+  const { chips, why } = await smartQuickEdit(page, '#subtitle', 'Fix contrast')
+  assert(chips.includes('Fix contrast') && chips.includes('Balance lines'), `a paragraph is offered ${chips.join(', ')}`)
+  assert(/→ .*passes WCAG AA/.test(why), `the preview says "${why}"`)
+  const previewed = await contrastOn(page, '#subtitle', pageGround)
+  await page.locator('.froam-intent-result [data-froam-intent-primary]').click()
+  await page.waitForTimeout(600)
+  const kept = await contrastOn(page, '#subtitle', pageGround)
+  await deselect(page)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(500)
+  const undone = await contrastOn(page, '#subtitle', pageGround)
+  await style.evaluate((node) => node.remove())
+  assert(before < 2.5, `the fixture should start unreadable (${before.toFixed(2)}:1)`)
+  assert(previewed >= 4.5, `previewed at ${previewed.toFixed(2)}:1`)
+  assert(kept >= 4.5, `kept at ${kept.toFixed(2)}:1`)
+  assert(Math.abs(undone - before) < 0.05, `Ctrl+Z left ${undone.toFixed(2)}:1 (was ${before.toFixed(2)}:1)`)
+})
+
+test('smart Quick Edit: Brand gradient finds the site’s own blue and clips it to the headline', async ({ page }) => {
+  const { chips, why } = await smartQuickEdit(page, '#headline', 'Brand gradient', 'first-word')
+  const seen = await page.evaluate(() => { const s = getComputedStyle(document.getElementById('headline')); return { clip: s.webkitBackgroundClip || s.backgroundClip, image: s.backgroundImage } })
+  await cancelPreview(page)
+  const after = await page.evaluate(() => getComputedStyle(document.getElementById('headline')).backgroundImage)
+  assert(chips.includes('Brand gradient') && chips.includes('Fluid size'), `a heading is offered ${chips.join(', ')}`)
+  assert(/brand colour #2563eb/.test(why), `the preview says "${why}"`)
+  assert(seen.clip === 'text' && /linear-gradient/.test(seen.image) && /37, 99, 235/.test(seen.image), `the headline shows ${JSON.stringify(seen)}`)
+  assert(after === 'none', 'Cancel left the gradient on the headline')
+})
+
+test('an element’s own inline styles survive Cancel, Undo and a phone preview — only Froam’s come off', async ({ page }) => {
+  const own = 'position: absolute; right: 24px; bottom: 24px; padding: 14px 18px; background: rgb(255, 255, 255); font-weight: 600;'
+  await page.evaluate((style) => { const caption = document.createElement('div'); caption.id = 'inline-caption'; caption.setAttribute('style', style); caption.textContent = 'Santorini · 3 nights'; document.getElementById('stage').append(caption) }, own)
+  const styleNow = () => page.evaluate(() => document.getElementById('inline-caption').getAttribute('style'))
+  const { why } = await smartQuickEdit(page, '#inline-caption', 'Frosted glass', [0.03, 0.5])
+  const previewed = await page.evaluate(() => getComputedStyle(document.getElementById('inline-caption')).backdropFilter)
+  await cancelPreview(page)
+  const afterCancel = await styleNow()
+  await smartQuickEdit(page, '#inline-caption', 'Frosted glass', [0.03, 0.5])
+  await page.locator('.froam-intent-result [data-froam-intent-primary]').click()
+  await page.waitForTimeout(600)
+  await deselect(page)
+  await page.click('button[aria-label*="Mobile" i], button[title*="Mobile" i], button[title*="Phone" i]')
+  await page.waitForTimeout(900)
+  const onPhone = await page.evaluate(() => getComputedStyle(document.getElementById('inline-caption')).position)
+  await page.click('button[aria-label*="Desktop" i], button[title*="Desktop" i]')
+  await page.waitForTimeout(700)
+  const backOnDesktop = await page.evaluate(() => getComputedStyle(document.getElementById('inline-caption')).backdropFilter)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(600)
+  const afterUndo = await styleNow()
+  await page.evaluate(() => document.getElementById('inline-caption')?.remove())
+  assert(/gradient/.test(why), `glass over the stage's gradient says "${why}"`)
+  assert(/blur/.test(previewed), `the preview shows no glass (${previewed})`)
+  assert(afterCancel === own, `Cancel left style="${afterCancel}"`)
+  assert(onPhone === 'absolute', `on the phone the caption lost its own position (${onPhone})`)
+  assert(/blur/.test(backOnDesktop), `back on desktop the kept glass is gone (${backOnDesktop})`)
+  assert(afterUndo === own, `Ctrl+Z left style="${afterUndo}"`)
+})
+
+test('smart Quick Edit: Match the others brings an odd card back in line with its look-alikes', async ({ page }) => {
+  const style = await page.addStyleTag({ content: '#features li:nth-child(1) { border-radius: 0; padding: 4px }' })
+  const { chips, why } = await smartQuickEdit(page, '#features li:nth-child(1)', 'Match the others', [0.5, 0.97])
+  const matched = await page.evaluate(() => { const s = getComputedStyle(document.querySelector('#features li:nth-child(1)')); return `${s.borderTopLeftRadius} ${s.paddingTop}` })
+  await cancelPreview(page)
+  await style.evaluate((node) => node.remove())
+  assert(chips.includes('Match the others'), `a card is offered ${chips.join(', ')}`)
+  assert(/Matched to the 2 other items like it: .*corners.*padding|padding.*corners/.test(why), `the preview says "${why}"`)
+  assert(matched === '12px 18px', `the card now has ${matched}`)
 })
 
 test('an edited page is quiet: drafts are painted once, not every frame', async ({ page }) => {

@@ -12,7 +12,33 @@ export interface FroamMutationProvider { id: string; version: string; local: boo
 export type FroamMutationProvenance = { id: string; sourceBranchId: string; sourceCheckpointId: string; level: FroamMutationLevel; provider: string; operationIds: string[]; targetScope: string[]; constraints: FroamMutationConstraints; createdAt: number }
 export type FroamMutationComparison = { sourceBranchId: string; mutationBranchId: string; changedNodeIds: string[]; structural: number; visual: number; interactions: number; responsive: number; eventIds: string[] }
 export type FroamAdoptionResult = { status: 'adopted' | 'refused'; project: FroamProjectDocument; adoptedEventIds: string[]; conflicts: Array<{ eventId: string; targetId: string; reason: string }> }
-export type FroamMutationSelectionSnapshot = { node: FroamNode; scan?: FroamScanRecord; dna?: FroamDNA; relationships?: FroamRelation[]; routeKey: string; viewport: FroamViewport; path: string }
+/**
+ * What the editor read off the page around the selection, for the edits that
+ * depend on it (smart Quick Edits). It stays on this device: it is not part of
+ * any AI request's evidence.
+ */
+export type FroamPageContext = {
+  /** The element's own solid fill, when it has one. */
+  surface?: string
+  /** The solid colour behind the element. */
+  behind?: string
+  /** A photo, video or gradient is behind its text. */
+  overImage?: boolean
+  /** Which: a photo's contrast can't be measured; a gradient's can, against each of its colours. */
+  imageKind?: 'photo' | 'gradient'
+  /** A gradient's colours, when that's what is behind. */
+  behindStops?: string[]
+  /** The site's brand colour, when the page has a clear one. */
+  accent?: string
+  /** The corner radius the site's cards and images mostly use. */
+  radius?: string
+  /** It reads as text (a heading, a paragraph, a link) rather than a box. */
+  text?: boolean
+  tag?: string
+  /** The other elements of its kind on the page, and the styles most of them share where this one differs. */
+  lookAlikes?: { count: number; noun: string; styles: Record<string, string> }
+}
+export type FroamMutationSelectionSnapshot = { node: FroamNode; scan?: FroamScanRecord; dna?: FroamDNA; relationships?: FroamRelation[]; routeKey: string; viewport: FroamViewport; path: string; page?: FroamPageContext }
 
 const DEFAULT_ALLOWED: Record<FroamMutationLevel, FroamMutationDomain[]> = {
   safe: ['visual', 'typography', 'spacing', 'layout', 'motion'],
@@ -123,8 +149,8 @@ export function adoptMutationChanges(document: FroamProjectDocument, input: { mu
 export function materializeMutationPreview(state: FroamProjectState, proposals: readonly FroamMutationProposal[]) { return proposals.reduce((current, proposal, index) => applyProjectEvent(current, { schemaVersion: 2, id: `preview-${index}`, projectId: 'preview', branchId: 'preview', actorId: 'preview', clock: index + 1, createdAt: 0, type: proposal.type, targetIds: proposal.targetIds, payload: proposal.payload }), structuredClone(state)) }
 
 const COMPILED_STYLE_FIELDS: Record<FroamMutationDomain, readonly string[]> = {
-  visual: ['color', 'backgroundColor', 'border', 'borderColor', 'borderRadius', 'boxShadow', 'opacity'],
-  typography: ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign', 'textTransform', 'textDecorationLine'],
+  visual: ['color', 'backgroundColor', 'border', 'borderColor', 'borderRadius', 'boxShadow', 'opacity', 'backgroundImage', 'backgroundClip', 'WebkitBackgroundClip', 'WebkitTextFillColor', 'backdropFilter', 'WebkitBackdropFilter', 'textShadow'],
+  typography: ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign', 'textTransform', 'textDecorationLine', 'textWrap'],
   spacing: ['margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'gap', 'rowGap', 'columnGap'],
   motion: ['transition', 'animation', 'transform'],
   layout: ['display', 'position', 'top', 'right', 'bottom', 'left', 'zIndex', 'overflow', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'aspectRatio', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'gridTemplateColumns', 'gridTemplateRows'], navigation: [], interactions: [], responsive: [], composition: [],

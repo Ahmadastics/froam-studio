@@ -1,5 +1,6 @@
-/* The Quick Edit catalog: 100 concrete, pre-written instructions the editor
-   offers instead of making someone phrase an edit themselves.
+/* The Quick Edit catalog: 109 concrete, pre-written instructions the editor
+   offers instead of making someone phrase an edit themselves — 100 direct
+   ones, and 9 smart ones that read the page first (smart-styles.ts).
 
    Every `intent` here must be resolvable by createLocalFroamIntentProposals
    without a provider — that is what keeps Quick Edit instant and offline.
@@ -7,7 +8,7 @@
    an entry worded in a way the local resolver cannot parse fails the suite
    rather than shipping a dead button. */
 
-export type FroamQuickEditCategory = 'Typography' | 'Text style' | 'Layout' | 'Spacing' | 'Surface' | 'Sizing' | 'Motion' | 'Cleanup'
+export type FroamQuickEditCategory = 'Smart' | 'Typography' | 'Text style' | 'Layout' | 'Spacing' | 'Surface' | 'Sizing' | 'Motion' | 'Cleanup'
 
 export type FroamQuickEditAction = {
   id: string
@@ -122,11 +123,25 @@ const cleanup = make('Cleanup', [
   ['transform-none', 'Reset transform', 'Reset the transform', 'position rotation scale'],
 ])
 
+/* These work the value out from the page: the colour behind the element, the
+   site's brand colour, the others of its kind. */
+const smart = make('Smart', [
+  ['smart-contrast', 'Fix the contrast', 'Fix the contrast', 'accessible wcag aa aaa readable legible color'],
+  ['smart-fluid', 'Fluid size', 'Make the size fluid', 'responsive scale clamp heading phone desktop type'],
+  ['smart-glass', 'Frosted glass', 'Make it frosted glass', 'glassmorphism blur translucent backdrop'],
+  ['smart-gradient', 'Brand gradient', 'Add a gradient in the brand colour', 'gradient text color accent'],
+  ['smart-glow', 'Brand glow', 'Make it glow in the brand colour', 'neon light halo color accent'],
+  ['smart-balance', 'Balance the lines', 'Balance the lines', 'text wrap orphans widows headline'],
+  ['smart-match', 'Match the others', 'Match the others like it', 'consistent siblings same style tidy'],
+  ['smart-brand', 'Brand colour', 'Use the brand colour', 'accent color primary on-brand'],
+  ['smart-pop', 'Make it pop', 'Make it pop', 'stand out shadow lift brand accent'],
+])
+
 export const FROAM_QUICK_EDIT_ACTIONS: FroamQuickEditAction[] = [
-  ...typography, ...textStyle, ...layout, ...spacing, ...surface, ...sizing, ...motion, ...cleanup,
+  ...smart, ...typography, ...textStyle, ...layout, ...spacing, ...surface, ...sizing, ...motion, ...cleanup,
 ]
 
-export const FROAM_QUICK_EDIT_CONTRIBUTION_COUNT = 100
+export const FROAM_QUICK_EDIT_CONTRIBUTION_COUNT = 109
 
 /* Every term must match somewhere, so "font 48" narrows rather than returning
    everything that mentions a font. Exact label beats prefix beats anywhere,
