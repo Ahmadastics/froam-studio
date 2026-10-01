@@ -6,7 +6,7 @@
  */
 import assert from 'node:assert/strict'
 
-const { smartStyleEdit, smartEditFor, readableShade } = await import('../dist/editor/smart-styles.js')
+const { smartStyleEdit, smartEditFor, readableShade, pageSweepFor } = await import('../dist/editor/smart-styles.js')
 const { contrast, parseColor } = await import('../dist/editor/library/site-theme.js')
 const { explainLocalFroamIntent } = await import('../dist/editor/froam-intent-model.js')
 
@@ -212,6 +212,11 @@ test('Try again gives a different take each time — and every take still reads 
   }
   for (const take of [1, 2, 3]) for (const stop of valueOf(smartStyleEdit('gradient', heading(), take), 'backgroundImage').match(/#[0-9a-f]{6}/g)) assert.ok(ratioOf(stop, '#ffffff') >= 3, `take ${take}: ${stop}`)
   assert.ok(ratioOf(valueOf(smartStyleEdit('Fix the contrast', paragraph(), 2), 'color'), '#ffffff') >= 7, 'the second take of a contrast fix aims for AAA')
+})
+
+test('page-wide fixes answer to their phrases, and leave one-element edits alone', () => {
+  for (const [phrase, id] of [['Fix contrast everywhere', 'contrast'], ['fix the contrast on the whole page', 'contrast'], ['Make the buttons consistent', 'buttons'], ['make all buttons match', 'buttons'], ['Tidy the spacing', 'spacing'], ['put the spacing on a grid', 'spacing']]) assert.equal(pageSweepFor(phrase), id, phrase)
+  for (const phrase of ['Fix the contrast', 'Make it bolder', 'Match the others like it', 'Add more space']) assert.equal(pageSweepFor(phrase), null, phrase)
 })
 
 test('Quick Edit explains a smart edit that has nothing to do', () => {

@@ -964,6 +964,80 @@ test('an element’s own inline styles survive Cancel, Undo and a phone preview 
   assert(afterUndo === own, `Ctrl+Z left style="${afterUndo}"`)
 })
 
+/* Page-wide fixes: Quick Edit with nothing selected, a page chip, the report. */
+async function pageFix(page, chip) {
+  await deselect(page)
+  await page.click('.froam-tb__ask-btn')
+  await page.waitForSelector('.froam-quick-chat', { timeout: 5000 })
+  await page.locator('.froam-quick-chat__suggestions button.is-smart', { hasText: chip }).click()
+  await page.waitForSelector('.froam-sweep-report', { timeout: 10000 })
+  return page.evaluate(() => ({
+    title: document.querySelector('.froam-sweep-report header strong')?.textContent ?? '',
+    note: document.querySelector('.froam-sweep-report .froam-intent-result__why')?.textContent ?? '',
+    lines: [...document.querySelectorAll('.froam-sweep-report__list li')].map((li) => li.textContent),
+  }))
+}
+const undoAll = async (page) => { await page.locator('.froam-sweep-report button', { hasText: 'Undo all' }).click(); await page.waitForTimeout(600) }
+
+test('Fix contrast everywhere: every failing text passes on what is really behind it, and one Undo takes it all back', async ({ page }) => {
+  const style = await page.addStyleTag({ content: '#subtitle { color: #c4cad2 } #features li:nth-child(2) h3 { color: #d3d8de }' })
+  const ground = 'rgb(253, 249, 245)'
+  const read = async () => ({ subtitle: await contrastOn(page, '#subtitle', ground), card: await contrastOn(page, '#features li:nth-child(2) h3', 'rgb(255, 255, 255)') })
+  const before = await read()
+  const report = await pageFix(page, 'Fix contrast everywhere')
+  const fixed = await read()
+  await undoAll(page)
+  const undone = await read()
+  await style.evaluate((node) => node.remove())
+  assert(/^Fixed the contrast of \d+ texts?$/.test(report.title), `the report says "${report.title}"`)
+  assert(report.lines.some((line) => /^Paragraph “(?:Hey )?Extraordinary/.test(line) && /→/.test(line)), `the report doesn't list the subtitle: ${report.lines.join(' | ')}`)
+  assert(before.subtitle < 2 && before.card < 2, `the fixture should start unreadable: ${JSON.stringify(before)}`)
+  assert(fixed.subtitle >= 4.5 && fixed.card >= 3, `after the fix: ${JSON.stringify(fixed)}`)
+  assert(Math.abs(undone.subtitle - before.subtitle) < 0.05 && Math.abs(undone.card - before.card) < 0.05, `Undo all left ${JSON.stringify(undone)}`)
+})
+
+test('Make the buttons consistent: the odd one out takes the family’s corners and weight, and sizes stay', async ({ page }) => {
+  await page.evaluate(() => {
+    const row = document.getElementById('cta').parentElement
+    for (const [id, style] of [['extra-1', ''], ['odd-one', 'border-radius: 2px; font-weight: 400; padding: 20px 34px']]) {
+      const button = document.createElement('button')
+      button.className = 'btn'
+      button.id = id
+      button.textContent = id === 'odd-one' ? 'Odd one' : 'Another'
+      if (style) button.setAttribute('style', style)
+      row.append(button)
+    }
+  })
+  const odd = () => page.evaluate(() => { const s = getComputedStyle(document.getElementById('odd-one')); return { radius: s.borderTopLeftRadius, weight: s.fontWeight, padding: s.paddingTop } })
+  const report = await pageFix(page, 'Consistent buttons')
+  const fixed = await odd()
+  await undoAll(page)
+  const undone = await odd()
+  await page.evaluate(() => { document.getElementById('extra-1')?.remove(); document.getElementById('odd-one')?.remove() })
+  assert(/^Brought 1 button in line$/.test(report.title), `the report says "${report.title}" (${report.lines.join(' | ')})`)
+  assert(report.lines.some((line) => /Odd one/.test(line) && /corners 10px/.test(line) && /weight 700/.test(line)), `the report reads ${report.lines.join(' | ')}`)
+  assert(fixed.radius === '10px' && fixed.weight === '700', `the odd button now has ${JSON.stringify(fixed)}`)
+  assert(fixed.padding === '20px', `its size changed: padding ${fixed.padding}`)
+  assert(undone.radius === '2px' && undone.weight === '400', `Undo all left ${JSON.stringify(undone)}`)
+})
+
+test('Tidy the spacing keeps to the page’s own scale, and says what it did', async ({ page }) => {
+  const padding = () => page.evaluate(() => getComputedStyle(document.querySelector('#features li:nth-child(1)')).paddingTop)
+  const before = await padding()
+  const report = await pageFix(page, 'Tidy spacing')
+  const after = await padding()
+  const applied = await page.locator('.froam-sweep-report button', { hasText: 'Undo all' }).count()
+  if (applied) await undoAll(page)
+  else await page.locator('.froam-sweep-report button', { hasText: 'Done' }).click()
+  const undone = await padding()
+  assert(/scale|spacing/i.test(report.title) && report.note.length > 20, `the report says "${report.title}" — "${report.note}"`)
+  if (/back on the (\d+)px scale/.test(report.title)) {
+    const grid = Number(report.title.match(/(\d+)px scale/)[1])
+    assert(Number.parseFloat(after) % grid === 0, `the card's padding ${after} is off the ${grid}px scale`)
+  } else assert(after === before, 'it said nothing changed, but the spacing moved')
+  assert(undone === before, `Undo all left the card's padding at ${undone} (was ${before})`)
+})
+
 test('smart Quick Edit: Match the others brings an odd card back in line with its look-alikes', async ({ page }) => {
   const style = await page.addStyleTag({ content: '#features li:nth-child(1) { border-radius: 0; padding: 4px }' })
   const { chips, why } = await smartQuickEdit(page, '#features li:nth-child(1)', 'Match the others', [0.5, 0.97])
@@ -1189,6 +1263,35 @@ appTest('Save writes @body paths, and production paints them whenever the dialog
     server.close()
     fs.rmSync(prodDir, { recursive: true, force: true })
   }
+})
+
+test('History and Undo survive Save to Repo and a reload', async ({ page, siteDir, url }) => {
+  const designPath = path.join(siteDir, 'froam', 'froam.design.json')
+  const radius = () => page.evaluate(() => getComputedStyle(document.getElementById('cta')).borderTopLeftRadius)
+  await deselect(page)
+  const before = await radius()
+  await clickOn(page, '#cta')
+  await openStyles(page)
+  await lookTile(page, 'Pill').click()
+  await page.waitForTimeout(300)
+  await closeStyles(page)
+  await deselect(page)
+  const styled = await radius()
+  await saveAndWait(page, designPath)
+  await openEditor(page, url)
+  const afterReload = await radius()
+  await openHistory(page)
+  const rows = await page.locator('.froam-tb__history-list li:not(.is-version)').allInnerTexts()
+  await page.click('button[aria-label="History"]')
+  await deselect(page)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(600)
+  const undone = await radius()
+  if (process.env.FROAM_E2E_DEBUG) console.log({ before, styled, afterReload, rows: rows.slice(0, 4), undone, debug: await page.evaluate(() => { const d = window.__froamOpLog; const ops = d?.ops?.() ?? []; return { actor: d?.session?.actor, canUndo: d?.session?.canUndo?.(), last: ops.slice(-6).map((op) => `${op.actor}/${op.kind}/${op.label}/${op.field}`) } }) })
+  assert(styled !== before, 'the look changed nothing')
+  assert(afterReload === styled, `after the reload the button reads ${afterReload}, not ${styled}`)
+  assert(rows.some((row) => /Pill/.test(row)), `after Save to Repo and a reload, History lists: ${rows.slice(0, 3).join(' | ') || 'nothing'}`)
+  assert(undone === before, `Ctrl+Z after the reload left the corners at ${undone} (was ${before})`)
 })
 
 appTest('the editor opens on the first Ctrl+. straight after load, and stays open', async ({ page, url }) => {

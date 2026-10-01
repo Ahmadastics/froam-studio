@@ -140,6 +140,7 @@ import { useFroamProjectDocument } from './useFroamProjectDocument'
 import { diffStores, type FroamChange } from '../collab/oplog'
 import { loadOpLog, saveOpLog } from '../collab/persist'
 import { findElementByPath, getElementPath, isInPageScope, isPathElement, isSafeDraftPath, tagOfPath } from '../collab/paths'
+import { pageSweepFor, runPageSweep, type PageSweep } from './smart-styles'
 import { usePageCanvasOffset } from './usePageCanvasOffset'
 import { createAnchor, resolveAnchor } from '../collab/anchor'
 import { fingerprintForDraft } from './draft-fingerprint'
@@ -400,6 +401,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   // UI state
   const [toastMsg, setToastMsg] = useState('')
+  /** What a page-wide fix did, shown until it's kept or undone. */
+  const [sweepReport, setSweepReport] = useState<null | { title: string; note: string; lines: string[]; applied: boolean }>(null)
   const [toastVisible, setToastVisible] = useState(false)
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     intel: true,
@@ -1738,9 +1741,39 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     toastTimerRef.current = window.setTimeout(() => setToastVisible(false), 2200)
   }, [])
 
+  /**
+   * A page-wide fix: every change it finds goes into the design at once, as
+   * one step — one Ctrl+Z (or Undo all) takes the whole sweep back — and the
+   * report says what changed, element by element.
+   */
+  function runSweep(id: PageSweep['id']) {
+    const root = getRoot()
+    if (!root) return
+    const sweep = runPageSweep(id, root)
+    const fixes = sweep.fixes.filter((fix) => !fix.element.closest(INJECTED_BLOCK_SELECTOR))
+    if (fixes.length) {
+      const current = storeRef.current
+      const routeEntries = { ...(current[viewportStoreKey] ?? {}) }
+      for (const fix of fixes) {
+        const path = getElementPath(fix.element, root)
+        if (!path || isInjectionPath(path)) continue
+        const draft = routeEntries[path] ?? {}
+        routeEntries[path] = { ...draft, styles: { ...(draft.styles ?? {}), ...fix.styles } }
+      }
+      opPendingLabelRef.current = sweep.title
+      const nextStore = { ...current, [viewportStoreKey]: routeEntries }
+      setStore(nextStore)
+      saveStore(nextStore)
+      applyStoreToDOM(nextStore)
+    }
+    setSweepReport({ title: sweep.title, note: sweep.note, lines: fixes.map((fix) => fix.line), applied: fixes.length > 0 })
+  }
+
   function executeLocalFroamCommand(intent: string) {
     const request = intent.toLocaleLowerCase().trim()
     const wants = (pattern: RegExp) => pattern.test(request)
+    const sweep = pageSweepFor(request)
+    if (sweep) { runSweep(sweep); return true }
     if (wants(/^(?:undo|undo that|go back)$/)) { undo(); return true }
     if (wants(/^(?:redo|redo that)$/)) { redo(); return true }
     if (wants(/\b(save|save draft)\b/) && request.split(/\s+/).length <= 4) { saveToRunam(); return true }
@@ -5311,6 +5344,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   const corePaletteCommands: PaletteCommand[] = [
     { id: 'save', label: 'Save', shortcut: 'Ctrl+S', icon: <Save size={15} />, action: saveToRunam },
+    { id: 'sweep-contrast', label: 'Fix contrast everywhere', searchText: 'accessibility wcag readable page', icon: <Sparkles size={15} />, action: () => runSweep('contrast') },
+    { id: 'sweep-buttons', label: 'Make the buttons consistent', searchText: 'buttons match family corners page', icon: <Sparkles size={15} />, action: () => runSweep('buttons') },
+    { id: 'sweep-spacing', label: 'Tidy the spacing', searchText: 'spacing scale grid padding page', icon: <Sparkles size={15} />, action: () => runSweep('spacing') },
     { id: 'save-repo', label: 'Save to your code (git-ready files)', shortcut: 'Ctrl+Shift+S', icon: <GitCommit size={15} />, action: () => { void saveToRepo() } },
     // Sharing is the start of a review, so it belongs where people look for a
     // verb — not only in a panel section they have to find first.
@@ -5921,6 +5957,29 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         onCancel={froamIntent.cancel}
         onDismiss={froamIntent.dismiss}
       />
+
+      {sweepReport && (
+        <aside className="froam-intent-result is-preview froam-sweep-report" data-chef-editor-root="true" role="dialog" aria-label="Page fix">
+          <header><div><span>Page fix</span><strong>{sweepReport.title}</strong></div></header>
+          <p className="froam-intent-result__why">{sweepReport.note}</p>
+          {sweepReport.lines.length > 0 && (
+            <ul className="froam-sweep-report__list">
+              {sweepReport.lines.slice(0, 8).map((line) => <li key={line}>{line}</li>)}
+              {sweepReport.lines.length > 8 && <li>…and {sweepReport.lines.length - 8} more</li>}
+            </ul>
+          )}
+          <div className="froam-intent-result__actions">
+            {sweepReport.applied ? (
+              <>
+                <button type="button" className="is-primary" data-froam-intent-primary onClick={() => setSweepReport(null)}>Keep</button>
+                <button type="button" onClick={() => { undo(); setSweepReport(null) }}><Undo2 size={13} /> Undo all</button>
+              </>
+            ) : (
+              <button type="button" className="is-primary" data-froam-intent-primary onClick={() => setSweepReport(null)}>Done</button>
+            )}
+          </div>
+        </aside>
+      )}
 
       {showPanel && !inlineEditing && (
         <FroamQuickChat

@@ -147,6 +147,19 @@ Selecting something offers the ones that suit it. **Try again** gives a
 different take, such as another hue pairing, a softer glow or heavier frost.
 When there's nothing to fix, it says so ("Already easy to read: 12.6:1").
 
+With nothing selected, Quick Edit (and the command palette) offers three
+**page-wide fixes**:
+
+| Say | What it does |
+| --- | --- |
+| **Fix contrast everywhere** | Checks every text against what is really behind it, including each colour of a gradient, and moves each one that fails WCAG AA to the nearest passing shade of its hue. Text over photos is left alone, because it can't be measured. |
+| **Make the buttons consistent** | Gives buttons that stray the corners, font, weight, tracking and case most of the page's buttons share. Sizes are left alone. |
+| **Tidy the spacing** | When most of the page's spacing sits on a 4px or 8px grid, rounds the few values that are off it onto it. A page with no scale is left as designed. |
+
+Each one applies everything it found as a single step. A report lists every
+element it changed (for example "Paragraph 'Extraordinary…': 1.5:1 → 4.6:1"),
+and **Undo all**, or one Ctrl+Z, takes the whole fix back.
+
 ### AI in Quick Edit
 
 Quick Edit handles direct edits ("make it bolder", "add more space") on your
@@ -392,9 +405,10 @@ Local deterministic Quick Edit does not require remote AI.
   write-back covers copy (text) today; styles stay in `froam.generated.css`.
 - Content inside shadow roots (web components) and inside iframes is not
   editable yet. Portals mounted on `<body>` beside `#root` are.
-- Immediate undo works in the active editor session. In this audit, undo was
-  unavailable after Save to Repo followed by a full editor reload. Use version
-  control and `index.html.bak` as the reliable recovery path.
+- Undo and History survive a reload, including after Save to Repo; this is
+  verified for style edits. For copy that Save to Repo has already written
+  into your source files, version control and `index.html.bak` remain the
+  reliable recovery path.
 - The development proxy removes CSP headers from proxied HTML so the editor can
   load. It does not establish compatibility with the site's production CSP.
 - A page that cannot load the generated stylesheet/runtime cannot ship Froam

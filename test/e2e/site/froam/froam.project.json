@@ -1,0 +1,1878 @@
+{
+  "kind": "froam-project",
+  "schemaVersion": 2,
+  "project": {
+    "schemaVersion": 2,
+    "id": "project:bridge-841b4bcc2d333d3eedf2",
+    "name": "Froam project",
+    "activeBranchId": "main",
+    "createdAt": 1790356969069,
+    "updatedAt": 1790356969330,
+    "branches": {
+      "main": {
+        "id": "main",
+        "name": "Main",
+        "parentBranchId": null,
+        "forkEventId": null,
+        "baseCheckpointId": "3c19e29f-7bfa-45b4-a407-cc0b7248824e",
+        "headEventId": "c344908a-654f-4de6-a1a0-2fdd5d120ac2",
+        "createdAt": 1790356969069,
+        "createdBy": "local",
+        "rootCheckpointId": "3c19e29f-7bfa-45b4-a407-cc0b7248824e"
+      }
+    },
+    "checkpoints": {
+      "3c19e29f-7bfa-45b4-a407-cc0b7248824e": {
+        "id": "3c19e29f-7bfa-45b4-a407-cc0b7248824e",
+        "projectId": "project:bridge-841b4bcc2d333d3eedf2",
+        "branchId": "main",
+        "createdAt": 1790356969069,
+        "createdBy": "local",
+        "label": "Initial state",
+        "eventIds": [],
+        "state": {
+          "legacyStore": {},
+          "nodes": {},
+          "relations": {},
+          "flows": {},
+          "interactions": {},
+          "dna": {},
+          "assets": {},
+          "scans": {},
+          "archive": {},
+          "analyses": {},
+          "responsive": {},
+          "designSystem": {
+            "schemaVersion": 1,
+            "activeModeIds": [
+              "mode:light"
+            ],
+            "modes": {
+              "mode:base": {
+                "id": "mode:base",
+                "name": "Base",
+                "kind": "base",
+                "createdAt": 1790356969069
+              },
+              "mode:light": {
+                "id": "mode:light",
+                "name": "Light",
+                "kind": "light",
+                "parentId": "mode:base",
+                "createdAt": 1790356969069
+              },
+              "mode:dark": {
+                "id": "mode:dark",
+                "name": "Dark",
+                "kind": "dark",
+                "parentId": "mode:base",
+                "createdAt": 1790356969069
+              },
+              "mode:mobile": {
+                "id": "mode:mobile",
+                "name": "Mobile",
+                "kind": "mobile",
+                "parentId": "mode:base",
+                "viewport": "mobile",
+                "createdAt": 1790356969069
+              },
+              "mode:brand": {
+                "id": "mode:brand",
+                "name": "Brand",
+                "kind": "brand",
+                "parentId": "mode:light",
+                "brand": "Primary",
+                "createdAt": 1790356969069
+              }
+            },
+            "variables": {
+              "var:accent": {
+                "id": "var:accent",
+                "name": "Accent",
+                "cssName": "--froam-accent",
+                "kind": "color",
+                "role": "primitive",
+                "collection": "Brand",
+                "values": {
+                  "mode:base": "#14b8a6",
+                  "mode:dark": "#5eead4",
+                  "mode:brand": "#7c3aed"
+                }
+              },
+              "var:surface": {
+                "id": "var:surface",
+                "name": "Surface",
+                "cssName": "--froam-surface",
+                "kind": "color",
+                "role": "semantic",
+                "collection": "Semantic",
+                "values": {
+                  "mode:light": "#ffffff",
+                  "mode:dark": "#0f172a"
+                }
+              },
+              "var:text": {
+                "id": "var:text",
+                "name": "Text",
+                "cssName": "--froam-text",
+                "kind": "color",
+                "role": "semantic",
+                "collection": "Semantic",
+                "values": {
+                  "mode:light": "#0f172a",
+                  "mode:dark": "#f8fafc"
+                }
+              },
+              "var:radius": {
+                "id": "var:radius",
+                "name": "Card radius",
+                "cssName": "--froam-radius-card",
+                "kind": "size",
+                "role": "semantic",
+                "collection": "Shape",
+                "values": {
+                  "mode:base": "18px",
+                  "mode:mobile": "14px"
+                }
+              },
+              "var:space": {
+                "id": "var:space",
+                "name": "Section space",
+                "cssName": "--froam-space-section",
+                "kind": "size",
+                "role": "semantic",
+                "collection": "Layout",
+                "values": {
+                  "mode:base": "72px",
+                  "mode:mobile": "36px"
+                }
+              }
+            },
+            "styles": {
+              "style:button-primary": {
+                "id": "style:button-primary",
+                "name": "Primary button",
+                "category": "Button",
+                "states": {
+                  "base": {
+                    "background": "var(--froam-accent)",
+                    "color": "#ffffff",
+                    "borderRadius": "var(--froam-radius-card)",
+                    "padding": "12px 18px",
+                    "fontWeight": "700"
+                  },
+                  "hover": {
+                    "filter": "brightness(1.08)",
+                    "transform": "translateY(-1px)"
+                  },
+                  "focus": {
+                    "outline": "3px solid color-mix(in srgb, var(--froam-accent) 35%, transparent)",
+                    "outlineOffset": "2px"
+                  },
+                  "active": {
+                    "transform": "translateY(0)",
+                    "filter": "brightness(.94)"
+                  }
+                },
+                "usageNodeIds": [],
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              },
+              "style:display-heading": {
+                "id": "style:display-heading",
+                "name": "Display heading",
+                "category": "Typography",
+                "states": {
+                  "base": {
+                    "color": "var(--froam-text)",
+                    "fontFamily": "Inter, system-ui, sans-serif",
+                    "fontSize": "clamp(2.75rem, 8vw, 7rem)",
+                    "fontWeight": "800",
+                    "letterSpacing": "-.055em",
+                    "lineHeight": ".92"
+                  }
+                },
+                "usageNodeIds": [],
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              },
+              "style:card": {
+                "id": "style:card",
+                "name": "System card",
+                "category": "Card",
+                "states": {
+                  "base": {
+                    "background": "var(--froam-surface)",
+                    "color": "var(--froam-text)",
+                    "border": "1px solid color-mix(in srgb, var(--froam-text) 12%, transparent)",
+                    "borderRadius": "var(--froam-radius-card)",
+                    "padding": "24px",
+                    "boxShadow": "0 20px 50px -34px rgba(15,23,42,.45)"
+                  },
+                  "hover": {
+                    "transform": "translateY(-3px)",
+                    "boxShadow": "0 26px 60px -32px rgba(15,23,42,.55)"
+                  }
+                },
+                "usageNodeIds": [],
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              },
+              "style:field": {
+                "id": "style:field",
+                "name": "Form field",
+                "category": "Form",
+                "states": {
+                  "base": {
+                    "background": "var(--froam-surface)",
+                    "color": "var(--froam-text)",
+                    "border": "1px solid color-mix(in srgb, var(--froam-text) 18%, transparent)",
+                    "borderRadius": "12px",
+                    "padding": "12px 14px"
+                  },
+                  "focus": {
+                    "borderColor": "var(--froam-accent)",
+                    "outline": "3px solid color-mix(in srgb, var(--froam-accent) 22%, transparent)"
+                  }
+                },
+                "usageNodeIds": [],
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              },
+              "style:navigation": {
+                "id": "style:navigation",
+                "name": "Navigation shell",
+                "category": "Navigation",
+                "states": {
+                  "base": {
+                    "background": "color-mix(in srgb, var(--froam-surface) 88%, transparent)",
+                    "color": "var(--froam-text)",
+                    "backdropFilter": "blur(18px)",
+                    "borderBottom": "1px solid color-mix(in srgb, var(--froam-text) 10%, transparent)",
+                    "padding": "14px 24px"
+                  }
+                },
+                "usageNodeIds": [],
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              }
+            },
+            "componentFamilies": {
+              "family:button": {
+                "id": "family:button",
+                "name": "Button",
+                "category": "Action",
+                "baseComponentId": "button",
+                "props": [
+                  {
+                    "id": "prop:label",
+                    "name": "Label",
+                    "kind": "text",
+                    "defaultValue": "Get started"
+                  },
+                  {
+                    "id": "prop:link",
+                    "name": "Link",
+                    "kind": "link",
+                    "defaultValue": "#"
+                  },
+                  {
+                    "id": "prop:icon",
+                    "name": "Show icon",
+                    "kind": "boolean",
+                    "defaultValue": false
+                  }
+                ],
+                "slots": [
+                  {
+                    "id": "slot:icon",
+                    "name": "Icon",
+                    "accepts": [
+                      "icon",
+                      "svg"
+                    ]
+                  }
+                ],
+                "variants": [
+                  {
+                    "id": "variant:solid",
+                    "name": "Solid",
+                    "styles": {
+                      "background": "var(--froam-accent)",
+                      "color": "#fff"
+                    }
+                  },
+                  {
+                    "id": "variant:outline",
+                    "name": "Outline",
+                    "styles": {
+                      "background": "transparent",
+                      "color": "var(--froam-accent)",
+                      "border": "1px solid currentColor"
+                    }
+                  },
+                  {
+                    "id": "variant:quiet",
+                    "name": "Quiet",
+                    "styles": {
+                      "background": "transparent",
+                      "color": "var(--froam-text)"
+                    }
+                  }
+                ],
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              }
+            },
+            "siteKits": {
+              "kit:launch": {
+                "id": "kit:launch",
+                "name": "Launch system",
+                "description": "Coordinated typography, actions, cards, navigation, forms, and motion for a product launch.",
+                "modeIds": [
+                  "mode:light",
+                  "mode:mobile",
+                  "mode:brand"
+                ],
+                "variableIds": [
+                  "var:accent",
+                  "var:surface",
+                  "var:text",
+                  "var:radius",
+                  "var:space"
+                ],
+                "styleIds": [
+                  "style:button-primary",
+                  "style:display-heading",
+                  "style:card",
+                  "style:field",
+                  "style:navigation"
+                ],
+                "componentFamilyIds": [
+                  "family:button",
+                  "family:navigation",
+                  "family:hero",
+                  "family:features",
+                  "family:cta",
+                  "family:contact",
+                  "family:footer"
+                ],
+                "interactionIds": [],
+                "tags": [
+                  "launch",
+                  "marketing",
+                  "responsive"
+                ],
+                "now": 1790356969069,
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              },
+              "kit:editorial": {
+                "id": "kit:editorial",
+                "name": "Editorial system",
+                "description": "Large display typography, restrained surfaces, article cards, navigation, newsletter forms, and calm motion.",
+                "modeIds": [
+                  "mode:light",
+                  "mode:mobile"
+                ],
+                "variableIds": [
+                  "var:accent",
+                  "var:surface",
+                  "var:text",
+                  "var:radius",
+                  "var:space"
+                ],
+                "styleIds": [
+                  "style:display-heading",
+                  "style:card",
+                  "style:field",
+                  "style:navigation"
+                ],
+                "componentFamilyIds": [
+                  "family:navigation",
+                  "family:hero",
+                  "family:content",
+                  "family:blog",
+                  "family:footer"
+                ],
+                "interactionIds": [],
+                "tags": [
+                  "editorial",
+                  "content",
+                  "magazine"
+                ],
+                "now": 1790356969069,
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              },
+              "kit:product-dark": {
+                "id": "kit:product-dark",
+                "name": "Product dark system",
+                "description": "Dark product surfaces, clear actions, bento features, pricing, forms, and focused interaction states.",
+                "modeIds": [
+                  "mode:dark",
+                  "mode:mobile",
+                  "mode:brand"
+                ],
+                "variableIds": [
+                  "var:accent",
+                  "var:surface",
+                  "var:text",
+                  "var:radius",
+                  "var:space"
+                ],
+                "styleIds": [
+                  "style:button-primary",
+                  "style:display-heading",
+                  "style:card",
+                  "style:field",
+                  "style:navigation"
+                ],
+                "componentFamilyIds": [
+                  "family:navigation",
+                  "family:hero",
+                  "family:features",
+                  "family:pricing",
+                  "family:faq",
+                  "family:contact",
+                  "family:footer"
+                ],
+                "interactionIds": [],
+                "tags": [
+                  "product",
+                  "dark",
+                  "saas"
+                ],
+                "now": 1790356969069,
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              }
+            },
+            "libraries": {
+              "library:local": {
+                "id": "library:local",
+                "name": "Project library",
+                "sourceProjectId": "local",
+                "installedVersion": 1,
+                "availableVersion": 1,
+                "status": "current",
+                "releases": [
+                  {
+                    "version": 1,
+                    "createdAt": 1790356969069,
+                    "variableIds": [
+                      "var:accent",
+                      "var:surface",
+                      "var:text",
+                      "var:radius",
+                      "var:space"
+                    ],
+                    "styleIds": [
+                      "style:button-primary",
+                      "style:display-heading",
+                      "style:card",
+                      "style:field",
+                      "style:navigation"
+                    ],
+                    "componentFamilyIds": [
+                      "family:button"
+                    ],
+                    "siteKitIds": [
+                      "kit:launch",
+                      "kit:editorial",
+                      "kit:product-dark"
+                    ],
+                    "notes": "Initial design system"
+                  }
+                ],
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069
+              }
+            }
+          }
+        }
+      }
+    },
+    "events": [
+      {
+        "schemaVersion": 2,
+        "id": "c344908a-654f-4de6-a1a0-2fdd5d120ac2",
+        "projectId": "project:bridge-841b4bcc2d333d3eedf2",
+        "branchId": "main",
+        "actorId": "local",
+        "clock": 1,
+        "createdAt": 1790356969330,
+        "type": "design-system.replaced",
+        "targetIds": [
+          "var:accent",
+          "var:surface",
+          "var:text",
+          "var:radius",
+          "var:space"
+        ],
+        "payload": {
+          "designSystem": {
+            "schemaVersion": 1,
+            "activeModeIds": [
+              "mode:light"
+            ],
+            "modes": {
+              "mode:base": {
+                "id": "mode:base",
+                "name": "Base",
+                "kind": "base",
+                "createdAt": 1790356969069
+              },
+              "mode:light": {
+                "id": "mode:light",
+                "name": "Light",
+                "kind": "light",
+                "parentId": "mode:base",
+                "createdAt": 1790356969069
+              },
+              "mode:dark": {
+                "id": "mode:dark",
+                "name": "Dark",
+                "kind": "dark",
+                "parentId": "mode:base",
+                "createdAt": 1790356969069
+              },
+              "mode:mobile": {
+                "id": "mode:mobile",
+                "name": "Mobile",
+                "kind": "mobile",
+                "parentId": "mode:base",
+                "viewport": "mobile",
+                "createdAt": 1790356969069
+              },
+              "mode:brand": {
+                "id": "mode:brand",
+                "name": "Brand",
+                "kind": "brand",
+                "parentId": "mode:light",
+                "brand": "Primary",
+                "createdAt": 1790356969069
+              }
+            },
+            "variables": {
+              "var:accent": {
+                "id": "var:accent",
+                "name": "Accent",
+                "cssName": "--froam-accent",
+                "kind": "color",
+                "role": "primitive",
+                "collection": "Brand",
+                "values": {
+                  "mode:base": "#14b8a6",
+                  "mode:dark": "#5eead4",
+                  "mode:brand": "#7c3aed"
+                }
+              },
+              "var:surface": {
+                "id": "var:surface",
+                "name": "Surface",
+                "cssName": "--froam-surface",
+                "kind": "color",
+                "role": "semantic",
+                "collection": "Semantic",
+                "values": {
+                  "mode:light": "#ffffff",
+                  "mode:dark": "#0f172a"
+                }
+              },
+              "var:text": {
+                "id": "var:text",
+                "name": "Text",
+                "cssName": "--froam-text",
+                "kind": "color",
+                "role": "semantic",
+                "collection": "Semantic",
+                "values": {
+                  "mode:light": "#0f172a",
+                  "mode:dark": "#f8fafc"
+                }
+              },
+              "var:radius": {
+                "id": "var:radius",
+                "name": "Card radius",
+                "cssName": "--froam-radius-card",
+                "kind": "size",
+                "role": "semantic",
+                "collection": "Shape",
+                "values": {
+                  "mode:base": "18px",
+                  "mode:mobile": "14px"
+                }
+              },
+              "var:space": {
+                "id": "var:space",
+                "name": "Section space",
+                "cssName": "--froam-space-section",
+                "kind": "size",
+                "role": "semantic",
+                "collection": "Layout",
+                "values": {
+                  "mode:base": "72px",
+                  "mode:mobile": "36px"
+                }
+              }
+            },
+            "styles": {
+              "style:button-primary": {
+                "id": "style:button-primary",
+                "name": "Primary button",
+                "category": "Button",
+                "states": {
+                  "base": {
+                    "background": "var(--froam-accent)",
+                    "color": "#ffffff",
+                    "borderRadius": "var(--froam-radius-card)",
+                    "padding": "12px 18px",
+                    "fontWeight": "700"
+                  },
+                  "hover": {
+                    "filter": "brightness(1.08)",
+                    "transform": "translateY(-1px)"
+                  },
+                  "focus": {
+                    "outline": "3px solid color-mix(in srgb, var(--froam-accent) 35%, transparent)",
+                    "outlineOffset": "2px"
+                  },
+                  "active": {
+                    "transform": "translateY(0)",
+                    "filter": "brightness(.94)"
+                  }
+                },
+                "usageNodeIds": [],
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              },
+              "style:display-heading": {
+                "id": "style:display-heading",
+                "name": "Display heading",
+                "category": "Typography",
+                "states": {
+                  "base": {
+                    "color": "var(--froam-text)",
+                    "fontFamily": "Inter, system-ui, sans-serif",
+                    "fontSize": "clamp(2.75rem, 8vw, 7rem)",
+                    "fontWeight": "800",
+                    "letterSpacing": "-.055em",
+                    "lineHeight": ".92"
+                  }
+                },
+                "usageNodeIds": [],
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              },
+              "style:card": {
+                "id": "style:card",
+                "name": "System card",
+                "category": "Card",
+                "states": {
+                  "base": {
+                    "background": "var(--froam-surface)",
+                    "color": "var(--froam-text)",
+                    "border": "1px solid color-mix(in srgb, var(--froam-text) 12%, transparent)",
+                    "borderRadius": "var(--froam-radius-card)",
+                    "padding": "24px",
+                    "boxShadow": "0 20px 50px -34px rgba(15,23,42,.45)"
+                  },
+                  "hover": {
+                    "transform": "translateY(-3px)",
+                    "boxShadow": "0 26px 60px -32px rgba(15,23,42,.55)"
+                  }
+                },
+                "usageNodeIds": [],
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              },
+              "style:field": {
+                "id": "style:field",
+                "name": "Form field",
+                "category": "Form",
+                "states": {
+                  "base": {
+                    "background": "var(--froam-surface)",
+                    "color": "var(--froam-text)",
+                    "border": "1px solid color-mix(in srgb, var(--froam-text) 18%, transparent)",
+                    "borderRadius": "12px",
+                    "padding": "12px 14px"
+                  },
+                  "focus": {
+                    "borderColor": "var(--froam-accent)",
+                    "outline": "3px solid color-mix(in srgb, var(--froam-accent) 22%, transparent)"
+                  }
+                },
+                "usageNodeIds": [],
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              },
+              "style:navigation": {
+                "id": "style:navigation",
+                "name": "Navigation shell",
+                "category": "Navigation",
+                "states": {
+                  "base": {
+                    "background": "color-mix(in srgb, var(--froam-surface) 88%, transparent)",
+                    "color": "var(--froam-text)",
+                    "backdropFilter": "blur(18px)",
+                    "borderBottom": "1px solid color-mix(in srgb, var(--froam-text) 10%, transparent)",
+                    "padding": "14px 24px"
+                  }
+                },
+                "usageNodeIds": [],
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              }
+            },
+            "componentFamilies": {
+              "family:button": {
+                "id": "family:button",
+                "name": "Button",
+                "category": "Action",
+                "baseComponentId": "button",
+                "props": [
+                  {
+                    "id": "prop:label",
+                    "name": "Label",
+                    "kind": "text",
+                    "defaultValue": "Get started"
+                  },
+                  {
+                    "id": "prop:link",
+                    "name": "Link",
+                    "kind": "link",
+                    "defaultValue": "#"
+                  },
+                  {
+                    "id": "prop:icon",
+                    "name": "Show icon",
+                    "kind": "boolean",
+                    "defaultValue": false
+                  }
+                ],
+                "slots": [
+                  {
+                    "id": "slot:icon",
+                    "name": "Icon",
+                    "accepts": [
+                      "icon",
+                      "svg"
+                    ]
+                  }
+                ],
+                "variants": [
+                  {
+                    "id": "variant:solid",
+                    "name": "Solid",
+                    "styles": {
+                      "background": "var(--froam-accent)",
+                      "color": "#fff"
+                    }
+                  },
+                  {
+                    "id": "variant:outline",
+                    "name": "Outline",
+                    "styles": {
+                      "background": "transparent",
+                      "color": "var(--froam-accent)",
+                      "border": "1px solid currentColor"
+                    }
+                  },
+                  {
+                    "id": "variant:quiet",
+                    "name": "Quiet",
+                    "styles": {
+                      "background": "transparent",
+                      "color": "var(--froam-text)"
+                    }
+                  }
+                ],
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              },
+              "family:navigation": {
+                "id": "family:navigation",
+                "name": "Navigation",
+                "category": "Navigation",
+                "baseComponentId": "navigation-01",
+                "props": [
+                  {
+                    "id": "navigation:content",
+                    "name": "Content",
+                    "kind": "text",
+                    "required": false
+                  },
+                  {
+                    "id": "navigation:visible",
+                    "name": "Visible",
+                    "kind": "boolean",
+                    "defaultValue": true
+                  }
+                ],
+                "slots": [
+                  {
+                    "id": "navigation:slot:0",
+                    "name": "brand",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "navigation:slot:1",
+                    "name": "links",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "navigation:slot:2",
+                    "name": "action",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  }
+                ],
+                "variants": [
+                  {
+                    "id": "navigation-01",
+                    "name": "Compact navbar",
+                    "propDefaults": {
+                      "summary": "Brand, links, and one action."
+                    }
+                  },
+                  {
+                    "id": "navigation-02",
+                    "name": "Centered navbar",
+                    "propDefaults": {
+                      "summary": "Balanced navigation with a centered brand."
+                    }
+                  },
+                  {
+                    "id": "navigation-03",
+                    "name": "Product navbar",
+                    "propDefaults": {
+                      "summary": "Product switcher, navigation, and account actions."
+                    }
+                  }
+                ],
+                "createdAt": 1790356969328,
+                "updatedAt": 1790356969328,
+                "version": 1
+              },
+              "family:hero": {
+                "id": "family:hero",
+                "name": "Hero",
+                "category": "Hero",
+                "baseComponentId": "hero-01",
+                "props": [
+                  {
+                    "id": "hero:content",
+                    "name": "Content",
+                    "kind": "text",
+                    "required": false
+                  },
+                  {
+                    "id": "hero:visible",
+                    "name": "Visible",
+                    "kind": "boolean",
+                    "defaultValue": true
+                  }
+                ],
+                "slots": [
+                  {
+                    "id": "hero:slot:0",
+                    "name": "eyebrow",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "hero:slot:1",
+                    "name": "headline",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "hero:slot:2",
+                    "name": "copy",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "hero:slot:3",
+                    "name": "actions",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  }
+                ],
+                "variants": [
+                  {
+                    "id": "hero-01",
+                    "name": "Centered launch hero",
+                    "propDefaults": {
+                      "summary": "Focused headline, supporting copy, and two actions."
+                    }
+                  },
+                  {
+                    "id": "hero-02",
+                    "name": "Split media hero",
+                    "propDefaults": {
+                      "summary": "Copy and a large media frame in two columns."
+                    }
+                  },
+                  {
+                    "id": "hero-03",
+                    "name": "Editorial hero",
+                    "propDefaults": {
+                      "summary": "Large display headline with an offset proof note."
+                    }
+                  }
+                ],
+                "createdAt": 1790356969328,
+                "updatedAt": 1790356969328,
+                "version": 1
+              },
+              "family:features": {
+                "id": "family:features",
+                "name": "Features",
+                "category": "Features",
+                "baseComponentId": "features-01",
+                "props": [
+                  {
+                    "id": "features:content",
+                    "name": "Content",
+                    "kind": "text",
+                    "required": false
+                  },
+                  {
+                    "id": "features:visible",
+                    "name": "Visible",
+                    "kind": "boolean",
+                    "defaultValue": true
+                  }
+                ],
+                "slots": [
+                  {
+                    "id": "features:slot:0",
+                    "name": "heading",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "features:slot:1",
+                    "name": "card",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "features:slot:2",
+                    "name": "card",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "features:slot:3",
+                    "name": "card",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  }
+                ],
+                "variants": [
+                  {
+                    "id": "features-01",
+                    "name": "Feature card grid",
+                    "propDefaults": {
+                      "summary": "Three scannable value cards."
+                    }
+                  },
+                  {
+                    "id": "features-02",
+                    "name": "Bento features",
+                    "propDefaults": {
+                      "summary": "A varied grid for product capabilities."
+                    }
+                  },
+                  {
+                    "id": "features-03",
+                    "name": "Numbered feature list",
+                    "propDefaults": {
+                      "summary": "A calm, editorial list of benefits."
+                    }
+                  }
+                ],
+                "createdAt": 1790356969328,
+                "updatedAt": 1790356969328,
+                "version": 1
+              },
+              "family:content": {
+                "id": "family:content",
+                "name": "Content",
+                "category": "Content",
+                "baseComponentId": "content-01",
+                "props": [
+                  {
+                    "id": "content:content",
+                    "name": "Content",
+                    "kind": "text",
+                    "required": false
+                  },
+                  {
+                    "id": "content:visible",
+                    "name": "Visible",
+                    "kind": "boolean",
+                    "defaultValue": true
+                  }
+                ],
+                "slots": [
+                  {
+                    "id": "content:slot:0",
+                    "name": "media",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "content:slot:1",
+                    "name": "heading",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "content:slot:2",
+                    "name": "copy",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "content:slot:3",
+                    "name": "action",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  }
+                ],
+                "variants": [
+                  {
+                    "id": "content-01",
+                    "name": "Image and copy",
+                    "propDefaults": {
+                      "summary": "A media frame paired with long-form copy."
+                    }
+                  },
+                  {
+                    "id": "content-02",
+                    "name": "Story statement",
+                    "propDefaults": {
+                      "summary": "A large statement with supporting details."
+                    }
+                  },
+                  {
+                    "id": "content-03",
+                    "name": "Process timeline",
+                    "propDefaults": {
+                      "summary": "Four clear steps for explaining a workflow."
+                    }
+                  }
+                ],
+                "createdAt": 1790356969328,
+                "updatedAt": 1790356969328,
+                "version": 1
+              },
+              "family:social-proof": {
+                "id": "family:social-proof",
+                "name": "Social proof",
+                "category": "Social proof",
+                "baseComponentId": "social-proof-01",
+                "props": [
+                  {
+                    "id": "social-proof:content",
+                    "name": "Content",
+                    "kind": "text",
+                    "required": false
+                  },
+                  {
+                    "id": "social-proof:visible",
+                    "name": "Visible",
+                    "kind": "boolean",
+                    "defaultValue": true
+                  }
+                ],
+                "slots": [
+                  {
+                    "id": "social-proof:slot:0",
+                    "name": "heading",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "social-proof:slot:1",
+                    "name": "logo",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "social-proof:slot:2",
+                    "name": "logo",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "social-proof:slot:3",
+                    "name": "logo",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  }
+                ],
+                "variants": [
+                  {
+                    "id": "social-proof-01",
+                    "name": "Logo cloud",
+                    "propDefaults": {
+                      "summary": "A simple strip of customer or partner names."
+                    }
+                  },
+                  {
+                    "id": "social-proof-02",
+                    "name": "Testimonial spotlight",
+                    "propDefaults": {
+                      "summary": "One strong customer quote and attribution."
+                    }
+                  },
+                  {
+                    "id": "social-proof-03",
+                    "name": "Metrics and proof",
+                    "propDefaults": {
+                      "summary": "Three metrics paired with a trust statement."
+                    }
+                  }
+                ],
+                "createdAt": 1790356969328,
+                "updatedAt": 1790356969328,
+                "version": 1
+              },
+              "family:pricing": {
+                "id": "family:pricing",
+                "name": "Pricing",
+                "category": "Pricing",
+                "baseComponentId": "pricing-01",
+                "props": [
+                  {
+                    "id": "pricing:content",
+                    "name": "Content",
+                    "kind": "text",
+                    "required": false
+                  },
+                  {
+                    "id": "pricing:visible",
+                    "name": "Visible",
+                    "kind": "boolean",
+                    "defaultValue": true
+                  }
+                ],
+                "slots": [
+                  {
+                    "id": "pricing:slot:0",
+                    "name": "plan",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "pricing:slot:1",
+                    "name": "featured plan",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "pricing:slot:2",
+                    "name": "plan",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  }
+                ],
+                "variants": [
+                  {
+                    "id": "pricing-01",
+                    "name": "Three-tier pricing",
+                    "propDefaults": {
+                      "summary": "Side-by-side plans with a featured option."
+                    }
+                  },
+                  {
+                    "id": "pricing-02",
+                    "name": "Simple price card",
+                    "propDefaults": {
+                      "summary": "One decisive offer with included features."
+                    }
+                  },
+                  {
+                    "id": "pricing-03",
+                    "name": "Plan comparison",
+                    "propDefaults": {
+                      "summary": "A compact comparison-table layout."
+                    }
+                  }
+                ],
+                "createdAt": 1790356969328,
+                "updatedAt": 1790356969328,
+                "version": 1
+              },
+              "family:cta": {
+                "id": "family:cta",
+                "name": "CTA",
+                "category": "CTA",
+                "baseComponentId": "cta-01",
+                "props": [
+                  {
+                    "id": "cta:content",
+                    "name": "Content",
+                    "kind": "text",
+                    "required": false
+                  },
+                  {
+                    "id": "cta:visible",
+                    "name": "Visible",
+                    "kind": "boolean",
+                    "defaultValue": true
+                  }
+                ],
+                "slots": [
+                  {
+                    "id": "cta:slot:0",
+                    "name": "heading",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "cta:slot:1",
+                    "name": "copy",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "cta:slot:2",
+                    "name": "actions",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  }
+                ],
+                "variants": [
+                  {
+                    "id": "cta-01",
+                    "name": "Action band",
+                    "propDefaults": {
+                      "summary": "A concise conversion section with two actions."
+                    }
+                  },
+                  {
+                    "id": "cta-02",
+                    "name": "Split call to action",
+                    "propDefaults": {
+                      "summary": "Copy, action, and a supporting proof panel."
+                    }
+                  },
+                  {
+                    "id": "cta-03",
+                    "name": "Newsletter signup",
+                    "propDefaults": {
+                      "summary": "Email capture with a compact promise."
+                    }
+                  }
+                ],
+                "createdAt": 1790356969328,
+                "updatedAt": 1790356969328,
+                "version": 1
+              },
+              "family:faq": {
+                "id": "family:faq",
+                "name": "FAQ",
+                "category": "FAQ",
+                "baseComponentId": "faq-01",
+                "props": [
+                  {
+                    "id": "faq:content",
+                    "name": "Content",
+                    "kind": "text",
+                    "required": false
+                  },
+                  {
+                    "id": "faq:visible",
+                    "name": "Visible",
+                    "kind": "boolean",
+                    "defaultValue": true
+                  }
+                ],
+                "slots": [
+                  {
+                    "id": "faq:slot:0",
+                    "name": "question",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "faq:slot:1",
+                    "name": "question",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "faq:slot:2",
+                    "name": "question",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  }
+                ],
+                "variants": [
+                  {
+                    "id": "faq-01",
+                    "name": "Accordion FAQ",
+                    "propDefaults": {
+                      "summary": "A single-column list of common questions."
+                    }
+                  },
+                  {
+                    "id": "faq-02",
+                    "name": "FAQ columns",
+                    "propDefaults": {
+                      "summary": "Questions split into two easy-to-scan columns."
+                    }
+                  },
+                  {
+                    "id": "faq-03",
+                    "name": "FAQ with contact",
+                    "propDefaults": {
+                      "summary": "Questions plus a clear escalation path."
+                    }
+                  }
+                ],
+                "createdAt": 1790356969328,
+                "updatedAt": 1790356969328,
+                "version": 1
+              },
+              "family:footer": {
+                "id": "family:footer",
+                "name": "Footer",
+                "category": "Footer",
+                "baseComponentId": "footer-01",
+                "props": [
+                  {
+                    "id": "footer:content",
+                    "name": "Content",
+                    "kind": "text",
+                    "required": false
+                  },
+                  {
+                    "id": "footer:visible",
+                    "name": "Visible",
+                    "kind": "boolean",
+                    "defaultValue": true
+                  }
+                ],
+                "slots": [
+                  {
+                    "id": "footer:slot:0",
+                    "name": "brand",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "footer:slot:1",
+                    "name": "links",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "footer:slot:2",
+                    "name": "legal",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  }
+                ],
+                "variants": [
+                  {
+                    "id": "footer-01",
+                    "name": "Compact footer",
+                    "propDefaults": {
+                      "summary": "Brand, utility links, and copyright."
+                    }
+                  },
+                  {
+                    "id": "footer-02",
+                    "name": "Mega footer",
+                    "propDefaults": {
+                      "summary": "Multiple link groups with a closing legal row."
+                    }
+                  },
+                  {
+                    "id": "footer-03",
+                    "name": "Newsletter footer",
+                    "propDefaults": {
+                      "summary": "Subscription form above the utility links."
+                    }
+                  }
+                ],
+                "createdAt": 1790356969328,
+                "updatedAt": 1790356969328,
+                "version": 1
+              },
+              "family:contact": {
+                "id": "family:contact",
+                "name": "Contact",
+                "category": "Contact",
+                "baseComponentId": "contact-01",
+                "props": [
+                  {
+                    "id": "contact:content",
+                    "name": "Content",
+                    "kind": "text",
+                    "required": false
+                  },
+                  {
+                    "id": "contact:visible",
+                    "name": "Visible",
+                    "kind": "boolean",
+                    "defaultValue": true
+                  }
+                ],
+                "slots": [
+                  {
+                    "id": "contact:slot:0",
+                    "name": "details",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "contact:slot:1",
+                    "name": "form",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  }
+                ],
+                "variants": [
+                  {
+                    "id": "contact-01",
+                    "name": "Contact form",
+                    "propDefaults": {
+                      "summary": "A practical two-column contact section."
+                    }
+                  },
+                  {
+                    "id": "contact-02",
+                    "name": "Contact cards",
+                    "propDefaults": {
+                      "summary": "Three direct routes for getting help."
+                    }
+                  },
+                  {
+                    "id": "contact-03",
+                    "name": "Location panel",
+                    "propDefaults": {
+                      "summary": "Address, hours, and a large map placeholder."
+                    }
+                  }
+                ],
+                "createdAt": 1790356969328,
+                "updatedAt": 1790356969328,
+                "version": 1
+              },
+              "family:team": {
+                "id": "family:team",
+                "name": "Team",
+                "category": "Team",
+                "baseComponentId": "team-01",
+                "props": [
+                  {
+                    "id": "team:content",
+                    "name": "Content",
+                    "kind": "text",
+                    "required": false
+                  },
+                  {
+                    "id": "team:visible",
+                    "name": "Visible",
+                    "kind": "boolean",
+                    "defaultValue": true
+                  }
+                ],
+                "slots": [
+                  {
+                    "id": "team:slot:0",
+                    "name": "person",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "team:slot:1",
+                    "name": "person",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "team:slot:2",
+                    "name": "person",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  }
+                ],
+                "variants": [
+                  {
+                    "id": "team-01",
+                    "name": "Team grid",
+                    "propDefaults": {
+                      "summary": "A clean grid of people and roles."
+                    }
+                  },
+                  {
+                    "id": "team-02",
+                    "name": "Founder spotlight",
+                    "propDefaults": {
+                      "summary": "A large portrait area with founder copy."
+                    }
+                  },
+                  {
+                    "id": "team-03",
+                    "name": "Hiring team block",
+                    "propDefaults": {
+                      "summary": "Team proof plus an open-role action."
+                    }
+                  }
+                ],
+                "createdAt": 1790356969328,
+                "updatedAt": 1790356969328,
+                "version": 1
+              },
+              "family:blog": {
+                "id": "family:blog",
+                "name": "Blog",
+                "category": "Blog",
+                "baseComponentId": "blog-01",
+                "props": [
+                  {
+                    "id": "blog:content",
+                    "name": "Content",
+                    "kind": "text",
+                    "required": false
+                  },
+                  {
+                    "id": "blog:visible",
+                    "name": "Visible",
+                    "kind": "boolean",
+                    "defaultValue": true
+                  }
+                ],
+                "slots": [
+                  {
+                    "id": "blog:slot:0",
+                    "name": "article",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "blog:slot:1",
+                    "name": "article",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  },
+                  {
+                    "id": "blog:slot:2",
+                    "name": "article",
+                    "accepts": [
+                      "element",
+                      "component"
+                    ]
+                  }
+                ],
+                "variants": [
+                  {
+                    "id": "blog-01",
+                    "name": "Article grid",
+                    "propDefaults": {
+                      "summary": "Three editorial cards for recent writing."
+                    }
+                  },
+                  {
+                    "id": "blog-02",
+                    "name": "Featured article",
+                    "propDefaults": {
+                      "summary": "One lead story with two supporting stories."
+                    }
+                  },
+                  {
+                    "id": "blog-03",
+                    "name": "Resource list",
+                    "propDefaults": {
+                      "summary": "A compact list for guides, reports, or updates."
+                    }
+                  }
+                ],
+                "createdAt": 1790356969328,
+                "updatedAt": 1790356969328,
+                "version": 1
+              }
+            },
+            "siteKits": {
+              "kit:launch": {
+                "id": "kit:launch",
+                "name": "Launch system",
+                "description": "Coordinated typography, actions, cards, navigation, forms, and motion for a product launch.",
+                "modeIds": [
+                  "mode:light",
+                  "mode:mobile",
+                  "mode:brand"
+                ],
+                "variableIds": [
+                  "var:accent",
+                  "var:surface",
+                  "var:text",
+                  "var:radius",
+                  "var:space"
+                ],
+                "styleIds": [
+                  "style:button-primary",
+                  "style:display-heading",
+                  "style:card",
+                  "style:field",
+                  "style:navigation"
+                ],
+                "componentFamilyIds": [
+                  "family:button",
+                  "family:navigation",
+                  "family:hero",
+                  "family:features",
+                  "family:cta",
+                  "family:contact",
+                  "family:footer"
+                ],
+                "interactionIds": [],
+                "tags": [
+                  "launch",
+                  "marketing",
+                  "responsive"
+                ],
+                "now": 1790356969069,
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              },
+              "kit:editorial": {
+                "id": "kit:editorial",
+                "name": "Editorial system",
+                "description": "Large display typography, restrained surfaces, article cards, navigation, newsletter forms, and calm motion.",
+                "modeIds": [
+                  "mode:light",
+                  "mode:mobile"
+                ],
+                "variableIds": [
+                  "var:accent",
+                  "var:surface",
+                  "var:text",
+                  "var:radius",
+                  "var:space"
+                ],
+                "styleIds": [
+                  "style:display-heading",
+                  "style:card",
+                  "style:field",
+                  "style:navigation"
+                ],
+                "componentFamilyIds": [
+                  "family:navigation",
+                  "family:hero",
+                  "family:content",
+                  "family:blog",
+                  "family:footer"
+                ],
+                "interactionIds": [],
+                "tags": [
+                  "editorial",
+                  "content",
+                  "magazine"
+                ],
+                "now": 1790356969069,
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              },
+              "kit:product-dark": {
+                "id": "kit:product-dark",
+                "name": "Product dark system",
+                "description": "Dark product surfaces, clear actions, bento features, pricing, forms, and focused interaction states.",
+                "modeIds": [
+                  "mode:dark",
+                  "mode:mobile",
+                  "mode:brand"
+                ],
+                "variableIds": [
+                  "var:accent",
+                  "var:surface",
+                  "var:text",
+                  "var:radius",
+                  "var:space"
+                ],
+                "styleIds": [
+                  "style:button-primary",
+                  "style:display-heading",
+                  "style:card",
+                  "style:field",
+                  "style:navigation"
+                ],
+                "componentFamilyIds": [
+                  "family:navigation",
+                  "family:hero",
+                  "family:features",
+                  "family:pricing",
+                  "family:faq",
+                  "family:contact",
+                  "family:footer"
+                ],
+                "interactionIds": [],
+                "tags": [
+                  "product",
+                  "dark",
+                  "saas"
+                ],
+                "now": 1790356969069,
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069,
+                "version": 1
+              }
+            },
+            "libraries": {
+              "library:local": {
+                "id": "library:local",
+                "name": "Project library",
+                "sourceProjectId": "local",
+                "installedVersion": 1,
+                "availableVersion": 1,
+                "status": "current",
+                "releases": [
+                  {
+                    "version": 1,
+                    "createdAt": 1790356969069,
+                    "variableIds": [
+                      "var:accent",
+                      "var:surface",
+                      "var:text",
+                      "var:radius",
+                      "var:space"
+                    ],
+                    "styleIds": [
+                      "style:button-primary",
+                      "style:display-heading",
+                      "style:card",
+                      "style:field",
+                      "style:navigation"
+                    ],
+                    "componentFamilyIds": [
+                      "family:button"
+                    ],
+                    "siteKitIds": [
+                      "kit:launch",
+                      "kit:editorial",
+                      "kit:product-dark"
+                    ],
+                    "notes": "Initial design system"
+                  }
+                ],
+                "createdAt": 1790356969069,
+                "updatedAt": 1790356969069
+              }
+            }
+          }
+        },
+        "label": "Added component catalog families"
+      }
+    ]
+  },
+  "design": {
+    "version": 3,
+    "updatedAt": "2026-09-25T17:22:50.157Z",
+    "routes": {}
+  }
+}

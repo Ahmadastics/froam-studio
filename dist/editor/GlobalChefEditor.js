@@ -49,6 +49,7 @@ import { useFroamProjectDocument } from './useFroamProjectDocument.js';
 import { diffStores } from '../collab/oplog.js';
 import { loadOpLog, saveOpLog } from '../collab/persist.js';
 import { findElementByPath, getElementPath, isInPageScope, isPathElement, isSafeDraftPath, tagOfPath } from '../collab/paths.js';
+import { pageSweepFor, runPageSweep } from './smart-styles.js';
 import { usePageCanvasOffset } from './usePageCanvasOffset.js';
 import { createAnchor, resolveAnchor } from '../collab/anchor.js';
 import { fingerprintForDraft } from './draft-fingerprint.js';
@@ -184,6 +185,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [personaEditorOpen, setPersonaEditorOpen] = useState(false);
     // UI state
     const [toastMsg, setToastMsg] = useState('');
+    /** What a page-wide fix did, shown until it's kept or undone. */
+    const [sweepReport, setSweepReport] = useState(null);
     const [toastVisible, setToastVisible] = useState(false);
     const [openSections, setOpenSections] = useState({
         intel: true,
@@ -1610,9 +1613,43 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         window.clearTimeout(toastTimerRef.current);
         toastTimerRef.current = window.setTimeout(() => setToastVisible(false), 2200);
     }, []);
+    /**
+     * A page-wide fix: every change it finds goes into the design at once, as
+     * one step — one Ctrl+Z (or Undo all) takes the whole sweep back — and the
+     * report says what changed, element by element.
+     */
+    function runSweep(id) {
+        const root = getRoot();
+        if (!root)
+            return;
+        const sweep = runPageSweep(id, root);
+        const fixes = sweep.fixes.filter((fix) => !fix.element.closest(INJECTED_BLOCK_SELECTOR));
+        if (fixes.length) {
+            const current = storeRef.current;
+            const routeEntries = { ...(current[viewportStoreKey] ?? {}) };
+            for (const fix of fixes) {
+                const path = getElementPath(fix.element, root);
+                if (!path || isInjectionPath(path))
+                    continue;
+                const draft = routeEntries[path] ?? {};
+                routeEntries[path] = { ...draft, styles: { ...(draft.styles ?? {}), ...fix.styles } };
+            }
+            opPendingLabelRef.current = sweep.title;
+            const nextStore = { ...current, [viewportStoreKey]: routeEntries };
+            setStore(nextStore);
+            saveStore(nextStore);
+            applyStoreToDOM(nextStore);
+        }
+        setSweepReport({ title: sweep.title, note: sweep.note, lines: fixes.map((fix) => fix.line), applied: fixes.length > 0 });
+    }
     function executeLocalFroamCommand(intent) {
         const request = intent.toLocaleLowerCase().trim();
         const wants = (pattern) => pattern.test(request);
+        const sweep = pageSweepFor(request);
+        if (sweep) {
+            runSweep(sweep);
+            return true;
+        }
         if (wants(/^(?:undo|undo that|go back)$/)) {
             undo();
             return true;
@@ -5314,6 +5351,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     } }
     const corePaletteCommands = [
         { id: 'save', label: 'Save', shortcut: 'Ctrl+S', icon: _jsx(Save, { size: 15 }), action: saveToRunam },
+        { id: 'sweep-contrast', label: 'Fix contrast everywhere', searchText: 'accessibility wcag readable page', icon: _jsx(Sparkles, { size: 15 }), action: () => runSweep('contrast') },
+        { id: 'sweep-buttons', label: 'Make the buttons consistent', searchText: 'buttons match family corners page', icon: _jsx(Sparkles, { size: 15 }), action: () => runSweep('buttons') },
+        { id: 'sweep-spacing', label: 'Tidy the spacing', searchText: 'spacing scale grid padding page', icon: _jsx(Sparkles, { size: 15 }), action: () => runSweep('spacing') },
         { id: 'save-repo', label: 'Save to your code (git-ready files)', shortcut: 'Ctrl+Shift+S', icon: _jsx(GitCommit, { size: 15 }), action: () => { void saveToRepo(); } },
         // Sharing is the start of a review, so it belongs where people look for a
         // verb — not only in a panel section they have to find first.
@@ -5806,7 +5846,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     const next = { ...deviceSizes, [deviceFrame.kind]: id };
                     setDeviceSizes(next);
                     writeDeviceSizes(next);
-                }, onDesktop: () => setViewportMode('desktop') })), _jsx(FroamIntentResult, { state: froamIntent.state, aiModel: aiStatus?.model, onAllow: froamIntent.allow, onNotNow: froamIntent.notNow, onKeep: froamIntent.keep, onRetry: froamIntent.retry, onCancel: froamIntent.cancel, onDismiss: froamIntent.dismiss }), showPanel && !inlineEditing && (_jsx(FroamQuickChat, { open: quickChatOpen, selectionLabel: selection?.label, busy: ['preparing', 'awaiting-consent', 'requesting', 'plan-ready', 'creating-prototype', 'retrying', 'adopting'].includes(froamIntent.state.phase), onSubmit: (intent) => { setQuickChatOpen(false); void froamIntent.submit({ origin: 'contextual', intent }); }, onClose: () => setQuickChatOpen(false), ai: aiStatus && !isContributor ? {
+                }, onDesktop: () => setViewportMode('desktop') })), _jsx(FroamIntentResult, { state: froamIntent.state, aiModel: aiStatus?.model, onAllow: froamIntent.allow, onNotNow: froamIntent.notNow, onKeep: froamIntent.keep, onRetry: froamIntent.retry, onCancel: froamIntent.cancel, onDismiss: froamIntent.dismiss }), sweepReport && (_jsxs("aside", { className: "froam-intent-result is-preview froam-sweep-report", "data-chef-editor-root": "true", role: "dialog", "aria-label": "Page fix", children: [_jsx("header", { children: _jsxs("div", { children: [_jsx("span", { children: "Page fix" }), _jsx("strong", { children: sweepReport.title })] }) }), _jsx("p", { className: "froam-intent-result__why", children: sweepReport.note }), sweepReport.lines.length > 0 && (_jsxs("ul", { className: "froam-sweep-report__list", children: [sweepReport.lines.slice(0, 8).map((line) => _jsx("li", { children: line }, line)), sweepReport.lines.length > 8 && _jsxs("li", { children: ["\u2026and ", sweepReport.lines.length - 8, " more"] })] })), _jsx("div", { className: "froam-intent-result__actions", children: sweepReport.applied ? (_jsxs(_Fragment, { children: [_jsx("button", { type: "button", className: "is-primary", "data-froam-intent-primary": true, onClick: () => setSweepReport(null), children: "Keep" }), _jsxs("button", { type: "button", onClick: () => { undo(); setSweepReport(null); }, children: [_jsx(Undo2, { size: 13 }), " Undo all"] })] })) : (_jsx("button", { type: "button", className: "is-primary", "data-froam-intent-primary": true, onClick: () => setSweepReport(null), children: "Done" })) })] })), showPanel && !inlineEditing && (_jsx(FroamQuickChat, { open: quickChatOpen, selectionLabel: selection?.label, busy: ['preparing', 'awaiting-consent', 'requesting', 'plan-ready', 'creating-prototype', 'retrying', 'adopting'].includes(froamIntent.state.phase), onSubmit: (intent) => { setQuickChatOpen(false); void froamIntent.submit({ origin: 'contextual', intent }); }, onClose: () => setQuickChatOpen(false), ai: aiStatus && !isContributor ? {
                     available: aiStatus.configured,
                     on: quickEditAi,
                     model: aiStatus.model,

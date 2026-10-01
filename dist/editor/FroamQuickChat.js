@@ -4,7 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import { describeSelection } from './selection-name.js';
 const say = (intent) => ({ label: intent, intent });
 const selectedSuggestions = ['Make it bolder', 'Center the content', 'Add more space', 'Make it rounder'].map(say);
-const pageSuggestions = ['Add a hero section', 'Add a rectangle', 'Open Layers', 'Make the page dark'].map(say);
+/* With nothing selected: the page-wide fixes first, then the rest. */
+const pageSuggestions = [
+    { label: 'Fix contrast everywhere', intent: 'Fix contrast everywhere', smart: true },
+    { label: 'Consistent buttons', intent: 'Make the buttons consistent', smart: true },
+    { label: 'Tidy spacing', intent: 'Tidy the spacing', smart: true },
+    ...['Add a hero section', 'Open Layers'].map(say),
+];
 const aiSuggestions = ['Make it feel more premium', 'Tighten the spacing', 'Make it easier to read'].map(say);
 /* Smart edits read the page first (smart-styles.ts); these are the ones that suit each kind of thing. */
 const SMART = {

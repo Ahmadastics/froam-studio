@@ -359,3 +359,148 @@ export function readSmartContext(element: HTMLElement, root: HTMLElement): Froam
     lookAlikes: readLookAlikes(element, root),
   }
 }
+
+/* ── Page-wide fixes ──
+ * The smart edits, run across the whole page: every text checked against what
+ * is really behind it, the buttons brought into one family, the spacing put
+ * back on the page's own scale. Each returns what it would change, so the
+ * editor can apply it all as one step and say exactly what it did. */
+
+export type PageFix = { element: HTMLElement; styles: Record<string, string>; line: string }
+export type PageSweep = { id: 'contrast' | 'buttons' | 'spacing'; title: string; checked: number; fixes: PageFix[]; note: string }
+
+const MAX_SCANNED = 1500
+const onPage = (element: Element): element is HTMLElement => element instanceof HTMLElement && !editorOwned(element) && !element.hasAttribute('data-froam-stage') && visible(element)
+const ownWords = (element: HTMLElement) => Array.from(element.childNodes).some((node) => node.nodeType === Node.TEXT_NODE && Boolean(node.textContent?.trim()))
+const KIND: Record<string, string> = { h1: 'Heading', h2: 'Heading', h3: 'Heading', h4: 'Heading', h5: 'Heading', h6: 'Heading', p: 'Paragraph', a: 'Link', button: 'Button', li: 'Item', label: 'Label', small: 'Small print', span: 'Text', blockquote: 'Quote', figcaption: 'Caption', input: 'Button' }
+/** "Paragraph “Extraordinary places…”": what a person would call it. */
+function describe(element: HTMLElement) {
+  const words = (element instanceof HTMLInputElement ? element.value : element.innerText || '').replace(/\s+/g, ' ').trim()
+  const kind = KIND[element.tagName.toLowerCase()] ?? 'Text'
+  return words ? `${kind} “${words.length > 28 ? `${words.slice(0, 27)}…` : words}”` : kind
+}
+
+/** Every text that fails WCAG AA where it sits — its own fill, the colour behind it, or each colour of a gradient — moved to the nearest shade of its hue that passes. */
+export function sweepContrast(root: HTMLElement): PageSweep {
+  const fixes: PageFix[] = []
+  let checked = 0
+  let onPhotos = 0
+  for (const element of Array.from(root.querySelectorAll('*')).slice(0, MAX_SCANNED)) {
+    if (!onPage(element) || !ownWords(element)) continue
+    if (element.matches(':disabled') || element.closest('[aria-disabled="true"]')) continue // WCAG leaves inactive controls out.
+    const style = getComputedStyle(element)
+    if (style.visibility === 'hidden' || Number(style.opacity) < 0.1) continue
+    const fg = parse(style.color)
+    const fill = parse(style.webkitTextFillColor)
+    if (!fg || fg.a < 0.5 || (fill && fill.a < 0.1)) continue // Gradient-clipped words aren't one colour.
+    checked += 1
+    const surface = solid(parse(style.backgroundColor))
+    const layer = layerBehind(style)
+    const found: Behind = surface ? { behind: surface, overImage: false } : layer?.overImage ? layer : readBehind(element)
+    if (!surface && found.overImage && found.imageKind !== 'gradient') { onPhotos += 1; continue }
+    const grounds = !surface && found.imageKind === 'gradient' && found.stops?.length ? found.stops : [found.behind ?? WHITE]
+    const worst = (text: Rgba) => grounds.reduce((low, ground) => (contrast(text, ground) < contrast(text, low) ? ground : low))
+    const size = Number.parseFloat(style.fontSize) || 16
+    const target = size >= 24 || (size >= 18.66 && Number(style.fontWeight) >= 700) ? 3 : 4.5
+    const before = contrast(fg, worst(fg))
+    if (before >= target) continue
+    let next = fg
+    for (let round = 0; round < 4 && contrast(next, worst(next)) < target + 0.05; round += 1) next = readableShade(next, worst(next), target + 0.05)
+    const after = contrast(next, worst(next))
+    if (after < target) continue
+    const styles: Record<string, string> = { color: toHex(next) }
+    if (fill && toHex(fill) !== toHex(fg)) styles.WebkitTextFillColor = toHex(next)
+    fixes.push({ element, styles, line: `${describe(element)}: ${ratio(before)} → ${ratio(after)}` })
+  }
+  const skipped = onPhotos ? ` ${onPhotos} on photos can't be measured and were left as they are.` : ''
+  return {
+    id: 'contrast',
+    title: fixes.length ? `Fixed the contrast of ${fixes.length} text${fixes.length === 1 ? '' : 's'}` : 'Every text already reads well',
+    checked,
+    fixes,
+    note: fixes.length
+      ? `Each now passes WCAG AA on what is really behind it, in the same hue. ${checked} texts checked.${skipped}`
+      : `All ${checked} texts pass WCAG AA where they sit.${skipped}`,
+  }
+}
+
+const BUTTON_SELECTOR = 'button, [role="button"], input[type="submit"], input[type="button"], a[class*="btn" i], a[class*="button" i]'
+const BUTTON_TRAITS: Record<string, string> = { borderRadius: 'corners', fontFamily: 'font', fontWeight: 'weight', letterSpacing: 'tracking', textTransform: 'case' }
+
+/** The buttons as one family: the corners, font, weight, tracking and case most of them share, given to the ones that stray. Sizes stay — a large and a small button are both on-brand. */
+export function sweepButtons(root: HTMLElement): PageSweep {
+  const buttons = Array.from(root.querySelectorAll(BUTTON_SELECTOR)).filter(onPage)
+    .filter((element) => (element instanceof HTMLInputElement ? element.value : element.innerText).trim())
+    .filter((element, index, all) => !all.some((other, at) => at !== index && other.contains(element)))
+  if (buttons.length < 3) return { id: 'buttons', title: 'Nothing to bring in line', checked: buttons.length, fixes: [], note: `There ${buttons.length === 1 ? 'is 1 button' : `are ${buttons.length} buttons`} on this page — it takes three to tell what the family looks like.` }
+  const styles = buttons.map((element) => getComputedStyle(element) as unknown as Record<string, string>)
+  const family: Record<string, string> = {}
+  for (const property of Object.keys(BUTTON_TRAITS)) {
+    const counts = new Map<string, number>()
+    for (const style of styles) counts.set(style[property], (counts.get(style[property]) ?? 0) + 1)
+    const [value, count] = [...counts].sort((a, b) => b[1] - a[1])[0] ?? []
+    if (value && count && count * 2 > buttons.length) family[property] = value
+  }
+  const fixes: PageFix[] = []
+  buttons.forEach((element, index) => {
+    const changes = Object.entries(family).filter(([property, value]) => styles[index][property] !== value)
+    if (!changes.length) return
+    fixes.push({ element, styles: Object.fromEntries(changes), line: `${describe(element)}: ${changes.map(([property, value]) => `${BUTTON_TRAITS[property]} ${property === 'fontFamily' ? value.split(',')[0].replace(/["']/g, '') : value}`).join(', ')}` })
+  })
+  return {
+    id: 'buttons',
+    title: fixes.length ? `Brought ${fixes.length} button${fixes.length === 1 ? '' : 's'} in line` : 'The buttons already match',
+    checked: buttons.length,
+    fixes,
+    note: fixes.length ? `Matched to what most of the ${buttons.length} buttons share. Sizes were left alone.` : `All ${buttons.length} buttons share their corners, font, weight and case.`,
+  }
+}
+
+const SPACING = ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'marginTop', 'marginBottom', 'rowGap', 'columnGap'] as const
+const SPACING_WORDS: Record<string, string> = { paddingTop: 'padding', paddingRight: 'padding', paddingBottom: 'padding', paddingLeft: 'padding', marginTop: 'margin', marginBottom: 'margin', rowGap: 'gap', columnGap: 'gap' }
+
+/** Spacing back on the page's own scale: when most of its spacing sits on a 4px (or 8px) grid, the few values off it are rounded onto it. A page with no scale is left alone. */
+export function sweepSpacing(root: HTMLElement): PageSweep {
+  const seen: Array<{ element: HTMLElement; property: string; value: number }> = []
+  for (const element of Array.from(root.querySelectorAll('*')).slice(0, MAX_SCANNED)) {
+    if (!onPage(element)) continue
+    const style = getComputedStyle(element) as unknown as Record<string, string>
+    for (const property of SPACING) {
+      const value = Number.parseFloat(style[property])
+      if (Number.isFinite(value) && value >= 2 && value <= 160) seen.push({ element, property, value })
+    }
+  }
+  const share = (step: number) => seen.filter(({ value }) => Math.abs(value / step - Math.round(value / step)) < 0.05).length / Math.max(1, seen.length)
+  const grid = share(8) >= 0.75 ? 8 : share(4) >= 0.7 ? 4 : 0
+  if (!grid || seen.length < 6) return { id: 'spacing', title: 'Left the spacing as it is', checked: seen.length, fixes: [], note: seen.length < 6 ? 'There is too little spacing on this page to read a scale from.' : 'This page does not keep to a spacing scale, so there is nothing to snap to — its spacing is left as designed.' }
+  const byElement = new Map<HTMLElement, { styles: Record<string, string>; words: Set<string> }>()
+  for (const { element, property, value } of seen) {
+    const snapped = Math.max(grid, Math.round(value / grid) * grid)
+    if (Math.abs(snapped - value) < 1) continue
+    const entry = byElement.get(element) ?? { styles: {}, words: new Set<string>() }
+    entry.styles[property] = `${snapped}px`
+    entry.words.add(`${SPACING_WORDS[property]} ${Math.round(value)} → ${snapped}px`)
+    byElement.set(element, entry)
+  }
+  const fixes = [...byElement].map(([element, { styles, words }]) => ({ element, styles, line: `${describe(element)}: ${[...words].join(', ')}` }))
+  return {
+    id: 'spacing',
+    title: fixes.length ? `Put ${fixes.length} element${fixes.length === 1 ? '' : 's'} back on the ${grid}px scale` : 'The spacing is already on scale',
+    checked: seen.length,
+    fixes,
+    note: fixes.length ? `${Math.round(share(grid) * 100)}% of this page's spacing sits on a ${grid}px grid; the values off it were rounded onto it.` : `All the spacing sits on the page's ${grid}px grid.`,
+  }
+}
+
+/** Which page-wide fix an instruction asks for, if any. */
+export function pageSweepFor(intent: string): PageSweep['id'] | null {
+  const said = intent.toLocaleLowerCase()
+  if (/\bcontrast\b.*\b(?:everywhere|page|site|all)\b|\b(?:everywhere|whole page|all text)\b.*\bcontrast\b/.test(said)) return 'contrast'
+  if (/\bbuttons\b.*\b(?:consistent|match|same|in line|family)\b|\bconsistent buttons\b/.test(said)) return 'buttons'
+  if (/\btidy\b.*\bspacing\b|\bspacing\b.*\b(?:scale|grid|tidy|consistent|everywhere)\b/.test(said)) return 'spacing'
+  return null
+}
+
+export function runPageSweep(id: PageSweep['id'], root: HTMLElement): PageSweep {
+  return id === 'contrast' ? sweepContrast(root) : id === 'buttons' ? sweepButtons(root) : sweepSpacing(root)
+}

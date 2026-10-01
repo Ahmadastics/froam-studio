@@ -28,3 +28,10 @@ adoption.json
 
 # Wrangler local state (wrangler dev / deploy)
 .wrangler/
+
+# Run'Am staging data — local only
+.runam-staging/
+
+# Generated model data
+corpus.json
+priors.json

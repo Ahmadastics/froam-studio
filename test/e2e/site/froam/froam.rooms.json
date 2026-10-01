@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "rooms": {
+    "a9e532c7-456d-4991-b455-4620b8cc1b51": {
+      "id": "a9e532c7-456d-4991-b455-4620b8cc1b51",
+      "createdAt": 1790355838761,
+      "routes": "*",
+      "ownerActor": "a_lJmBFzHiT2on",
+      "sequence": 4,
+      "events": [
+        {
+          "seq": 1,
+          "createdAt": 1790356996916,
+          "type": "design",
+          "actor": "a_lJmBFzHiT2on",
+          "routeKey": "/",
+          "viewport": "desktop"
+        },
+        {
+          "seq": 2,
+          "createdAt": 1790357029675,
+          "type": "chat",
+          "actor": "a_lJmBFzHiT2on",
+          "message": {
+            "id": "a99bd784-7f70-44af-a16f-9a9240bd8c29",
+            "actor": "a_lJmBFzHiT2on",
+            "name": "Froam",
+            "body": "yo",
+            "createdAt": 1790357029675
+          }
+        },
+        {
+          "seq": 3,
+          "createdAt": 1790357041960,
+          "type": "chat",
+          "actor": "a_oxkggmPmn17f",
+          "message": {
+            "id": "8816b54c-b7c7-4681-b720-7fcc18d01011",
+            "actor": "a_oxkggmPmn17f",
+            "name": "dastic",
+            "body": "niice",
+            "createdAt": 1790357041960
+          }
+        },
+        {
+          "seq": 4,
+          "createdAt": 1790357058791,
+          "type": "chat",
+          "actor": "a_lJmBFzHiT2on",
+          "message": {
+            "id": "ca79fdc6-592a-4c48-8dec-92a5fb644974",
+            "actor": "a_lJmBFzHiT2on",
+            "name": "Froam",
+            "body": "hehe",
+            "createdAt": 1790357058791
+          }
+        }
+      ],
+      "chat": [
+        {
+          "id": "a99bd784-7f70-44af-a16f-9a9240bd8c29",
+          "actor": "a_lJmBFzHiT2on",
+          "name": "Froam",
+          "body": "yo",
+          "createdAt": 1790357029675
+        },
+        {
+          "id": "8816b54c-b7c7-4681-b720-7fcc18d01011",
+          "actor": "a_oxkggmPmn17f",
+          "name": "dastic",
+          "body": "niice",
+          "createdAt": 1790357041960
+        },
+        {
+          "id": "ca79fdc6-592a-4c48-8dec-92a5fb644974",
+          "actor": "a_lJmBFzHiT2on",
+          "name": "Froam",
+          "body": "hehe",
+          "createdAt": 1790357058791
+        }
+      ],
+      "proposals": {},
+      "tokens": {
+        "luNl3umHUgPO8jEUf8FDxFwI": "owner",
+        "B-j4zwAvBKhU_X3oBmy-V-pt": "editor",
+        "ppEs8MLWbUKD-KhO5IZSh8r3": "contributor",
+        "UqBcUSAdfsu5gH9ZIPw-CBEQ": "commenter",
+        "C0H2q9-W3YbbBDovfm4cwj_Z": "viewer"
+      },
+      "members": {
+        "a_lJmBFzHiT2on": {
+          "actor": "a_lJmBFzHiT2on",
+          "session": "LVBzb3Ibomd8-bHL727vM_9i",
+          "name": "Froam",
+          "role": "owner",
+          "color": "#fde047",
+          "joinedAt": 1790355838761,
+          "seenAt": 1790357109501,
+          "routeKey": "/",
+          "viewport": "desktop",
+          "selectedPath": "main:1/section:1/div:1/div:1",
+          "selectedNodeId": "2a42952f-daf9-46d3-b75a-98ce0241da83",
+          "lockedPath": null,
+          "lockedNodeId": null,
+          "cursor": {
+            "x": 399,
+            "y": 352
+          },
+          "tool": "pointer",
+          "action": "Editing selection"
+        },
+        "a_oxkggmPmn17f": {
+          "actor": "a_oxkggmPmn17f",
+          "session": "hbLZJDuTGNXqQ5gl0VdklH73",
+          "name": "dastic",
+          "role": "viewer",
+          "color": "#5eead4",
+          "avatarUrl": null,
+          "joinedAt": 1790356982348,
+          "seenAt": 1790357042379,
+          "routeKey": "/",
+          "viewport": "desktop",
+          "selectedPath": null,
+          "selectedNodeId": null,
+          "lockedPath": null,
+          "lockedNodeId": null,
+          "cursor": null,
+          "tool": null,
+          "action": null
+        }
+      }
+    }
+  }
+}

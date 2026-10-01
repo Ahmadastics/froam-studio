@@ -24,6 +24,9 @@
 .froam-intent-result header span { color: var(--fs-accent-text); font-size: 11px; }
 .froam-intent-result header em { color: var(--fs-text-tertiary); font-size: 11px; font-style: normal; }
 .froam-intent-result p { margin: 0; color: #b6c0c7; }
+.froam-sweep-report__list { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; max-height: 168px; overflow-y: auto; color: #b6c0c7; font-size: 12px; line-height: 1.4; }
+.froam-sweep-report__list li { padding-left: 14px; position: relative; }
+.froam-sweep-report__list li::before { content: "✓"; position: absolute; left: 0; color: var(--fs-accent-text); }
 .froam-intent-result p.froam-intent-result__why { color: var(--fs-text-primary, #eef2f5); font-weight: 500; line-height: 1.45; }
 .froam-intent-result small { color: #7f8b94; }
 .froam-intent-result__actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }

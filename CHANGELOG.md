@@ -1,5 +1,33 @@
 # Changelog
 
+## 9.4.0 - 2026-10-01
+
+**Page-wide fixes in one step.**
+
+- **Fix contrast everywhere.** Checks every text against what is really behind
+  it — including each colour of a gradient — and moves each one that fails
+  WCAG AA to the nearest passing shade of its hue. Text over photos is left
+  alone because it cannot be measured. The report lists every change with the
+  ratio before and after (e.g. "1.5:1 → 4.6:1").
+- **Make the buttons consistent.** Gives buttons that stray the corners, font,
+  weight, tracking and case most of the page's buttons share. Sizes stay.
+- **Tidy the spacing.** When most of the page's spacing sits on a 4px or 8px
+  grid, rounds the few values off it onto it. A page with no scale is left as
+  designed.
+- Each fix applies as **one step**: a report lists every element it changed,
+  and **Undo all** (or one Ctrl+Z) takes the whole fix back.
+- The three fixes are available from the **command palette** and from
+  **Quick Edit** when nothing is selected.
+- **Undo and History survive Save to Repo and a reload.** Saving and then
+  reloading the editor no longer loses the undo stack. (Verified for style
+  edits; copy written back into source is recovered via version control.)
+- **Shorthand-aware draft reads.** Undoing a look that set `border-radius`
+  no longer leaves the browser's expanded corner longhands behind as phantom
+  edits that a reload makes permanent.
+- 5 new browser tests: one for each page-wide fix (with before/after and undo
+  assertions), one for undo-after-save-and-reload, and one for inline styles
+  surviving Cancel, Undo and phone preview. Total: 65 e2e tests.
+
 ## 9.3.0 - 2026-09-30
 
 **48 new looks in Styles, and looks that move.**

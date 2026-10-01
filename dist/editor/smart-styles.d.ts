@@ -52,5 +52,26 @@ export declare function smartEditFor(intent: string): SmartEditId | null;
 export declare function smartStyleEdit(intent: string, subject: SmartSubject, take?: number): SmartEdit | null;
 /** Everything the smart edits need about the page around `element`, read once. */
 export declare function readSmartContext(element: HTMLElement, root: HTMLElement): FroamPageContext;
+export type PageFix = {
+    element: HTMLElement;
+    styles: Record<string, string>;
+    line: string;
+};
+export type PageSweep = {
+    id: 'contrast' | 'buttons' | 'spacing';
+    title: string;
+    checked: number;
+    fixes: PageFix[];
+    note: string;
+};
+/** Every text that fails WCAG AA where it sits — its own fill, the colour behind it, or each colour of a gradient — moved to the nearest shade of its hue that passes. */
+export declare function sweepContrast(root: HTMLElement): PageSweep;
+/** The buttons as one family: the corners, font, weight, tracking and case most of them share, given to the ones that stray. Sizes stay — a large and a small button are both on-brand. */
+export declare function sweepButtons(root: HTMLElement): PageSweep;
+/** Spacing back on the page's own scale: when most of its spacing sits on a 4px (or 8px) grid, the few values off it are rounded onto it. A page with no scale is left alone. */
+export declare function sweepSpacing(root: HTMLElement): PageSweep;
+/** Which page-wide fix an instruction asks for, if any. */
+export declare function pageSweepFor(intent: string): PageSweep['id'] | null;
+export declare function runPageSweep(id: PageSweep['id'], root: HTMLElement): PageSweep;
 export {};
 //# sourceMappingURL=smart-styles.d.ts.map

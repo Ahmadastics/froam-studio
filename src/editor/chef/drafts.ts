@@ -93,6 +93,28 @@ export function readInjectionDraft(draft: ElementDraft) {
   }
 }
 
+/* Shorthands and the longhands a browser expands them into. Reading an element
+   back, `border-radius: 999px` also reads as four corner radii; those copies
+   are the browser's, not an edit. Saved into the design they became a
+   baseline Undo can't reach, so a look taken back after a reload left its
+   corners behind. */
+const SHORTHANDS: Record<string, readonly string[]> = {
+  padding: ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'],
+  margin: ['marginTop', 'marginRight', 'marginBottom', 'marginLeft'],
+  borderRadius: ['borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomRightRadius', 'borderBottomLeftRadius'],
+  border: ['borderWidth', 'borderStyle', 'borderColor'],
+  background: ['backgroundColor', 'backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'backgroundAttachment'],
+  flex: ['flexGrow', 'flexShrink', 'flexBasis'],
+}
+/** A key that only restates, in another form, a property the draft already sets. */
+function restates(key: string, draft: Record<string, string>) {
+  for (const [shorthand, longhands] of Object.entries(SHORTHANDS)) {
+    if (longhands.includes(key) && draft[shorthand]) return true
+    if (key === shorthand && longhands.some((longhand) => draft[longhand])) return true
+  }
+  return false
+}
+
 export function readLiveElementDraft(element: HTMLElement, existingDraft: ElementDraft = {}): ElementDraft {
   const nextDraft: ElementDraft = { ...existingDraft }
 
@@ -100,10 +122,14 @@ export function readLiveElementDraft(element: HTMLElement, existingDraft: Elemen
     nextDraft.text = element.innerText || ''
   }
 
-  const liveStyles: Record<string, string> = { ...(existingDraft.styles ?? {}) }
+  const drafted = existingDraft.styles ?? {}
+  const liveStyles: Record<string, string> = { ...drafted }
   persistedStyleKeys.forEach((key) => {
     const value = element.style[key]
-    if (value) liveStyles[key] = value
+    if (!value) return
+    // What the draft sets is refreshed; a new key is taken only when it is a
+    // property of its own (an aligned element's left/top), not a restatement.
+    if (key in drafted || !restates(key, drafted)) liveStyles[key] = value
   })
 
   const imageUrl = element instanceof HTMLImageElement
