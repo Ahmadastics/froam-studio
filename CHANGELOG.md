@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased
+
+**Every stack in the matrix, from `init` to production.**
+
+- **The editor no longer ships to visitors.** `<FroamGate enabled>` opens the
+  editor in development only. In a production build only owners signed in
+  through `authProvider` + `ownerEmails` get in. A public demo adds the new
+  `showInProduction` prop. Before this, the snippet `init` printed for Vite +
+  React showed the editor launcher to everyone.
+- **`init` installs the package before wiring Vite.** It installs
+  `@ahmadastic/froam` with the project's package manager (pnpm, yarn, bun or
+  npm, read from the lockfile) before adding `froamStudio()` to the config. If
+  the install fails, it leaves the config alone and prints the command.
+  `--no-install` skips the install and puts it first in the next steps.
+  `froam doctor` flags a config that imports a package the project doesn't
+  have.
+- **Shipping is done by `init`.** On Vite, Astro, Next.js, SvelteKit and Remix
+  it adds the two tags to the page head and sets `"shipDir": "public/froam"`.
+  Every save then copies `froam.generated.css` and `froam.runtime.js` there,
+  so they can't go stale. The design, room chat and notes stay private.
+  `createGitHubCommitter` takes `shipDir` too.
+- **Next.js: the editor survives Save and Fast Refresh.** On a page whose
+  `<body>` React owns (App Router, Remix, React Router), the standalone editor
+  now uses `<body>` as the page root. Before, it moved React's nodes into a
+  wrapper, which broke hydration and made React's next update throw
+  `removeChild`. It also waits for hydration before mounting. The production
+  runtime waits for hydration on such pages too, and text drafts now rewrite
+  an element's own text nodes instead of replacing them.
+- **The project store's worker loads** under `froam dev`. It is now built and
+  served; it used to 404 on every stack.
+- `init` prints the React snippet in the project's language (no TypeScript in
+  a `.jsx` app; `index.js` glue), names Vite + Vue / Svelte, uses the
+  framework's dev port (or the one in the dev script), and keeps settings
+  already in `froam.config.json`.
+- **QA:** the stack matrix runs on Windows. It stops excusing hydration errors
+  and the worker 404 as "known", and checks that a save leaves the public
+  copies current. `scripts/test-init.mjs` covers `init` offline.
+
 ## 9.4.0 - 2026-10-01
 
 **Page-wide fixes in one step.**

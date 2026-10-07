@@ -169,7 +169,7 @@ import { usePatternDrop } from './library/pattern-drop'
 import { FroamCollaborate, type JoinProfile } from './collaborate/FroamCollaborate'
 import { useRoomMessages } from './collaborate/useRoomMessages'
 import { findPinned, RoomPins } from './collaborate/RoomPins'
-import { applyDraftText, pageTextOf, rememberPageText } from './draft-text'
+import { applyDraftText, pageTextOf, rememberPageText, writeElementText } from './draft-text'
 import { TYPING } from './collaborate/RoomMessages'
 import { elementLabel, sourceClasses } from './collaborate/request-builder'
 import { shrinkAvatar } from './collaborate/avatar-image'
@@ -2526,7 +2526,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       if (!element) return
       if (original.style === null) element.removeAttribute('style')
       else element.setAttribute('style', original.style)
-      if (original.text !== undefined) element.innerText = original.text
+      if (original.text !== undefined) writeElementText(element, original.text)
       if (original.imageUrl !== undefined && element instanceof HTMLImageElement) element.src = original.imageUrl
     })
     connectedPreviewOriginalStylesRef.current = null

@@ -14,6 +14,7 @@
  */
 import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import { configureFroamStudio } from './config'
 import FroamGate from './editor/FroamGate'
 import FroamRuntime, { type FroamLocalDesign } from './editor/FroamRuntime'
 import './froam-studio.css'
@@ -124,19 +125,65 @@ function wrapBodyAsRoot(adoptLateNodes: boolean) {
   }).observe(document.body, { childList: true })
 }
 
+type HydratingWindow = Window & { __next_f?: unknown; __remixContext?: unknown; __reactRouterContext?: unknown }
+
+/**
+ * Whether the app renders <body> itself and hydrates it (Next's App Router,
+ * Remix, React Router). React owns <body>'s children then. Wrapping them makes
+ * hydration fail, and React's next `body.removeChild(child)` throws "The node
+ * to be removed is not a child of this node", because the child has moved.
+ */
+function appOwnsBody() {
+  const win = window as HydratingWindow
+  return Boolean(win.__next_f || win.__remixContext || win.__reactRouterContext) || isReactManaged(document)
+}
+
+/**
+ * Resolves once React has hydrated the server's markup. Any change to it
+ * before then (even an attribute on <html>) is a hydration mismatch.
+ */
+function whenAppHydrated() {
+  return new Promise<void>((resolve) => {
+    if (!appOwnsBody()) return resolve()
+    const started = Date.now()
+    const check = () => {
+      const claimed = Array.from(document.body.children).some((node) => node.id !== HOST_ID && isReactManaged(node))
+      // React hydrates in slices; a frame and an idle moment let the pass commit.
+      if (claimed || Date.now() - started > 10_000) {
+        requestAnimationFrame(() => {
+          const idle = (window as Window & { requestIdleCallback?: (cb: () => void, options?: { timeout: number }) => number }).requestIdleCallback
+          if (idle) idle(() => resolve(), { timeout: 500 })
+          else window.setTimeout(resolve, 50)
+        })
+      } else window.setTimeout(check, 50)
+    }
+    check()
+  })
+}
+
+/** The root when the app owns <body>: <body> itself, the same element the production runtime counts paths from. */
+const selectBody = () => document.body
+
+/** Marks the editable root. Returns true when it is <body> itself, which nothing marks. */
 function markFroamRoot(scope: RootScope) {
-  if (document.querySelector('[data-froam-root]')) return
+  if (document.querySelector('[data-froam-root]')) return false
+  const ownedBody = appOwnsBody()
   if (scope === 'page') {
+    // The wrapper mirrors <body>, so <body> as the root gives the same paths
+    // without moving React's nodes.
+    if (ownedBody) return true
     wrapBodyAsRoot(true)
-    return
+    return false
   }
-  if (document.getElementById('root') || document.getElementById('__next')) return
+  if (document.getElementById('root') || document.getElementById('__next')) return false
   const main = document.querySelector<HTMLElement>('main')
   if (main) {
     main.setAttribute('data-froam-root', '')
-    return
+    return false
   }
+  if (ownedBody) return true
   wrapBodyAsRoot(false)
+  return false
 }
 
 function injectEditorStyles(origin: string) {
@@ -156,16 +203,23 @@ function StandaloneApp({ origin, initialOpen, initialProjectKey }: { origin: str
   const [projectKey, setProjectKey] = useState<string | null>(initialProjectKey)
   const [loaded, setLoaded] = useState(false)
   const [rootScope, setRootScope] = useState<RootScope>('auto')
+  const [bodyRoot, setBodyRoot] = useState(false)
 
   useEffect(() => {
     let cancelled = false
+    let marked = false
+    const mark = (scope: RootScope) => {
+      marked = true
+      const isBody = markFroamRoot(scope)
+      // Set before anything renders: FroamRuntime resolves the root on its
+      // first pass, ahead of FroamGate's own configure.
+      if (isBody) configureFroamStudio({ rootSelector: selectBody })
+      setBodyRoot(isBody)
+      setRootScope(scope)
+    }
     const markFresh = () => {
       // Nothing saved known yet: mark as a fresh design would.
-      if (!document.querySelector('[data-froam-root]')) {
-        const scope = chooseRootScope(null)
-        markFroamRoot(scope)
-        setRootScope(scope)
-      }
+      if (!marked && !document.querySelector('[data-froam-root]')) mark(chooseRootScope(null))
     }
     // The editor never waits long on the bridge: through a share link it sits
     // on someone else's computer, and a slow answer must not hide the editor.
@@ -182,8 +236,8 @@ function StandaloneApp({ origin, initialOpen, initialProjectKey }: { origin: str
       .then(([designData, configData]: [{ success?: boolean; design?: FroamLocalDesign } | null, BridgeConfig | null]) => {
         if (cancelled) return
         const scope = chooseRootScope(designData?.success ? designData.design : null)
-        markFroamRoot(scope)
-        setRootScope(scope)
+        if (!marked) mark(scope)
+        else setRootScope(scope)
         if (designData?.success && designData.design) setDesign(designData.design)
         if (configData?.success && configData.projectKey) setProjectKey(configData.projectKey)
       })
@@ -209,7 +263,9 @@ function StandaloneApp({ origin, initialOpen, initialProjectKey }: { origin: str
       {/* apiBaseUrl = bridge origin so publish + published-designs hit the
           bridge's /api/froam/published even in script-tag mode. */}
       <FroamRuntime apiBaseUrl={origin} design={design} routes="*" />
-      <FroamGate apiBaseUrl={origin} enabled initialOpen={initialOpen} localRoutes="*" projectKey={projectKey ?? origin} rootScope={rootScope} />
+      {/* This bundle is built for production but only the bridge serves it,
+          so every page that loads it is one someone opened to edit. */}
+      <FroamGate apiBaseUrl={origin} enabled showInProduction initialOpen={initialOpen} localRoutes="*" projectKey={projectKey ?? origin} rootScope={rootScope} rootSelector={bodyRoot ? selectBody : undefined} />
     </StrictMode>
   )
 }
@@ -241,8 +297,11 @@ function boot() {
     else window.setTimeout(warm, 1200)
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount)
-  else mount()
+  // A hydrating app gets its server markup back untouched first: the host
+  // node, the editor's styles and the route attribute all come after.
+  const start = () => { void whenAppHydrated().then(mount) }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start)
+  else start()
 }
 
 boot()

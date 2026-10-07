@@ -11,7 +11,18 @@ import { resolveFroamProjectKey } from '../project/storage-scope'
 const GlobalChefEditor = lazy(() => import('./GlobalChefEditor'))
 
 export type FroamGateProps = Pick<FroamStudioConfig, 'apiBaseUrl' | 'authProvider' | 'fetch' | 'rootSelector' | 'rootScope'> & {
+  /**
+   * true opens the editor for everyone in development; false keeps it shut.
+   * A production build ignores it unless `showInProduction` is set — owners
+   * signed in through `authProvider` + `ownerEmails` still get in.
+   */
   enabled?: boolean
+  /**
+   * Let `enabled` and localhost open the editor in a production build too.
+   * Only for a page whose visitors are meant to use the editor, such as a
+   * public demo.
+   */
+  showInProduction?: boolean
   initialOpen?: boolean
   routeKey?: string
   /** Stable per-project key. The Froam bridge supplies this automatically. */
@@ -26,6 +37,22 @@ export type FroamGateProps = Pick<FroamStudioConfig, 'apiBaseUrl' | 'authProvide
 function getEnvOwnerEmails() {
   const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
   return env?.VITE_FROAM_OWNER_EMAILS
+}
+
+declare const process: { env: { NODE_ENV?: string } }
+
+/**
+ * True in a production build of the host app. Bundlers replace the literal
+ * `process.env.NODE_ENV` in dependencies (React relies on it) and Vite also
+ * sets `import.meta.env.PROD`. Unbundled code has neither and counts as
+ * development.
+ */
+function isProductionBuild() {
+  try {
+    if (process.env.NODE_ENV === 'production') return true
+  } catch { /* no `process` in an unbundled page */ }
+  const env = (import.meta as ImportMeta & { env?: { PROD?: boolean } }).env
+  return env?.PROD === true
 }
 
 function isFroamOwner(email: string | null | undefined, ownerEmails: readonly string[]) {
@@ -80,6 +107,7 @@ export default function FroamGate({
   routeKey: explicitRouteKey,
   projectKey: explicitProjectKey,
   allowLocalhost = true,
+  showInProduction = false,
 }: FroamGateProps) {
   const routeKey = useFroamRouteKey(explicitRouteKey)
   const projectKey = useMemo(() => resolveFroamProjectKey(explicitProjectKey), [explicitProjectKey])
@@ -87,8 +115,13 @@ export default function FroamGate({
     () => normalizeOwnerEmails(ownerEmails ?? getFroamStudioConfig().ownerEmails ?? getEnvOwnerEmails()),
     [ownerEmails],
   )
-  const localAllowed = allowLocalhost && isLocalHost() && routeMatches(routeKey, localRoutes)
-  const [allowed, setAllowed] = useState(enabled === true || localAllowed)
+  // `<FroamGate enabled />` pasted into an app must not hand the editor to
+  // every visitor once it ships. In production only owners get in, unless the
+  // page asks for more.
+  const openToAll = !isProductionBuild() || showInProduction
+  const forced = openToAll && enabled === true
+  const localAllowed = openToAll && allowLocalhost && isLocalHost() && routeMatches(routeKey, localRoutes)
+  const [allowed, setAllowed] = useState(forced || localAllowed)
   const [key, setKey] = useState(0)
 
   useEffect(() => {
@@ -111,7 +144,7 @@ export default function FroamGate({
       return undefined
     }
 
-    if (enabled === true || localAllowed) {
+    if (forced || localAllowed) {
       setAllowed(true)
       return undefined
     }
@@ -131,7 +164,7 @@ export default function FroamGate({
     return () => {
       cancelled = true
     }
-  }, [authProvider, enabled, localAllowed, resolvedOwnerEmails])
+  }, [authProvider, enabled, forced, localAllowed, resolvedOwnerEmails])
 
   if (!allowed) return <>{lockedFallback}</>
 

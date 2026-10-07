@@ -29,6 +29,7 @@ import {
   generateRuntimeJs,
   loadDesign,
   migrateDesign,
+  shipArtifacts,
   writeArtifacts,
 } from '../lib/codegen.mjs'
 import { createBridgeServer, normalizeAppTarget } from '../lib/dev-server.mjs'
@@ -228,7 +229,7 @@ function wireViteConfig(froamDirRel) {
   src = "import froamStudio from '@ahmadastic/froam/vite'\n" + src
   const pluginArgs = froamDirRel === 'src/froam' ? '' : `{ dir: '${froamDirRel}' }`
   if (/plugins:\s*\[/.test(src)) {
-    src = src.replace(/plugins:\s*\[/, (m) => `${m}froamStudio(${pluginArgs}), `)
+    src = src.replace(/plugins:\s*\[(\s*\])?/, (m, empty) => (empty ? `plugins: [froamStudio(${pluginArgs})]` : `${m}froamStudio(${pluginArgs}), `))
     fs.writeFileSync(viteConfig, src)
     log(`${OK} wired froamStudio() into ${path.basename(viteConfig)} ${dim('(backup: .bak)')}`)
   } else {
@@ -237,91 +238,311 @@ function wireViteConfig(froamDirRel) {
   }
 }
 
-function wireStaticHtml(froamDirRel) {
-  const indexPath = path.join(cwd, 'index.html')
-  if (!fs.existsSync(indexPath)) return false
-  let html = fs.readFileSync(indexPath, 'utf8')
-  if (html.includes('froam.generated.css') || html.includes('froam.runtime.js')) {
-    log(`${OK} index.html already wired`)
+/** The two tags that ship a design, spelled for the file they go in. */
+function headTags(urlBase, flavor) {
+  const css = `${urlBase}/froam.generated.css`
+  const js = `${urlBase}/froam.runtime.js`
+  if (flavor === 'jsx') return [`<link rel="stylesheet" href="${css}" />`, `<script src="${js}" defer></script>`]
+  // Astro bundles a <script> it can see; this one is already final.
+  if (flavor === 'astro') return [`<link rel="stylesheet" href="${css}">`, `<script is:inline src="${js}" defer></script>`]
+  return [`<link rel="stylesheet" href="${css}">`, `<script src="${js}" defer></script>`]
+}
+
+/**
+ * Put the two tags in a page's <head>, keeping a backup. Returns false when
+ * the file has no <head> to put them in, so the caller can say what to add.
+ */
+function wireHeadTags(file, urlBase, flavor = 'html', { prependIfNoHead = false } = {}) {
+  const name = path.relative(cwd, file).split(path.sep).join('/')
+  const src = fs.readFileSync(file, 'utf8')
+  if (src.includes('froam.generated.css') || src.includes('froam.runtime.js')) {
+    log(`${OK} ${name} already loads your design`)
     return true
   }
-  fs.writeFileSync(indexPath + '.bak', html)
-  const linkTag = `  <link rel="stylesheet" href="/${froamDirRel}/froam.generated.css">`
-  const scriptTag = `  <script src="/${froamDirRel}/froam.runtime.js" defer></script>`
-  if (/<\/head>/i.test(html)) {
-    html = html.replace(/<\/head>/i, `${linkTag}\n${scriptTag}\n</head>`)
-  } else {
-    html = `${linkTag}\n${scriptTag}\n${html}`
+  const tags = headTags(urlBase, flavor)
+  let next = null
+  if (/<\/head>/i.test(src)) {
+    next = src.replace(/([ \t]*)<\/head>/i, (_, indent, offset) => {
+      // </head> sharing a line with other markup gets a line of its own.
+      const ownLine = offset === 0 || src[offset - 1] === '\n'
+      const pad = ownLine ? indent : ''
+      return `${ownLine ? '' : '\n'}${pad}  ${tags.join(`\n${pad}  `)}\n${pad}</head>`
+    })
+  } else if (flavor === 'jsx' && /<html\b[^>]*>/.test(src)) {
+    // A root layout often renders <html><body> with no <head> of its own.
+    next = src.replace(/([ \t]*)(<html\b[^>]*>)/, (_, indent, open) => `${indent}${open}\n${indent}  <head>\n${indent}    ${tags.join(`\n${indent}    `)}\n${indent}  </head>`)
+  } else if (prependIfNoHead) {
+    next = `${tags.join('\n')}\n${src}`
   }
-  fs.writeFileSync(indexPath, html)
-  log(`${OK} wired froam tags into index.html ${dim('(backup: .bak)')}`)
+  if (next === null) return false
+  // Astro routes every file in src/pages; a leading _ keeps the backup out.
+  const backup = /(^|\/)src\/pages\//.test(name) ? path.join(path.dirname(file), `_${path.basename(file)}.bak`) : `${file}.bak`
+  fs.writeFileSync(backup, src)
+  fs.writeFileSync(file, next)
+  log(`${OK} added your design's two tags to ${name} ${dim(`(backup: ${path.basename(backup)})`)}`)
   return true
 }
 
-const REACT_MOUNT_SNIPPET = `
-  import { FroamGate, FroamRuntime, type FroamLocalDesign } from '@ahmadastic/froam'
+/** Files under `dir` (relative to the project) with these extensions, a few levels deep. */
+function listFiles(dir, extensions, depth = 3) {
+  const found = []
+  const walk = (abs, level) => {
+    let entries = []
+    try { entries = fs.readdirSync(abs, { withFileTypes: true }) } catch { return }
+    for (const entry of entries) {
+      const full = path.join(abs, entry.name)
+      if (entry.isDirectory() && level < depth && entry.name !== 'node_modules' && !entry.name.startsWith('.')) walk(full, level + 1)
+      else if (entry.isFile() && extensions.some((ext) => entry.name.endsWith(ext))) found.push(full)
+    }
+  }
+  walk(path.join(cwd, dir), 0)
+  return found.sort()
+}
+
+function existingFiles(rels) {
+  return rels.map((rel) => path.join(cwd, rel)).filter((file) => fs.existsSync(file))
+}
+
+const hasHead = (file) => /<\/head>/i.test(fs.readFileSync(file, 'utf8'))
+
+/**
+ * How a stack ships the two files: the folder it serves as-is (so every save
+ * can keep a copy there) and the files whose <head> should load them.
+ * React on Vite ships through <FroamRuntime> instead, and a static site
+ * serves the workspace itself, so neither has a plan.
+ */
+function shipPlan(framework) {
+  switch (framework) {
+    case 'vite':
+      return { publicDir: 'public', flavor: 'html', heads: existingFiles(['index.html']) }
+    case 'astro':
+      return { publicDir: 'public', flavor: 'astro', heads: [...listFiles('src/layouts', ['.astro']), ...listFiles('src/pages', ['.astro'])].filter(hasHead).slice(0, 12), where: 'your layout\'s <head>' }
+    case 'next': {
+      // The App Router's root layout wraps every page; Pages Router has _document.
+      const layout = existingFiles(['app/layout.tsx', 'app/layout.jsx', 'app/layout.js', 'src/app/layout.tsx', 'src/app/layout.jsx', 'src/app/layout.js'])
+      const document = existingFiles(['pages/_document.tsx', 'pages/_document.jsx', 'pages/_document.js', 'src/pages/_document.tsx', 'src/pages/_document.jsx', 'src/pages/_document.js'])
+      return { publicDir: 'public', flavor: 'jsx', heads: (layout.length ? layout : document).slice(0, 1), where: 'app/layout (or pages/_document)' }
+    }
+    case 'remix':
+      return { publicDir: 'public', flavor: 'jsx', heads: existingFiles(['app/root.tsx', 'app/root.jsx', 'app/root.js']).slice(0, 1), where: 'app/root' }
+    case 'sveltekit':
+      return { publicDir: 'static', flavor: 'html', heads: existingFiles(['src/app.html']) }
+    case 'cra':
+    case 'vue':
+      return { publicDir: 'public', flavor: 'html', heads: existingFiles(['public/index.html']) }
+    case 'nuxt':
+      return { publicDir: 'public', flavor: 'html', heads: [], where: 'app.head in nuxt.config' }
+    default:
+      return null
+  }
+}
+
+/** detectFramework says "vite" for every non-React Vite app; name the one it is. */
+function frameworkLabel(framework, dir) {
+  if (framework === 'vite') {
+    const pkg = readPackageJson(dir)
+    const deps = { ...(pkg?.dependencies ?? {}), ...(pkg?.devDependencies ?? {}) }
+    if (deps.vue) return 'Vite + Vue'
+    if (deps.svelte) return 'Vite + Svelte'
+    if (deps['solid-js']) return 'Vite + Solid'
+    if (deps.preact) return 'Vite + Preact'
+  }
+  return FRAMEWORK_LABELS[framework]
+}
+
+const DEFAULT_DEV_PORTS = {
+  'vite-react': 5173, vite: 5173, sveltekit: 5173, remix: 5173, astro: 4321,
+  next: 3000, nuxt: 3000, cra: 3000, angular: 4200, vue: 8080,
+}
+
+/** The port the app's dev server uses: a --port in its dev script, else its framework's default. */
+function devPort(framework, dir) {
+  const scripts = readPackageJson(dir)?.scripts ?? {}
+  const flag = String(scripts.dev ?? scripts.start ?? '').match(/(?:--port|-p)[=\s]+(\d{2,5})\b/)
+  return flag ? Number(flag[1]) : DEFAULT_DEV_PORTS[framework] ?? null
+}
+
+function usesTypeScript(dir) {
+  return ['tsconfig.json', 'src/main.tsx', 'src/index.tsx'].some((rel) => fs.existsSync(path.join(dir, rel)))
+}
+
+/* ── installing the package ── */
+function froamInstalled(dir) {
+  for (let d = path.resolve(dir); ; d = path.dirname(d)) {
+    if (fs.existsSync(path.join(d, 'node_modules', '@ahmadastic', 'froam', 'package.json'))) return true
+    if (path.dirname(d) === d) return false
+  }
+}
+
+const LOCKFILES = [['pnpm-lock.yaml', 'pnpm'], ['yarn.lock', 'yarn'], ['bun.lock', 'bun'], ['bun.lockb', 'bun'], ['package-lock.json', 'npm']]
+
+/** The project's package manager: its lockfile's, else whichever started us, else npm. */
+function detectPackageManager(dir) {
+  for (let d = path.resolve(dir); ; d = path.dirname(d)) {
+    for (const [file, manager] of LOCKFILES) if (fs.existsSync(path.join(d, file))) return manager
+    if (fs.existsSync(path.join(d, '.git')) || path.dirname(d) === d) break
+  }
+  const agent = process.env.npm_config_user_agent ?? ''
+  return ['pnpm', 'yarn', 'bun'].find((manager) => agent.startsWith(manager)) ?? 'npm'
+}
+
+/** The command that adds Froam to the project. A runtime import ships, so it's a dependency. */
+function installCommand(manager, { runtime }) {
+  const version = packageVersion()
+  // FROAM_INSTALL_SPEC installs something else (a tarball under test) in its place.
+  const spec = process.env.FROAM_INSTALL_SPEC || (version === '?' ? '@ahmadastic/froam' : `@ahmadastic/froam@^${version}`)
+  if (manager === 'npm') return ['npm', 'install', runtime ? '--save' : '--save-dev', spec]
+  const devFlag = manager === 'bun' ? '-d' : '-D'
+  return [manager, 'add', ...(runtime ? [] : [devFlag]), spec]
+}
+
+/** A command as the tester would type it; also how cmd.exe needs it (`^` escapes there). */
+function commandLine(argv) {
+  return argv.map((arg) => (/[\s"^&|<>]/.test(arg) ? `"${arg.replace(/"/g, '""')}"` : arg)).join(' ')
+}
+
+/**
+ * froamStudio() in vite.config and the React mount both import the package
+ * from the project, so it has to be installed there, not only in npx's cache.
+ * Wiring the config first would crash the next `npm run dev`.
+ *
+ * @returns {{ ok: boolean, command: string }}
+ */
+function ensureFroamPackage({ runtime, skip }) {
+  const argv = installCommand(detectPackageManager(cwd), { runtime })
+  const command = commandLine(argv)
+  if (froamInstalled(cwd)) return { ok: true, command }
+  if (skip) return { ok: false, skipped: true, command }
+
+  log(`${dim('…')} installing @ahmadastic/froam ${dim(`(${command})`)}`)
+  // npm, pnpm and yarn are .cmd files on Windows: only a shell starts them,
+  // and it gets one string so nothing is left for it to split.
+  const res = process.platform === 'win32'
+    ? spawnSync(command, { cwd, shell: true, encoding: 'utf8' })
+    : spawnSync(argv[0], argv.slice(1), { cwd, encoding: 'utf8' })
+  if (res.status === 0 && froamInstalled(cwd)) {
+    log(`${OK} installed @ahmadastic/froam`)
+    return { ok: true, command }
+  }
+  const output = `${res.stdout ?? ''}${res.stderr ?? ''}${res.error ? res.error.message : ''}`.trim().split('\n').slice(-8)
+  log(`${BAD} could not install @ahmadastic/froam`)
+  for (const line of output) log(dim(`    ${line}`))
+  return { ok: false, command }
+}
+
+function printReactMount(froamDir, typescript) {
+  let fromSrc = path.relative(path.join(cwd, 'src'), froamDir).split(path.sep).join('/')
+  if (!fromSrc.startsWith('.')) fromSrc = `./${fromSrc}`
+  const types = typescript ? ', type FroamLocalDesign' : ''
+  const design = typescript ? 'froamDesign as FroamLocalDesign' : 'froamDesign'
+  log(`  Mount the editor + runtime once in your app ${dim(`(src/main.${typescript ? 'tsx' : 'jsx'})`)}:`)
+  log(dim(`
+  import { FroamGate, FroamRuntime${types} } from '@ahmadastic/froam'
   import '@ahmadastic/froam/css'
   import '@ahmadastic/froam/gate-css'
-  import froamDesign from './froam'
+  import froamDesign from '${fromSrc}'
 
-  // Render once, near the root of your app:
-  <FroamRuntime design={froamDesign as FroamLocalDesign} routes="*" />
+  // Render once, near the root of your app. The editor opens in development
+  // only; production visitors get your design and nothing else.
+  <FroamRuntime design={${design}} routes="*" />
   <FroamGate enabled initialOpen={false} localRoutes="*" />
-`
+`))
+}
 
-function printNextSteps(framework, froamDirRel, port = 4600) {
+function printNextSteps({ framework, froamDir, froamDirRel, typescript, install, ship, port = 4600 }) {
   log()
   log(bold('Next steps'))
-  switch (framework) {
-    case 'vite-react':
-      log('  Mount the editor + runtime once in your app:')
-      log(dim(REACT_MOUNT_SNIPPET))
-      log('  Run your dev server, open the Froam gate, edit visually,')
-      log(`  then ${teal('Save to Repo')} (Ctrl+Shift+S). Commit ${froamDirRel} and push — done.`)
-      break
-    case 'static':
-      log(`  1. ${teal('npx @ahmadastic/froam dev --serve .')}`)
-      log(`  2. Open ${teal(`http://localhost:${port}`)} — your site with the editor on top.`)
-      log(`  3. Edit visually, hit ${teal('Save to Repo')} (Ctrl+Shift+S), commit ${froamDirRel}/.`)
-      log(`  Production needs nothing extra — the tags in index.html ship your design.`)
-      break
-    default:
-      log(`  1. Start your app's dev server as usual.`)
-      log(`  2. ${teal('npx @ahmadastic/froam dev --app http://localhost:3000')} ${dim('(use your app\'s port)')}`)
-      log(`  3. Open ${teal(`http://localhost:${port}`)} — your app with the editor on top.`)
-      log(`  4. Edit visually, hit ${teal('Save to Repo')} (Ctrl+Shift+S), commit ${froamDirRel}/.`)
-      log()
-      log(bold('Ship it (production)'))
-      log('  Serve the two generated files with your site and add:')
-      log(dim(`    <link rel="stylesheet" href="/${froamDirRel}/froam.generated.css">`))
-      log(dim(`    <script src="/${froamDirRel}/froam.runtime.js" defer></script>`))
-      if (framework === 'next' || framework === 'remix' || framework === 'cra' || framework === 'react') {
-        log(dim(`  (React apps can import '@ahmadastic/froam' and mount <FroamRuntime design={...}/> instead.)`))
-      }
-      break
+  let step = 1
+  const next = (text) => log(`  ${step++}. ${text}`)
+  if (install && !install.ok) {
+    next(`${teal(install.command)} ${dim(install.skipped ? '— before your dev server starts' : '— then add froamStudio() to your vite config, as above')}`)
   }
+
+  if (framework === 'vite-react') {
+    if (step > 1) log()
+    printReactMount(froamDir, typescript)
+    log('  Run your dev server, open the Froam gate, edit visually,')
+    log(`  then ${teal('Save to Repo')} (Ctrl+Shift+S). Commit ${froamDirRel} and push — done.`)
+    return
+  }
+
+  if (framework === 'static') {
+    next(teal('npx @ahmadastic/froam dev --serve .'))
+    next(`Open ${teal(`http://localhost:${port}`)} — your site with the editor on top.`)
+    next(`Edit visually, hit ${teal('Save to Repo')} (Ctrl+Shift+S), commit ${froamDirRel}/.`)
+    log(`  Production needs nothing extra — the tags in index.html ship your design.`)
+    return
+  }
+
+  const appPort = devPort(framework, cwd)
+  const shipRel = ship ? `${ship.publicDir}/froam` : null
+  next(`Start your app's dev server as usual.`)
+  next(`${teal(`npx @ahmadastic/froam dev --app http://localhost:${appPort ?? 3000}`)}${appPort ? '' : ` ${dim('(use your app\'s port)')}`}`)
+  next(`Open ${teal(`http://localhost:${port}`)} — your app with the editor on top.`)
+  next(`Edit visually, hit ${teal('Save to Repo')} (Ctrl+Shift+S), commit ${froamDirRel}/${shipRel ? ` and ${shipRel}/` : ''}.`)
+  log()
+  log(bold('Ship it (production)'))
+  if (ship?.wired.length) {
+    const files = ship.wired.map((file) => path.relative(cwd, file).split(path.sep).join('/')).join(', ')
+    log(`  Nothing more to do. ${files} loads ${shipRel}/, and every save keeps it current.`)
+    return
+  }
+  const tags = headTags(shipRel ? '/froam' : `/${froamDirRel}`, ship?.flavor ?? 'html')
+  if (shipRel) {
+    log(`  Every save keeps ${shipRel}/ current. Load it from ${ship.where ?? 'every page\'s <head>'}:`)
+  } else {
+    log(`  Serve froam.generated.css and froam.runtime.js as static files, and load them`)
+    log(`  from every page's <head>. Set ${teal('"shipDir"')} in ${CONFIG_FILE} to your static folder`)
+    log(`  and every save copies them there. With the files at /${froamDirRel}/:`)
+  }
+  for (const tag of tags) log(dim(`    ${tag}`))
 }
 
 function init(flags) {
   const framework = detectFramework(cwd)
   const isBundledReact = framework === 'vite-react'
+  const typescript = usesTypeScript(cwd)
   const froamDir = resolveFroamDir(flags.dir)
   const froamDirRel = relDir(froamDir)
+  const plan = shipPlan(framework)
 
   log(`${teal('◆')} ${bold('Froam Studio')} ${dim(`v${packageVersion()} · init`)}`)
-  log(`${OK} detected ${bold(FRAMEWORK_LABELS[framework])}`)
+  log(`${OK} detected ${bold(frameworkLabel(framework, cwd))}`)
 
-  ensureScaffold(froamDir, { glue: isBundledReact })
-  log(`${OK} scaffolded ${froamDirRel}/ ${dim(`(design.json, generated.css, runtime.js${isBundledReact ? ', index.ts' : ''})`)}`)
+  const glue = isBundledReact ? (typescript ? 'ts' : 'js') : false
+  ensureScaffold(froamDir, { glue })
+  const glueName = ['index.ts', 'index.js'].find((name) => glue && fs.existsSync(path.join(froamDir, name)))
+  log(`${OK} scaffolded ${froamDirRel}/ ${dim(`(design.json, generated.css, runtime.js${glueName ? `, ${glueName}` : ''})`)}`)
 
-  const config = { dir: froamDirRel, framework }
+  // Keep what the tester set (notify, writeSource…); init owns these keys.
+  const config = { ...loadProjectConfig(), dir: froamDirRel, framework }
+  if (plan) config.shipDir = `${plan.publicDir}/froam`
   fs.writeFileSync(path.join(cwd, CONFIG_FILE), JSON.stringify(config, null, 2) + '\n')
   log(`${OK} wrote ${CONFIG_FILE}`)
 
-  if (isBundledReact || framework === 'vite') wireViteConfig(froamDirRel)
-  if (framework === 'static') wireStaticHtml(froamDirRel)
+  let install = null
+  if (isBundledReact || framework === 'vite') {
+    install = ensureFroamPackage({ runtime: isBundledReact, skip: flags['no-install'] === true })
+    // --no-install means "I'll install it myself": wire it, and say so first.
+    if (install.ok || install.skipped) wireViteConfig(froamDirRel)
+    else {
+      log(`${WARN} left your vite config alone — it would not start without the package. Once installed, add:`)
+      log(dim("    import froamStudio from '@ahmadastic/froam/vite'"))
+      log(dim(`    plugins: [froamStudio(${froamDirRel === 'src/froam' ? '' : `{ dir: '${froamDirRel}' }`}), …]`))
+      process.exitCode = 1
+    }
+  }
 
-  printNextSteps(framework, froamDirRel)
+  let ship = null
+  if (plan) {
+    shipArtifacts(froamDir, path.join(cwd, config.shipDir))
+    log(`${OK} copied your design's two public files to ${config.shipDir}/ ${dim('(every save updates them)')}`)
+    const wired = plan.heads.filter((file) => wireHeadTags(file, '/froam', plan.flavor))
+    ship = { ...plan, wired }
+  }
+  if (framework === 'static') wireHeadTags(path.join(cwd, 'index.html'), `/${froamDirRel}`, 'html', { prependIfNoHead: true })
+
+  printNextSteps({ framework, froamDir, froamDirRel, typescript, install, ship })
 }
 
 /**
@@ -891,7 +1112,7 @@ function doctor(flags) {
 
   const [major] = process.versions.node.split('.').map(Number)
   check(major >= 18, `node ${process.version}`, `node ${process.version} — Froam needs Node 18+`)
-  check(true, `project type: ${FRAMEWORK_LABELS[framework] ?? framework}`)
+  check(true, `project type: ${frameworkLabel(framework, cwd) ?? framework}`)
 
   const designPath = path.join(froamDir, 'froam.design.json')
   if (!fs.existsSync(designPath)) {
@@ -912,12 +1133,16 @@ function doctor(flags) {
 
   if (framework === 'vite-react' || framework === 'vite') {
     const viteConfig = findViteConfig()
-    check(
-      Boolean(viteConfig && fs.readFileSync(viteConfig, 'utf8').includes('@ahmadastic/froam/vite')),
-      'vite config wired with froamStudio()',
-      'vite config not wired — run `froam init` or add froamStudio() to plugins',
-      true,
-    )
+    const wired = Boolean(viteConfig && fs.readFileSync(viteConfig, 'utf8').includes('@ahmadastic/froam/vite'))
+    check(wired, 'vite config wired with froamStudio()', 'vite config not wired — run `froam init` or add froamStudio() to plugins', true)
+    // A config that imports a package the project doesn't have won't start.
+    if (wired) {
+      check(
+        froamInstalled(cwd),
+        '@ahmadastic/froam installed in the project',
+        `vite config imports @ahmadastic/froam but the project doesn't have it — run ${installCommand(detectPackageManager(cwd), { runtime: framework === 'vite-react' }).join(' ')}`,
+      )
+    }
   }
 
   try {
@@ -955,6 +1180,7 @@ function help() {
   log()
   log(bold('Commands'))
   log(`  ${teal('init')}               detect a supported project, scaffold Froam files, wire supported entry points`)
+  log(`      ${dim('--no-install')}       don't add @ahmadastic/froam to a Vite project — you will`)
   log(`  ${teal('dev')}                universal editor bridge`)
   log(`      ${dim('--app <url|port>')}   overlay the editor on a served HTML page`)
   log(`      ${dim('--serve [dir]')}      serve a static folder with the editor injected`)

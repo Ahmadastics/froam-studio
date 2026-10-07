@@ -483,8 +483,23 @@ function generateRuntimeJs(design) {
     if (shown === text) return
     var last = shownAfterWrite && shownAfterWrite.get(element)
     if (last && last.text === text && last.shown === shown) return
-    element.innerText = text
+    writeText(element, text)
     if (shownAfterWrite) shownAfterWrite.set(element, { text: text, shown: element.innerText })
+  }
+
+  // An element holding only text (and the comments SSR puts between text)
+  // keeps its own nodes: React holds on to them, and swapping them out the
+  // way innerText does makes its next update remove a node that isn't there.
+  function writeText(element, text) {
+    var nodes = element.childNodes
+    var first = null
+    for (var i = 0; i < nodes.length; i += 1) {
+      if (nodes[i].nodeType === 3) { if (!first) first = nodes[i] }
+      else if (nodes[i].nodeType !== 8) { first = null; break }
+    }
+    if (!first || text.indexOf('\\n') !== -1) { element.innerText = text; return }
+    first.nodeValue = text
+    for (var j = 0; j < nodes.length; j += 1) if (nodes[j] !== first && nodes[j].nodeType === 3) nodes[j].nodeValue = ''
   }
 
   function clearInjected(root) {
@@ -674,8 +689,45 @@ function generateRuntimeJs(design) {
     return false
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start)
-  else start()
+  // A page a framework hydrates must stay as the server sent it until it has:
+  // a changed text or attribute is a mismatch, and React answers one by
+  // rebuilding the tree. The stylesheet needs no waiting; only this does.
+  function hydrates() {
+    return !!(window.__next_f || window.__NEXT_DATA__ || document.getElementById('__NEXT_DATA__') || window.__remixContext || window.__reactRouterContext || window.__NUXT__ || document.getElementById('__nuxt'))
+  }
+
+  function hydrated() {
+    var root = getRoot()
+    var probes = [root, root && root.firstElementChild, document.getElementById('__nuxt')]
+    for (var i = 0; i < probes.length; i += 1) {
+      var el = probes[i]
+      if (!el) continue
+      if (el.__vue_app__) return true
+      var keys = Object.keys(el)
+      for (var k = 0; k < keys.length; k += 1) if (keys[k].indexOf('__reactFiber$') === 0 || keys[k].indexOf('__reactContainer$') === 0) return true
+    }
+    return false
+  }
+
+  function afterHydration(fn) {
+    var waited = 0
+    var settle = function () { requestAnimationFrame(function () { setTimeout(fn, 0) }) }
+    var poll = function () {
+      if (hydrated() || waited >= 3000) return settle()
+      waited += 50
+      setTimeout(poll, 50)
+    }
+    if (document.readyState === 'complete') poll()
+    else window.addEventListener('load', poll)
+  }
+
+  function boot() {
+    if (hydrates()) afterHydration(start)
+    else start()
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot)
+  else boot()
 })()
 `;
 }
@@ -797,6 +849,7 @@ function createGitHubCommitter(options = {}) {
     repo,
     branch = "main",
     dir = "froam",
+    shipDir = null,
     committer,
     fetchImpl = globalThis.fetch
   } = options;
@@ -854,9 +907,14 @@ function createGitHubCommitter(options = {}) {
       css: `${base}/froam.generated.css`,
       runtime: `${base}/froam.runtime.js`
     };
+    const shipBase = !paths && shipDir ? shipDir.replace(/\/+$/, "") : null;
+    const entries = [
+      ...Object.entries(targets),
+      ...shipBase && shipBase !== base ? [["css", `${shipBase}/froam.generated.css`], ["runtime", `${shipBase}/froam.runtime.js`]] : []
+    ];
     const subject = message || "Design update from Froam";
     const written = [];
-    for (const [key, path5] of Object.entries(targets)) {
+    for (const [key, path5] of entries) {
       const content = artifacts[key];
       if (typeof content !== "string") continue;
       const result = await putFile(path5, content, subject);

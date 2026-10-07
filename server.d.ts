@@ -284,6 +284,8 @@ export function createGitHubCommitter(options: {
   branch?: string
   /** Directory the froam files live in. Defaults to "froam". */
   dir?: string
+  /** froam.config.json's `shipDir` (e.g. "public/froam"): the CSS and runtime are committed there too. */
+  shipDir?: string
   committer?: { name: string; email: string }
   fetchImpl?: typeof fetch
 }): (input: { design: FroamDesign; message?: string; paths?: Record<string, string> }) => Promise<FroamCommitResult>

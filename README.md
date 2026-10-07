@@ -263,10 +263,21 @@ production artifacts, and is not required by a plain static production page.
 | --- | --- |
 | `froam dev` or shorthand `froam <url-or-dir>` | Creates the Froam workspace; does not rewrite the host application's existing components or stylesheets |
 | `froam init` on static HTML | Changes `index.html` only to add the generated CSS/runtime tags and creates `index.html.bak` |
-| `froam init` on Vite | Creates Froam files and may edit `vite.config.*`, with a `.bak` file |
+| `froam init` on Vite | Installs `@ahmadastic/froam` with the project's package manager (`--no-install` to skip), then edits `vite.config.*`, with a `.bak` file. If the install fails, the config is left alone |
+| `froam init` on Vite (non-React), Astro, Next.js, SvelteKit, Remix | Adds the two tags to the page head it finds (`index.html`, the Astro layouts, `app/layout`, `src/app.html`, `app/root`), with a `.bak`, and sets `"shipDir"` in `froam.config.json` (see below) |
 | Visual editing and Save to Repo | Writes Froam-owned design/output files, and writes copy edits into the source file that holds the original words (only when they appear exactly once as a whole string; never in comments, `node_modules`, builds or dotfolders). Turn off with `--no-write-source` or `"writeSource": false` in `froam.config.json` |
 
 Review every `init` diff before committing it.
+
+### Shipping from a public folder
+
+A site that isn't built from the Froam workspace serves the two production
+files from its static folder. `"shipDir": "public/froam"` in
+`froam.config.json` tells every save (the CLI, the bridge, the Vite plugin, and
+`createGitHubCommitter({ shipDir })`) to copy `froam.generated.css` and
+`froam.runtime.js` there, so the copies never go stale. Commit both folders.
+Only those two files are copied: the workspace also holds the design source,
+room chat and project notes, and those stay private.
 
 ## Checking that a design still fits the page
 
@@ -321,10 +332,11 @@ Current evidence:
 
 ## React and Vite integration
 
-Install the package when importing its APIs:
+`froam init` installs the package. To do it yourself (a dependency, because
+`FroamRuntime` ships in your bundle):
 
 ```bash
-npm install --save-dev @ahmadastic/froam
+npm install @ahmadastic/froam
 ```
 
 Use the default Vite plugin export:
@@ -348,6 +360,14 @@ import froamDesign from './froam'
 <FroamRuntime design={froamDesign as FroamLocalDesign} routes="*" />
 <FroamGate enabled initialOpen={false} localRoutes="*" />
 ```
+
+In a JavaScript project, drop `type FroamLocalDesign` and the `as` cast;
+`froam init` prints the version for your project.
+
+`enabled` and localhost open the editor in development only. A production
+build shows it to owners signed in through `authProvider` + `ownerEmails`, and
+to nobody else. A page whose visitors should get the editor, such as a public
+demo, adds `showInProduction`.
 
 `froam init` has emitted legacy unscoped import examples in past releases.
 Verify generated Vite imports against the scoped examples above.

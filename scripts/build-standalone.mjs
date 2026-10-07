@@ -56,6 +56,26 @@ const result = await build({
 })
 if (result.errors.length) process.exit(1)
 
+// The project store packs in a module worker found by
+// `new URL('./storage-worker.js', import.meta.url)`. esbuild leaves that URL
+// alone and never emits the worker, so it's built here and the bridge serves
+// it under that name from whichever chunk asks.
+const worker = await build({
+  absWorkingDir: root,
+  entryPoints: [join(root, 'src', 'project', 'storage-worker.ts')],
+  outfile: join(modules, 'storage-worker.js'),
+  tsconfig: join(root, 'tsconfig.json'),
+  bundle: true,
+  minify: true,
+  platform: 'browser',
+  format: 'esm',
+  target: ['es2020'],
+  legalComments: 'none',
+  logLevel: 'info',
+  define: { 'process.env.NODE_ENV': '"production"' },
+})
+if (worker.errors.length) process.exit(1)
+
 // Every stylesheet the split produced becomes one file, loaded once.
 const cssFiles = []
 const walk = (dir) => {

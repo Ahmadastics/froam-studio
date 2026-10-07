@@ -21,13 +21,36 @@ export function pageTextOf(element: HTMLElement): string | undefined {
   return pageText.get(element)
 }
 
+/**
+ * Write an element's text, keeping its own text nodes when that is all it
+ * holds (with the comments SSR puts between adjacent text). React keeps
+ * references to those nodes; `innerText` swaps them for new ones, and React's
+ * next update then removes a node that is no longer there.
+ */
+export function writeElementText(element: HTMLElement, text: string) {
+  let first: Text | null = null
+  for (const node of Array.from(element.childNodes)) {
+    if (node.nodeType === Node.TEXT_NODE) first ??= node as Text
+    else if (node.nodeType !== Node.COMMENT_NODE) { first = null; break }
+  }
+  // innerText turns a newline into <br>; a text node can't.
+  if (!first || text.includes('\n')) {
+    element.innerText = text
+    return
+  }
+  first.nodeValue = text
+  for (const node of Array.from(element.childNodes)) {
+    if (node !== first && node.nodeType === Node.TEXT_NODE) node.nodeValue = ''
+  }
+}
+
 export function applyDraftText(element: HTMLElement, text: string): boolean {
   const shown = element.innerText
   if (shown === text) return false
   const last = shownAfterWrite.get(element)
   if (last && last.text === text && last.shown === shown) return false
   if (!pageText.has(element)) pageText.set(element, shown)
-  element.innerText = text
+  writeElementText(element, text)
   shownAfterWrite.set(element, { text, shown: element.innerText })
   return true
 }
@@ -47,7 +70,7 @@ export function restorePageText(element: HTMLElement): boolean {
   const last = shownAfterWrite.get(element)
   if (original === undefined || !last || isBeingWritten(element)) return false
   if (element.innerText !== last.shown) return false
-  element.innerText = original
+  writeElementText(element, original)
   pageText.delete(element)
   shownAfterWrite.delete(element)
   return true

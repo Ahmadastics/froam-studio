@@ -14,7 +14,7 @@ import { isFroamPersonaPath } from './froamPersona'
 import { SECTION_STRUCTURE_KEY } from './section-structure'
 import { resolveAnchor } from '../collab/anchor'
 import { isBodyScopedPath, isFroamOwnedNode, isPathElement } from '../collab/paths'
-import { applyDraftText } from './draft-text'
+import { applyDraftText, writeElementText } from './draft-text'
 import type { FroamAnchorFingerprint } from '../collab/types'
 
 type ElementDraft = {
@@ -195,7 +195,7 @@ function restoreRuntimeSnapshots(snapshots: RuntimeSnapshot[]) {
     const { element } = snapshot
 
     if (snapshot.text !== undefined && canApplyTextDraft(element) && element.innerText !== snapshot.text) {
-      element.innerText = snapshot.text
+      writeElementText(element, snapshot.text)
     }
 
     if (snapshot.imageSrc !== undefined && element instanceof HTMLImageElement) {
