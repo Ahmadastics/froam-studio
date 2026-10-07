@@ -161,6 +161,32 @@ function whenAppHydrated() {
   })
 }
 
+/**
+ * A page that rebuilds <body> after load takes Froam's nodes with it: React
+ * recovering from a hydration error renders the document again from scratch
+ * (linear.app), and the Froam button vanished with nothing to bring it back.
+ * The host and the editor's portal are put back wherever they're dropped.
+ */
+function keepOnPage(host: HTMLElement) {
+  let portal: HTMLElement | null = null
+  let watched: HTMLElement | null = null
+  const restore = () => {
+    portal ??= document.getElementById('froam-editor-portal')
+    const body = document.body
+    if (!body) return
+    for (const node of [host, portal]) if (node && !node.isConnected) body.appendChild(node)
+    if (watched !== body) {
+      // A replaced <body> is a new node to watch.
+      observer.disconnect()
+      observer.observe(body, { childList: true })
+      observer.observe(document.documentElement, { childList: true })
+      watched = body
+    }
+  }
+  const observer = new MutationObserver(restore)
+  restore()
+}
+
 /** The root when the app owns <body>: <body> itself, the same element the production runtime counts paths from. */
 const selectBody = () => document.body
 
@@ -290,6 +316,7 @@ function boot() {
       document.body.appendChild(host)
     }
     createRoot(host).render(<StandaloneApp origin={origin} initialOpen={initialOpen} initialProjectKey={projectKey} />)
+    keepOnPage(host)
     // The button is up; fetch the full editor behind it, so opening it is instant.
     const warm = () => { void import('./editor/GlobalChefEditor').catch(() => {}) }
     const idle = (window as Window & { requestIdleCallback?: (cb: () => void, options?: { timeout: number }) => number }).requestIdleCallback

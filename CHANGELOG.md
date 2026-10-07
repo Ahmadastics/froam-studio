@@ -30,6 +30,28 @@
   an element's own text nodes instead of replacing them.
 - **The project store's worker loads** under `froam dev`. It is now built and
   served; it used to 404 on every stack.
+- **Live sites load through Froam the way they do on their own domain.**
+  Checked on 12 real sites (`scripts/qa/live-sites.mjs`: loaded directly and
+  through `froam dev --app`, compared, then 40 clicks and a typed heading on
+  each). The editor now opens on all 12; before, it didn't on 3.
+  - The editor's loader is written into the page. An async
+    `<script src="/froam.js">` could be removed by a framework rebuilding
+    `<body>` before it ran (vercel.com, linear.app), and if a page rebuilds
+    `<body>` after load, the Froam button and editor are put back.
+  - A site that sends itself to its own domain (vercel.com does, on any other
+    host) stays in Froam: a guard first in `<head>` cancels the bounce, and a
+    link to another of its pages stays inside.
+  - A Content-Security-Policy in a `<meta>` tag is removed like the header
+    (paystack.com blocked the editor with one).
+  - The site's own module scripts, fonts, stylesheets, import maps and
+    `crossorigin` files by full URL load through Froam. Seen from Froam's
+    address they were another site and the browser blocked them:
+    wordpress.org lost its fonts and blocks, allbirds.com half its page.
+  - Cookies set for the site's domain stick, and same-site WebSockets on an
+    https site connect (the upstream leg was plain TCP to port 443).
+  - A bot check (Cloudflare's "Just a moment…") is named in the terminal:
+    it stops any proxy, so edit your own copy of that site instead.
+  - The share service template gets the same changes; redeploy it to use them.
 - **A host page's own Froam chrome takes its clicks.** A click on a node Froam
   owns on `<body>` (an element whose id starts with `froam-`, like the demo's
   "Saved" dialog) was resolved to the page beneath it, selected that, and was

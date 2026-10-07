@@ -211,7 +211,8 @@ test('someone elsewhere opens an invite link and gets the site, with the editor'
   const html = await page.text()
   assert.equal(page.status, 200)
   assert.match(html, /Discover/)
-  assert.match(html, /<script src="\/froam\.js"/)
+  // The loader is written into the page (lib/dev-server.mjs editorLoader).
+  assert.match(html, /<script data-froam-loader\b/)
   const loader = await remote('/froam.js')
   assert.equal(loader.status, 200)
   assert.match(await loader.text(), /froam-modules\/froam-editor\.mjs/)

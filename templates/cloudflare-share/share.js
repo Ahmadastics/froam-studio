@@ -289,13 +289,74 @@ const STRIP_FROM_SITE = ['content-security-policy', 'content-security-policy-rep
 /** Same site: one host is the other with or without "www.". */
 const sameSite = (a, b) => String(a).toLowerCase().replace(/^www\./, '') === String(b).toLowerCase().replace(/^www\./, '')
 
-/** The editor tag, exactly as froam dev adds it (lib/dev-server.mjs). */
+/**
+ * The editor's loader, exactly as froam dev writes it (lib/dev-server.mjs
+ * editorLoader): inline, so a framework that rebuilds <body> while starting
+ * up cannot remove it before it runs.
+ */
 export function injectEditor(html, project) {
-  if (html.includes('/froam.js')) return html
-  const tag = `<script src="/froam.js" async${project ? ` data-froam-project="${String(project).replace(/[^\w-]/g, '')}"` : ''}></script>`
+  if (html.includes('data-froam-loader') || html.includes('/froam.js')) return html
+  const key = JSON.stringify(String(project ?? '').replace(/[^\w-]/g, ''))
+  const tag = `<script data-froam-loader>/* /froam.js */(function(){if(window.__FROAM_BOOT__)return;window.__FROAM_BOOT__={origin:location.origin,open:false,routes:'*',projectKey:${key}||null};import(location.origin+'/froam-modules/froam-editor.mjs').catch(function(e){console.error('[froam] could not load the editor',e)})})()</script>`
   if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${tag}\n</body>`)
   if (/<\/html>/i.test(html)) return html.replace(/<\/html>/i, `${tag}\n</html>`)
   return `${html}\n${tag}\n`
+}
+
+/**
+ * Keeps a site that sends itself to its own domain on the share, as froam dev
+ * does (lib/dev-server.mjs navigationGuard): first in <head>, before its scripts.
+ */
+export function injectNavigationGuard(html, origin) {
+  if (html.includes('data-froam-guard')) return html
+  let hosts = []
+  try { const bare = new URL(origin).host.replace(/^www\./, ''); hosts = [bare, `www.${bare}`] } catch { return html }
+  const guard = `<script data-froam-guard>(function(){var n=window.navigation,s=${JSON.stringify(hosts)};if(!n||!n.addEventListener)return;n.addEventListener('navigate',function(e){try{var u=new URL(e.destination.url);if(u.origin===location.origin||s.indexOf(u.host)<0||!e.cancelable||e.navigationType==='traverse')return;e.preventDefault();var to=u.pathname+u.search+u.hash;if(u.pathname+u.search===location.pathname+location.search)return;if(e.navigationType==='replace')location.replace(to);else location.assign(to)}catch(_){}})})()</script>`
+  if (/<head\b[^>]*>/i.test(html)) return html.replace(/<head\b[^>]*>/i, (open) => `${open}${guard}`)
+  if (/<html\b[^>]*>/i.test(html)) return html.replace(/<html\b[^>]*>/i, (open) => `${open}${guard}`)
+  return `${guard}${html}`
+}
+
+/** A Content-Security-Policy in a <meta> tag blocks the editor exactly as the header does. */
+export function withoutMetaCsp(html) {
+  return html.replace(/<meta\b[^>]*http-equiv\s*=\s*["']?content-security-policy(?:-report-only)?["']?[^>]*>/gi, '')
+}
+
+/** `https://site.com/x`, `http://site.com/x` and `//site.com/x` → `/x`, for the site and its www twin. */
+function siteUrlStripper(origin) {
+  let host = ''
+  try { host = new URL(origin).host } catch { return (s) => s }
+  const hosts = [host, host.startsWith('www.') ? host.slice(4) : `www.${host}`]
+  const prefix = new RegExp(`(?:https?:)?//(?:${hosts.map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?=/)`, 'gi')
+  return (s) => s.replace(prefix, '')
+}
+
+/**
+ * The site's own CORS-mode files (module scripts, fonts, stylesheets,
+ * crossorigin elements, import maps, inline @font-face) load through the share,
+ * as froam dev does (lib/dev-server.mjs keepAssetsInside): from the share's
+ * address a full site URL is another site, and the browser blocks it.
+ */
+export function keepAssetsInside(html, origin) {
+  const strip = siteUrlStripper(origin)
+  let out = html.replace(/<(script|link|img|source|video|audio)\b[^>]*>/gi, (tag, name) => {
+    const lower = tag.toLowerCase()
+    const kind = name.toLowerCase()
+    const cors = /\scrossorigin\b/.test(lower)
+      || (kind === 'script' && /\stype\s*=\s*["']?module\b/.test(lower))
+      || (kind === 'link' && /\srel\s*=\s*["']?[^"'>]*\b(?:stylesheet|modulepreload)\b/.test(lower))
+      || (kind === 'link' && /\sas\s*=\s*["']?(?:font|fetch|style)\b/.test(lower))
+    return cors ? tag.replace(/(\s(?:src|href)\s*=\s*)(["']?)([^"'\s>]+)/gi, (_m, lead, quote, url) => `${lead}${quote}${strip(url)}`) : tag
+  })
+  out = out.replace(/(<script\b[^>]*\btype\s*=\s*["']?importmap\b[^>]*>)([\s\S]*?)(<\/script>)/gi, (_m, open, body, close) => `${open}${strip(body)}${close}`)
+  out = out.replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi, (_m, open, body, close) => `${open}${strip(body)}${close}`)
+  return out
+}
+
+/** A stylesheet's own fonts and @imports, by full URL, load through the share too. */
+export function keepCssInside(css, origin) {
+  const strip = siteUrlStripper(origin)
+  return css.replace(/(url\(\s*["']?|@import\s+["'])((?:https?:)?\/\/[^"')\s]+)/gi, (_m, lead, url) => `${lead}${strip(url)}`)
 }
 
 /** Links to the site's own pages stay on the share; its files keep loading straight from the site. */
@@ -371,10 +432,17 @@ export async function fromSite(request, site, fetchImpl = fetch) {
     } catch { /* leave it */ }
   }
   const type = String(response.headers.get('content-type') ?? '')
-  if (!type.includes('text/html') || request.method === 'HEAD' || response.status === 204 || response.status === 304) {
+  const bodyless = request.method === 'HEAD' || response.status === 204 || response.status === 304
+  if (type.includes('text/css') && !bodyless) {
+    const css = keepCssInside(await response.text(), site.origin)
+    out.delete('content-length')
+    out.delete('content-encoding')
+    return new Response(css, { status: response.status, headers: out })
+  }
+  if (!type.includes('text/html') || bodyless) {
     return new Response(response.body, { status: response.status, headers: out })
   }
-  const html = keepLinksInside(injectEditor(await response.text(), site.project), site.origin)
+  const html = injectNavigationGuard(keepLinksInside(keepAssetsInside(withoutMetaCsp(injectEditor(await response.text(), site.project)), site.origin), site.origin), site.origin)
   out.delete('content-length')
   out.delete('content-encoding')
   out.set('cache-control', 'no-store')
