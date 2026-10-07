@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 9.5.0 - 2026-10-07
 
 **Every stack in the matrix, from `init` to production.**
 
