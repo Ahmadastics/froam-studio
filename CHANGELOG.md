@@ -30,6 +30,11 @@
   an element's own text nodes instead of replacing them.
 - **The project store's worker loads** under `froam dev`. It is now built and
   served; it used to 404 on every stack.
+- **A host page's own Froam chrome takes its clicks.** A click on a node Froam
+  owns on `<body>` (an element whose id starts with `froam-`, like the demo's
+  "Saved" dialog) was resolved to the page beneath it, selected that, and was
+  swallowed. On froam.vercel.app, "Keep editing" did nothing, so visitors could
+  only reset the demo and lose their edits.
 - `init` prints the React snippet in the project's language (no TypeScript in
   a `.jsx` app; `index.js` glue), names Vite + Vue / Svelte, uses the
   framework's dev port (or the one in the dev script), and keeps settings

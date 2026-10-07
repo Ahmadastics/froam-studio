@@ -160,10 +160,24 @@ export function createHitTester(rootElement: HTMLElement, getSelectedPath: () =>
     return stack
   }
 
+  /**
+   * Froam's UI, or anything inside a node Froam owns on <body> (the standalone
+   * host, a host page's own Froam chrome such as a demo's dialog).
+   */
+  function isOnFroamUi(target: EventTarget | null) {
+    if (!(target instanceof Element)) return false
+    if (target.closest('[data-chef-editor-root="true"]')) return true
+    let top: Element = target
+    while (top.parentElement && top.parentElement !== body) top = top.parentElement
+    return top.parentElement === body && isFroamOwnedNode(top)
+  }
+
   /** What a click at this point should select, plus everything beneath it for Alt+click. */
   function resolveClick(event: MouseEvent) {
-    // A click on Froam's own UI is never also a click on the page beneath it.
-    if (event.target instanceof Element && event.target.closest('[data-chef-editor-root="true"]')) {
+    // A click on Froam's own UI is never also a click on the page beneath it:
+    // the point-stack below would find the page under a dialog, select it, and
+    // swallow the click before the dialog's button ever saw it.
+    if (isOnFroamUi(event.target)) {
       return { target: null, stack: [] as HTMLElement[] }
     }
     // Keyboard-activated clicks (Enter/Space on a focused control) carry no
