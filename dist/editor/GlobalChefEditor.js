@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState, } from 'react';
 import { createPortal } from 'react-dom';
-import { AlignCenter, AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignLeft, AlignRight, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, Bold, Box, ClipboardCheck, Clock, Code, Copy, Download, Eraser, Eye, EyeOff, FileImage, FileText, GitCommit, Grip, ImagePlus, Italic, Layers, LayoutGrid, Link, Minus, MousePointer, Share2, MousePointer2, MessageSquare, Move, Paintbrush, Palette, PencilLine, Plus, Redo2, RotateCw, Save, DraftingCompass, ScanLine, Search, SlidersHorizontal, Sparkles, Square, SquareDashedBottom, Strikethrough, Type, Underline, Undo2, Unlink, Variable, Maximize2, X, Zap, Coins, AlignCenterHorizontal, AlignCenterVertical, Timer, } from 'lucide-react';
+import { AlignCenter, AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignLeft, AlignRight, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, Bold, Box, ClipboardCheck, Clock, Code, Copy, Crop, Download, Eraser, Eye, EyeOff, FileImage, FileText, GitCommit, Grip, ImagePlus, Italic, Layers, LayoutGrid, Link, Minus, MousePointer, Share2, MousePointer2, MessageSquare, Move, Paintbrush, Palette, PencilLine, Plus, Redo2, RotateCw, Save, DraftingCompass, ScanLine, Search, SlidersHorizontal, Sparkles, Square, SquareDashedBottom, Strikethrough, Type, Underline, Undo2, Unlink, Variable, Maximize2, X, Zap, Coins, AlignCenterHorizontal, AlignCenterVertical, Timer, } from 'lucide-react';
 import FroamSectionBoundary from './FroamSectionBoundary.js';
 import { apiGetFresh, apiPost } from '../lib/api.js';
 import { bridgeUrl } from '../lib/bridge.js';
@@ -12,6 +12,14 @@ import FroamBottomSheet from './FroamBottomSheet.js';
 import FroamBlueprint from './FroamBlueprint.js';
 import { COARSE_POINTER_QUERY, MOBILE_UI_QUERY, useMediaQuery } from './froamMedia.js';
 import FroamShortcutOverlay from './FroamShortcutOverlay.js';
+import FroamImageFit, { recallImageFit, rememberImageFit } from './FroamImageFit.js';
+import { aspectRatioCss, DEFAULT_IMAGE_FIT, imageFitStyles, liveFitStyles, outputSize, resolveAspectRatio, shapeStyles, slotSize, sourceRect, srcsetWidths } from './image-fit.js';
+import { DEFAULT_PLAYBACK, writeMediaDraft } from './media/media-draft.js';
+import { isMediaRef, mediaRefsFromUrls, resolveMediaRefs } from './media/media-refs.js';
+import { canStoreMedia, importMedia, MediaRejected, storeMedia } from './media/media-store.js';
+import { bakeCrop, blobToDataUrl, capturePoster } from './media/encode.js';
+import { moveInlineMedia } from './media/migrate-inline.js';
+import { canZoomLive, currentMediaOf, ensureBackgroundVideo, ensureFrameVideo, hasAdjustableMedia, isBakeable, isImageFrame, measureSlot, MEDIA_ATTR, mediaHostOf, roleFor, typeFromName, VIDEO_ATTR, writeOwnedVideo } from './media/media-placement.js';
 import FroamSmartGuides from './FroamSmartGuides.js';
 import { createFroamLibraryComponent, FROAM_COMPONENTS } from './FroamComponentCatalog.js';
 import { FROAM_FRAME_PRESETS, } from './FroamPlannerTypes.js';
@@ -70,7 +78,7 @@ import { usePatternDrop } from './library/pattern-drop.js';
 import { FroamCollaborate } from './collaborate/FroamCollaborate.js';
 import { useRoomMessages } from './collaborate/useRoomMessages.js';
 import { findPinned, RoomPins } from './collaborate/RoomPins.js';
-import { applyDraftText, pageTextOf, rememberPageText } from './draft-text.js';
+import { applyDraftText, pageTextOf, rememberPageText, writeElementText } from './draft-text.js';
 import { TYPING } from './collaborate/RoomMessages.js';
 import { elementLabel, sourceClasses } from './collaborate/request-builder.js';
 import { shrinkAvatar } from './collaborate/avatar-image.js';
@@ -396,6 +404,30 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [activeTool, setActiveTool] = useState('pointer');
     // Layers
     const [layers, setLayers] = useState([]);
+    /*
+     * Layers is rebuilt only while someone can see it. On a big page the tree is
+     * thousands of nodes, and selecting used to rebuild it on every click —
+     * about a second per click at 7,500 elements, panel open or not. When it is
+     * visible it is rebuilt after the next paint, so the click shows first.
+     */
+    const layersVisibleRef = useRef(false);
+    const layersFrameRef = useRef(0);
+    function refreshLayers() {
+        if (!layersVisibleRef.current)
+            return;
+        window.cancelAnimationFrame(layersFrameRef.current);
+        layersFrameRef.current = window.requestAnimationFrame(() => {
+            window.setTimeout(() => {
+                const root = getRoot();
+                if (!root || !layersVisibleRef.current)
+                    return;
+                try {
+                    setLayers(collectLayers(root));
+                }
+                catch { /* DOM may be mid-render */ }
+            }, 0);
+        });
+    }
     // CSS Variables
     const [cssVars, setCssVars] = useState([]);
     const [repoStatus, setRepoStatus] = useState(null);
@@ -433,11 +465,17 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         }
     });
     const [assetSearch, setAssetSearch] = useState('');
+    // Assets are stored by reference; the panels show them from the bridge.
+    const shownAssets = useMemo(() => assets.map((asset) => (asset.url.startsWith('froam-media:') ? { ...asset, url: resolveMediaRefs(asset.url, 'editor') } : asset)), [assets]);
     // Refs
     const dragRef = useRef(null);
     const fileInputRef = useRef(null);
     const pendingImageTargetRef = useRef(null);
     const pendingCanvasImageRef = useRef(false);
+    /* The crop/fit step between choosing a picture and placing it. A null
+       target means "no selection": a new image frame is made on Place. */
+    const [imageFitRequest, setImageFitRequest] = useState(null);
+    const pendingMediaRef = useRef(null);
     const currentSelectionRef = useRef(null);
     /** What the selected element *is*, so it can be found again if the page moves. */
     const selectionAnchorRef = useRef(null);
@@ -1490,6 +1528,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const draftCount = useMemo(() => countRenderableDrafts(routeDrafts), [routeDrafts]);
     const hasRouteDrafts = useMemo(() => draftCount > 0, [draftCount]);
     const showPanel = panelOpen || active;
+    const layersVisible = showPanel && ((leftPanelOpen && leftWorkspaceMode === 'layers') || openSections.layers);
+    layersVisibleRef.current = layersVisible;
     // A page wider than the phone (one oversized image is enough) makes mobile
     // Chrome widen the layout viewport, and every fixed control — the top bar's
     // end, the docked bar, the sheet — lands off-screen. While editing on a
@@ -2340,15 +2380,57 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             document.documentElement.removeAttribute('data-chef-editing');
         };
     }, []);
-    /* ─── Refresh layers when section opens ─── */
+    /*
+     * Pictures saved inline before media was kept as files are moved into the
+     * project once, when the page has settled. Recorded like a loaded design:
+     * it changes how the design is stored, not what it shows, so it is no
+     * one's undo step.
+     */
+    const inlineMediaRef = useRef(async () => { });
+    inlineMediaRef.current = async () => {
+        if (!(await canStoreMedia()))
+            return;
+        const keep = async (blob) => (await storeMedia(blob)).ref;
+        const known = new Map();
+        // The undo log first: the design it derives must match the one below.
+        const ops = opLog.all();
+        const nextOps = await moveInlineMedia(ops, keep, known);
+        if (nextOps && opLog.all().length === ops.length) {
+            opLog.load(nextOps);
+            saveOpLog(nextOps, projectKey);
+        }
+        const before = storeRef.current;
+        const next = await moveInlineMedia(before, keep, known);
+        if (next && storeRef.current === before) {
+            opLoadingDesignRef.current = true;
+            storeRef.current = next;
+            setStore(next);
+            saveStore(next);
+            applyStoreToDOM(next, { clearCurrent: true, previousStore: before });
+        }
+        // The project's history carries every past value too — it is saved whole.
+        const project = projectSession.project;
+        const nextProject = await moveInlineMedia(project, keep, known);
+        if (nextProject)
+            projectSession.setProject((current) => (current === project ? nextProject : current));
+        const nextAssets = await moveInlineMedia(assets, keep, known);
+        if (nextAssets) {
+            setAssets(nextAssets);
+            try {
+                window.localStorage.setItem(froamStorageKey('froam-assets-v1', projectKey), JSON.stringify(nextAssets));
+            }
+            catch { /* quota */ }
+        }
+    };
     useEffect(() => {
-        if (!openSections.layers || !showPanel)
-            return;
-        const root = getRoot();
-        if (!root)
-            return;
-        setLayers(collectLayers(root));
-    }, [openSections.layers, showPanel, routeKey]);
+        const timer = window.setTimeout(() => { void inlineMediaRef.current().catch(() => { }); }, 2500);
+        return () => window.clearTimeout(timer);
+    }, [projectKey]);
+    /* ─── Refresh layers when they come into view, or the route changes under them ─── */
+    useEffect(() => {
+        if (layersVisible)
+            refreshLayers();
+    }, [layersVisible, routeKey]);
     /* ─── Op log ─── */
     /**
      * Ops recorded close together under the same label collapse into one undo
@@ -2457,7 +2539,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             else
                 element.setAttribute('style', original.style);
             if (original.text !== undefined)
-                element.innerText = original.text;
+                writeElementText(element, original.text);
             if (original.imageUrl !== undefined && element instanceof HTMLImageElement)
                 element.src = original.imageUrl;
         });
@@ -2820,7 +2902,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             selectInsertedElement(selectedElement);
         else
             updateSelectionsState([]);
-        setLayers(collectLayers(root));
+        refreshLayers();
     }
     function serializableElementHtml(element) {
         const clone = element.cloneNode(true);
@@ -2841,7 +2923,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             node.removeAttribute('data-froam-writable');
             node.removeAttribute('data-froam-moving');
         });
-        return clone.outerHTML;
+        return mediaRefsFromUrls(clone.outerHTML);
     }
     function collectVersionRouteDrafts() {
         const root = getRoot();
@@ -2944,15 +3026,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             .filter((draft) => draft !== null)
             .sort((a, b) => a.order - b.order)
             .forEach((injection) => {
-            const parent = injection.parentId
-                ? root.querySelector(`[data-froam-id="${CSS.escape(injection.parentId)}"]`)
-                : injection.parentPath === ROOT_PARENT_KEY
-                    ? root
-                    : findElementByPath(root, injection.parentPath);
+            // The parent's node id is the sturdier address, but it is given out
+            // per session: a reloaded page (or a visitor's) has the path only.
+            const parent = (injection.parentId ? root.querySelector(`[data-froam-id="${CSS.escape(injection.parentId)}"]`) : null)
+                ?? (injection.parentPath === ROOT_PARENT_KEY ? root : findElementByPath(root, injection.parentPath));
             if (!parent)
                 return;
             const template = document.createElement('template');
-            template.innerHTML = injection.html.trim();
+            template.innerHTML = resolveMediaRefs(injection.html.trim(), 'editor');
             const node = template.content.firstElementChild;
             if (!(node instanceof HTMLElement))
                 return;
@@ -3765,10 +3846,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 nextElement.setAttribute('data-froam-writable', 'true');
             }
             if (root) {
-                try {
-                    setLayers(collectLayers(root));
-                }
-                catch { /* DOM may be mid-render */ }
+                refreshLayers();
             }
         }
         catch {
@@ -3900,15 +3978,304 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         persistLiveRouteSnapshot();
     }
     function readImageFile(file, target) {
-        const reader = new FileReader();
-        reader.onload = () => {
-            const imageData = typeof reader.result === 'string' ? reader.result : undefined;
-            if (!imageData)
-                return;
-            applyImageToTarget(target, imageData);
-            showToast('Image applied');
-        };
-        reader.readAsDataURL(file);
+        void openMediaUpload(file, target);
+    }
+    /* ─── Media: fit, crop and place pictures and videos ─── */
+    async function fetchBlob(url) {
+        const response = await fetch(url);
+        if (!response.ok)
+            throw new Error(`Could not read that file (${response.status})`);
+        return response.blob();
+    }
+    function isSameOrigin(url) {
+        try {
+            return new URL(url, window.location.href).origin === window.location.origin;
+        }
+        catch {
+            return false;
+        }
+    }
+    /**
+     * A picture or video to place: a file just chosen or dropped, or one the
+     * project already keeps (an asset). The original goes into the project
+     * first, so the design refers to a file and a crop can be redone from it
+     * — after a reload, on another machine, any time.
+     */
+    async function openMediaUpload(input, selected) {
+        keepStudioPinned();
+        const target = mediaHostOf(selected);
+        const stored0 = input instanceof Blob ? null : input;
+        const type = input instanceof Blob ? input.type : input.type;
+        const kind = type.startsWith('video/') ? 'video' : type.startsWith('image/') ? 'image' : null;
+        if (!kind) {
+            showToast('Froam places images (JPEG, PNG, WebP, AVIF, GIF, SVG) and videos (MP4, WebM)');
+            return;
+        }
+        const role = roleFor(target, kind);
+        if (role !== 'img' && role !== 'video' && role !== 'frame' && role !== 'frame-video' && role !== 'background' && role !== 'bg-video' && role !== 'new') {
+            showToast(role);
+            return;
+        }
+        const keepsFiles = await canStoreMedia();
+        if (kind === 'video' && !keepsFiles) {
+            showToast('Videos are kept as files in your project — open the page through froam dev to add one');
+            return;
+        }
+        let stored = stored0;
+        if (!stored && keepsFiles && input instanceof Blob) {
+            if (input.size > 4 * 1024 * 1024)
+                showToast(kind === 'video' ? 'Adding the video to your project…' : 'Adding the image to your project…');
+            try {
+                stored = await storeMedia(input);
+            }
+            catch (error) {
+                // Refused for what it is (not really an image, too large): say so.
+                // Only an unreachable bridge leaves an image to go in inline.
+                if (kind === 'video' || error instanceof MediaRejected) {
+                    showToast(error instanceof Error ? error.message : 'Could not add that file');
+                    return;
+                }
+            }
+        }
+        const revoke = !stored && input instanceof Blob ? URL.createObjectURL(input) : null;
+        openMediaFit({
+            target,
+            role,
+            isUpload: true,
+            kind,
+            method: kind === 'image' && isBakeable(type) ? 'baked' : 'live',
+            sourceRef: stored?.ref ?? null,
+            sourceUrl: stored?.url ?? revoke ?? '',
+            sourceType: type,
+            blob: input instanceof Blob ? input : null,
+            revoke,
+            bytes: input instanceof Blob ? input.size : stored?.bytes,
+        });
+    }
+    function openMediaFit(pending) {
+        const root = getRoot();
+        const frame = measureSlot(pending.target);
+        // An empty frame has no shape worth keeping: it takes the file's. A
+        // filled one keeps its shape, so the page around it does not move.
+        const empty = !pending.target || (isImageFrame(pending.target) && !currentMediaOf(pending.target));
+        pendingMediaRef.current = { ...pending, path: pending.target && root ? getElementPath(pending.target, root) : null, frame };
+        setImageFitRequest({
+            id: Date.now(),
+            previewUrl: pending.sourceUrl,
+            kind: pending.kind,
+            method: pending.method,
+            zoomable: pending.method === 'baked' || canZoomLive(pending.role),
+            frame,
+            initial: pending.initial ?? { ...DEFAULT_IMAGE_FIT, aspect: empty ? 'original' : 'frame' },
+            isUpload: pending.isUpload,
+            playback: pending.playback,
+            bytes: pending.bytes,
+            note: pending.note,
+            vector: /svg/i.test(pending.sourceType),
+        });
+    }
+    function closeMediaFit() {
+        const pending = pendingMediaRef.current;
+        pendingMediaRef.current = null;
+        setImageFitRequest(null);
+        if (pending?.revoke)
+            URL.revokeObjectURL(pending.revoke);
+    }
+    /**
+     * Write a fit to an element. Its draft carries the media; an element inside
+     * an injected block (a Froam frame) persists through the block's HTML, so
+     * the media rides along as an attribute there too.
+     */
+    function writeMediaTo(target, change, label) {
+        const mediaValue = writeMediaDraft(change.media);
+        updateTargetDraft(target, (draft) => ({
+            ...draft,
+            ...(change.imageUrl !== undefined ? { imageUrl: change.imageUrl } : {}),
+            media: mediaValue,
+            styles: { ...(draft.styles ?? {}), ...change.styles },
+        }), { imageUrl: change.imageUrl ? resolveMediaRefs(change.imageUrl, 'editor') : '' }, label);
+        if (target.closest(INJECTED_BLOCK_SELECTOR)) {
+            target.setAttribute(MEDIA_ATTR, mediaValue);
+            persistLiveRouteSnapshot();
+        }
+    }
+    function newFrameForMedia() {
+        const frame = createInjectedBlock('image');
+        if (!placeInsertedNode(frame, 'inside'))
+            throw new Error('There is no place to add it on this page');
+        selectInsertedElement(frame);
+        return frame;
+    }
+    /** Place: cut or fit the file, keep what it made, write it to the page. The dialog shows progress until this settles. */
+    async function placeMediaFit(choice) {
+        const pending = pendingMediaRef.current;
+        if (!pending)
+            return;
+        const root = getRoot();
+        if (!root)
+            throw new Error('The page is not ready yet');
+        // The page may have re-rendered while the dialog was open.
+        let target = pending.target;
+        if (target && !root.contains(target))
+            target = pending.path ? findElementByPath(root, pending.path) : null;
+        if (pending.target && !target)
+            throw new Error('That element is gone from the page — select it and try again');
+        const { state, natural } = choice;
+        const ratio = resolveAspectRatio(state.aspect, pending.frame, natural);
+        const aspectCss = aspectRatioCss(state.aspect, natural);
+        const frameRatio = pending.frame ? pending.frame.width / pending.frame.height : undefined;
+        const slot = slotSize(pending.frame, state.aspect, ratio);
+        const keepsFiles = Boolean(pending.sourceRef);
+        if (pending.kind === 'video') {
+            // The first frame, shown while it loads — and instead of it, for reduced motion.
+            const posterBlob = await capturePoster(pending.sourceUrl);
+            const poster = posterBlob ? (await storeMedia(posterBlob)).ref : undefined;
+            const src = pending.sourceRef ?? pending.sourceUrl;
+            const media = { kind: 'video', method: 'live', src, poster, playback: choice.playback ?? DEFAULT_PLAYBACK, source: src, fit: state };
+            const label = pending.isUpload ? 'Placed video' : 'Adjusted video';
+            if (target instanceof HTMLVideoElement) {
+                writeMediaTo(target, { media, styles: liveFitStyles({ kind: 'element', state, image: natural, slot: pending.frame, aspectCss, frameRatio }) }, label);
+            }
+            else {
+                const host = target ?? newFrameForMedia();
+                const contained = liveFitStyles({ kind: 'contained', state, image: natural, slot: pending.frame, aspectCss: null });
+                const video = isImageFrame(host) ? ensureFrameVideo(host) : ensureBackgroundVideo(host).video;
+                writeOwnedVideo(video, media, contained);
+                const hostStyles = { ...shapeStyles(aspectCss, isImageFrame(host)) };
+                if (isImageFrame(host)) {
+                    hostStyles.backgroundImage = 'none';
+                    syncImageFrameState(host, 'video');
+                }
+                else {
+                    // Behind the content and inside the box: the box is the stacking context.
+                    hostStyles.isolation = 'isolate';
+                    if (window.getComputedStyle(host).position === 'static')
+                        hostStyles.position = 'relative';
+                }
+                if (Object.keys(hostStyles).length)
+                    updateTargetDraft(host, (draft) => ({ ...draft, styles: { ...(draft.styles ?? {}), ...hostStyles } }), {}, label);
+                opPendingLabelRef.current = label;
+                persistLiveRouteSnapshot();
+            }
+            closeMediaFit();
+            showToast(pending.isUpload ? 'Video placed' : 'Video adjusted');
+            return;
+        }
+        let url;
+        let media;
+        if (pending.method === 'baked') {
+            const blob = pending.blob ?? await fetchBlob(pending.sourceUrl);
+            const rect = sourceRect(natural, ratio, state);
+            const largest = outputSize({ width: rect.sw, height: rect.sh }, slot);
+            // An <img> gets several widths: phones download the small one.
+            const responsive = keepsFiles && target instanceof HTMLImageElement;
+            const widths = responsive ? srcsetWidths(rect.sw, slot, largest.width) : [largest.width];
+            const encoded = await bakeCrop(blob, rect, widths, !/jpe?g/i.test(pending.sourceType));
+            if (keepsFiles) {
+                const kept = await Promise.all(encoded.map((item) => storeMedia(item.blob)));
+                url = kept[kept.length - 1].ref;
+                media = { kind: 'image', method: 'baked', source: pending.sourceRef ?? undefined, fit: state };
+                if (responsive && kept.length > 1 && slot) {
+                    media.srcset = kept.map((item, index) => `${item.ref} ${encoded[index].width}w`).join(', ');
+                    media.sizes = `${Math.round(slot.width)}px`;
+                }
+            }
+            else {
+                // No bridge to keep files: one inline picture, as before, and the
+                // original remembered for this session.
+                url = await blobToDataUrl(encoded[encoded.length - 1].blob);
+                rememberImageFit(url, blob, state);
+                media = { kind: 'image', method: 'baked', fit: state };
+            }
+        }
+        else {
+            // A GIF, an SVG, or a file whose pixels can't be read: shown as it is, cropped by CSS.
+            url = pending.sourceRef ?? (pending.sourceUrl.startsWith('blob:') ? await blobToDataUrl(pending.blob ?? await fetchBlob(pending.sourceUrl)) : pending.sourceUrl);
+            media = { kind: 'image', method: 'live', source: pending.sourceRef ?? undefined, fit: state };
+        }
+        const host = target ?? newFrameForMedia();
+        const isImg = host instanceof HTMLImageElement;
+        const frame = isImageFrame(host);
+        const styles = media.method === 'baked'
+            ? imageFitStyles({ kind: isImg ? 'img' : 'background', state, url, aspectCss, isImageFrame: frame, frameRatio })
+            : liveFitStyles({ kind: isImg ? 'element' : 'background', state, image: natural, slot: pending.frame, url, aspectCss, isImageFrame: frame, frameRatio });
+        // A frame that played a video shows a picture again.
+        if (frame)
+            host.querySelector(`:scope > video[${VIDEO_ATTR}]`)?.remove();
+        writeMediaTo(host, { imageUrl: url, media, styles }, pending.isUpload ? 'Placed image' : 'Adjusted image');
+        if (frame)
+            syncImageFrameState(host, url);
+        if (!target)
+            persistLiveRouteSnapshot();
+        closeMediaFit();
+        showToast(pending.isUpload ? (target ? 'Image placed' : 'Image added') : 'Image adjusted');
+    }
+    /**
+     * Adjust what an element already shows. The crop starts again from the
+     * original the design kept; a picture from the page itself or another site
+     * is first copied into the project, so it can be cut like an upload.
+     */
+    async function openSelectedImageFit() {
+        keepStudioPinned();
+        const root = getRoot();
+        const selected = root && selection ? findElementByPath(root, selection.path) : null;
+        const target = mediaHostOf(selected);
+        const current = target ? currentMediaOf(target, target === selected ? routeDrafts[selection?.path ?? '']?.media : undefined) : null;
+        if (!target || !current) {
+            showToast('Select an image or video to adjust');
+            return;
+        }
+        const keepsFiles = await canStoreMedia();
+        const original = current.media?.source ?? current.url;
+        let sourceRef = isMediaRef(original) ? original : null;
+        let sourceUrl = sourceRef ? resolveMediaRefs(sourceRef, 'editor') : original;
+        let sourceType = typeFromName(original);
+        let blob = null;
+        if (!sourceRef) {
+            const remembered = recallImageFit(current.url);
+            if (remembered) {
+                blob = remembered.blob;
+                sourceType = remembered.blob.type;
+            }
+            else if (keepsFiles) {
+                try {
+                    if (/^https?:/i.test(sourceUrl) && !isSameOrigin(sourceUrl)) {
+                        const imported = await importMedia(sourceUrl);
+                        sourceRef = imported.ref;
+                        sourceUrl = imported.url;
+                        sourceType = imported.type;
+                    }
+                    else {
+                        // The page's own file, or an inline picture: kept in the project
+                        // from now on, so the design stops carrying it inline.
+                        blob = await fetchBlob(sourceUrl);
+                        const kept = await storeMedia(blob);
+                        sourceRef = kept.ref;
+                        sourceUrl = kept.url;
+                        sourceType = blob.type || kept.type;
+                    }
+                }
+                catch {
+                    // Can't be read or copied: it is still fitted, by CSS.
+                }
+            }
+        }
+        const revoke = blob && !sourceRef ? URL.createObjectURL(blob) : null;
+        const readable = Boolean(sourceRef || blob) || sourceUrl.startsWith('data:') || isSameOrigin(sourceUrl);
+        openMediaFit({
+            target,
+            role: current.role,
+            isUpload: false,
+            kind: current.kind,
+            method: current.kind === 'image' && readable && isBakeable(sourceType) ? 'baked' : 'live',
+            sourceRef,
+            sourceUrl: revoke ?? sourceUrl,
+            sourceType,
+            blob,
+            revoke,
+            initial: current.media?.fit,
+            playback: current.media?.playback,
+        });
     }
     function createInjectedBlock(kind) {
         if (kind === 'header') {
@@ -4443,7 +4810,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         });
         selectInsertedElement(wrapper);
         persistLiveRouteSnapshot();
-        setLayers(collectLayers(root));
+        refreshLayers();
         showToast('Merged into movable stamp');
     }
     function ungroupSelected() {
@@ -4483,7 +4850,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         const newSelections = children.map((child) => buildSelection(child, getElementPath(child, root)));
         updateSelectionsState(newSelections);
         persistLiveRouteSnapshot();
-        setLayers(collectLayers(root));
+        refreshLayers();
         showToast('Ungrouped elements');
     }
     function addChildContainer() {
@@ -4537,7 +4904,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             persistPathStyle(target, node.path, { display: 'none' }, 'Hide element');
         }
         // Refresh layers
-        setLayers(collectLayers(root));
+        refreshLayers();
     }
     function selectedSectionElement(node) {
         const root = getRoot();
@@ -4678,13 +5045,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             return;
         }
         if (pendingCanvasImageRef.current) {
-            const reader = new FileReader();
-            reader.onload = () => {
-                const imageData = typeof reader.result === 'string' ? reader.result : undefined;
-                if (imageData)
-                    applyCanvasImage(imageData);
-            };
-            reader.readAsDataURL(file);
+            void placePageBackground(file);
             pendingCanvasImageRef.current = false;
             pendingImageTargetRef.current = null;
             event.target.value = '';
@@ -4696,18 +5057,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             return;
         }
         const selectedTarget = selection ? findElementByPath(root, selection.path) : null;
+        // No target: Place adds a new image frame.
         const target = pendingImageTargetRef.current ?? selectedTarget;
-        if (!target) {
-            const reader = new FileReader();
-            reader.onload = () => {
-                const imageData = typeof reader.result === 'string' ? reader.result : undefined;
-                if (imageData)
-                    addImageBlockFromSource(imageData);
-            };
-            reader.readAsDataURL(file);
-            event.target.value = '';
-            return;
-        }
         readImageFile(file, target);
         pendingImageTargetRef.current = null;
         event.target.value = '';
@@ -4954,8 +5305,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     contextMenuPosRef.current = contextMenuPos;
     const moveModeRef = useRef(moveMode);
     moveModeRef.current = moveMode;
-    const actionsRef = useRef({ saveToRunam, saveDraft, saveToRepo, undo, redo, clearSelectionDraft, applyStyle, openSelectedImageUpload, wrapInContainer });
-    actionsRef.current = { saveToRunam, saveDraft, saveToRepo, undo, redo, clearSelectionDraft, applyStyle, openSelectedImageUpload, wrapInContainer };
+    const actionsRef = useRef({ saveToRunam, saveDraft, saveToRepo, undo, redo, clearSelectionDraft, applyStyle, openSelectedImageUpload, openSelectedImageFit, wrapInContainer });
+    actionsRef.current = { saveToRunam, saveDraft, saveToRepo, undo, redo, clearSelectionDraft, applyStyle, openSelectedImageUpload, openSelectedImageFit, wrapInContainer };
     /* Save automatically: a few seconds after the last change. */
     useEffect(() => {
         if (!autosave || isContributor || !showPanel || unsavedCount === 0)
@@ -5145,6 +5496,23 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
     /* ─── Asset manager ─── */
     function addAssetEntry(url, name) {
+        // An uploaded asset becomes a project file: a data URL in localStorage
+        // filled the quota after a few photos.
+        if (url.startsWith('data:')) {
+            void (async () => {
+                let kept = url;
+                try {
+                    if (await canStoreMedia())
+                        kept = (await storeMedia(await fetchBlob(url))).ref;
+                }
+                catch { /* stays inline */ }
+                addAssetRecord(kept, name);
+            })();
+            return;
+        }
+        addAssetRecord(mediaRefsFromUrls(url), name);
+    }
+    function addAssetRecord(url, name) {
         const entry = { id: `${Date.now()}`, name, url, addedAt: Date.now() };
         const next = [entry, ...assets];
         setAssets(next);
@@ -5155,24 +5523,55 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         setAssets(next);
         window.localStorage.setItem(froamStorageKey('froam-assets-v1', projectKey), JSON.stringify(next));
     }
-    function applyAssetToSelection(url) {
-        if (!selection) {
-            addImageBlockFromSource(url, 'Asset added as image');
-            return;
-        }
+    /** An asset goes through the same fit as an upload: it lands the shape of its spot. */
+    async function applyAssetToSelection(url) {
         const root = getRoot();
-        if (!root)
-            return;
-        const target = findElementByPath(root, selection.path);
-        if (!target)
-            return;
-        if (target instanceof HTMLImageElement) {
-            updateDraft((d) => ({ ...d, imageUrl: url }));
+        const target = root && selection ? findElementByPath(root, selection.path) : null;
+        const ref = mediaRefsFromUrls(url);
+        try {
+            if (isMediaRef(ref)) {
+                const name = ref.slice('froam-media:'.length);
+                await openMediaUpload({ ref, url: resolveMediaRefs(ref, 'editor'), name, bytes: 0, type: typeFromName(name) }, target);
+                return;
+            }
+            if (/^https?:/i.test(url) && !isSameOrigin(url) && await canStoreMedia()) {
+                await openMediaUpload(await importMedia(url), target);
+                return;
+            }
+            await openMediaUpload(await fetchBlob(url), target);
         }
-        else {
-            applyStyle({ backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' });
+        catch {
+            showToast('That asset could not be opened');
         }
-        showToast('Asset applied');
+    }
+    /**
+     * A page background: kept as a file, at most 2560 px wide — a phone photo
+     * as a full-page background was megabytes in the design and the CSS.
+     */
+    async function placePageBackground(file) {
+        if (!file.type.startsWith('image/')) {
+            showToast('A page background is an image');
+            return;
+        }
+        try {
+            if (await canStoreMedia()) {
+                let blob = file;
+                if (isBakeable(file.type)) {
+                    const bitmap = await createImageBitmap(file);
+                    const { width, height } = bitmap;
+                    bitmap.close();
+                    const target = Math.min(width, 2560);
+                    if (target < width)
+                        blob = (await bakeCrop(file, { sx: 0, sy: 0, sw: width, sh: height }, [target], !/jpe?g/i.test(file.type)))[0].blob;
+                }
+                applyCanvasImage((await storeMedia(blob)).ref);
+                return;
+            }
+        }
+        catch {
+            // Fall back to an inline picture below.
+        }
+        applyCanvasImage(await blobToDataUrl(file));
     }
     function renameProject(name) {
         const next = name.trim();
@@ -5235,11 +5634,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 setIntelligenceOpen(false);
                 setLeftPanelOpen(true);
                 setLeftWorkspaceMode(section);
-                if (section === 'layers') {
-                    const root = getRoot();
-                    if (root)
-                        setLayers(collectLayers(root));
-                }
+                if (section === 'layers')
+                    refreshLayers();
             }
             else {
                 setLeftPanelOpen(false);
@@ -5278,11 +5674,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             if (!roomForBothPanels())
                 setRightPanelOpen(false);
             setLeftWorkspaceMode(section);
-            if (section === 'layers') {
-                const root = getRoot();
-                if (root)
-                    setLayers(collectLayers(root));
-            }
+            if (section === 'layers')
+                refreshLayers();
             return;
         }
         if (mode === 'create') {
@@ -5965,14 +6358,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                     loadVersionIntoPage(versionStore, name);
                                 else
                                     showToast('That version could not be found');
-                            }, onOpenAllVersions: () => { setWorkspacePreference((current) => ({ ...current, advancedOpen: true })); setOpenSections((p) => ({ ...p, versions: true })); } }) }), _jsxs("div", { className: "froam-figma-left", "data-chef-editor-root": "true", hidden: !leftPanelOpen, children: [_jsx(FroamPanelTabs, { tabs: LEFT_PANEL_TABS, active: leftTab, onSelect: (tab) => openLeftTab(tab.id), label: "Layers, pages and library" }), _jsxs("div", { className: "froam-figma-left__body", "data-chef-editor-root": "true", children: [leftWorkspaceMode === 'plan' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "SitePlanner", children: _jsx(FroamSitePlanner, { projectKey: projectKey, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, requestedTab: plannerRequestedTab, selection: selection ? { nodeId: selection.nodeId, label: selection.label } : null, archiveItems: plannerArchiveItems, assets: assets, onRenameProject: renameProject, onAddAsset: addAssetEntry, onApplyAsset: applyAssetToSelection, onRemoveAsset: removeAsset, onTabChange: (nextTab) => {
+                            }, onOpenAllVersions: () => { setWorkspacePreference((current) => ({ ...current, advancedOpen: true })); setOpenSections((p) => ({ ...p, versions: true })); } }) }), _jsxs("div", { className: "froam-figma-left", "data-chef-editor-root": "true", hidden: !leftPanelOpen, children: [_jsx(FroamPanelTabs, { tabs: LEFT_PANEL_TABS, active: leftTab, onSelect: (tab) => openLeftTab(tab.id), label: "Layers, pages and library" }), _jsxs("div", { className: "froam-figma-left__body", "data-chef-editor-root": "true", children: [leftWorkspaceMode === 'plan' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "SitePlanner", children: _jsx(FroamSitePlanner, { projectKey: projectKey, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, requestedTab: plannerRequestedTab, selection: selection ? { nodeId: selection.nodeId, label: selection.label } : null, archiveItems: plannerArchiveItems, assets: shownAssets, onRenameProject: renameProject, onAddAsset: addAssetEntry, onApplyAsset: applyAssetToSelection, onRemoveAsset: removeAsset, onTabChange: (nextTab) => {
                                                     setPlannerRequestedTab(nextTab);
                                                     const section = nextTab === 'library' ? 'library' : 'plan';
                                                     setWorkspacePreference((current) => ({ ...current, mode: 'create', sections: { ...current.sections, create: section } }));
                                                 }, onInsertComponent: insertLibraryComponent, onInsertBlankFrame: insertBlankFrame, onInsertBlock: addStructureBlock, onInsertArchived: insertArchivedHtml, onBuildPage: buildLibraryPage, onPlanChange: syncSitePlanGraph, onToast: showToast, sampleTheme: () => sampleSiteTheme(getRoot() ?? undefined) }) }) })) : null, _jsx("div", { className: "froam-figma-left__view", hidden: leftWorkspaceMode !== 'reference', children: (referenceOpenedRef.current ||= leftWorkspaceMode === 'reference') && _jsx(FroamSectionBoundary, { name: "ReferenceWorkspace", children: _jsx(FroamReferenceWorkspace, { project: projectSession.project, routeKey: routeKey, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, reconstructing: ['preparing', 'requesting', 'plan-ready', 'creating-prototype', 'retrying'].includes(froamIntent.state.phase), onReconstruct: (understanding, target) => { void froamIntent.submitReference({ understanding, target }); }, onReferencesChanged: () => { if (froamIntent.state.session?.origin === 'reference')
-                                                    froamIntent.cancel(); }, onToast: showToast, onActivityChange: setWorkspaceActivity }) }) }), leftWorkspaceMode === 'layers' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "LayersPanel", children: _jsx(FroamLayersPanel, { layers: layers, selectedPath: selection?.path ?? null, selections: selections, selectionCandidates: selectionCandidates, onSelectLayer: selectLayerNode, onToggleVisibility: toggleLayerVisibility, onAddSection: addSectionRelative, onDuplicateSection: duplicateSection, onMoveSection: moveSection, canMoveSection: canMoveSection, onSetSectionVisibility: setSectionVisibility, onDeleteSection: deleteSection, onRefresh: () => { const root = getRoot(); if (root)
-                                                    setLayers(collectLayers(root)); }, routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, knowledgeByNodeId: layerKnowledge, onOpenKnowledge: (node, section) => { selectLayerNode(node); openWorkspaceSection(section); } }) }) })) : null] })] }), _jsx("div", { className: "froam-figma-layout__canvas", "data-chef-editor-root": "true" }), rightPanelOpen && !contextInspectorOpen && (() => {
-                        const designPanel = (_jsx(FroamSectionBoundary, { name: "DesignPanel", children: _jsx(FroamDesignPanel, { projectKey: projectKey, selection: selection, selectionRect: selectionRect, onApplyStyle: applyStyle, onUpdateDraft: updateDraft, onOpenImageUpload: openSelectedImageUpload, onClearImage: clearAppliedImage, onClearSelectionDraft: actionsRef.current.clearSelectionDraft, marginLinked: marginLinked, paddingLinked: paddingLinked, radiusLinked: radiusLinked, onToggleMarginLinked: () => setMarginLinked((value) => !value), onTogglePaddingLinked: () => setPaddingLinked((value) => !value), onToggleRadiusLinked: () => setRadiusLinked((value) => !value), onApplySizePreset: applySizePreset, onBuildTransformString: buildTransformString, fontOptions: fontOptions, onAddBrandFont: addBrandFont, getRootEl: getRoot, onOpenBlueprint: () => setBlueprintOpen(true), draftStyles: selection ? store[viewportStoreKey]?.[selection.path]?.styles : undefined, onApplyPseudoStyle: applyPseudoStyle, onAnimate: () => openWorkspaceSection('animator', 'create') }) }));
+                                                    froamIntent.cancel(); }, onToast: showToast, onActivityChange: setWorkspaceActivity }) }) }), leftWorkspaceMode === 'layers' ? (_jsx("div", { className: "froam-figma-left__view", children: _jsx(FroamSectionBoundary, { name: "LayersPanel", children: _jsx(FroamLayersPanel, { layers: layers, selectedPath: selection?.path ?? null, selections: selections, selectionCandidates: selectionCandidates, onSelectLayer: selectLayerNode, onToggleVisibility: toggleLayerVisibility, onAddSection: addSectionRelative, onDuplicateSection: duplicateSection, onMoveSection: moveSection, canMoveSection: canMoveSection, onSetSectionVisibility: setSectionVisibility, onDeleteSection: deleteSection, onRefresh: () => refreshLayers(), routeKey: routeKey, projectName: projectSession.project.name, branchName: projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId, knowledgeByNodeId: layerKnowledge, onOpenKnowledge: (node, section) => { selectLayerNode(node); openWorkspaceSection(section); } }) }) })) : null] })] }), _jsx("div", { className: "froam-figma-layout__canvas", "data-chef-editor-root": "true" }), rightPanelOpen && !contextInspectorOpen && (() => {
+                        const designPanel = (_jsx(FroamSectionBoundary, { name: "DesignPanel", children: _jsx(FroamDesignPanel, { projectKey: projectKey, selection: selection, selectionRect: selectionRect, onApplyStyle: applyStyle, onUpdateDraft: updateDraft, onOpenImageUpload: openSelectedImageUpload, onAdjustImage: hasAdjustableMedia(currentSelectionRef.current) ? () => void openSelectedImageFit() : undefined, onClearImage: clearAppliedImage, onClearSelectionDraft: actionsRef.current.clearSelectionDraft, marginLinked: marginLinked, paddingLinked: paddingLinked, radiusLinked: radiusLinked, onToggleMarginLinked: () => setMarginLinked((value) => !value), onTogglePaddingLinked: () => setPaddingLinked((value) => !value), onToggleRadiusLinked: () => setRadiusLinked((value) => !value), onApplySizePreset: applySizePreset, onBuildTransformString: buildTransformString, fontOptions: fontOptions, onAddBrandFont: addBrandFont, getRootEl: getRoot, onOpenBlueprint: () => setBlueprintOpen(true), draftStyles: selection ? store[viewportStoreKey]?.[selection.path]?.styles : undefined, onApplyPseudoStyle: applyPseudoStyle, onAnimate: () => openWorkspaceSection('animator', 'create') }) }));
                         if (!isMobileUI)
                             return designPanel;
                         return (_jsx(FroamBottomSheet, { detent: sheetDetent, onDetentChange: setSheetDetent, title: selection?.label ?? 'Design', subtitle: selection ? 'Tap for style controls' : 'Tap any element to start', children: designPanel }));
@@ -6023,7 +6415,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                                         } } }), _jsx("div", { className: "fs-boxmodel__content", children: "content" })] })] }), _jsxs("div", { className: "fs-pill-group", children: [_jsx("button", { type: "button", className: "fs-pill", onClick: () => applySizePreset('auto'), children: "Auto" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => applySizePreset('hug'), children: "Hug" }), _jsx("button", { type: "button", className: "fs-pill is-accent", onClick: () => applySizePreset('fill'), children: "Fill" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => applySizePreset('fullBleed'), children: "Full bleed" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => applySizePreset('square'), children: "Square" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => applySizePreset('viewportHeight'), children: "100vh" })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Width" }), _jsx("input", { type: "text", className: "fs-input", value: selection.width, onChange: (e) => applyStyle({ width: e.target.value }, { width: e.target.value }), placeholder: "auto" })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Height" }), _jsx("input", { type: "text", className: "fs-input", value: selection.height, onChange: (e) => applyStyle({ height: e.target.value }, { height: e.target.value }), placeholder: "auto" })] })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Min width" }), _jsx("input", { type: "text", className: "fs-input", value: selection.minWidth, onChange: (e) => applyStyle({ minWidth: e.target.value }, { minWidth: e.target.value }), placeholder: "none" })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Max width" }), _jsx("input", { type: "text", className: "fs-input", value: selection.maxWidth, onChange: (e) => applyStyle({ maxWidth: e.target.value }, { maxWidth: e.target.value }), placeholder: "none" })] })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Min height" }), _jsx("input", { type: "text", className: "fs-input", value: selection.minHeight, onChange: (e) => applyStyle({ minHeight: e.target.value }, { minHeight: e.target.value }), placeholder: "none" })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Max height" }), _jsx("input", { type: "text", className: "fs-input", value: selection.maxHeight, onChange: (e) => applyStyle({ maxHeight: e.target.value }, { maxHeight: e.target.value }), placeholder: "none" })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Aspect ratio" }), _jsx("input", { type: "text", className: "fs-input", value: selection.aspectRatio, onChange: (e) => applyStyle({ aspectRatio: e.target.value }, { aspectRatio: e.target.value }), placeholder: "auto, 1 / 1, 16 / 9" })] })] })) : (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Select an element" })) }), _jsx(AccordionSection, { id: "typography", icon: _jsx(Type, { size: 14 }), title: "Typography", isOpen: openSections.typography, onToggle: () => toggleSection('typography'), children: selection ? (_jsxs("div", { className: "fs-stack", children: [_jsxs("label", { className: "fs-field", children: [_jsxs("span", { className: "fs-field__label", children: [_jsx(PencilLine, { size: 12 }), " Content"] }), _jsx("textarea", { className: "fs-textarea", value: selection.text, onChange: (e) => {
                                                     const value = e.target.value;
                                                     updateDraft((draft) => ({ ...draft, text: value }), { text: value });
-                                                } })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Font family" }), _jsx("select", { className: "fs-select", value: selection.fontFamily, onChange: (e) => applyStyle({ fontFamily: e.target.value }, { fontFamily: e.target.value }), children: fontOptions.map((f) => _jsx("option", { value: f.value, children: f.label }, f.label)) })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Size" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "8", max: "96", value: selection.fontSize, onChange: (e) => { const v = Number(e.target.value); applyStyle({ fontSize: `${v}px` }, { fontSize: v }); } }), _jsx("span", { className: "fs-range-value", children: selection.fontSize })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Weight" }), _jsx("select", { className: "fs-select", value: selection.fontWeight, onChange: (e) => applyStyle({ fontWeight: e.target.value }, { fontWeight: e.target.value }), children: ['100', '200', '300', '400', '500', '600', '700', '800', '900'].map((w) => _jsx("option", { value: w, children: w }, w)) })] })] }), _jsxs("div", { className: "fs-toolbar", role: "toolbar", "aria-label": "Text formatting", children: [_jsx("button", { type: "button", className: `fs-toolbar__btn ${selection.fontWeight === '700' || selection.fontWeight === '800' || selection.fontWeight === '900' ? 'is-active' : ''}`, onClick: () => applyStyle({ fontWeight: Number(selection.fontWeight) >= 700 ? '400' : '700' }, { fontWeight: Number(selection.fontWeight) >= 700 ? '400' : '700' }), title: "Bold", children: _jsx(Bold, { size: 14 }) }), _jsx("button", { type: "button", className: `fs-toolbar__btn ${selection.fontStyle === 'italic' ? 'is-active' : ''}`, onClick: () => applyStyle({ fontStyle: selection.fontStyle === 'italic' ? 'normal' : 'italic' }, { fontStyle: selection.fontStyle === 'italic' ? 'normal' : 'italic' }), title: "Italic", children: _jsx(Italic, { size: 14 }) }), _jsx("button", { type: "button", className: `fs-toolbar__btn ${selection.textDecoration.includes('underline') ? 'is-active' : ''}`, onClick: () => applyStyle({ textDecorationLine: selection.textDecoration.includes('underline') ? 'none' : 'underline' }, { textDecoration: selection.textDecoration.includes('underline') ? 'none' : 'underline' }), title: "Underline", children: _jsx(Underline, { size: 14 }) }), _jsx("button", { type: "button", className: `fs-toolbar__btn ${selection.textDecoration.includes('line-through') ? 'is-active' : ''}`, onClick: () => applyStyle({ textDecorationLine: selection.textDecoration.includes('line-through') ? 'none' : 'line-through' }, { textDecoration: selection.textDecoration.includes('line-through') ? 'none' : 'line-through' }), title: "Strikethrough", children: _jsx(Strikethrough, { size: 14 }) })] }), _jsxs("div", { className: "fs-toolbar", role: "toolbar", "aria-label": "Text alignment", children: [_jsx("button", { type: "button", className: `fs-toolbar__btn ${selection.textAlign === 'left' || selection.textAlign === 'start' ? 'is-active' : ''}`, onClick: () => applyStyle({ textAlign: 'left' }, { textAlign: 'left' }), title: "Align left", children: _jsx(AlignLeft, { size: 14 }) }), _jsx("button", { type: "button", className: `fs-toolbar__btn ${selection.textAlign === 'center' ? 'is-active' : ''}`, onClick: () => applyStyle({ textAlign: 'center' }, { textAlign: 'center' }), title: "Align center", children: _jsx(AlignCenter, { size: 14 }) }), _jsx("button", { type: "button", className: `fs-toolbar__btn ${selection.textAlign === 'right' || selection.textAlign === 'end' ? 'is-active' : ''}`, onClick: () => applyStyle({ textAlign: 'right' }, { textAlign: 'right' }), title: "Align right", children: _jsx(AlignRight, { size: 14 }) })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Letter spacing" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "-5", max: "20", step: "0.5", value: selection.letterSpacing, onChange: (e) => { const v = Number(e.target.value); applyStyle({ letterSpacing: `${v}px` }, { letterSpacing: v }); } }), _jsx("span", { className: "fs-range-value", children: selection.letterSpacing })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Line height" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "0.8", max: "3", step: "0.1", value: selection.lineHeight, onChange: (e) => { const v = Number(e.target.value); applyStyle({ lineHeight: `${v}` }, { lineHeight: v }); } }), _jsx("span", { className: "fs-range-value", children: selection.lineHeight.toFixed(1) })] })] })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Word spacing" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "-5", max: "20", step: "1", value: selection.wordSpacing, onChange: (e) => { const v = Number(e.target.value); applyStyle({ wordSpacing: `${v}px` }, { wordSpacing: v }); } }), _jsx("span", { className: "fs-range-value", children: selection.wordSpacing })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Text transform" }), _jsx("select", { className: "fs-select", value: selection.textTransform, onChange: (e) => applyStyle({ textTransform: e.target.value }, { textTransform: e.target.value }), children: textTransformOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] })] })] })) : (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Select an element" })) }), _jsx(AccordionSection, { id: "fill", icon: _jsx(Paintbrush, { size: 14 }), title: "Fill & Color", isOpen: openSections.fill, onToggle: () => toggleSection('fill'), children: selection ? (_jsxs("div", { className: "fs-stack", children: [_jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsxs("span", { className: "fs-field__label", children: [_jsx(Palette, { size: 12 }), " Background"] }), _jsx("input", { type: "color", className: "fs-color-input", value: selection.background, onChange: (e) => applyStyle({ backgroundColor: e.target.value }, { background: e.target.value }) })] }), _jsxs("label", { className: "fs-field", children: [_jsxs("span", { className: "fs-field__label", children: [_jsx(PencilLine, { size: 12 }), " Text color"] }), _jsx("input", { type: "color", className: "fs-color-input", value: selection.color, onChange: (e) => applyStyle({ color: e.target.value }, { color: e.target.value }) })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Opacity" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "0", max: "100", value: Math.round(selection.opacity * 100), onChange: (e) => { const v = Number(e.target.value) / 100; applyStyle({ opacity: `${v}` }, { opacity: v }); } }), _jsxs("span", { className: "fs-range-value", children: [Math.round(selection.opacity * 100), "%"] })] })] }), _jsxs("div", { className: "fs-pill-group", children: [_jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: openSelectedImageUpload, children: [_jsx(ImagePlus, { size: 13 }), " Selected image"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: clearAppliedImage, children: [_jsx(Eraser, { size: 13 }), " Clear selected image"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: openCanvasImageUpload, children: [_jsx(ImagePlus, { size: 13 }), " Page image"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: clearCanvasImage, children: [_jsx(Eraser, { size: 13 }), " Clear page image"] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Mix blend mode" }), _jsx("select", { className: "fs-select", value: selection.mixBlendMode, onChange: (e) => applyStyle({ mixBlendMode: e.target.value }, { mixBlendMode: e.target.value }), children: blendModeOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] })] })) : (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Select an element" })) }), _jsx(AccordionSection, { id: "borders", icon: _jsx(SquareDashedBottom, { size: 14 }), title: "Borders", isOpen: openSections.borders, onToggle: () => toggleSection('borders'), children: selection ? (_jsxs("div", { className: "fs-stack", children: [_jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Width" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "0", max: "12", value: selection.borderWidth, onChange: (e) => { const v = e.target.value; applyStyle({ borderWidth: `${v}px` }, { borderWidth: Number(v) }); } }), _jsx("span", { className: "fs-range-value", children: selection.borderWidth })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Style" }), _jsx("select", { className: "fs-select", value: selection.borderStyle, onChange: (e) => applyStyle({ borderStyle: e.target.value }, { borderStyle: e.target.value }), children: borderStyleOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] })] }), _jsxs("label", { className: "fs-field", children: [_jsxs("span", { className: "fs-field__label", children: [_jsx(SlidersHorizontal, { size: 12 }), " Border color"] }), _jsx("input", { type: "color", className: "fs-color-input", value: selection.borderColor, onChange: (e) => applyStyle({ borderColor: e.target.value }, { borderColor: e.target.value }) })] }), _jsxs("div", { className: "fs-row-between", children: [_jsx("span", { className: "fs-field__label", children: "Corner radius" }), _jsx("button", { type: "button", className: `fs-boxmodel__link-btn ${radiusLinked ? 'is-linked' : ''}`, onClick: () => setRadiusLinked(!radiusLinked), title: "Link corners", style: { position: 'static' }, children: radiusLinked ? _jsx(Link, { size: 10 }) : _jsx(Unlink, { size: 10 }) })] }), _jsxs("div", { className: "fs-grid-4", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", style: { fontSize: '0.62rem' }, children: "TL" }), _jsx("input", { type: "number", className: "fs-input", min: "0", max: "100", value: Math.round(selection.borderRadiusTL), onChange: (e) => {
+                                                } })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Font family" }), _jsx("select", { className: "fs-select", value: selection.fontFamily, onChange: (e) => applyStyle({ fontFamily: e.target.value }, { fontFamily: e.target.value }), children: fontOptions.map((f) => _jsx("option", { value: f.value, children: f.label }, f.label)) })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Size" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "8", max: "96", value: selection.fontSize, onChange: (e) => { const v = Number(e.target.value); applyStyle({ fontSize: `${v}px` }, { fontSize: v }); } }), _jsx("span", { className: "fs-range-value", children: selection.fontSize })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Weight" }), _jsx("select", { className: "fs-select", value: selection.fontWeight, onChange: (e) => applyStyle({ fontWeight: e.target.value }, { fontWeight: e.target.value }), children: ['100', '200', '300', '400', '500', '600', '700', '800', '900'].map((w) => _jsx("option", { value: w, children: w }, w)) })] })] }), _jsxs("div", { className: "fs-toolbar", role: "toolbar", "aria-label": "Text formatting", children: [_jsx("button", { type: "button", className: `fs-toolbar__btn ${selection.fontWeight === '700' || selection.fontWeight === '800' || selection.fontWeight === '900' ? 'is-active' : ''}`, onClick: () => applyStyle({ fontWeight: Number(selection.fontWeight) >= 700 ? '400' : '700' }, { fontWeight: Number(selection.fontWeight) >= 700 ? '400' : '700' }), title: "Bold", children: _jsx(Bold, { size: 14 }) }), _jsx("button", { type: "button", className: `fs-toolbar__btn ${selection.fontStyle === 'italic' ? 'is-active' : ''}`, onClick: () => applyStyle({ fontStyle: selection.fontStyle === 'italic' ? 'normal' : 'italic' }, { fontStyle: selection.fontStyle === 'italic' ? 'normal' : 'italic' }), title: "Italic", children: _jsx(Italic, { size: 14 }) }), _jsx("button", { type: "button", className: `fs-toolbar__btn ${selection.textDecoration.includes('underline') ? 'is-active' : ''}`, onClick: () => applyStyle({ textDecorationLine: selection.textDecoration.includes('underline') ? 'none' : 'underline' }, { textDecoration: selection.textDecoration.includes('underline') ? 'none' : 'underline' }), title: "Underline", children: _jsx(Underline, { size: 14 }) }), _jsx("button", { type: "button", className: `fs-toolbar__btn ${selection.textDecoration.includes('line-through') ? 'is-active' : ''}`, onClick: () => applyStyle({ textDecorationLine: selection.textDecoration.includes('line-through') ? 'none' : 'line-through' }, { textDecoration: selection.textDecoration.includes('line-through') ? 'none' : 'line-through' }), title: "Strikethrough", children: _jsx(Strikethrough, { size: 14 }) })] }), _jsxs("div", { className: "fs-toolbar", role: "toolbar", "aria-label": "Text alignment", children: [_jsx("button", { type: "button", className: `fs-toolbar__btn ${selection.textAlign === 'left' || selection.textAlign === 'start' ? 'is-active' : ''}`, onClick: () => applyStyle({ textAlign: 'left' }, { textAlign: 'left' }), title: "Align left", children: _jsx(AlignLeft, { size: 14 }) }), _jsx("button", { type: "button", className: `fs-toolbar__btn ${selection.textAlign === 'center' ? 'is-active' : ''}`, onClick: () => applyStyle({ textAlign: 'center' }, { textAlign: 'center' }), title: "Align center", children: _jsx(AlignCenter, { size: 14 }) }), _jsx("button", { type: "button", className: `fs-toolbar__btn ${selection.textAlign === 'right' || selection.textAlign === 'end' ? 'is-active' : ''}`, onClick: () => applyStyle({ textAlign: 'right' }, { textAlign: 'right' }), title: "Align right", children: _jsx(AlignRight, { size: 14 }) })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Letter spacing" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "-5", max: "20", step: "0.5", value: selection.letterSpacing, onChange: (e) => { const v = Number(e.target.value); applyStyle({ letterSpacing: `${v}px` }, { letterSpacing: v }); } }), _jsx("span", { className: "fs-range-value", children: selection.letterSpacing })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Line height" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "0.8", max: "3", step: "0.1", value: selection.lineHeight, onChange: (e) => { const v = Number(e.target.value); applyStyle({ lineHeight: `${v}` }, { lineHeight: v }); } }), _jsx("span", { className: "fs-range-value", children: selection.lineHeight.toFixed(1) })] })] })] }), _jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Word spacing" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "-5", max: "20", step: "1", value: selection.wordSpacing, onChange: (e) => { const v = Number(e.target.value); applyStyle({ wordSpacing: `${v}px` }, { wordSpacing: v }); } }), _jsx("span", { className: "fs-range-value", children: selection.wordSpacing })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Text transform" }), _jsx("select", { className: "fs-select", value: selection.textTransform, onChange: (e) => applyStyle({ textTransform: e.target.value }, { textTransform: e.target.value }), children: textTransformOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] })] })] })) : (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Select an element" })) }), _jsx(AccordionSection, { id: "fill", icon: _jsx(Paintbrush, { size: 14 }), title: "Fill & Color", isOpen: openSections.fill, onToggle: () => toggleSection('fill'), children: selection ? (_jsxs("div", { className: "fs-stack", children: [_jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsxs("span", { className: "fs-field__label", children: [_jsx(Palette, { size: 12 }), " Background"] }), _jsx("input", { type: "color", className: "fs-color-input", value: selection.background, onChange: (e) => applyStyle({ backgroundColor: e.target.value }, { background: e.target.value }) })] }), _jsxs("label", { className: "fs-field", children: [_jsxs("span", { className: "fs-field__label", children: [_jsx(PencilLine, { size: 12 }), " Text color"] }), _jsx("input", { type: "color", className: "fs-color-input", value: selection.color, onChange: (e) => applyStyle({ color: e.target.value }, { color: e.target.value }) })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Opacity" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "0", max: "100", value: Math.round(selection.opacity * 100), onChange: (e) => { const v = Number(e.target.value) / 100; applyStyle({ opacity: `${v}` }, { opacity: v }); } }), _jsxs("span", { className: "fs-range-value", children: [Math.round(selection.opacity * 100), "%"] })] })] }), _jsxs("div", { className: "fs-pill-group", children: [_jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: openSelectedImageUpload, children: [_jsx(ImagePlus, { size: 13 }), " Selected image"] }), hasAdjustableMedia(currentSelectionRef.current) ? (_jsxs("button", { type: "button", className: "fs-pill", onClick: openSelectedImageFit, children: [_jsx(Crop, { size: 13 }), " Adjust selected image"] })) : null, _jsxs("button", { type: "button", className: "fs-pill", onClick: clearAppliedImage, children: [_jsx(Eraser, { size: 13 }), " Clear selected image"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: openCanvasImageUpload, children: [_jsx(ImagePlus, { size: 13 }), " Page image"] }), _jsxs("button", { type: "button", className: "fs-pill", onClick: clearCanvasImage, children: [_jsx(Eraser, { size: 13 }), " Clear page image"] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Mix blend mode" }), _jsx("select", { className: "fs-select", value: selection.mixBlendMode, onChange: (e) => applyStyle({ mixBlendMode: e.target.value }, { mixBlendMode: e.target.value }), children: blendModeOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] })] })) : (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Select an element" })) }), _jsx(AccordionSection, { id: "borders", icon: _jsx(SquareDashedBottom, { size: 14 }), title: "Borders", isOpen: openSections.borders, onToggle: () => toggleSection('borders'), children: selection ? (_jsxs("div", { className: "fs-stack", children: [_jsxs("div", { className: "fs-grid-2", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Width" }), _jsxs("div", { className: "fs-range-row", children: [_jsx("input", { type: "range", className: "fs-range", min: "0", max: "12", value: selection.borderWidth, onChange: (e) => { const v = e.target.value; applyStyle({ borderWidth: `${v}px` }, { borderWidth: Number(v) }); } }), _jsx("span", { className: "fs-range-value", children: selection.borderWidth })] })] }), _jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", children: "Style" }), _jsx("select", { className: "fs-select", value: selection.borderStyle, onChange: (e) => applyStyle({ borderStyle: e.target.value }, { borderStyle: e.target.value }), children: borderStyleOptions.map((o) => _jsx("option", { value: o, children: o }, o)) })] })] }), _jsxs("label", { className: "fs-field", children: [_jsxs("span", { className: "fs-field__label", children: [_jsx(SlidersHorizontal, { size: 12 }), " Border color"] }), _jsx("input", { type: "color", className: "fs-color-input", value: selection.borderColor, onChange: (e) => applyStyle({ borderColor: e.target.value }, { borderColor: e.target.value }) })] }), _jsxs("div", { className: "fs-row-between", children: [_jsx("span", { className: "fs-field__label", children: "Corner radius" }), _jsx("button", { type: "button", className: `fs-boxmodel__link-btn ${radiusLinked ? 'is-linked' : ''}`, onClick: () => setRadiusLinked(!radiusLinked), title: "Link corners", style: { position: 'static' }, children: radiusLinked ? _jsx(Link, { size: 10 }) : _jsx(Unlink, { size: 10 }) })] }), _jsxs("div", { className: "fs-grid-4", children: [_jsxs("label", { className: "fs-field", children: [_jsx("span", { className: "fs-field__label", style: { fontSize: '0.62rem' }, children: "TL" }), _jsx("input", { type: "number", className: "fs-input", min: "0", max: "100", value: Math.round(selection.borderRadiusTL), onChange: (e) => {
                                                             const v = Number(e.target.value);
                                                             if (radiusLinked) {
                                                                 applyStyle({ borderRadius: `${v}px` }, { borderRadiusTL: v, borderRadiusTR: v, borderRadiusBR: v, borderRadiusBL: v });
@@ -6084,8 +6476,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                                         const next = [...gradStops];
                                                         next[i] = { ...next[i], position: Number(e.target.value) };
                                                         setGradStops(next);
-                                                    } }), _jsx("span", { className: "fs-range-value", children: "%" }), gradStops.length > 2 && (_jsx("button", { type: "button", className: "fs-gradient-stop__remove", onClick: () => setGradStops(gradStops.filter((_, j) => j !== i)), children: _jsx(X, { size: 12 }) }))] }, i))) }), _jsxs("div", { className: "fs-pill-group", children: [_jsxs("button", { type: "button", className: "fs-pill", onClick: () => setGradStops([...gradStops, { color: '#ffffff', position: 50 }]), children: [_jsx(Plus, { size: 12 }), " Add stop"] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: applyGradient, disabled: !selection, children: [_jsx(Paintbrush, { size: 12 }), " Apply gradient"] })] })] }) }), _jsxs(AccordionSection, { id: "layers", icon: _jsx(Layers, { size: 14 }), title: "Layers", isOpen: openSections.layers, onToggle: () => toggleSection('layers'), children: [_jsx("div", { className: "fs-layers", "data-chef-editor-root": "true", children: layers.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "No layers detected" })) : (layers.map((node) => (_jsxs("div", { className: `fs-layers__node ${selection?.path === node.path ? 'is-selected' : ''}`, style: { paddingLeft: `${8 + node.depth * 14}px` }, onClick: () => selectLayerNode(node), children: [_jsx(Code, { size: 11, style: { opacity: 0.5, flexShrink: 0 } }), _jsx("span", { className: "fs-layers__node-tag", children: node.tag }), node.className && _jsxs("span", { className: "fs-layers__node-class", children: [".", node.className.replace(/ /g, '.')] }), _jsx("button", { type: "button", className: `fs-layers__eye ${node.hidden ? 'is-hidden' : ''}`, onClick: (e) => { e.stopPropagation(); toggleLayerVisibility(node); }, title: node.hidden ? 'Show' : 'Hide', children: node.hidden ? _jsx(EyeOff, { size: 12 }) : _jsx(Eye, { size: 12 }) })] }, node.path)))) }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => { const root = getRoot(); if (root)
-                                        setLayers(collectLayers(root)); }, children: [_jsx(Search, { size: 12 }), " Refresh layers"] })] }), _jsx(AccordionSection, { id: "cssVars", icon: _jsx(Variable, { size: 14 }), title: "CSS variables", isOpen: openSections.cssVars, onToggle: () => toggleSection('cssVars'), children: _jsxs("div", { className: "fs-stack", children: [cssVars.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "No custom properties found on :root" })) : (cssVars.map((v) => (_jsxs("div", { className: "fs-css-var", "data-chef-editor-root": "true", children: [_jsx("span", { className: "fs-css-var__name", title: v.name, children: v.name }), _jsx("input", { type: "text", className: "fs-input fs-css-var__value", value: v.value, onChange: (e) => updateCSSVar(v.name, e.target.value) }), _jsx("button", { type: "button", className: "fs-gradient-stop__remove", onClick: () => removeCSSVar(v.name), title: "Remove", children: _jsx(X, { size: 12 }) })] }, v.name)))), _jsxs("div", { className: "fs-row", style: { gap: 6 }, children: [_jsx("input", { type: "text", className: "fs-input", value: newVarName, onChange: (e) => setNewVarName(e.target.value), placeholder: "--my-color", style: { flex: 1 } }), _jsx("input", { type: "text", className: "fs-input", value: newVarValue, onChange: (e) => setNewVarValue(e.target.value), placeholder: "#ff0000", style: { flex: 1 } }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: addCSSVar, children: [_jsx(Plus, { size: 12 }), " Add"] })] })] }) }), _jsx(AccordionSection, { id: "versions", icon: _jsx(GitCommit, { size: 14 }), title: "Versions", isOpen: openSections.versions, onToggle: () => toggleSection('versions'), children: _jsx(FroamVersionPanel, { projectKey: projectKey, routeKey: routeKey, viewportMode: viewportMode, currentStore: routeDrafts, getCurrentStore: () => collectVersionRouteDrafts(), captureThumb: capturePageThumb, onLoadVersion: (versionStore, versionName) => {
+                                                    } }), _jsx("span", { className: "fs-range-value", children: "%" }), gradStops.length > 2 && (_jsx("button", { type: "button", className: "fs-gradient-stop__remove", onClick: () => setGradStops(gradStops.filter((_, j) => j !== i)), children: _jsx(X, { size: 12 }) }))] }, i))) }), _jsxs("div", { className: "fs-pill-group", children: [_jsxs("button", { type: "button", className: "fs-pill", onClick: () => setGradStops([...gradStops, { color: '#ffffff', position: 50 }]), children: [_jsx(Plus, { size: 12 }), " Add stop"] }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: applyGradient, disabled: !selection, children: [_jsx(Paintbrush, { size: 12 }), " Apply gradient"] })] })] }) }), _jsxs(AccordionSection, { id: "layers", icon: _jsx(Layers, { size: 14 }), title: "Layers", isOpen: openSections.layers, onToggle: () => toggleSection('layers'), children: [_jsx("div", { className: "fs-layers", "data-chef-editor-root": "true", children: layers.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "No layers detected" })) : (layers.map((node) => (_jsxs("div", { className: `fs-layers__node ${selection?.path === node.path ? 'is-selected' : ''}`, style: { paddingLeft: `${8 + node.depth * 14}px` }, onClick: () => selectLayerNode(node), children: [_jsx(Code, { size: 11, style: { opacity: 0.5, flexShrink: 0 } }), _jsx("span", { className: "fs-layers__node-tag", children: node.tag }), node.className && _jsxs("span", { className: "fs-layers__node-class", children: [".", node.className.replace(/ /g, '.')] }), _jsx("button", { type: "button", className: `fs-layers__eye ${node.hidden ? 'is-hidden' : ''}`, onClick: (e) => { e.stopPropagation(); toggleLayerVisibility(node); }, title: node.hidden ? 'Show' : 'Hide', children: node.hidden ? _jsx(EyeOff, { size: 12 }) : _jsx(Eye, { size: 12 }) })] }, node.path)))) }), _jsxs("button", { type: "button", className: "fs-pill", onClick: () => refreshLayers(), children: [_jsx(Search, { size: 12 }), " Refresh layers"] })] }), _jsx(AccordionSection, { id: "cssVars", icon: _jsx(Variable, { size: 14 }), title: "CSS variables", isOpen: openSections.cssVars, onToggle: () => toggleSection('cssVars'), children: _jsxs("div", { className: "fs-stack", children: [cssVars.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "No custom properties found on :root" })) : (cssVars.map((v) => (_jsxs("div", { className: "fs-css-var", "data-chef-editor-root": "true", children: [_jsx("span", { className: "fs-css-var__name", title: v.name, children: v.name }), _jsx("input", { type: "text", className: "fs-input fs-css-var__value", value: v.value, onChange: (e) => updateCSSVar(v.name, e.target.value) }), _jsx("button", { type: "button", className: "fs-gradient-stop__remove", onClick: () => removeCSSVar(v.name), title: "Remove", children: _jsx(X, { size: 12 }) })] }, v.name)))), _jsxs("div", { className: "fs-row", style: { gap: 6 }, children: [_jsx("input", { type: "text", className: "fs-input", value: newVarName, onChange: (e) => setNewVarName(e.target.value), placeholder: "--my-color", style: { flex: 1 } }), _jsx("input", { type: "text", className: "fs-input", value: newVarValue, onChange: (e) => setNewVarValue(e.target.value), placeholder: "#ff0000", style: { flex: 1 } }), _jsxs("button", { type: "button", className: "fs-pill is-accent", onClick: addCSSVar, children: [_jsx(Plus, { size: 12 }), " Add"] })] })] }) }), _jsx(AccordionSection, { id: "versions", icon: _jsx(GitCommit, { size: 14 }), title: "Versions", isOpen: openSections.versions, onToggle: () => toggleSection('versions'), children: _jsx(FroamVersionPanel, { projectKey: projectKey, routeKey: routeKey, viewportMode: viewportMode, currentStore: routeDrafts, getCurrentStore: () => collectVersionRouteDrafts(), captureThumb: capturePageThumb, onLoadVersion: (versionStore, versionName) => {
                                     loadVersionIntoPage(versionStore, versionName);
                                     toggleSection('versions');
                                 }, onClose: () => toggleSection('versions') }) }), _jsx(AccordionSection, { id: "history", icon: _jsx(Clock, { size: 14 }), title: "History", isOpen: openSections.history, onToggle: () => toggleSection('history'), children: changeLog.length === 0 ? (_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Nothing changed here yet" })) : (_jsx("ul", { className: "fs-history-list", children: changeLog.map((change) => (_jsxs("li", { className: "fs-history-item", "data-chef-editor-root": "true", children: [_jsxs("div", { className: "fs-history-meta", children: [_jsx("span", { children: describeChange(change) }), _jsx("small", { children: changeByline(change) })] }), _jsx("button", { type: "button", className: "fs-pill is-accent", title: `Undo ${describeChange(change)}`, onClick: () => revertChange(change), children: "Undo" })] }, change.id))) })) }), _jsx(AccordionSection, { id: "share", icon: _jsx(Share2, { size: 14 }), title: room.inRoom ? 'Shared for review' : 'Share for review', isOpen: openSections.share, onToggle: () => toggleSection('share'), children: !shareLink ? (_jsxs("div", { className: "froam-notes", children: [_jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem' }, children: "Open a room and send the link. They need no account \u2014 the link is the way in." }), _jsx("button", { type: "button", className: "fs-pill is-accent", disabled: sharing, onClick: () => void startSharing(), children: sharing ? 'Opening…' : 'Get a review link' })] })) : (_jsxs("div", { className: "froam-notes", children: [_jsx("div", { className: "froam-share__link", title: shareLink, children: shareLink }), _jsxs("div", { className: "froam-note__row", children: [_jsx("button", { type: "button", className: "fs-pill is-accent", onClick: () => void copyShareLink(), children: copied ? 'Copied' : 'Copy link' }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => void copyEditorLink(), title: "Invite another designer who can edit", children: "Invite editor" }), _jsx("button", { type: "button", className: "fs-pill", onClick: () => void startSharing(true), children: "New link" })] }), _jsx("span", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.7rem' }, children: roomPresence.length
@@ -6136,7 +6527,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                                         reader.readAsDataURL(file);
                                                     };
                                                     input.click();
-                                                }, children: [_jsx(ImagePlus, { size: 12 }), " Upload"] })] }), assets.length > 0 && (_jsx("input", { type: "text", className: "fs-input", placeholder: "Search assets\u2026", value: assetSearch, onChange: (e) => setAssetSearch(e.target.value) })), _jsxs("div", { className: "fs-assets-grid", children: [assets.filter((a) => !assetSearch || a.name.toLowerCase().includes(assetSearch.toLowerCase())).map((asset) => (_jsxs("div", { className: "fs-asset-item", "data-chef-editor-root": "true", children: [_jsx("img", { src: asset.url, alt: asset.name, className: "fs-asset-item__thumb", onClick: () => applyAssetToSelection(asset.url), loading: "lazy" }), _jsx("span", { className: "fs-asset-item__name", title: asset.name, children: asset.name }), _jsx("button", { type: "button", className: "fs-asset-item__remove", onClick: () => removeAsset(asset.id), children: _jsx(X, { size: 10 }) })] }, asset.id))), assets.length === 0 && _jsx("p", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem', margin: 0 }, children: "No assets yet." })] })] }) }), _jsxs("div", { className: "froam-studio__quick-bar", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: "fs-pill", onClick: openCommandPalette, title: "Ctrl+K", children: [_jsx(Search, { size: 11 }), " Ctrl+K"] }), _jsx("span", { style: { flex: 1 } }), _jsxs("span", { style: { fontSize: '0.64rem', color: 'var(--fs-text-tertiary)' }, children: [draftCount, " ", viewportMode, " drafts"] })] })] }) })) : null, _jsx("input", { ref: fileInputRef, className: "fs-hidden-input", "data-chef-editor-root": "true", type: "file", accept: "image/*", onChange: handleImageUpload }), room.inRoom && (_jsx(FroamNotePins, { notes: notes, root: getRoot(), activeId: activeNoteId, onPick: goToNote })), room.inRoom && (_jsx(FroamPresenceLayer, { members: roomPresence, routeKey: routeKey, viewport: viewportMode, root: getRoot() })), _jsx(FroamConnectedCanvas, { open: showPanel && connectedCanvasOpen, onClose: () => { setConnectedCanvasOpen(false); setTemporalOwner((owner) => owner === 'replay' || owner === 'animator' ? null : owner); }, projectId: froamProjectId, actorId: room.identity?.actor ?? LOCAL_ACTOR, ops: opLog.all(), store: store, registry: nodeRegistryRef.current, diagnostics: identityDiagnostics, frameworkFinding: frameworkIdentityFinding, routeKey: routeKey, viewport: viewportMode, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, selectedElement: currentSelectionRef.current, onPreviewStore: previewConnectedCanvas, onMaterializeBranch: materializeConnectedBranch, onSelectNode: selectConnectedNode, onApplyAnimation: (css, inline) => {
+                                                }, children: [_jsx(ImagePlus, { size: 12 }), " Upload"] })] }), assets.length > 0 && (_jsx("input", { type: "text", className: "fs-input", placeholder: "Search assets\u2026", value: assetSearch, onChange: (e) => setAssetSearch(e.target.value) })), _jsxs("div", { className: "fs-assets-grid", children: [shownAssets.filter((a) => !assetSearch || a.name.toLowerCase().includes(assetSearch.toLowerCase())).map((asset) => (_jsxs("div", { className: "fs-asset-item", "data-chef-editor-root": "true", children: [_jsx("img", { src: asset.url, alt: asset.name, className: "fs-asset-item__thumb", onClick: () => void applyAssetToSelection(asset.url), loading: "lazy", decoding: "async" }), _jsx("span", { className: "fs-asset-item__name", title: asset.name, children: asset.name }), _jsx("button", { type: "button", className: "fs-asset-item__remove", onClick: () => removeAsset(asset.id), children: _jsx(X, { size: 10 }) })] }, asset.id))), assets.length === 0 && _jsx("p", { style: { color: 'var(--fs-text-tertiary)', fontSize: '0.74rem', margin: 0 }, children: "No assets yet." })] })] }) }), _jsxs("div", { className: "froam-studio__quick-bar", "data-chef-editor-root": "true", children: [_jsxs("button", { type: "button", className: "fs-pill", onClick: openCommandPalette, title: "Ctrl+K", children: [_jsx(Search, { size: 11 }), " Ctrl+K"] }), _jsx("span", { style: { flex: 1 } }), _jsxs("span", { style: { fontSize: '0.64rem', color: 'var(--fs-text-tertiary)' }, children: [draftCount, " ", viewportMode, " drafts"] })] })] }) })) : null, _jsx("input", { ref: fileInputRef, className: "fs-hidden-input", "data-chef-editor-root": "true", type: "file", accept: "image/*,video/*", onChange: handleImageUpload }), room.inRoom && (_jsx(FroamNotePins, { notes: notes, root: getRoot(), activeId: activeNoteId, onPick: goToNote })), room.inRoom && (_jsx(FroamPresenceLayer, { members: roomPresence, routeKey: routeKey, viewport: viewportMode, root: getRoot() })), _jsx(FroamConnectedCanvas, { open: showPanel && connectedCanvasOpen, onClose: () => { setConnectedCanvasOpen(false); setTemporalOwner((owner) => owner === 'replay' || owner === 'animator' ? null : owner); }, projectId: froamProjectId, actorId: room.identity?.actor ?? LOCAL_ACTOR, ops: opLog.all(), store: store, registry: nodeRegistryRef.current, diagnostics: identityDiagnostics, frameworkFinding: frameworkIdentityFinding, routeKey: routeKey, viewport: viewportMode, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, selectedElement: currentSelectionRef.current, onPreviewStore: previewConnectedCanvas, onMaterializeBranch: materializeConnectedBranch, onSelectNode: selectConnectedNode, onApplyAnimation: (css, inline) => {
                     let style = document.getElementById('froam-connected-interactions');
                     if (!style) {
                         style = document.createElement('style');
@@ -6291,7 +6682,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         applyStyle(finalStyles, nextSelection, 'Resized element');
                     }
                     setSelectionRect(target.getBoundingClientRect());
-                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, inRoom: roomJoined, roomRole: room.role, onImageFile: (file) => { void applyPersonaImage(file); }, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && !quickChatOpen && froamIntent.state.phase !== 'previewing' && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: canUndo, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, opacity: selection.opacity, isHidden: selection.display === 'none', mixBlendMode: selection.mixBlendMode, zIndex: selection.zIndex, fontOptions: fontOptions, selectionCount: selections.length, isTextLayer: currentSelectionRef.current ? isTextVisualLayer(currentSelectionRef.current) : false, hasText: currentSelectionRef.current ? hasOwnWords(currentSelectionRef.current) : true, isImage: currentSelectionRef.current?.tagName === 'IMG' || currentSelectionRef.current?.tagName === 'PICTURE', onSaveLook: ({ name, states }) => {
+                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, inRoom: roomJoined, roomRole: room.role, onImageFile: (file) => { void applyPersonaImage(file); }, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && !quickChatOpen && froamIntent.state.phase !== 'previewing' && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: canUndo, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, opacity: selection.opacity, isHidden: selection.display === 'none', mixBlendMode: selection.mixBlendMode, zIndex: selection.zIndex, fontOptions: fontOptions, selectionCount: selections.length, isTextLayer: currentSelectionRef.current ? isTextVisualLayer(currentSelectionRef.current) : false, hasText: currentSelectionRef.current ? hasOwnWords(currentSelectionRef.current) : true, isImage: currentSelectionRef.current?.tagName === 'IMG' || currentSelectionRef.current?.tagName === 'PICTURE' || currentSelectionRef.current?.tagName === 'VIDEO', canAdjustImage: hasAdjustableMedia(currentSelectionRef.current), onSaveLook: ({ name, states }) => {
                     const style = createReusableStyle({ id: `style:look:${Date.now().toString(36)}`, name: `${name} custom`, states });
                     replaceDesignSystem(saveReusableStyle(activeProjectState.designSystem, style), `Saved reusable style: ${style.name}`);
                     showToast(`${style.name} saved to Design System`);
@@ -6360,6 +6751,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         case 'image':
                             actionsRef.current.openSelectedImageUpload();
                             break;
+                        case 'adjust-image':
+                            actionsRef.current.openSelectedImageFit();
+                            break;
                         case 'merge':
                             groupSelected();
                             break;
@@ -6413,7 +6807,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                             break;
                         }
                     }
-                } })), _jsx(FroamContextMenu, { position: contextMenuPos, elementLabel: selection?.label, isHidden: false, hasClipboard: !!clipboardStyles, hasMultiSelection: selections.length > 1, isGroup: selection?.label?.toLowerCase().includes('group') || false, onAction: (action) => {
+                } })), _jsx(FroamContextMenu, { position: contextMenuPos, elementLabel: selection?.label, isHidden: false, hasClipboard: !!clipboardStyles, hasMultiSelection: selections.length > 1, isGroup: selection?.label?.toLowerCase().includes('group') || false, canAdjustImage: hasAdjustableMedia(currentSelectionRef.current), onAction: (action) => {
                     switch (action) {
                         case 'edit-with-ai': {
                             // Intentional AI entry point: open Quick Chat with the selected element as context
@@ -6515,6 +6909,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         case 'upload-image':
                             actionsRef.current.openSelectedImageUpload();
                             break;
+                        case 'adjust-image':
+                            actionsRef.current.openSelectedImageFit();
+                            break;
                         case 'customize-ui':
                             setUICustomizerOpen(true);
                             break;
@@ -6531,6 +6928,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                             archiveCurrentSelection('interface-pattern');
                             break;
                     }
-                }, onClose: () => setContextMenuPos(null) }), _jsx(FroamUICustomizer, { open: uiCustomizerOpen, value: uiPreference, onChange: setUIPreference, onClose: () => setUICustomizerOpen(false) }), _jsx(FroamSmartGuides, { guides: smartGuides, visible: smartGuides.length > 0 }), _jsx(FroamShortcutOverlay, { visible: showShortcutOverlay, onClose: () => setShowShortcutOverlay(false) })] }), portalContainer);
+                }, onClose: () => setContextMenuPos(null) }), _jsx(FroamUICustomizer, { open: uiCustomizerOpen, value: uiPreference, onChange: setUIPreference, onClose: () => setUICustomizerOpen(false) }), _jsx(FroamSmartGuides, { guides: smartGuides, visible: smartGuides.length > 0 }), _jsx(FroamImageFit, { request: imageFitRequest, onApply: placeMediaFit, onCancel: closeMediaFit }), _jsx(FroamShortcutOverlay, { visible: showShortcutOverlay, onClose: () => setShowShortcutOverlay(false) })] }), portalContainer);
 }
 //# sourceMappingURL=GlobalChefEditor.js.map

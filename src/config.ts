@@ -14,6 +14,12 @@ export type FroamStudioConfig = {
   /** 'page' when the whole <body> is the editable root (see designRootScope in lib/codegen.mjs). */
   rootScope?: 'page' | 'auto'
   runtimeRoutes?: readonly string[] | '*'
+  /**
+   * Where placed pictures and videos are served in production (they ship to
+   * `<shipDir>/media`, so '/froam/media/' unless your Froam files live
+   * elsewhere). In froam dev they come from the bridge.
+   */
+  mediaBaseUrl?: string
 }
 
 let config: FroamStudioConfig = {}

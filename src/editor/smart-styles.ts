@@ -12,6 +12,7 @@
  * for (readSmartContext); everything after that is pure, so it's tested in Node.
  */
 import type { FroamMutationDomain, FroamPageContext } from '../project/mutation'
+import { contrastOn, readTextContrast } from '../project/a11y'
 import { contrast, luminance, parseColor, sampleAccent, sampleRadius, toHex } from './library/site-theme'
 
 type Rgba = { r: number; g: number; b: number; a: number }
@@ -41,16 +42,8 @@ const SMART_EDITS: ReadonlyArray<readonly [SmartEditId, RegExp]> = [
 
 /* ── Colour ── */
 
-/** Computed colours come as rgb(), rgba(), hex, or color(srgb …) for color-mix results. */
-function parse(value: unknown): Rgba | null {
-  if (typeof value !== 'string' || !value.trim()) return null
-  const srgb = value.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+%?))?\s*\)/i)
-  if (srgb) {
-    const alpha = srgb[4] === undefined ? 1 : srgb[4].endsWith('%') ? Number.parseFloat(srgb[4]) / 100 : Number(srgb[4])
-    return { r: Number(srgb[1]) * 255, g: Number(srgb[2]) * 255, b: Number(srgb[3]) * 255, a: alpha }
-  }
-  return parseColor(value.trim())
-}
+/** Computed colours come as rgb(), rgba(), hex, color(srgb …) for color-mix results, or oklch()/oklab(). */
+const parse = (value: unknown): Rgba | null => (typeof value === 'string' ? parseColor(value) : null)
 const solid = (color: Rgba | null) => (color && color.a > 0.6 ? color : null)
 const chroma = ({ r, g, b }: Rgba) => (Math.max(r, g, b) - Math.min(r, g, b)) / 255
 const rgba = ({ r, g, b }: Rgba, alpha: number) => `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${Number(alpha.toFixed(2))})`
@@ -371,7 +364,6 @@ export type PageSweep = { id: 'contrast' | 'buttons' | 'spacing'; title: string;
 
 const MAX_SCANNED = 1500
 const onPage = (element: Element): element is HTMLElement => element instanceof HTMLElement && !editorOwned(element) && !element.hasAttribute('data-froam-stage') && visible(element)
-const ownWords = (element: HTMLElement) => Array.from(element.childNodes).some((node) => node.nodeType === Node.TEXT_NODE && Boolean(node.textContent?.trim()))
 const KIND: Record<string, string> = { h1: 'Heading', h2: 'Heading', h3: 'Heading', h4: 'Heading', h5: 'Heading', h6: 'Heading', p: 'Paragraph', a: 'Link', button: 'Button', li: 'Item', label: 'Label', small: 'Small print', span: 'Text', blockquote: 'Quote', figcaption: 'Caption', input: 'Button' }
 /** "Paragraph “Extraordinary places…”": what a person would call it. */
 function describe(element: HTMLElement) {
@@ -380,48 +372,84 @@ function describe(element: HTMLElement) {
   return words ? `${kind} “${words.length > 28 ? `${words.slice(0, 27)}…` : words}”` : kind
 }
 
-/** Every text that fails WCAG AA where it sits — its own fill, the colour behind it, or each colour of a gradient — moved to the nearest shade of its hue that passes. */
+/**
+ * The nearest shade of the text's own hue that passes on every ground, as it
+ * will really paint — faded by any opacity it sits under. Aims a little above
+ * the floor, then higher, because a lighter or darker step in HSL doesn't map
+ * one-to-one onto the ratio once opacity mixes the ground back in.
+ */
+function passingShade(colour: Rgba, grounds: readonly Rgba[], opacity: number, required: number): Rgba | null {
+  const passes = (shade: Rgba) => contrastOn(shade, grounds, opacity).ratio >= required
+  const opaque = { ...colour, a: 1 }
+  for (let goal = required + 0.05; goal <= 21; goal += 0.25) {
+    let next = opaque
+    for (let round = 0; round < 4; round += 1) {
+      const { ground } = contrastOn(next, grounds, opacity)
+      next = readableShade(next, ground, goal)
+      if (passes(next)) return next
+    }
+  }
+  return null
+}
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
+
+/**
+ * Every text that fails WCAG AA where it sits — its own fill, every colour
+ * behind it, each stop of a gradient, any opacity it is faded by — moved to
+ * the nearest shade of its hue that passes. What it measured but could not
+ * fix, and what it could not measure, it says out loud: a sweep that reports
+ * "all pass" over a page that doesn't is worse than no sweep.
+ */
 export function sweepContrast(root: HTMLElement): PageSweep {
   const fixes: PageFix[] = []
+  const stuck: string[] = []
   let checked = 0
+  let passing = 0
   let onPhotos = 0
+  let gradientText = 0
+  let unreadable = 0
   for (const element of Array.from(root.querySelectorAll('*')).slice(0, MAX_SCANNED)) {
-    if (!onPage(element) || !ownWords(element)) continue
-    if (element.matches(':disabled') || element.closest('[aria-disabled="true"]')) continue // WCAG leaves inactive controls out.
-    const style = getComputedStyle(element)
-    if (style.visibility === 'hidden' || Number(style.opacity) < 0.1) continue
-    const fg = parse(style.color)
-    const fill = parse(style.webkitTextFillColor)
-    if (!fg || fg.a < 0.5 || (fill && fill.a < 0.1)) continue // Gradient-clipped words aren't one colour.
+    if (!onPage(element)) continue
+    const reading = readTextContrast(element)
+    if (reading.status === 'exempt') continue // No words of its own, hidden, or a disabled control WCAG leaves out.
     checked += 1
-    const surface = solid(parse(style.backgroundColor))
-    const layer = layerBehind(style)
-    const found: Behind = surface ? { behind: surface, overImage: false } : layer?.overImage ? layer : readBehind(element)
-    if (!surface && found.overImage && found.imageKind !== 'gradient') { onPhotos += 1; continue }
-    const grounds = !surface && found.imageKind === 'gradient' && found.stops?.length ? found.stops : [found.behind ?? WHITE]
-    const worst = (text: Rgba) => grounds.reduce((low, ground) => (contrast(text, ground) < contrast(text, low) ? ground : low))
-    const size = Number.parseFloat(style.fontSize) || 16
-    const target = size >= 24 || (size >= 18.66 && Number(style.fontWeight) >= 700) ? 3 : 4.5
-    const before = contrast(fg, worst(fg))
-    if (before >= target) continue
-    let next = fg
-    for (let round = 0; round < 4 && contrast(next, worst(next)) < target + 0.05; round += 1) next = readableShade(next, worst(next), target + 0.05)
-    const after = contrast(next, worst(next))
-    if (after < target) continue
+    if (reading.status === 'unmeasurable') {
+      if (reading.reason === 'photo') onPhotos += 1
+      else if (reading.reason === 'gradient-text') gradientText += 1
+      else unreadable += 1
+      continue
+    }
+    if (reading.passes) { passing += 1; continue }
+    const next = reading.fixableByColour ? passingShade(reading.colour, reading.grounds, reading.opacity, reading.required) : null
+    if (!next) {
+      const why = reading.fixableByColour ? 'no shade of its colour reaches it' : `it is faded to ${Math.round(reading.opacity * 100)}% opacity, which no text colour can overcome`
+      stuck.push(`${describe(element)}: ${ratio(reading.ratio)}, needs ${reading.required}:1 — ${why}`)
+      continue
+    }
+    const after = contrastOn(next, reading.grounds, reading.opacity).ratio
     const styles: Record<string, string> = { color: toHex(next) }
-    if (fill && toHex(fill) !== toHex(fg)) styles.WebkitTextFillColor = toHex(next)
-    fixes.push({ element, styles, line: `${describe(element)}: ${ratio(before)} → ${ratio(after)}` })
+    const style = getComputedStyle(element)
+    if (toHex(parse(style.webkitTextFillColor) ?? reading.colour) !== toHex(parse(style.color) ?? reading.colour)) styles.WebkitTextFillColor = toHex(next)
+    fixes.push({ element, styles, line: `${describe(element)}: ${ratio(reading.ratio)} → ${ratio(after)}` })
   }
-  const skipped = onPhotos ? ` ${onPhotos} on photos can't be measured and were left as they are.` : ''
-  return {
-    id: 'contrast',
-    title: fixes.length ? `Fixed the contrast of ${fixes.length} text${fixes.length === 1 ? '' : 's'}` : 'Every text already reads well',
-    checked,
-    fixes,
-    note: fixes.length
-      ? `Each now passes WCAG AA on what is really behind it, in the same hue. ${checked} texts checked.${skipped}`
-      : `All ${checked} texts pass WCAG AA where they sit.${skipped}`,
-  }
+  const unmeasured = [
+    onPhotos ? `${plural(onPhotos, 'text')} on photos can't be measured` : '',
+    gradientText ? `${plural(gradientText, 'text')} filled with a gradient can't be measured` : '',
+    unreadable ? `${plural(unreadable, 'text')} use a colour space Froam can't read yet` : '',
+  ].filter(Boolean)
+  const skipped = unmeasured.length ? ` ${unmeasured.join('; ')} — check ${onPhotos + gradientText + unreadable === 1 ? 'it' : 'them'} by eye.` : ''
+  const named = stuck.length > 4 ? [...stuck.slice(0, 3), `and ${stuck.length - 3} more`] : stuck
+  const failing = stuck.length ? ` ${plural(stuck.length, 'text')} still fail${stuck.length === 1 ? 's' : ''} and need${stuck.length === 1 ? 's' : ''} a design change: ${named.join('; ')}.` : ''
+  const title = fixes.length
+    ? `Fixed the contrast of ${plural(fixes.length, 'text')}`
+    : stuck.length ? `${plural(stuck.length, 'text')} fail${stuck.length === 1 ? 's' : ''} contrast and can't be fixed by colour` : 'Every text already reads well'
+  const note = fixes.length
+    ? `Each fixed text now passes WCAG AA on what is really behind it, in the same hue. ${plural(checked, 'text')} checked.${failing}${skipped}`
+    : stuck.length
+      ? `${plural(passing, 'text')} of ${checked} pass WCAG AA where they sit.${failing}${skipped}`
+      : `All ${plural(passing, 'measured text')} pass WCAG AA where they sit.${skipped}`
+  return { id: 'contrast', title, checked, fixes, note }
 }
 
 const BUTTON_SELECTOR = 'button, [role="button"], input[type="submit"], input[type="button"], a[class*="btn" i], a[class*="button" i]'

@@ -1,4 +1,3 @@
-import { matchesMedia } from './froamMedia'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Accessibility,
@@ -17,15 +16,14 @@ import {
 } from 'lucide-react'
 import { componentAncestry, nearestComponent } from './froamReactFiber'
 import {
-  contrastRatio,
   nearestColorToken,
   parseColor,
   readDesignTokens,
-  resolvedBackground,
   toHex,
   type DesignToken,
   type RGB,
 } from './froamDesignTokens'
+import { INTERACTIVE_SELECTOR, contrastOn, imageAlternative, readTextContrast, undersizedTargets } from '../project/a11y'
 import './FroamIntel.css'
 
 // Matches GlobalChefEditor.applyStyle; the middle "next selection" arg is
@@ -49,10 +47,11 @@ type LintIssue = {
   id: string
   el: HTMLElement
   type: 'off-token' | 'contrast' | 'tap-target' | 'alt'
-  severity: 'high' | 'medium' | 'low'
+  /** `info` is listed but costs no health points: something to look at, not a failure. */
+  severity: 'high' | 'medium' | 'low' | 'info'
   label: string
   detail: string
-  fix?: { property: string; value: string; label: string }
+  fix?: { styles: Record<string, string>; label: string }
 }
 
 const TARGET_PROP: Record<Target, string> = { fill: 'backgroundColor', text: 'color', border: 'borderColor' }
@@ -70,18 +69,12 @@ function scoreIssues(issues: LintIssue[]): number {
   return Math.max(12, Math.round(100 - deduction))
 }
 
-function ratingLabel(ratio: number): { grade: string; tone: 'pass' | 'warn' | 'fail' } {
+/** Graded against what this text needs: large text passes AA at 3:1, so it isn't a warning there. */
+function ratingLabel(ratio: number, required: number): { grade: string; tone: 'pass' | 'warn' | 'fail' } {
   if (ratio >= 7) return { grade: 'AAA', tone: 'pass' }
   if (ratio >= 4.5) return { grade: 'AA', tone: 'pass' }
-  if (ratio >= 3) return { grade: 'AA Large', tone: 'warn' }
+  if (ratio >= 3) return { grade: 'AA Large', tone: ratio >= required ? 'pass' : 'fail' }
   return { grade: 'Fail', tone: 'fail' }
-}
-
-function isInteractive(el: HTMLElement): boolean {
-  const tag = el.tagName.toLowerCase()
-  if (['a', 'button', 'select', 'textarea'].includes(tag)) return true
-  if (tag === 'input' && (el as HTMLInputElement).type !== 'hidden') return true
-  return el.getAttribute('role') === 'button' || el.hasAttribute('onclick')
 }
 
 function isFroamOwn(el: HTMLElement): boolean {
@@ -280,23 +273,20 @@ function A11yTab({
   applyStyle: ApplyStyle
   onToast: (m: string) => void
 }) {
-  const reading = useMemo(() => {
-    if (!selectedElement) return null
-    const fg = parseColor(getComputedStyle(selectedElement).color)
-    if (!fg) return null
-    const bg = resolvedBackground(selectedElement)
-    const flatFg = fg.a < 1 ? { ...fg, r: Math.round(fg.r * fg.a + bg.r * (1 - fg.a)), g: Math.round(fg.g * fg.a + bg.g * (1 - fg.a)), b: Math.round(fg.b * fg.a + bg.b * (1 - fg.a)), a: 1 } : fg
-    const ratio = contrastRatio(flatFg, bg)
-    return { fg: flatFg, bg, ratio, ...ratingLabel(ratio) }
-  }, [selectedElement])
+  // The same reading the Health scan, the reviewer checks and "Fix contrast
+  // everywhere" use (project/a11y), so the tab never disagrees with them.
+  const measured = useMemo(() => (selectedElement ? readTextContrast(selectedElement) : null), [selectedElement])
+  const reading = measured?.status === 'measured'
+    ? { fg: measured.rendered, bg: measured.ground, ratio: measured.ratio, required: measured.required, ...ratingLabel(measured.ratio, measured.required) }
+    : null
 
   function suggestAccessibleToken(): DesignToken | null {
-    if (!reading) return null
+    if (measured?.status !== 'measured') return null
     let best: { t: DesignToken; ratio: number } | null = null
     for (const t of solidColorTokens) {
       if (!t.rgb) continue
-      const r = contrastRatio(t.rgb, reading.bg)
-      if (r >= 4.5 && (!best || r < best.ratio)) best = { t, ratio: r } // smallest passing = closest tonal shift
+      const r = contrastOn(t.rgb, measured.grounds, measured.opacity).ratio
+      if (r >= measured.required && (!best || r < best.ratio)) best = { t, ratio: r } // smallest passing = closest tonal shift
     }
     return best?.t ?? null
   }
@@ -305,7 +295,12 @@ function A11yTab({
     return <div className="froam-intel__body"><p className="froam-intel__hint">Select any text element to check its live contrast against the real background behind it.</p></div>
   }
   if (!reading) {
-    return <div className="froam-intel__body"><p className="froam-intel__hint">No readable text colour on this element.</p></div>
+    const why = measured?.status === 'unmeasurable'
+      ? `${measured.detail}, so there is no single contrast ratio to give — check it by eye.`
+      : measured?.status === 'exempt' && measured.reason === 'disabled'
+        ? 'This control is disabled. WCAG leaves inactive controls out of the contrast requirement.'
+        : 'Select an element that holds text of its own to check its contrast.'
+    return <div className="froam-intel__body"><p className="froam-intel__hint">{why}</p></div>
   }
 
   const suggestion = reading.tone === 'fail' ? suggestAccessibleToken() : null
@@ -361,7 +356,6 @@ function HealthTab({
     // Defer so the spinner paints.
     requestAnimationFrame(() => {
       const found: LintIssue[] = []
-      const isMobile = matchesMedia('(max-width: 640px)')
       const els = Array.from(rootEl.querySelectorAll<HTMLElement>('*')).filter((el) => !isFroamOwn(el)).slice(0, 500)
       const tokenValues = new Set(solidColorTokens.map((t) => t.rgb ? `${t.rgb.r},${t.rgb.g},${t.rgb.b}` : ''))
 
@@ -381,41 +375,31 @@ function HealthTab({
               found.push({
                 id: `t${idRef.current}-${found.length}`, el, type: 'off-token', severity: 'medium',
                 label: 'Off-token colour', detail: `${toHex(bg)} ≈ ${near.token.name}`,
-                fix: { property: 'backgroundColor', value: `var(${near.token.name})`, label: `Snap to ${near.token.name.replace(/^--/, '')}` },
+                fix: { styles: { backgroundColor: `var(${near.token.name})` }, label: `Snap to ${near.token.name.replace(/^--/, '')}` },
               })
             }
           }
         }
 
-        // Contrast on text-bearing leaf elements
-        const hasText = el.childNodes.length > 0 && Array.from(el.childNodes).some((n) => n.nodeType === 3 && n.textContent?.trim())
-        if (hasText) {
-          const fg = parseColor(cs.color)
-          if (fg) {
-            const behind = resolvedBackground(el)
-            const flat = fg.a < 1 ? { r: Math.round(fg.r * fg.a + behind.r * (1 - fg.a)), g: Math.round(fg.g * fg.a + behind.g * (1 - fg.a)), b: Math.round(fg.b * fg.a + behind.b * (1 - fg.a)), a: 1 } : fg
-            const ratio = contrastRatio(flat, behind)
-            const big = parseFloat(cs.fontSize) >= 24 || (parseFloat(cs.fontSize) >= 18.66 && Number(cs.fontWeight) >= 700)
-            if (ratio < (big ? 3 : 4.5)) {
-              found.push({
-                id: `t${idRef.current}-${found.length}`, el, type: 'contrast', severity: 'high',
-                label: 'Low contrast', detail: `${ratio.toFixed(2)}:1 — needs ${big ? '3.0' : '4.5'}`,
-              })
-            }
-          }
-        }
-
-        // Tap targets on mobile
-        if (isMobile && isInteractive(el) && (rect.width < 44 || rect.height < 44)) {
+        // Contrast of the words an element holds itself, against everything
+        // really painted behind them (project/a11y). Text over a photo has no
+        // single ratio: it is listed for a look, not given a made-up number.
+        const reading = readTextContrast(el)
+        if (reading.status === 'measured' && !reading.passes) {
           found.push({
-            id: `t${idRef.current}-${found.length}`, el, type: 'tap-target', severity: 'medium',
-            label: 'Small tap target', detail: `${Math.round(rect.width)}×${Math.round(rect.height)} — min 44×44`,
-            fix: { property: 'minHeight', value: '44px', label: 'Set min 44px' },
+            id: `t${idRef.current}-${found.length}`, el, type: 'contrast', severity: 'high',
+            label: 'Low contrast',
+            detail: `${(Math.floor(reading.ratio * 100) / 100).toFixed(2)}:1 — needs ${reading.required.toFixed(1)}${reading.fixableByColour ? '' : ` · faded to ${Math.round(reading.opacity * 100)}%`}`,
+          })
+        } else if (reading.status === 'unmeasurable' && reading.reason !== 'colour') {
+          found.push({
+            id: `t${idRef.current}-${found.length}`, el, type: 'contrast', severity: 'info',
+            label: 'Check contrast by eye', detail: reading.reason === 'photo' ? 'Text over a photo' : 'Gradient-filled text',
           })
         }
 
-        // Missing alt
-        if (el instanceof HTMLImageElement && !el.alt.trim()) {
+        // Missing alt. alt="" is how an image is marked decorative — not missing.
+        if (el instanceof HTMLImageElement && imageAlternative(el) === 'missing') {
           found.push({
             id: `t${idRef.current}-${found.length}`, el, type: 'alt', severity: 'low',
             label: 'Image missing alt', detail: el.currentSrc?.split('/').pop()?.slice(0, 28) ?? 'image',
@@ -423,11 +407,25 @@ function HealthTab({
         }
       }
 
+      // Targets under WCAG 2.5.8's 24×24, at every screen size, after its
+      // inline and spacing exceptions — 44×44 is the AAA goal, not the floor.
+      const controls = Array.from(rootEl.querySelectorAll<HTMLElement>(INTERACTIVE_SELECTOR)).filter((el) => !isFroamOwn(el))
+      for (const { element, width, height } of undersizedTargets(controls)) {
+        const styles: Record<string, string> = { minWidth: '24px', minHeight: '24px' }
+        if (getComputedStyle(element).display === 'inline') styles.display = 'inline-block'
+        found.push({
+          id: `t${idRef.current}-${found.length}`, el: element, type: 'tap-target', severity: 'medium',
+          label: 'Small target', detail: `${width}×${height} — min 24×24`,
+          fix: { styles, label: 'Make it 24×24' },
+        })
+      }
+
       const dedup = found.slice(0, 60)
       setIssues(dedup)
       setScanning(false)
       const score = dedup.length ? scoreIssues(dedup) : 100
-      onToast(dedup.length ? `Health ${score}/100 · ${dedup.length} issues` : 'Health 100/100 — clean')
+      const failures = dedup.filter((issue) => issue.severity !== 'info').length
+      onToast(failures ? `Health ${score}/100 · ${failures} issues` : dedup.length ? `Health ${score}/100 · ${dedup.length} to check by eye` : 'Health 100/100 — clean')
     })
   }
 
@@ -436,7 +434,7 @@ function HealthTab({
 
   function fixIssue(issue: LintIssue) {
     if (!issue.fix) return
-    onFixElement(issue.el, { [issue.fix.property]: issue.fix.value }, issue.fix.label)
+    onFixElement(issue.el, issue.fix.styles, issue.fix.label)
     onToast(issue.fix.label)
     setIssues((prev) => prev ? prev.filter((i) => i.id !== issue.id) : prev)
   }

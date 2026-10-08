@@ -35,12 +35,7 @@ export function isStageElement(node) {
 /** An element's children as paths see them: a preview frame is looked through. */
 export function pathChildren(parent) {
     const out = [];
-    for (const child of Array.from(parent.children)) {
-        if (isStageElement(child))
-            out.push(...pathChildren(child));
-        else
-            out.push(child);
-    }
+    walkPathChildren(parent, (child) => { out.push(child); });
     return out;
 }
 /** An element's parent as paths see it. */
@@ -79,12 +74,82 @@ export function isBodyScopedPath(path) {
 export function isFroamOwnedNode(element) {
     return element.getAttribute('data-chef-editor-root') === 'true' || element.id.startsWith('froam-');
 }
-/** Children of `parent` that count toward a path segment's position. */
-function countedChildren(parent, tagName) {
+/**
+ * Visit an element's children as paths see them, in order, without building
+ * a list: a preview frame is looked through. Stops when `visit` returns true.
+ *
+ * Paths are computed on every click, hover and repaint, on pages with
+ * thousands of siblings. Walking siblings in place, instead of copying and
+ * filtering arrays at every level, is what keeps that cheap.
+ */
+function walkPathChildren(parent, visit) {
+    const children = parent.children;
+    for (let index = 0; index < children.length; index += 1) {
+        const child = children[index];
+        if (isStageElement(child)) {
+            if (walkPathChildren(child, visit))
+                return true;
+        }
+        else if (visit(child)) {
+            return true;
+        }
+    }
+    return false;
+}
+/** An element's tag as a path writes it. */
+function tagOf(element) {
+    return element.localName ?? element.tagName.toLowerCase();
+}
+/** Whether `child` counts toward a `tag:n` segment. The tag is compared first: it is the cheap test. */
+function countsAs(child, tag, onBody) {
+    return tagOf(child) === tag && isPathElement(child) && !(onBody && isFroamOwnedNode(child));
+}
+/** The 1-based position of `element` among the children of `parent` that count for its tag. */
+function positionIn(parent, element, tag) {
     const onBody = parent === parent.ownerDocument?.body;
-    return pathChildren(parent).filter((child) => isPathElement(child)
-        && child.tagName.toLowerCase() === tagName
-        && !(onBody && isFroamOwnedNode(child)));
+    let position = 0;
+    const found = walkPathChildren(parent, (child) => {
+        if (countsAs(child, tag, onBody))
+            position += 1;
+        return child === element;
+    });
+    return found ? Math.max(1, position) : 1;
+}
+/** The `index`-th (0-based) child of `parent` that counts for `tag`. */
+function nthCounted(parent, tag, index) {
+    const onBody = parent === parent.ownerDocument?.body;
+    let seen = -1;
+    let match = null;
+    walkPathChildren(parent, (child) => {
+        if (!countsAs(child, tag, onBody))
+            return false;
+        seen += 1;
+        if (seen !== index)
+            return false;
+        match = child;
+        return true;
+    });
+    return match;
+}
+/**
+ * `parent`'s path children with the segment each one adds (`tag:n`), in one
+ * pass. For building many paths at once, like the Layers tree: a child's path
+ * is its parent's plus this, instead of a fresh walk back up for every node.
+ */
+export function pathSegmentsOfChildren(parent) {
+    const onBody = parent === parent.ownerDocument?.body;
+    const seen = new Map();
+    const out = [];
+    walkPathChildren(parent, (child) => {
+        if (!isPathElement(child) || (onBody && isFroamOwnedNode(child)))
+            return false;
+        const tag = tagOf(child);
+        const position = (seen.get(tag) ?? 0) + 1;
+        seen.set(tag, position);
+        out.push([child, `${tag}:${position}`]);
+        return false;
+    });
+    return out;
 }
 /**
  * Whether `element` is page content Froam can address from `root`: inside the
@@ -113,12 +178,11 @@ function segmentsFrom(element, base) {
         const parent = pathParent(current);
         if (!parent)
             break;
-        const tag = current.tagName.toLowerCase();
-        const index = Math.max(1, countedChildren(parent, tag).indexOf(current) + 1);
-        segments.unshift(`${tag}:${index}`);
+        const tag = tagOf(current);
+        segments.push(`${tag}:${positionIn(parent, current, tag)}`);
         current = parent;
     }
-    return segments.join('/');
+    return segments.reverse().join('/');
 }
 export function getElementPath(element, root) {
     const body = element.ownerDocument?.body;
@@ -138,7 +202,7 @@ export function findElementByPath(root, path) {
             return null;
         const [tag, position] = segment.split(':');
         const index = Math.max(0, Number(position) - 1);
-        const next = countedChildren(current, tag)[index];
+        const next = nthCounted(current, tag, index);
         if (!next)
             return null;
         current = next;

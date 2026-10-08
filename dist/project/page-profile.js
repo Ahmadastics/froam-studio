@@ -1,34 +1,16 @@
+import { WCAG_MIN_TARGET_PX, parseColor, relativeLuminance01, requiredContrast } from './wcag.js';
 export const FROAM_PAGE_PROFILE_SCHEMA_VERSION = 1;
 /** Roles that represent a user action. Accent discipline is measured against these. */
 export const FROAM_ACTION_ROLES = ['cta', 'button', 'input', 'form'];
 /** Smallest font size treated as a type-scale step. Below this it is decoration. */
 export const FROAM_MIN_TYPE_PX = 10;
 /** WCAG 2.5.8 AA minimum target size, in CSS pixels. */
-export const FROAM_MIN_TARGET_PX = 24;
+export const FROAM_MIN_TARGET_PX = WCAG_MIN_TARGET_PX;
 // ── colour ──────────────────────────────────────────────────────────────────
-/** Parse the colour forms computed styles actually emit. Returns null for gradients and keywords. */
+/** Parse the colour forms computed styles actually emit, channels 0–1. Returns null for gradients and keywords. */
 export function parseCssColor(value) {
-    if (!value)
-        return null;
-    const text = value.trim().toLowerCase();
-    if (!text || text === 'transparent' || text === 'none' || text === 'currentcolor')
-        return null;
-    const rgb = text.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.%]+))?\s*\)$/);
-    if (rgb) {
-        const alphaRaw = rgb[4];
-        const a = alphaRaw === undefined ? 1 : alphaRaw.endsWith('%') ? Number.parseFloat(alphaRaw) / 100 : Number.parseFloat(alphaRaw);
-        return { r: Number(rgb[1]) / 255, g: Number(rgb[2]) / 255, b: Number(rgb[3]) / 255, a: Number.isFinite(a) ? a : 1 };
-    }
-    const hex = text.match(/^#([0-9a-f]{3,8})$/);
-    if (hex) {
-        const digits = hex[1];
-        const expand = (part) => Number.parseInt(part.length === 1 ? part + part : part, 16) / 255;
-        if (digits.length === 3 || digits.length === 4)
-            return { r: expand(digits[0]), g: expand(digits[1]), b: expand(digits[2]), a: digits.length === 4 ? expand(digits[3]) : 1 };
-        if (digits.length === 6 || digits.length === 8)
-            return { r: expand(digits.slice(0, 2)), g: expand(digits.slice(2, 4)), b: expand(digits.slice(4, 6)), a: digits.length === 8 ? expand(digits.slice(6, 8)) : 1 };
-    }
-    return null;
+    const colour = parseColor(value);
+    return colour && { r: colour.r / 255, g: colour.g / 255, b: colour.b / 255, a: colour.a };
 }
 const linearize = (channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
 const delinearize = (channel) => channel <= 0.0031308 ? channel * 12.92 : 1.055 * channel ** (1 / 2.4) - 0.055;
@@ -68,7 +50,7 @@ const toHex = (rgb) => `#${[rgb.r, rgb.g, rgb.b].map((channel) => Math.round(cha
 export function oklchToHex(oklch) { return toHex(oklabToRgb(oklchToOklab(oklch))); }
 /** WCAG 2.x relative luminance. Deliberately not OKLab — the standard defines this exact formula. */
 export function relativeLuminance(rgb) {
-    return 0.2126 * linearize(rgb.r) + 0.7152 * linearize(rgb.g) + 0.0722 * linearize(rgb.b);
+    return relativeLuminance01(rgb);
 }
 export function contrastRatio(foreground, background) {
     const a = relativeLuminance(foreground), b = relativeLuminance(background);
@@ -87,7 +69,7 @@ function flatten(colour, backdrop) {
 }
 /** WCAG AA threshold: 3.0 for large text (≥24px, or ≥18.66px at weight ≥700), else 4.5. */
 export function contrastRequirement(fontSizePx, fontWeight) {
-    return fontSizePx >= 24 || (fontSizePx >= 18.66 && fontWeight >= 700) ? 3 : 4.5;
+    return requiredContrast(fontSizePx, fontWeight);
 }
 const signal = (record, kind) => (record.signals.find((item) => item.kind === kind)?.values ?? {});
 const num = (value, fallback = 0) => {

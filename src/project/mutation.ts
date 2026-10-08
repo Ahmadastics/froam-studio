@@ -123,6 +123,7 @@ function storeField(state: FroamProjectState, op: FroamOp) {
   const draft = state.legacyStore[scopeKey(op.routeKey, op.viewport)]?.[op.path]
   if (op.field === 'text') return draft?.text
   if (op.field === 'imageUrl') return draft?.imageUrl
+  if (op.field === 'media') return draft?.media
   return draft?.styles?.[op.field.slice(6)]
 }
 export function compareMutationBranches(document: FroamProjectDocument, sourceBranchId: string, mutationBranchId: string): FroamMutationComparison {

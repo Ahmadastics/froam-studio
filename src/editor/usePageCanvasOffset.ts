@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { isInPageScope } from '../collab/paths'
+import { subscribePageStyles } from './chef/page-styles'
 
 /**
  * Keeps the page clear of Froam's own chrome while editing.
@@ -33,12 +33,19 @@ export function usePageCanvasOffset(active: boolean, getRoot: () => HTMLElement 
 
   useEffect(() => {
     if (!active) return undefined
-    const html = document.documentElement
-    const style = document.createElement('style')
-    style.id = STYLE_ID
-    document.head.appendChild(style)
+    // Two sheets: the page's padding, and the pinned elements' offsets. Pinned
+    // elements are read with only their own sheet switched off — switching
+    // the padding off too would relayout the whole page twice per measure.
+    const padStyle = document.createElement('style')
+    padStyle.id = STYLE_ID
+    const pinStyle = document.createElement('style')
+    pinStyle.id = `${STYLE_ID}-pins`
+    document.head.append(padStyle, pinStyle)
     let counter = 0
     let frame = 0
+    let pinned: HTMLElement[] = []
+    let pinnedChanged = true
+    let applied = ''
 
     const measure = () => {
       frame = 0
@@ -65,17 +72,23 @@ export function usePageCanvasOffset(active: boolean, getRoot: () => HTMLElement 
         }
       }
 
-      // Read pinned elements with our own rules switched off, so each one's
+      // Froam's own UI changes all the time (hover states, open menus); when
+      // that moved nothing, nothing is written and the page is not touched.
+      const offsets = `${top} ${right} ${bottom} ${left} ${window.innerWidth}x${window.innerHeight}`
+      if (offsets === applied && !pinnedChanged) return
+      if (offsets !== applied) {
+        padStyle.textContent = `html[data-chef-editing]{padding:${top}px ${right}px ${bottom}px ${left}px!important;scroll-padding-top:${top}px}`
+      }
+      applied = offsets
+      pinnedChanged = false
+
+      // Read pinned elements with their own rules switched off, so each one's
       // real (authored) position is what gets offset.
-      style.textContent = ''
       const rules: string[] = []
-      const root = getRootRef.current()
-      if (root && (top || bottom || left || right)) {
-        // Page content beside the root too (a portal's modal on <body>).
-        const base = root === document.body ? root : document.body
-        for (const el of Array.from(base.querySelectorAll<HTMLElement>('*'))) {
-          if (el.closest('[data-chef-editor-root="true"]')) continue
-          if (base !== root && !isInPageScope(el, root)) continue
+      if (pinned.length && (top || bottom || left || right)) {
+        if (pinStyle.sheet) pinStyle.sheet.disabled = true
+        for (const el of pinned) {
+          if (!el.isConnected) continue
           const cs = window.getComputedStyle(el)
           if (cs.position !== 'sticky' && cs.position !== 'fixed') continue
           let id = el.getAttribute(PIN_ATTR)
@@ -103,9 +116,10 @@ export function usePageCanvasOffset(active: boolean, getRoot: () => HTMLElement 
             if (dx || dy) rules.push(`${sel}{translate:${dx}px ${dy}px!important}`)
           }
         }
+        if (pinStyle.sheet) pinStyle.sheet.disabled = false
       }
-      rules.unshift(`html[data-chef-editing]{padding:${top}px ${right}px ${bottom}px ${left}px!important;scroll-padding-top:${top}px}`)
-      style.textContent = rules.join('\n')
+      const text = rules.join('\n')
+      if (pinStyle.textContent !== text) pinStyle.textContent = text
     }
 
     const schedule = () => {
@@ -124,25 +138,27 @@ export function usePageCanvasOffset(active: boolean, getRoot: () => HTMLElement 
     const layout = new MutationObserver(schedule)
     const portal = document.getElementById('froam-editor-portal')
     if (portal) layout.observe(portal, { attributes: true, subtree: true, attributeFilter: ['class', 'hidden'] })
+    // Which page elements are sticky or fixed: found when the page is idle,
+    // re-read only where the page changes (page-styles.ts).
     const root = getRootRef.current()
-    let debounce = 0
-    const pageChanges = new MutationObserver((records) => {
-      // Ignore our own marker writes; react to real structure/class changes.
-      if (records.every((r) => r.type === 'attributes' && r.attributeName === PIN_ATTR)) return
-      window.clearTimeout(debounce)
-      debounce = window.setTimeout(schedule, 600)
-    })
-    if (root) pageChanges.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', PIN_ATTR] })
+    const unsubscribe = root
+      ? subscribePageStyles(root, (index, changed) => {
+          if (!changed.pinned) return
+          pinned = [...index.pinned]
+          pinnedChanged = true
+          schedule()
+        })
+      : () => {}
     window.addEventListener('resize', schedule)
 
     return () => {
       cancelAnimationFrame(frame)
-      window.clearTimeout(debounce)
       resize.disconnect()
       layout.disconnect()
-      pageChanges.disconnect()
+      unsubscribe()
       window.removeEventListener('resize', schedule)
-      style.remove()
+      padStyle.remove()
+      pinStyle.remove()
       document.querySelectorAll(`[${PIN_ATTR}]`).forEach((el) => el.removeAttribute(PIN_ATTR))
     }
   }, [active])

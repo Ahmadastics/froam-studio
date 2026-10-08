@@ -7,6 +7,7 @@
  * themeVariables). The values travel inside the section's own style, so the
  * look survives saving, the op log and the production runtime unchanged.
  */
+import { parseColor, toHex, luminance, contrastRatio as contrast } from '../../project/wcag';
 export type SiteTheme = {
     fontBody: string;
     fontHeading: string;
@@ -40,11 +41,7 @@ type Rgba = {
     b: number;
     a: number;
 };
-export declare function parseColor(value: string | null | undefined): Rgba | null;
-export declare function toHex({ r, g, b }: Rgba): string;
-/** WCAG relative luminance. */
-export declare function luminance({ r, g, b }: Rgba): number;
-export declare function contrast(a: Rgba, b: Rgba): number;
+export { parseColor, toHex, luminance, contrast };
 /**
  * The brand colour: the most-used saturated colour across the page's buttons
  * and links (backgrounds first — a filled button is the loudest statement of
@@ -56,5 +53,4 @@ export declare function sampleRadius(elements: HTMLElement[], fallback: string):
 export declare function sampleSiteTheme(scope?: HTMLElement): SiteTheme;
 /** The theme as the custom properties the Library's patterns are written against. */
 export declare function themeVariables(theme: SiteTheme): Record<string, string>;
-export {};
 //# sourceMappingURL=site-theme.d.ts.map

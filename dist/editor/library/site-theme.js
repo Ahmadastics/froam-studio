@@ -1,3 +1,13 @@
+/**
+ * The site's own look, read off the live page, so a pattern from the Library
+ * arrives looking like it was always part of the site: its fonts, its ink and
+ * paper, its brand colour, its corner radius, its name and its navigation.
+ *
+ * Everything becomes a CSS custom property on the inserted section (see
+ * themeVariables). The values travel inside the section's own style, so the
+ * look survives saving, the op log and the production runtime unchanged.
+ */
+import { parseColor, toHex, luminance, contrastRatio as contrast } from '../../project/wcag.js';
 export const DEFAULT_SITE_THEME = {
     fontBody: 'inherit',
     fontHeading: 'inherit',
@@ -15,40 +25,11 @@ export const DEFAULT_SITE_THEME = {
     brandName: 'Your brand',
     navLinks: ['About', 'Work', 'Contact'],
 };
-export function parseColor(value) {
-    if (!value)
-        return null;
-    const hex = value.trim().match(/^#([0-9a-f]{3,8})$/i);
-    if (hex) {
-        let digits = hex[1];
-        if (digits.length <= 4)
-            digits = digits.split('').map((d) => d + d).join('');
-        const n = (i) => parseInt(digits.slice(i, i + 2), 16);
-        return { r: n(0), g: n(2), b: n(4), a: digits.length === 8 ? n(6) / 255 : 1 };
-    }
-    const rgb = value.match(/rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+%?))?\s*\)/i);
-    if (!rgb)
-        return null;
-    const alpha = rgb[4] === undefined ? 1 : rgb[4].endsWith('%') ? Number.parseFloat(rgb[4]) / 100 : Number(rgb[4]);
-    return { r: Number(rgb[1]), g: Number(rgb[2]), b: Number(rgb[3]), a: alpha };
-}
-export function toHex({ r, g, b }) {
-    return `#${[r, g, b].map((part) => Math.round(Math.max(0, Math.min(255, part))).toString(16).padStart(2, '0')).join('')}`;
-}
+// One parser and one WCAG formula for all of Froam (project/wcag), so the
+// Library, the smart edits and the accessibility checks read colours alike.
+export { parseColor, toHex, luminance, contrast };
 function mix(a, b, amountOfB) {
     return { r: a.r + (b.r - a.r) * amountOfB, g: a.g + (b.g - a.g) * amountOfB, b: a.b + (b.b - a.b) * amountOfB, a: 1 };
-}
-/** WCAG relative luminance. */
-export function luminance({ r, g, b }) {
-    const channel = (value) => {
-        const c = value / 255;
-        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-    };
-    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
-}
-export function contrast(a, b) {
-    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-    return (hi + 0.05) / (lo + 0.05);
 }
 /**
  * How colourful a colour actually is (max − min channel). Unlike HSL

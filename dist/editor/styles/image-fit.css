@@ -1,0 +1,336 @@
+/* ─── Image fit: crop, zoom and shape an image for its spot ─── */
+
+.froam-image-fit {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483645;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--fs-surface-veil);
+  backdrop-filter: blur(6px);
+  animation: fs-fade-in 150ms ease;
+  font-family: var(--fs-font);
+}
+
+.froam-image-fit__card {
+  width: min(720px, 100%);
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  border: 1px solid var(--fs-border);
+  background: var(--fs-surface-2);
+  box-shadow: var(--fs-shadow-panel);
+  overflow: hidden;
+  animation: fs-slide-up 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.froam-image-fit__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 12px 20px;
+}
+
+.froam-image-fit__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fs-text-primary);
+}
+
+.froam-image-fit__title svg { color: var(--fs-text-tertiary); }
+
+.froam-image-fit__close,
+.froam-image-fit__icon-btn {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--fs-text-secondary);
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease;
+}
+
+.froam-image-fit__close:hover,
+.froam-image-fit__icon-btn:hover:not(:disabled) {
+  background: var(--fs-surface-control-hover);
+  color: var(--fs-text-primary);
+}
+
+.froam-image-fit__close:focus-visible,
+.froam-image-fit__icon-btn:focus-visible,
+.froam-image-fit__chip:focus-visible,
+.froam-image-fit__segmented button:focus-visible {
+  outline: none;
+  box-shadow: var(--fs-focus-ring);
+}
+
+.froam-image-fit__icon-btn:disabled { opacity: 0.35; cursor: default; }
+
+/* The stage: the frame in the middle, what gets cut off dimmed around it. */
+.froam-image-fit__stage {
+  position: relative;
+  height: clamp(220px, 52vh, 440px);
+  margin: 0 16px;
+  border-radius: 12px;
+  overflow: hidden;
+  /* Dark in both themes, as photo tools are: the white frame and the dimmed
+     cut-off read the same whatever the editor theme. */
+  background: #111214;
+  isolation: isolate;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+
+.froam-image-fit__stage:focus-visible { box-shadow: var(--fs-focus-ring); }
+.froam-image-fit__stage.is-fill { cursor: grab; }
+.froam-image-fit__stage.is-dragging { cursor: grabbing; }
+
+.froam-image-fit__picture {
+  position: absolute;
+  max-width: none;
+  max-height: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+.froam-image-fit__frame {
+  position: absolute;
+  pointer-events: none;
+  outline: 2px solid rgba(255, 255, 255, 0.92);
+  outline-offset: 0;
+}
+
+.froam-image-fit__stage.is-fill .froam-image-fit__frame {
+  box-shadow: 0 0 0 9999px rgba(8, 9, 11, 0.62);
+}
+
+/* Fit: the frame's own background shows in the gaps — drawn as a checker. */
+.froam-image-fit__stage.is-fit .froam-image-fit__frame {
+  z-index: -1;
+  outline-color: rgba(255, 255, 255, 0.5);
+  background:
+    repeating-conic-gradient(rgba(255, 255, 255, 0.08) 0% 25%, transparent 0% 50%) 0 0 / 16px 16px;
+}
+
+.froam-image-fit__stage.is-fit .froam-image-fit__picture { z-index: 1; }
+
+.froam-image-fit__thirds {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 160ms ease;
+  background:
+    linear-gradient(to right, transparent calc(33.333% - 0.5px), rgba(255, 255, 255, 0.45) calc(33.333% - 0.5px), rgba(255, 255, 255, 0.45) calc(33.333% + 0.5px), transparent calc(33.333% + 0.5px), transparent calc(66.666% - 0.5px), rgba(255, 255, 255, 0.45) calc(66.666% - 0.5px), rgba(255, 255, 255, 0.45) calc(66.666% + 0.5px), transparent calc(66.666% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(33.333% - 0.5px), rgba(255, 255, 255, 0.45) calc(33.333% - 0.5px), rgba(255, 255, 255, 0.45) calc(33.333% + 0.5px), transparent calc(33.333% + 0.5px), transparent calc(66.666% - 0.5px), rgba(255, 255, 255, 0.45) calc(66.666% - 0.5px), rgba(255, 255, 255, 0.45) calc(66.666% + 0.5px), transparent calc(66.666% + 0.5px));
+}
+
+.froam-image-fit__stage.is-dragging .froam-image-fit__thirds { opacity: 1; }
+
+.froam-image-fit__status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.froam-image-fit__status.is-busy {
+  background: rgba(8, 9, 11, 0.55);
+  color: #fff;
+  font-weight: 600;
+  z-index: 2;
+}
+
+.froam-image-fit__note {
+  margin: 10px 16px 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--fs-text-secondary);
+}
+
+.froam-image-fit__playback {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 16px 0;
+}
+
+.froam-image-fit__toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--fs-border);
+  color: var(--fs-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+
+.froam-image-fit__toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.froam-image-fit__toggle:has(input:focus-visible) { box-shadow: var(--fs-focus-ring); }
+
+.froam-image-fit__toggle.is-on {
+  border-color: var(--fs-border-active);
+  background: var(--fs-accent-soft);
+  color: var(--fs-text-primary);
+}
+
+.froam-image-fit__error {
+  margin: 10px 16px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(var(--fs-danger-rgb), 0.12);
+  color: var(--fs-text-danger);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.froam-image-fit__controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 0;
+}
+
+.froam-image-fit__segmented {
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--fs-surface-control);
+}
+
+.froam-image-fit__segmented button {
+  min-width: 52px;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fs-text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.froam-image-fit__segmented button.is-active {
+  background: var(--fs-surface-4);
+  color: var(--fs-text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.froam-image-fit__zoom {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.froam-image-fit__zoom.is-disabled { opacity: 0.45; }
+.froam-image-fit__zoom .fs-range { flex: 1; min-width: 0; }
+
+.froam-image-fit__aspects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 16px 0;
+}
+
+.froam-image-fit__chip {
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--fs-border);
+  background: transparent;
+  color: var(--fs-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 100ms ease, border-color 100ms ease, color 100ms ease;
+}
+
+.froam-image-fit__chip:hover {
+  border-color: var(--fs-border-hover);
+  color: var(--fs-text-primary);
+}
+
+.froam-image-fit__chip.is-active {
+  border-color: var(--fs-border-active);
+  background: var(--fs-accent-soft);
+  color: var(--fs-text-primary);
+}
+
+.froam-image-fit__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  margin-top: 14px;
+  border-top: 1px solid var(--fs-border-muted);
+}
+
+.froam-image-fit__meta {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: 12px;
+  color: var(--fs-text-tertiary);
+}
+
+.froam-image-fit__warn { color: var(--fs-warning); }
+
+.froam-image-fit__size {
+  font-variant-numeric: tabular-nums;
+  color: var(--fs-text-tertiary);
+}
+
+.froam-image-fit__actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.froam-image-fit__actions .fs-pill { min-width: 76px; justify-content: center; }
+.froam-image-fit__actions .fs-pill:disabled { opacity: 0.5; cursor: default; }
+
+@media (max-width: 560px) {
+  .froam-image-fit { padding: 8px; align-items: end; }
+  .froam-image-fit__card { max-height: calc(100dvh - 16px); }
+  .froam-image-fit__stage { height: clamp(200px, 44vh, 360px); margin: 0 12px; }
+  .froam-image-fit__controls,
+  .froam-image-fit__aspects { padding-left: 12px; padding-right: 12px; }
+  /* One swipeable row. The id outranks the editor-wide thin-scrollbar rule. */
+  #froam-editor-portal .froam-image-fit__aspects { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  #froam-editor-portal .froam-image-fit__aspects::-webkit-scrollbar { display: none; }
+  .froam-image-fit__chip { flex: none; }
+  .froam-image-fit__footer { flex-direction: column; align-items: stretch; padding: 12px; }
+  .froam-image-fit__actions .fs-pill { flex: 1; min-height: 40px; }
+}

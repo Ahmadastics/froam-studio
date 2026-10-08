@@ -4,6 +4,8 @@ import type { FroamAnchorFingerprint } from '../collab/types';
 type ElementDraft = {
     text?: string;
     imageUrl?: string;
+    /** See MediaDraft in ./media/media-draft.ts. */
+    media?: string;
     styles?: Record<string, string>;
     /** See `ElementDraft` in src/collab/types.ts — how this edit re-finds its element. */
     fingerprint?: FroamAnchorFingerprint;

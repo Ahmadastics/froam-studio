@@ -10,7 +10,9 @@ import { isFroamPersonaPath } from './froamPersona.js';
 import { SECTION_STRUCTURE_KEY } from './section-structure.js';
 import { resolveAnchor } from '../collab/anchor.js';
 import { isBodyScopedPath, isFroamOwnedNode, isPathElement } from '../collab/paths.js';
-import { applyDraftText } from './draft-text.js';
+import { applyDraftText, writeElementText } from './draft-text.js';
+import { applyMediaSource, restorePageMedia } from './media/apply-media.js';
+import { hasMediaRef, resolveMediaRefs } from './media/media-refs.js';
 const CANVAS_KEY = '__froam_canvas__';
 const INJECTION_KEY = '__froam_injection__';
 const ROOT_PARENT_KEY = '__froam_root__';
@@ -90,18 +92,15 @@ function canApplyTextDraft(element) {
 function applyDraft(element, draft) {
     if (draft.text !== undefined && canApplyTextDraft(element))
         applyDraftText(element, draft.text);
-    if (element instanceof HTMLImageElement && draft.imageUrl !== undefined) {
-        if (draft.imageUrl && element.getAttribute('src') !== draft.imageUrl)
-            element.src = draft.imageUrl;
-        if (!draft.imageUrl && element.hasAttribute('src'))
-            element.removeAttribute('src');
-    }
+    if (draft.imageUrl !== undefined || draft.media !== undefined)
+        applyMediaSource(element, draft.imageUrl, draft.media, 'runtime');
     if (!draft.styles)
         return;
-    for (const [key, value] of Object.entries(draft.styles)) {
+    for (const [key, raw] of Object.entries(draft.styles)) {
         if (key.startsWith('__froamState:'))
             continue;
         const cssKey = camelToKebab(key);
+        const value = hasMediaRef(raw) ? resolveMediaRefs(raw, 'runtime') : raw;
         if (element.style.getPropertyValue(cssKey) === value)
             continue;
         if (value)
@@ -114,14 +113,10 @@ function restoreRuntimeSnapshots(snapshots) {
     for (const snapshot of snapshots.slice().reverse()) {
         const { element } = snapshot;
         if (snapshot.text !== undefined && canApplyTextDraft(element) && element.innerText !== snapshot.text) {
-            element.innerText = snapshot.text;
+            writeElementText(element, snapshot.text);
         }
-        if (snapshot.imageSrc !== undefined && element instanceof HTMLImageElement) {
-            if (snapshot.imageSrc)
-                element.src = snapshot.imageSrc;
-            else
-                element.removeAttribute('src');
-        }
+        if (snapshot.media)
+            restorePageMedia(element);
         for (const [cssKey, value] of Object.entries(snapshot.styles)) {
             if (value)
                 element.style.setProperty(cssKey, value);
@@ -135,8 +130,8 @@ function snapshotDraftTarget(element, draft, snapshots) {
     if (draft.text !== undefined && canApplyTextDraft(element)) {
         snapshot.text = element.innerText;
     }
-    if (element instanceof HTMLImageElement && draft.imageUrl !== undefined) {
-        snapshot.imageSrc = element.getAttribute('src');
+    if ((element instanceof HTMLImageElement || element instanceof HTMLVideoElement) && (draft.imageUrl !== undefined || draft.media !== undefined)) {
+        snapshot.media = true;
     }
     for (const key of Object.keys(draft.styles ?? {})) {
         if (key.startsWith('__froamState:'))
@@ -144,7 +139,7 @@ function snapshotDraftTarget(element, draft, snapshots) {
         const cssKey = camelToKebab(key);
         snapshot.styles[cssKey] = element.style.getPropertyValue(cssKey);
     }
-    if (snapshot.text !== undefined || snapshot.imageSrc !== undefined || Object.keys(snapshot.styles).length > 0) {
+    if (snapshot.text !== undefined || snapshot.media || Object.keys(snapshot.styles).length > 0) {
         snapshots.push(snapshot);
     }
     applyDraft(element, draft);
@@ -156,10 +151,11 @@ function applyCanvasDraftStyles(styles, snapshots) {
     if (!host)
         return;
     const snapshot = { element: host, styles: {} };
-    for (const [key, value] of Object.entries(styles)) {
+    for (const [key, raw] of Object.entries(styles)) {
         if (key === 'customCSS')
             continue;
         const cssKey = camelToKebab(key);
+        const value = hasMediaRef(raw) ? resolveMediaRefs(raw, 'runtime') : raw;
         snapshot.styles[cssKey] = host.style.getPropertyValue(cssKey);
         if (host.style.getPropertyValue(cssKey) === value)
             continue;
@@ -306,15 +302,14 @@ function restoreInjectedBlocks(store) {
         .filter((draft) => draft !== null)
         .sort((a, b) => a.order - b.order)
         .forEach((injection) => {
-        const parent = injection.parentId
-            ? root.querySelector(`[data-froam-id="${CSS.escape(injection.parentId)}"]`)
-            : injection.parentPath === ROOT_PARENT_KEY
-                ? root
-                : findElementByPath(root, injection.parentPath);
+        // The parent's node id is the sturdier address, but it is given out
+        // per session: a reloaded page (or a visitor's) has the path only.
+        const parent = (injection.parentId ? root.querySelector(`[data-froam-id="${CSS.escape(injection.parentId)}"]`) : null)
+            ?? (injection.parentPath === ROOT_PARENT_KEY ? root : findElementByPath(root, injection.parentPath));
         if (!parent)
             return;
         const template = document.createElement('template');
-        template.innerHTML = injection.html.trim();
+        template.innerHTML = resolveMediaRefs(injection.html.trim(), 'runtime');
         const node = template.content.firstElementChild;
         if (!(node instanceof HTMLElement))
             return;

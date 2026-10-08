@@ -59,6 +59,12 @@ html[data-chef-editing] [contenteditable='true'] * {
   pointer-events: auto !important;
 }
 
+/* A video Froam placed in a frame is edited through its frame: a click on
+   it selects the frame (visitors still get its controls). */
+html[data-chef-editing] video[data-froam-video] {
+  pointer-events: none;
+}
+
 /* Set for one caretRangeFromPoint() call (placeCaret) so Froam's overlay
    doesn't stand between the pointer and the text the caret belongs in. */
 html[data-froam-caret-probe] #froam-editor-portal,

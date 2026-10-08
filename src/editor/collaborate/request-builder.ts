@@ -3,7 +3,7 @@ import type { FroamOp, FroamViewport } from '../../collab/types'
 import type { RoomRequestScope, RoomStyleEdit } from '../../collab/room'
 import type { PendingChange } from './FroamCollaborate'
 
-type Draft = { text?: string; imageUrl?: string; styles?: Record<string, string>; fingerprint?: { text?: string; className?: string }; [key: string]: unknown }
+type Draft = { text?: string; imageUrl?: string; media?: string; styles?: Record<string, string>; fingerprint?: { text?: string; className?: string }; [key: string]: unknown }
 
 export type BuiltRequest = {
   /** The ops this request is made of — so a sent-back request's edits count again. */
@@ -35,6 +35,7 @@ const clip = (value: string | undefined, max = 160) => {
 function fieldLabel(field: string) {
   if (field === 'text') return 'Text'
   if (field === 'imageUrl') return 'Image'
+  if (field === 'media') return 'Image or video'
   const name = field.replace(/^style:/, '').replace(/^__froamState:([^:]+):/, '$1 ').replace(/([A-Z])/g, ' $1').trim().toLowerCase()
   return name.charAt(0).toUpperCase() + name.slice(1)
 }
@@ -55,6 +56,7 @@ function currentValue(draft: Draft | undefined, field: string) {
   if (!draft) return undefined
   if (field === 'text') return draft.text
   if (field === 'imageUrl') return draft.imageUrl
+  if (field === 'media') return draft.media
   return draft.styles?.[field.replace(/^style:/, '')]
 }
 
@@ -133,8 +135,8 @@ export function buildChangeRequest(input: {
         }
         changes.push({
           label: `${fieldLabel(field)} · ${elementLabel(path, onScreen ? input.current.root : null, draft?.fingerprint?.text)}`,
-          before: field === 'imageUrl' ? (before ? 'previous image' : null) : clip(before),
-          after: field === 'imageUrl' ? (after ? 'new image' : null) : clip(after),
+          before: field === 'imageUrl' || field === 'media' ? (before ? 'previous image' : null) : clip(before),
+          after: field === 'imageUrl' || field === 'media' ? (after ? 'new image' : null) : clip(after),
           routeKey: scope.routeKey,
           viewport: scope.viewport as FroamViewport,
         })

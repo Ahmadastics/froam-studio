@@ -1,5 +1,59 @@
 # Changelog
 
+## 9.5.1 - 2026-10-08
+
+**`npx @ahmadastic/froam` runs on Linux and macOS again. Pictures and video
+fit their spot, and big pages stay fast.**
+
+- **Linux and macOS.** 9.5.0's `bin/froam.mjs` shipped with a Windows line
+  ending on its `#!` line, so the CLI couldn't start anywhere but Windows
+  (`/usr/bin/env: 'node\r'`). `.gitattributes` now keeps LF on every
+  machine, and `scripts/check-package.mjs` runs before every pack: it
+  repairs `#!` lines and fails on imports whose case doesn't match the file.
+- **Fit your image.** An upload opens a fit step before it's placed. You
+  drag to choose what shows, zoom (scroll, pinch or slider), pick Fill or
+  Fit and a shape (the spot's own, the photo's, 1:1 … 3:4). It lands at
+  exactly that shape, so the page around it doesn't move. Adjust reopens it
+  later from the full original, including after a reload. Esc, Enter, arrow
+  keys and phone layout all work.
+- **Responsive images actually change.** Replacing an `<img>` with a
+  `srcset`, or one inside a `<picture>`, used to leave the browser showing
+  the site's own candidate (Next.js, most modern sites). The editor and both
+  runtimes now point every source at the new image, and Undo puts back
+  exactly what the page had.
+- **Media is kept as files.** Uploads go to `<froam>/media/<hash>.<ext>`
+  through the bridge, and the design refers to them as `froam-media:` instead
+  of carrying base64. Photos are cut to the crop and encoded off the main
+  thread as WebP, at the slot's 1×, 1.5× and 2× widths with `srcset`. On
+  every save, the files the design shows ship next to the generated CSS and
+  runtime; originals stay in the workspace. Existing designs are moved over
+  automatically the first time the editor opens them with a bridge (design,
+  undo log, project history and assets). The test project went from 2 MB to
+  2 KB.
+- **GIFs, SVGs and other sites' pictures fit too.** They're cropped by CSS
+  instead of being redrawn, so GIFs keep moving and SVGs stay sharp. A
+  picture another site won't share is copied into the project by the bridge
+  first.
+- **Video.** Upload into a page's `<video>`, behind a section's content, or
+  as a new video block. Fit, autoplay, loop, sound and controls are set in
+  the same dialog, and a poster frame is captured. On the live site a video
+  plays only while on screen, and not for visitors who ask for reduced
+  motion.
+- **Big pages are fast.** Measured on a 7,500-element page
+  (`npm run benchmark:editor`), total main-thread blocking went from 43.7 s
+  to 0.4 s, and a click to select from ~1 s to ~0.1 s. Selecting no longer
+  rebuilds Layers when it's closed. Paths are computed without copying
+  sibling lists. Sticky, fixed and click-through elements are found once and
+  re-read only where the page changes, instead of on every edit.
+- **Blocks added inside a section survive a reload.** An injected block was
+  found by a node id that only lives for one session. The editor and both
+  runtimes now fall back to its path, so it no longer disappears from the
+  next save.
+- **One accessibility answer.** The A11y tab, Health scan, "Fix contrast
+  everywhere", reviewer checks and the page profile now share one WCAG 2.2
+  implementation (`project/wcag.ts`, `project/a11y.ts`). An axe-core browser
+  test runs in `test:e2e`.
+
 ## 9.5.0 - 2026-10-07
 
 **Every stack in the matrix, from `init` to production.**

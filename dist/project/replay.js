@@ -11,7 +11,7 @@ export function replayCategory(event) {
         return 'structural';
     if (op?.field === 'text')
         return 'text';
-    if (op?.field?.startsWith('style:') || op?.field === 'imageUrl')
+    if (op?.field?.startsWith('style:') || op?.field === 'imageUrl' || op?.field === 'media')
         return 'styling';
     return 'other';
 }

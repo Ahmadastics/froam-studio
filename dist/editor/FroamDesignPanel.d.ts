@@ -80,6 +80,8 @@ type Props = {
         styles?: Record<string, string>;
     }, nextSelection?: Partial<SelectionState>) => void;
     onOpenImageUpload: () => void;
+    /** Crop, zoom and re-fit the selected picture. */
+    onAdjustImage?: () => void;
     onClearImage: () => void;
     onClearSelectionDraft: () => void;
     marginLinked: boolean;
@@ -109,6 +111,6 @@ type Props = {
     /** Open motion for the selection. */
     onAnimate?: () => void;
 };
-export default function FroamDesignPanel({ projectKey, selection, selectionRect, onApplyStyle, onUpdateDraft, onOpenImageUpload, onClearImage, onClearSelectionDraft, marginLinked, paddingLinked, radiusLinked, onToggleMarginLinked, onTogglePaddingLinked, onToggleRadiusLinked, onApplySizePreset, onBuildTransformString, fontOptions, onAddBrandFont, getRootEl, onOpenBlueprint, draftStyles, onApplyPseudoStyle, onAnimate, }: Props): import("react").JSX.Element;
+export default function FroamDesignPanel({ projectKey, selection, selectionRect, onApplyStyle, onUpdateDraft, onOpenImageUpload, onAdjustImage, onClearImage, onClearSelectionDraft, marginLinked, paddingLinked, radiusLinked, onToggleMarginLinked, onTogglePaddingLinked, onToggleRadiusLinked, onApplySizePreset, onBuildTransformString, fontOptions, onAddBrandFont, getRootEl, onOpenBlueprint, draftStyles, onApplyPseudoStyle, onAnimate, }: Props): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=FroamDesignPanel.d.ts.map

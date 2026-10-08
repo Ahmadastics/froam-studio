@@ -285,12 +285,16 @@ function pathToSelector(draftPath, rootScope = "auto") {
 function isSafeDeclaration(property, value) {
   return /^-{0,2}[a-zA-Z][a-zA-Z0-9-]*$/.test(property) && !/[{}]|<\/style/i.test(String(value));
 }
+var MEDIA_REF_GLOBAL = /froam-media:([a-f0-9]{32}.(?:jpg|png|webp|avif|gif|svg|bmp|mp4|webm|mov|ogv))/g;
+function cssMediaValue(value) {
+  return String(value).replace(MEDIA_REF_GLOBAL, "media/$1");
+}
 function declarations(styles, indent) {
   const lines = [];
   for (const [key, value] of Object.entries(styles ?? {})) {
     if (key === "customCSS" || key.startsWith("__froamState:") || value === "" || value == null) continue;
     if (!isSafeDeclaration(key, value)) continue;
-    lines.push(`${indent}${camelToKebab(key)}: ${value} !important;`);
+    lines.push(`${indent}${camelToKebab(key)}: ${cssMediaValue(value)} !important;`);
   }
   return lines;
 }
@@ -301,7 +305,7 @@ function stateDeclarations(styles, state, indent) {
     if (!key.startsWith(prefix) || value === "" || value == null) continue;
     const property = key.slice(prefix.length);
     if (!isSafeDeclaration(property, value)) continue;
-    lines.push(`${indent}${camelToKebab(property)}: ${value} !important;`);
+    lines.push(`${indent}${camelToKebab(property)}: ${cssMediaValue(value)} !important;`);
   }
   return lines;
 }
@@ -377,6 +381,19 @@ ${pseudoDecls.join("\n")}
   }
   return out.join("\n");
 }
+function runtimeMedia(value) {
+  if (typeof value !== "string" || !value) return null;
+  let media;
+  try {
+    media = JSON.parse(value);
+  } catch {
+    return null;
+  }
+  if (!media || typeof media !== "object") return null;
+  const kept = {};
+  for (const key of ["kind", "src", "srcset", "sizes", "poster", "playback"]) if (media[key] !== void 0) kept[key] = media[key];
+  return Object.keys(kept).length ? JSON.stringify(kept) : null;
+}
 function generateRuntimeJs(design) {
   const routes = {};
   for (const [routeKey, viewports] of Object.entries(design.routes ?? {})) {
@@ -395,6 +412,8 @@ function generateRuntimeJs(design) {
         } else {
           if (draft.text !== void 0) entry.text = draft.text;
           if (draft.imageUrl !== void 0) entry.imageUrl = draft.imageUrl;
+          const media = runtimeMedia(draft.media);
+          if (media) entry.media = media;
         }
         if (Object.keys(entry).length) kept[draftPath] = entry;
       }
@@ -421,6 +440,105 @@ function generateRuntimeJs(design) {
   var INJECTION_PREFIX = '${INJECTION_KEY}:'
   var SECTION_STRUCTURE_KEY = '${SECTION_STRUCTURE_KEY}'
   var ROOT_PARENT_KEY = '__froam_root__'
+
+  // Placed pictures and videos ship in media/, beside this script.
+  var MEDIA_BASE = (function () {
+    var script = document.currentScript
+    if (!script || !script.src) {
+      var scripts = document.getElementsByTagName('script')
+      for (var i = scripts.length - 1; i >= 0; i -= 1) {
+        if (/froam\\.runtime\\.js(\\?|#|$)/.test(scripts[i].src)) { script = scripts[i]; break }
+      }
+    }
+    try { return new URL('media/', (script && script.src) || window.location.href).href } catch (e) { return '/froam/media/' }
+  })()
+  var MEDIA_REF = /froam-media:([a-f0-9]{32}\\.(?:jpg|png|webp|avif|gif|svg|bmp|mp4|webm|mov|ogv))/g
+  function mediaUrl(value) {
+    return String(value).replace(MEDIA_REF, function (_, name) { return MEDIA_BASE + name })
+  }
+  var parsedMedia = {}
+  function readMedia(value) {
+    if (!value) return null
+    if (!(value in parsedMedia)) {
+      try { parsedMedia[value] = JSON.parse(value) } catch (e) { parsedMedia[value] = null }
+    }
+    return parsedMedia[value]
+  }
+  function setAttr(element, name, value) {
+    if (value === null || value === undefined || value === false) { if (element.hasAttribute(name)) element.removeAttribute(name) }
+    else if (element.getAttribute(name) !== String(value)) element.setAttribute(name, String(value))
+  }
+
+  // A responsive picture keeps showing its own image if only src changes:
+  // the browser picks from srcset and <picture>'s <source>s first. Every
+  // place the page offers an image is pointed at the new one.
+  function applyImage(img, draft, media) {
+    var src = draft.imageUrl !== undefined ? mediaUrl(draft.imageUrl) : null
+    var srcset = media && media.srcset ? mediaUrl(media.srcset) : ''
+    var sizes = srcset && media.sizes ? media.sizes : null
+    var picture = img.parentNode && img.parentNode.nodeName === 'PICTURE' ? img.parentNode : null
+    if (picture) {
+      var sources = picture.getElementsByTagName('source')
+      for (var s = 0; s < sources.length; s += 1) {
+        setAttr(sources[s], 'srcset', srcset || src || null)
+        setAttr(sources[s], 'sizes', sizes)
+        setAttr(sources[s], 'type', null)
+      }
+    }
+    setAttr(img, 'srcset', srcset || null)
+    setAttr(img, 'sizes', sizes)
+    if (src !== null) setAttr(img, 'src', src || null)
+  }
+
+  // Videos play only while on screen, and not at all for people who asked
+  // their device for less motion: the poster shows instead.
+  var reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  var videoObserver = null
+  // A play() asked for while the video is still loading can be cut short;
+  // then it is asked again once the video can play, if it is still wanted.
+  function playWhenReady(video) {
+    video.__froamWanted = true
+    var attempt = video.play()
+    if (attempt && attempt.catch) attempt.catch(function () {
+      video.addEventListener('canplay', function () {
+        if (!video.__froamWanted) return
+        var again = video.play()
+        if (again && again.catch) again.catch(function () {})
+      }, { once: true })
+    })
+  }
+  function watchVideo(video) {
+    if (reducedMotion || !video.hasAttribute('autoplay') || typeof IntersectionObserver === 'undefined') return
+    if (!videoObserver) {
+      videoObserver = new IntersectionObserver(function (entries) {
+        for (var i = 0; i < entries.length; i += 1) {
+          var target = entries[i].target
+          if (entries[i].isIntersecting) playWhenReady(target)
+          else { target.__froamWanted = false; target.pause() }
+        }
+      }, { rootMargin: '200px' })
+    }
+    videoObserver.observe(video)
+  }
+  function settleVideo(video) {
+    if (reducedMotion && video.hasAttribute('autoplay')) { video.removeAttribute('autoplay'); video.pause() }
+    watchVideo(video)
+  }
+  function applyVideo(video, media) {
+    var playback = media.playback || {}
+    // With a src attribute, a video's own <source> children are not used.
+    if (media.src) setAttr(video, 'src', mediaUrl(media.src))
+    setAttr(video, 'poster', media.poster ? mediaUrl(media.poster) : null)
+    setAttr(video, 'autoplay', playback.autoplay ? '' : null)
+    setAttr(video, 'loop', playback.loop ? '' : null)
+    setAttr(video, 'muted', playback.muted ? '' : null)
+    setAttr(video, 'controls', playback.controls ? '' : null)
+    setAttr(video, 'playsinline', '')
+    setAttr(video, 'preload', playback.autoplay ? 'auto' : media.poster ? 'none' : 'metadata')
+    video.muted = !!playback.muted
+    settleVideo(video)
+  }
+
   var TEXT_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'small', 'strong', 'em', 'b', 'i', 'label', 'button', 'a', 'li']
 
   function getRoot() {
@@ -565,10 +683,12 @@ function generateRuntimeJs(design) {
     }
     blocks.sort(function (a, b) { return a.order - b.order })
     for (var i = 0; i < blocks.length; i += 1) {
-      var parent = blocks[i].parentId ? root.querySelector('[data-froam-id="' + blocks[i].parentId.replace(/["\\\\]/g, '\\\\$&') + '"]') : blocks[i].parentPath === ROOT_PARENT_KEY ? root : findByPath(root, blocks[i].parentPath)
+      // The parent's node id is given out per editing session; a visitor's
+      // page doesn't carry it, so the path is the fallback.
+      var parent = (blocks[i].parentId && root.querySelector('[data-froam-id="' + blocks[i].parentId.replace(/["\\\\]/g, '\\\\$&') + '"]')) || (blocks[i].parentPath === ROOT_PARENT_KEY ? root : findByPath(root, blocks[i].parentPath))
       if (!parent) continue
       var template = document.createElement('template')
-      template.innerHTML = blocks[i].html.trim()
+      template.innerHTML = mediaUrl(blocks[i].html.trim())
       var node = template.content.firstElementChild
       if (!node) continue
       node.setAttribute('data-froam-runtime-injected', 'true')
@@ -579,6 +699,8 @@ function generateRuntimeJs(design) {
       var editables = node.querySelectorAll('[contenteditable]')
       for (var e = 0; e < editables.length; e += 1) editables[e].removeAttribute('contenteditable')
       parent.insertBefore(node, parent.children.item(blocks[i].order))
+      var videos = node.nodeName === 'VIDEO' ? [node] : node.getElementsByTagName('video')
+      for (var v = 0; v < videos.length; v += 1) settleVideo(videos[v])
     }
   }
 
@@ -627,10 +749,10 @@ function generateRuntimeJs(design) {
       if (!target) continue
       var draft = store[key]
       if (draft.text !== undefined && canApplyText(target)) applyText(target, draft.text)
-      if (draft.imageUrl !== undefined && target.tagName.toLowerCase() === 'img') {
-        if (draft.imageUrl && target.getAttribute('src') !== draft.imageUrl) target.src = draft.imageUrl
-        if (!draft.imageUrl && target.hasAttribute('src')) target.removeAttribute('src')
-      }
+      var media = readMedia(draft.media)
+      var tag = target.tagName.toLowerCase()
+      if (tag === 'img' && (draft.imageUrl !== undefined || (media && media.srcset))) applyImage(target, draft, media)
+      if (tag === 'video' && media && media.kind === 'video') applyVideo(target, media)
     }
   }
 
@@ -1091,7 +1213,7 @@ function isSafeOp(value, actor) {
   if (!["edit", "undo", "redo"].includes(value.kind)) return false;
   if (typeof value.routeKey !== "string" || typeof value.path !== "string" || !value.path || value.path.length > 2e3) return false;
   if (!VIEWPORTS.includes(value.viewport)) return false;
-  if (typeof value.field !== "string" || !/^(text|imageUrl|style:[A-Za-z0-9_-]{1,100})$/.test(value.field)) return false;
+  if (typeof value.field !== "string" || !/^(text|imageUrl|media|style:[A-Za-z0-9_-]{1,100})$/.test(value.field)) return false;
   if (value.before !== void 0 && typeof value.before !== "string") return false;
   if (value.after !== void 0 && typeof value.after !== "string") return false;
   if ((value.before?.length ?? 0) > 2e6 || (value.after?.length ?? 0) > 2e6) return false;

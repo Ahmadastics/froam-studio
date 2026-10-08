@@ -19,6 +19,33 @@ const pageText = new WeakMap();
 export function pageTextOf(element) {
     return pageText.get(element);
 }
+/**
+ * Write an element's text, keeping its own text nodes when that is all it
+ * holds (with the comments SSR puts between adjacent text). React keeps
+ * references to those nodes; `innerText` swaps them for new ones, and React's
+ * next update then removes a node that is no longer there.
+ */
+export function writeElementText(element, text) {
+    let first = null;
+    for (const node of Array.from(element.childNodes)) {
+        if (node.nodeType === Node.TEXT_NODE)
+            first ??= node;
+        else if (node.nodeType !== Node.COMMENT_NODE) {
+            first = null;
+            break;
+        }
+    }
+    // innerText turns a newline into <br>; a text node can't.
+    if (!first || text.includes('\n')) {
+        element.innerText = text;
+        return;
+    }
+    first.nodeValue = text;
+    for (const node of Array.from(element.childNodes)) {
+        if (node !== first && node.nodeType === Node.TEXT_NODE)
+            node.nodeValue = '';
+    }
+}
 export function applyDraftText(element, text) {
     const shown = element.innerText;
     if (shown === text)
@@ -28,7 +55,7 @@ export function applyDraftText(element, text) {
         return false;
     if (!pageText.has(element))
         pageText.set(element, shown);
-    element.innerText = text;
+    writeElementText(element, text);
     shownAfterWrite.set(element, { text, shown: element.innerText });
     return true;
 }
@@ -49,7 +76,7 @@ export function restorePageText(element) {
         return false;
     if (element.innerText !== last.shown)
         return false;
-    element.innerText = original;
+    writeElementText(element, original);
     pageText.delete(element);
     shownAfterWrite.delete(element);
     return true;

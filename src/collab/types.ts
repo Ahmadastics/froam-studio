@@ -25,6 +25,12 @@ export const FROAM_VIEWPORTS: readonly FroamViewport[] = ['desktop', 'tablet', '
 export type ElementDraft = {
   text?: string
   imageUrl?: string
+  /**
+   * A picture's or video's extras as JSON (see MediaDraft in
+   * src/editor/media/media-draft.ts): responsive widths, a video's file and
+   * poster, the original a crop was cut from. One string, so it is one op.
+   */
+  media?: string
   styles?: Record<string, string>
   /**
    * Enough of what the element was to recognise it again after the page is
@@ -84,7 +90,7 @@ export const BASELINE_ACTOR: FroamActorId = 'baseline'
  * two people restyling the same element don't clobber each other unless they
  * touch the same property.
  */
-export type FroamOpField = 'text' | 'imageUrl' | `style:${string}`
+export type FroamOpField = 'text' | 'imageUrl' | 'media' | `style:${string}`
 
 export type FroamOpKind = 'edit' | 'undo' | 'redo'
 

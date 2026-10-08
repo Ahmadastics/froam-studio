@@ -4,7 +4,7 @@ import type { FroamStyleState } from '../project/types'
 import { FONT_GROUP_LABELS, groupFontOptions, type FontOption } from './fontSources'
 import { describeSelection } from './selection-name'
 import type { Look, LookGroup, LookOverrides } from './floating-bar-looks'
-import { sampleAccent, toHex as brandHex } from './library/site-theme'
+import { contrast, luminance, parseColor, sampleAccent, toHex as brandHex } from './library/site-theme'
 import {
   AlignCenter,
   AlignJustify,
@@ -21,6 +21,7 @@ import {
   Copy,
   CornerLeftUp,
   CornerRightDown,
+  Crop,
   Eraser,
   Eye,
   EyeOff,
@@ -53,6 +54,7 @@ type FloatingAction =
   | 'bg-color'
   | 'clear-bg'
   | 'image'
+  | 'adjust-image'
   | 'duplicate'
   | 'merge'
   | 'unmerge'
@@ -107,6 +109,8 @@ type Props = {
   /** The element has words of its own — show the type controls. */
   hasText?: boolean
   isImage?: boolean
+  /** The selection shows a picture that can be cropped and re-fitted. */
+  canAdjustImage?: boolean
   docked?: boolean
   canUndo?: boolean
   onWalk?: (direction: WalkDirection) => void
@@ -180,11 +184,8 @@ function useScrub(onSteps: (steps: number) => void, pixelsPerStep = 8) {
    The best mobile color picker is no picker: read the colors the site
    already uses, rank them by frequency, offer them as one-tap chips. */
 function normalizeToHex(value: string): string | null {
-  const match = value.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/)
-  if (!match) return value.startsWith('#') ? value.toLowerCase() : null
-  if (match[4] !== undefined && Number.parseFloat(match[4]) < 0.4) return null
-  const toHex = (channel: string) => Number(channel).toString(16).padStart(2, '0')
-  return `#${toHex(match[1])}${toHex(match[2])}${toHex(match[3])}`
+  const colour = parseColor(value)
+  return colour && colour.a >= 0.4 ? brandHex(colour) : null
 }
 
 export function collectPagePalette(): string[] {
@@ -206,20 +207,9 @@ export function collectPagePalette(): string[] {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([hex]) => hex)
 }
 
-function relativeLuminance(hex: string): number {
-  const channels = [1, 3, 5].map((offset) => {
-    const channel = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255
-    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
-  })
-  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
-}
-
-function contrastRatio(hexA: string, hexB: string): number {
-  const a = relativeLuminance(hexA)
-  const b = relativeLuminance(hexB)
-  const [lighter, darker] = a >= b ? [a, b] : [b, a]
-  return (lighter + 0.05) / (darker + 0.05)
-}
+const WHITE_HEX = { r: 255, g: 255, b: 255, a: 1 }
+const relativeLuminance = (hex: string) => luminance(parseColor(hex) ?? WHITE_HEX)
+const contrastRatio = (hexA: string, hexB: string) => contrast(parseColor(hexA) ?? WHITE_HEX, parseColor(hexB) ?? WHITE_HEX)
 
 function saturationOf(hex: string): number {
   const r = Number.parseInt(hex.slice(1, 3), 16) / 255
@@ -299,6 +289,7 @@ export default function FroamFloatingBar({
   isTextLayer = false,
   hasText = true,
   isImage = false,
+  canAdjustImage = false,
   docked = false,
   canUndo = false,
   onWalk,
@@ -681,7 +672,10 @@ export default function FroamFloatingBar({
         </button>
 
         {isImage && (
-          <button type="button" className="froam-floating-bar__btn" title="Replace image" aria-label="Replace image" onClick={() => onAction('image')}><ImagePlus size={15} /></button>
+          <button type="button" className="froam-floating-bar__btn" title="Replace — a new image or video" aria-label="Replace image or video" onClick={() => onAction('image')}><ImagePlus size={15} /></button>
+        )}
+        {canAdjustImage && (
+          <button type="button" className="froam-floating-bar__btn" title="Adjust — crop, zoom and fit it to its spot" aria-label="Adjust image or video" onClick={() => onAction('adjust-image')}><Crop size={15} /></button>
         )}
 
         <button

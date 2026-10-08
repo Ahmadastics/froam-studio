@@ -55,6 +55,12 @@ export declare function isBodyScopedPath(path: string): boolean;
  */
 export declare function isFroamOwnedNode(element: Element): boolean;
 /**
+ * `parent`'s path children with the segment each one adds (`tag:n`), in one
+ * pass. For building many paths at once, like the Layers tree: a child's path
+ * is its parent's plus this, instead of a fresh walk back up for every node.
+ */
+export declare function pathSegmentsOfChildren(parent: Element): Array<[HTMLElement, string]>;
+/**
  * Whether `element` is page content Froam can address from `root`: inside the
  * root, or elsewhere on `<body>` and not part of Froam's own UI.
  */

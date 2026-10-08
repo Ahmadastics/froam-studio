@@ -1,4 +1,4 @@
-import { getElementPath, isPathElement, pathChildren } from '../../collab/paths'
+import { getElementPath, isPathElement, pathChildren, pathSegmentsOfChildren } from '../../collab/paths'
 import { describeSelection } from '../selection-name'
 import { type LayerNode } from './types'
 import { shouldSkipElement } from './dom'
@@ -38,9 +38,12 @@ export function syncStructureBoundaryLabel(element: HTMLElement) {
 }
 
 export function buildLayerNode(element: HTMLElement, root: HTMLElement): LayerNode {
-  const path = getElementPath(element, root)
+  const children = pathChildren(element).filter((child): child is HTMLElement => isPathElement(child) && !shouldSkipElement(child))
+  return layerNodeAt(element, getElementPath(element, root), children.length)
+}
+
+function layerNodeAt(element: HTMLElement, path: string, childCount: number): LayerNode {
   const computed = window.getComputedStyle(element)
-  const elementChildren = pathChildren(element).filter((child): child is HTMLElement => isPathElement(child) && !shouldSkipElement(child))
   return {
     element,
     path,
@@ -52,8 +55,8 @@ export function buildLayerNode(element: HTMLElement, root: HTMLElement): LayerNo
     hidden: computed.display === 'none',
     editorHidden: element.dataset.froamEditorHidden === 'true',
     exportHidden: element.dataset.froamExportHidden === 'true',
-    hasChildren: elementChildren.length > 0,
-    childCount: elementChildren.length,
+    hasChildren: childCount > 0,
+    childCount,
     nodeId: element.dataset.froamId || undefined,
   }
 }
@@ -64,17 +67,20 @@ export const LAYER_MAX_DEPTH = 64
 
 export const LAYER_MAX_NODES = 6000
 
+/**
+ * The whole tree, paths built top-down: a child's path is its parent's plus
+ * one segment, so the tree costs one pass over the page instead of a walk
+ * back up to the root for every node.
+ */
 export function collectLayers(root: HTMLElement, maxDepth = LAYER_MAX_DEPTH): LayerNode[] {
   const nodes: LayerNode[] = []
-  function walk(el: HTMLElement, depth: number) {
+  function walk(el: HTMLElement, path: string, depth: number) {
     if (depth > maxDepth || nodes.length >= LAYER_MAX_NODES) return
     if (shouldSkipElement(el)) return
-    const elementChildren = pathChildren(el).filter((child): child is HTMLElement => isPathElement(child) && !shouldSkipElement(child))
-    nodes.push(buildLayerNode(el, root))
-    elementChildren.forEach((child) => walk(child, depth + 1))
+    const shown = pathSegmentsOfChildren(el).filter(([child]) => !shouldSkipElement(child))
+    nodes.push(layerNodeAt(el, path, shown.length))
+    for (const [child, segment] of shown) walk(child, `${path}/${segment}`, depth + 1)
   }
-  for (const child of pathChildren(root)) {
-    if (isPathElement(child)) walk(child, 0)
-  }
+  for (const [child, segment] of pathSegmentsOfChildren(root)) walk(child, segment, 0)
   return nodes
 }

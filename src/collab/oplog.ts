@@ -69,12 +69,13 @@ function readField(draft: ElementDraft | undefined, field: FroamOpField): string
   if (!draft) return undefined
   if (field === 'text') return draft.text
   if (field === 'imageUrl') return draft.imageUrl
+  if (field === 'media') return draft.media
   return draft.styles?.[field.slice(6)]
 }
 
 function writeField(draft: ElementDraft, field: FroamOpField, value: string | undefined): ElementDraft {
   const next: ElementDraft = { ...draft }
-  if (field === 'text' || field === 'imageUrl') {
+  if (field === 'text' || field === 'imageUrl' || field === 'media') {
     if (value === undefined) delete next[field]
     else next[field] = value
     return next
@@ -89,7 +90,7 @@ function writeField(draft: ElementDraft, field: FroamOpField, value: string | un
 }
 
 function isEmptyDraft(draft: ElementDraft) {
-  return draft.text === undefined && draft.imageUrl === undefined && !draft.styles
+  return draft.text === undefined && draft.imageUrl === undefined && draft.media === undefined && !draft.styles
 }
 
 /** Apply one op to a store, returning a new store. Last write wins. */
@@ -196,6 +197,7 @@ export function diffDrafts(prev: ElementDraft | undefined, next: ElementDraft | 
 
   if (before.text !== after.text) changes.push({ field: 'text', value: after.text })
   if (before.imageUrl !== after.imageUrl) changes.push({ field: 'imageUrl', value: after.imageUrl })
+  if (before.media !== after.media) changes.push({ field: 'media', value: after.media })
 
   const props = new Set([...Object.keys(before.styles ?? {}), ...Object.keys(after.styles ?? {})])
   for (const prop of props) {
@@ -566,6 +568,7 @@ export function compactLog(ops: readonly FroamOp[], keepRecent = 200): FroamOp[]
       const fields: Array<[FroamOpField, string | undefined]> = [
         ['text', draft.text],
         ['imageUrl', draft.imageUrl],
+        ['media', draft.media],
         ...Object.entries(draft.styles ?? {}).map(
           ([prop, value]) => [`style:${prop}`, value] as [FroamOpField, string],
         ),

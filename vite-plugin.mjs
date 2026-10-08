@@ -24,6 +24,7 @@ import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { ensureScaffold, loadDesign, mergeSave, writeArtifacts, VIEWPORTS } from './lib/codegen.mjs'
 import { loadProjectFile, writeProjectFile } from './lib/project-store.mjs'
+import { createFroamMediaApi } from './lib/media-store.mjs'
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -86,11 +87,15 @@ export default function froamStudio(options = {}) {
     configureServer(server) {
       ensureScaffold(froamDir, { glue: true })
 
+      // Placed media lives in <dir>/media and is served from here while editing.
+      const mediaApi = createFroamMediaApi({ getFroamDir: () => froamDir, send })
+
       server.middlewares.use(async (req, res, next) => {
         const url = (req.url || '').split('?')[0]
         if (!url.startsWith('/__froam/')) return next()
 
         try {
+          if ((url === '/__froam/media' || url.startsWith('/__froam/media/')) && await mediaApi(req, res, url)) return
           if (url === '/__froam/repo/load' && req.method === 'GET') {
             return send(res, 200, { success: true, design: loadDesign(designPath()) })
           }

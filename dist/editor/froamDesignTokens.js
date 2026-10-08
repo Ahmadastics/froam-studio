@@ -7,6 +7,7 @@
  * features. This is only possible because Froam edits the live app, not
  * a static mock — the tokens are the truth, not a copy.
  */
+import { contrastRatio, luminance, parseColor, toHex } from '../project/wcag.js';
 const COLOR_RAMP_ORDER = ['red', 'orange', 'gold', 'green', 'blue', 'magenta', 'semantic', 'ink', 'paper', 'white', 'other'];
 function classify(name) {
     const body = name.replace(/^--/, '');
@@ -28,87 +29,15 @@ function classify(name) {
     }
     return { kind: 'other', ramp: 'other' };
 }
-export function parseColor(input) {
-    const value = input.trim().toLowerCase();
-    if (!value || value === 'transparent' || value === 'none')
-        return null;
-    const rgbMatch = value.match(/rgba?\(([^)]+)\)/);
-    if (rgbMatch) {
-        const parts = rgbMatch[1].split(/[,\s/]+/).filter(Boolean).map((p) => p.trim());
-        const r = Number(parts[0]), g = Number(parts[1]), b = Number(parts[2]);
-        const a = parts[3] != null ? (parts[3].endsWith('%') ? Number(parts[3]) / 100 : Number(parts[3])) : 1;
-        if ([r, g, b].some(Number.isNaN))
-            return null;
-        return { r, g, b, a: Number.isNaN(a) ? 1 : a };
-    }
-    const hex = value.match(/^#([0-9a-f]{3,8})$/);
-    if (hex) {
-        let h = hex[1];
-        if (h.length === 3)
-            h = h.split('').map((c) => c + c).join('');
-        if (h.length === 6 || h.length === 8) {
-            return {
-                r: parseInt(h.slice(0, 2), 16),
-                g: parseInt(h.slice(2, 4), 16),
-                b: parseInt(h.slice(4, 6), 16),
-                a: h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1,
-            };
-        }
-    }
-    return null;
-}
-/** Composite a possibly-translucent colour over an opaque backdrop. */
-export function flatten(top, backdrop) {
-    const a = top.a;
-    return {
-        r: Math.round(top.r * a + backdrop.r * (1 - a)),
-        g: Math.round(top.g * a + backdrop.g * (1 - a)),
-        b: Math.round(top.b * a + backdrop.b * (1 - a)),
-        a: 1,
-    };
-}
-function channel(c) {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-}
-export function luminance({ r, g, b }) {
-    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
-}
-export function contrastRatio(fg, bg) {
-    const l1 = luminance(fg);
-    const l2 = luminance(bg);
-    const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1];
-    return (hi + 0.05) / (lo + 0.05);
-}
-export function toHex({ r, g, b }) {
-    return '#' + [r, g, b].map((c) => Math.max(0, Math.min(255, Math.round(c))).toString(16).padStart(2, '0')).join('');
-}
+// The colour maths is shared with every other check (project/wcag); what is
+// behind an element is read by project/a11y, which handles gradients, photos
+// and opacity rather than only solid backgrounds.
+export { parseColor, luminance, contrastRatio, toHex };
 export function colorDistance(a, b) {
     // Perceptual-ish weighting (redmean approximation).
     const rm = (a.r + b.r) / 2;
     const dr = a.r - b.r, dg = a.g - b.g, db = a.b - b.b;
     return Math.sqrt((2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db);
-}
-/** Resolve the true painted background behind an element (walks ancestors, composites alpha). */
-export function resolvedBackground(el) {
-    let node = el;
-    const stack = [];
-    while (node) {
-        const bg = parseColor(getComputedStyle(node).backgroundColor);
-        if (bg && bg.a > 0) {
-            stack.push(bg);
-            if (bg.a >= 1)
-                break;
-        }
-        node = node.parentElement;
-    }
-    let base = { r: 255, g: 255, b: 255, a: 1 };
-    const rootBg = parseColor(getComputedStyle(document.body).backgroundColor);
-    if (rootBg && rootBg.a >= 1)
-        base = rootBg;
-    for (let i = stack.length - 1; i >= 0; i--)
-        base = flatten(stack[i], base);
-    return base;
 }
 let cache = null;
 export function readDesignTokens(force = false) {

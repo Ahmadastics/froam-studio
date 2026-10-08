@@ -7,6 +7,8 @@
  * themeVariables). The values travel inside the section's own style, so the
  * look survives saving, the op log and the production runtime unchanged.
  */
+import { parseColor, toHex, luminance, contrastRatio as contrast } from '../../project/wcag'
+
 export type SiteTheme = {
   fontBody: string
   fontHeading: string
@@ -54,41 +56,12 @@ export const DEFAULT_SITE_THEME: SiteTheme = {
 
 type Rgba = { r: number; g: number; b: number; a: number }
 
-export function parseColor(value: string | null | undefined): Rgba | null {
-  if (!value) return null
-  const hex = value.trim().match(/^#([0-9a-f]{3,8})$/i)
-  if (hex) {
-    let digits = hex[1]
-    if (digits.length <= 4) digits = digits.split('').map((d) => d + d).join('')
-    const n = (i: number) => parseInt(digits.slice(i, i + 2), 16)
-    return { r: n(0), g: n(2), b: n(4), a: digits.length === 8 ? n(6) / 255 : 1 }
-  }
-  const rgb = value.match(/rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+%?))?\s*\)/i)
-  if (!rgb) return null
-  const alpha = rgb[4] === undefined ? 1 : rgb[4].endsWith('%') ? Number.parseFloat(rgb[4]) / 100 : Number(rgb[4])
-  return { r: Number(rgb[1]), g: Number(rgb[2]), b: Number(rgb[3]), a: alpha }
-}
-
-export function toHex({ r, g, b }: Rgba) {
-  return `#${[r, g, b].map((part) => Math.round(Math.max(0, Math.min(255, part))).toString(16).padStart(2, '0')).join('')}`
-}
+// One parser and one WCAG formula for all of Froam (project/wcag), so the
+// Library, the smart edits and the accessibility checks read colours alike.
+export { parseColor, toHex, luminance, contrast }
 
 function mix(a: Rgba, b: Rgba, amountOfB: number): Rgba {
   return { r: a.r + (b.r - a.r) * amountOfB, g: a.g + (b.g - a.g) * amountOfB, b: a.b + (b.b - a.b) * amountOfB, a: 1 }
-}
-
-/** WCAG relative luminance. */
-export function luminance({ r, g, b }: Rgba) {
-  const channel = (value: number) => {
-    const c = value / 255
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-  }
-  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
-}
-
-export function contrast(a: Rgba, b: Rgba) {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
-  return (hi + 0.05) / (lo + 0.05)
 }
 
 /**

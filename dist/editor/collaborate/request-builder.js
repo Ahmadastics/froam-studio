@@ -16,6 +16,8 @@ function fieldLabel(field) {
         return 'Text';
     if (field === 'imageUrl')
         return 'Image';
+    if (field === 'media')
+        return 'Image or video';
     const name = field.replace(/^style:/, '').replace(/^__froamState:([^:]+):/, '$1 ').replace(/([A-Z])/g, ' $1').trim().toLowerCase();
     return name.charAt(0).toUpperCase() + name.slice(1);
 }
@@ -37,6 +39,8 @@ function currentValue(draft, field) {
         return draft.text;
     if (field === 'imageUrl')
         return draft.imageUrl;
+    if (field === 'media')
+        return draft.media;
     return draft.styles?.[field.replace(/^style:/, '')];
 }
 const scopeId = (routeKey, viewport) => `${routeKey}@@${viewport}`;
@@ -98,8 +102,8 @@ export function buildChangeRequest(input) {
                 }
                 changes.push({
                     label: `${fieldLabel(field)} · ${elementLabel(path, onScreen ? input.current.root : null, draft?.fingerprint?.text)}`,
-                    before: field === 'imageUrl' ? (before ? 'previous image' : null) : clip(before),
-                    after: field === 'imageUrl' ? (after ? 'new image' : null) : clip(after),
+                    before: field === 'imageUrl' || field === 'media' ? (before ? 'previous image' : null) : clip(before),
+                    after: field === 'imageUrl' || field === 'media' ? (after ? 'new image' : null) : clip(after),
                     routeKey: scope.routeKey,
                     viewport: scope.viewport,
                 });

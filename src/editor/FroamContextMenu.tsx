@@ -10,6 +10,7 @@ import {
   ArrowDownToLine,
   Trash2,
   Box,
+  Crop,
   ImagePlus,
   SlidersHorizontal,
   Archive,
@@ -32,6 +33,7 @@ type ContextAction =
   | 'toggle-visibility'
   | 'wrap-container'
   | 'upload-image'
+  | 'adjust-image'
   | 'group-elements'
   | 'ungroup-elements'
   | 'customize-ui'
@@ -47,6 +49,8 @@ type Props = {
   hasClipboard?: boolean
   hasMultiSelection?: boolean
   isGroup?: boolean
+  /** The element shows a picture that can be cropped and re-fitted. */
+  canAdjustImage?: boolean
   onAction: (action: ContextAction) => void
   onClose: () => void
 }
@@ -58,6 +62,7 @@ export default function FroamContextMenu({
   hasClipboard,
   hasMultiSelection,
   isGroup,
+  canAdjustImage,
   onAction,
   onClose,
 }: Props) {
@@ -213,6 +218,12 @@ export default function FroamContextMenu({
           <ImagePlus size={14} />
           <span>Upload image</span>
         </button>
+        {canAdjustImage && (
+          <button type="button" className="froam-context-menu__item" onClick={() => handleAction('adjust-image')}>
+            <Crop size={14} />
+            <span>Adjust image</span>
+          </button>
+        )}
       </div>
 
       <div className="froam-context-menu__divider" />

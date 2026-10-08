@@ -8,6 +8,8 @@ export declare const labTabs: Partial<Record<FroamWorkspaceSection, FroamLab>>;
 export type ElementDraft = {
     text?: string;
     imageUrl?: string;
+    /** A picture's or video's extras, as JSON — see MediaDraft in ../media/media-draft.ts. */
+    media?: string;
     styles?: Record<string, string>;
     /** See `ElementDraft` in src/collab/types.ts — how this edit re-finds its element. */
     fingerprint?: FroamAnchorFingerprint;

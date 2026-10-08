@@ -24,6 +24,7 @@ import {
   Code,
   Command,
   Copy,
+  Crop,
   Download,
   Eraser,
   Eye,
@@ -87,6 +88,33 @@ import FroamBottomSheet, { type SheetDetent } from './FroamBottomSheet'
 import FroamBlueprint from './FroamBlueprint'
 import { COARSE_POINTER_QUERY, MOBILE_UI_QUERY, useMediaQuery } from './froamMedia'
 import FroamShortcutOverlay from './FroamShortcutOverlay'
+import FroamImageFit, { recallImageFit, rememberImageFit, type ImageFitChoice, type ImageFitRequest } from './FroamImageFit'
+import { aspectRatioCss, DEFAULT_IMAGE_FIT, imageFitStyles, liveFitStyles, outputSize, resolveAspectRatio, shapeStyles, slotSize, sourceRect, srcsetWidths, type FitSize, type ImageFitState } from './image-fit'
+import { DEFAULT_PLAYBACK, writeMediaDraft, type MediaDraft, type MediaPlayback } from './media/media-draft'
+import { isMediaRef, mediaRefsFromUrls, resolveMediaRefs } from './media/media-refs'
+import { canStoreMedia, importMedia, MediaRejected, storeMedia, type StoredMedia } from './media/media-store'
+import { bakeCrop, blobToDataUrl, capturePoster } from './media/encode'
+import { moveInlineMedia } from './media/migrate-inline'
+import { canZoomLive, currentMediaOf, ensureBackgroundVideo, ensureFrameVideo, hasAdjustableMedia, isBakeable, isImageFrame, measureSlot, MEDIA_ATTR, mediaHostOf, roleFor, typeFromName, VIDEO_ATTR, writeOwnedVideo, type MediaRole } from './media/media-placement'
+
+/** A placement waiting on the fit dialog. */
+type PendingMedia = {
+  target: HTMLElement | null
+  path: string | null
+  role: MediaRole
+  isUpload: boolean
+  kind: 'image' | 'video'
+  method: 'baked' | 'live'
+  /** The original as the project keeps it, when it can keep files. */
+  sourceRef: string | null
+  /** Where the dialog shows the original from. */
+  sourceUrl: string
+  sourceType: string
+  blob: Blob | null
+  /** An object URL to let go of when the dialog closes. */
+  revoke: string | null
+  frame: FitSize | null
+}
 import FroamSmartGuides, { type AlignmentGuide } from './FroamSmartGuides'
 import type { PlannerTab } from './FroamSitePlanner'
 import { createFroamLibraryComponent, FROAM_COMPONENTS } from './FroamComponentCatalog'
@@ -621,6 +649,27 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   // Layers
   const [layers, setLayers] = useState<LayerNode[]>([])
+  /*
+   * Layers is rebuilt only while someone can see it. On a big page the tree is
+   * thousands of nodes, and selecting used to rebuild it on every click —
+   * about a second per click at 7,500 elements, panel open or not. When it is
+   * visible it is rebuilt after the next paint, so the click shows first.
+   */
+  const layersVisibleRef = useRef(false)
+  const layersFrameRef = useRef(0)
+  function refreshLayers() {
+    if (!layersVisibleRef.current) return
+    window.cancelAnimationFrame(layersFrameRef.current)
+    layersFrameRef.current = window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        const root = getRoot()
+        if (!root || !layersVisibleRef.current) return
+        try {
+          setLayers(collectLayers(root))
+        } catch { /* DOM may be mid-render */ }
+      }, 0)
+    })
+  }
 
   // CSS Variables
   const [cssVars, setCssVars] = useState<CSSVarEntry[]>([])
@@ -650,12 +699,18 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     try { return JSON.parse(window.localStorage.getItem(froamStorageKey('froam-assets-v1', projectKey)) || '[]') } catch { return [] }
   })
   const [assetSearch, setAssetSearch] = useState('')
+  // Assets are stored by reference; the panels show them from the bridge.
+  const shownAssets = useMemo(() => assets.map((asset) => (asset.url.startsWith('froam-media:') ? { ...asset, url: resolveMediaRefs(asset.url, 'editor') } : asset)), [assets])
 
   // Refs
   const dragRef = useRef<{ offsetX: number; offsetY: number; startX: number; startY: number; moved: boolean } | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const pendingImageTargetRef = useRef<HTMLElement | null>(null)
   const pendingCanvasImageRef = useRef(false)
+  /* The crop/fit step between choosing a picture and placing it. A null
+     target means "no selection": a new image frame is made on Place. */
+  const [imageFitRequest, setImageFitRequest] = useState<ImageFitRequest | null>(null)
+  const pendingMediaRef = useRef<PendingMedia | null>(null)
   const currentSelectionRef = useRef<HTMLElement | null>(null)
   /** What the selected element *is*, so it can be found again if the page moves. */
   const selectionAnchorRef = useRef<FroamAnchor | null>(null)
@@ -1614,6 +1669,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const draftCount = useMemo(() => countRenderableDrafts(routeDrafts), [routeDrafts])
   const hasRouteDrafts = useMemo(() => draftCount > 0, [draftCount])
   const showPanel = panelOpen || active
+  const layersVisible = showPanel && ((leftPanelOpen && leftWorkspaceMode === 'layers') || openSections.layers)
+  layersVisibleRef.current = layersVisible
 
   // A page wider than the phone (one oversized image is enough) makes mobile
   // Chrome widen the layout viewport, and every fixed control — the top bar's
@@ -2404,13 +2461,52 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
   }, [])
 
-  /* ─── Refresh layers when section opens ─── */
+  /*
+   * Pictures saved inline before media was kept as files are moved into the
+   * project once, when the page has settled. Recorded like a loaded design:
+   * it changes how the design is stored, not what it shows, so it is no
+   * one's undo step.
+   */
+  const inlineMediaRef = useRef<() => Promise<void>>(async () => {})
+  inlineMediaRef.current = async () => {
+    if (!(await canStoreMedia())) return
+    const keep = async (blob: Blob) => (await storeMedia(blob)).ref
+    const known = new Map<string, string>()
+    // The undo log first: the design it derives must match the one below.
+    const ops = opLog.all()
+    const nextOps = await moveInlineMedia(ops, keep, known)
+    if (nextOps && opLog.all().length === ops.length) {
+      opLog.load(nextOps)
+      saveOpLog(nextOps, projectKey)
+    }
+    const before = storeRef.current
+    const next = await moveInlineMedia(before, keep, known)
+    if (next && storeRef.current === before) {
+      opLoadingDesignRef.current = true
+      storeRef.current = next
+      setStore(next)
+      saveStore(next)
+      applyStoreToDOM(next, { clearCurrent: true, previousStore: before })
+    }
+    // The project's history carries every past value too — it is saved whole.
+    const project = projectSession.project
+    const nextProject = await moveInlineMedia(project, keep, known)
+    if (nextProject) projectSession.setProject((current) => (current === project ? nextProject : current))
+    const nextAssets = await moveInlineMedia(assets, keep, known)
+    if (nextAssets) {
+      setAssets(nextAssets)
+      try { window.localStorage.setItem(froamStorageKey('froam-assets-v1', projectKey), JSON.stringify(nextAssets)) } catch { /* quota */ }
+    }
+  }
   useEffect(() => {
-    if (!openSections.layers || !showPanel) return
-    const root = getRoot()
-    if (!root) return
-    setLayers(collectLayers(root))
-  }, [openSections.layers, showPanel, routeKey])
+    const timer = window.setTimeout(() => { void inlineMediaRef.current().catch(() => {}) }, 2500)
+    return () => window.clearTimeout(timer)
+  }, [projectKey])
+
+  /* ─── Refresh layers when they come into view, or the route changes under them ─── */
+  useEffect(() => {
+    if (layersVisible) refreshLayers()
+  }, [layersVisible, routeKey])
 
   /* ─── Op log ─── */
 
@@ -2874,12 +2970,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     bumpLog()
     if (selectedElement && root.contains(selectedElement)) selectInsertedElement(selectedElement)
     else updateSelectionsState([])
-    setLayers(collectLayers(root))
+    refreshLayers()
   }
 
   function serializableElementHtml(element: HTMLElement) {
     const clone = element.cloneNode(true) as HTMLElement
     clone.querySelectorAll<HTMLElement>('[data-chef-editor-root="true"]').forEach((node) => node.remove())
+    // Placed media is shown from the bridge; what persists is its reference.
     ;[clone, ...Array.from(clone.querySelectorAll<HTMLElement>('*'))].forEach((node) => {
       node.removeAttribute('data-chef-selected')
       node.removeAttribute('data-chef-hovered')
@@ -2896,7 +2993,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       node.removeAttribute('data-froam-writable')
       node.removeAttribute('data-froam-moving')
     })
-    return clone.outerHTML
+    return mediaRefsFromUrls(clone.outerHTML)
   }
 
   function collectVersionRouteDrafts() {
@@ -3005,15 +3102,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       .filter((draft): draft is NonNullable<ReturnType<typeof readInjectionDraft>> => draft !== null)
       .sort((a, b) => a.order - b.order)
       .forEach((injection) => {
-        const parent = injection.parentId
-          ? root.querySelector<HTMLElement>(`[data-froam-id="${CSS.escape(injection.parentId)}"]`)
-          : injection.parentPath === ROOT_PARENT_KEY
-          ? root
-          : findElementByPath(root, injection.parentPath)
+        // The parent's node id is the sturdier address, but it is given out
+        // per session: a reloaded page (or a visitor's) has the path only.
+        const parent = (injection.parentId ? root.querySelector<HTMLElement>(`[data-froam-id="${CSS.escape(injection.parentId)}"]`) : null)
+          ?? (injection.parentPath === ROOT_PARENT_KEY ? root : findElementByPath(root, injection.parentPath))
         if (!parent) return
 
         const template = document.createElement('template')
-        template.innerHTML = injection.html.trim()
+        template.innerHTML = resolveMediaRefs(injection.html.trim(), 'editor')
         const node = template.content.firstElementChild
         if (!(node instanceof HTMLElement)) return
         const nodeId = node.dataset.froamId
@@ -3827,7 +3923,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         nextElement.setAttribute('data-froam-writable', 'true')
       }
       if (root) {
-        try { setLayers(collectLayers(root)) } catch { /* DOM may be mid-render */ }
+        refreshLayers()
       }
     } catch {
       // Safe fallback if DOM nodes disappear mid-update
@@ -3960,15 +4056,293 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     persistLiveRouteSnapshot()
   }
 
-  function readImageFile(file: File, target: HTMLElement) {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const imageData = typeof reader.result === 'string' ? reader.result : undefined
-      if (!imageData) return
-      applyImageToTarget(target, imageData)
-      showToast('Image applied')
+  function readImageFile(file: File, target: HTMLElement | null) {
+    void openMediaUpload(file, target)
+  }
+
+  /* ─── Media: fit, crop and place pictures and videos ─── */
+
+  async function fetchBlob(url: string) {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`Could not read that file (${response.status})`)
+    return response.blob()
+  }
+
+  function isSameOrigin(url: string) {
+    try { return new URL(url, window.location.href).origin === window.location.origin } catch { return false }
+  }
+
+  /**
+   * A picture or video to place: a file just chosen or dropped, or one the
+   * project already keeps (an asset). The original goes into the project
+   * first, so the design refers to a file and a crop can be redone from it
+   * — after a reload, on another machine, any time.
+   */
+  async function openMediaUpload(input: Blob | StoredMedia, selected: HTMLElement | null) {
+    keepStudioPinned()
+    const target = mediaHostOf(selected)
+    const stored0 = input instanceof Blob ? null : input
+    const type = input instanceof Blob ? input.type : input.type
+    const kind = type.startsWith('video/') ? 'video' : type.startsWith('image/') ? 'image' : null
+    if (!kind) {
+      showToast('Froam places images (JPEG, PNG, WebP, AVIF, GIF, SVG) and videos (MP4, WebM)')
+      return
     }
-    reader.readAsDataURL(file)
+    const role = roleFor(target, kind)
+    if (role !== 'img' && role !== 'video' && role !== 'frame' && role !== 'frame-video' && role !== 'background' && role !== 'bg-video' && role !== 'new') {
+      showToast(role)
+      return
+    }
+    const keepsFiles = await canStoreMedia()
+    if (kind === 'video' && !keepsFiles) {
+      showToast('Videos are kept as files in your project — open the page through froam dev to add one')
+      return
+    }
+    let stored = stored0
+    if (!stored && keepsFiles && input instanceof Blob) {
+      if (input.size > 4 * 1024 * 1024) showToast(kind === 'video' ? 'Adding the video to your project…' : 'Adding the image to your project…')
+      try {
+        stored = await storeMedia(input)
+      } catch (error) {
+        // Refused for what it is (not really an image, too large): say so.
+        // Only an unreachable bridge leaves an image to go in inline.
+        if (kind === 'video' || error instanceof MediaRejected) {
+          showToast(error instanceof Error ? error.message : 'Could not add that file')
+          return
+        }
+      }
+    }
+    const revoke = !stored && input instanceof Blob ? URL.createObjectURL(input) : null
+    openMediaFit({
+      target,
+      role,
+      isUpload: true,
+      kind,
+      method: kind === 'image' && isBakeable(type) ? 'baked' : 'live',
+      sourceRef: stored?.ref ?? null,
+      sourceUrl: stored?.url ?? revoke ?? '',
+      sourceType: type,
+      blob: input instanceof Blob ? input : null,
+      revoke,
+      bytes: input instanceof Blob ? input.size : stored?.bytes,
+    })
+  }
+
+  function openMediaFit(pending: Omit<PendingMedia, 'path' | 'frame'> & { bytes?: number; initial?: ImageFitState; playback?: MediaPlayback; note?: string }) {
+    const root = getRoot()
+    const frame = measureSlot(pending.target)
+    // An empty frame has no shape worth keeping: it takes the file's. A
+    // filled one keeps its shape, so the page around it does not move.
+    const empty = !pending.target || (isImageFrame(pending.target) && !currentMediaOf(pending.target))
+    pendingMediaRef.current = { ...pending, path: pending.target && root ? getElementPath(pending.target, root) : null, frame }
+    setImageFitRequest({
+      id: Date.now(),
+      previewUrl: pending.sourceUrl,
+      kind: pending.kind,
+      method: pending.method,
+      zoomable: pending.method === 'baked' || canZoomLive(pending.role),
+      frame,
+      initial: pending.initial ?? { ...DEFAULT_IMAGE_FIT, aspect: empty ? 'original' : 'frame' },
+      isUpload: pending.isUpload,
+      playback: pending.playback,
+      bytes: pending.bytes,
+      note: pending.note,
+      vector: /svg/i.test(pending.sourceType),
+    })
+  }
+
+  function closeMediaFit() {
+    const pending = pendingMediaRef.current
+    pendingMediaRef.current = null
+    setImageFitRequest(null)
+    if (pending?.revoke) URL.revokeObjectURL(pending.revoke)
+  }
+
+  /**
+   * Write a fit to an element. Its draft carries the media; an element inside
+   * an injected block (a Froam frame) persists through the block's HTML, so
+   * the media rides along as an attribute there too.
+   */
+  function writeMediaTo(target: HTMLElement, change: { imageUrl?: string; media: MediaDraft; styles: Record<string, string> }, label: string) {
+    const mediaValue = writeMediaDraft(change.media)
+    updateTargetDraft(target, (draft) => ({
+      ...draft,
+      ...(change.imageUrl !== undefined ? { imageUrl: change.imageUrl } : {}),
+      media: mediaValue,
+      styles: { ...(draft.styles ?? {}), ...change.styles },
+    }), { imageUrl: change.imageUrl ? resolveMediaRefs(change.imageUrl, 'editor') : '' }, label)
+    if (target.closest(INJECTED_BLOCK_SELECTOR)) {
+      target.setAttribute(MEDIA_ATTR, mediaValue)
+      persistLiveRouteSnapshot()
+    }
+  }
+
+  function newFrameForMedia() {
+    const frame = createInjectedBlock('image')
+    if (!placeInsertedNode(frame, 'inside')) throw new Error('There is no place to add it on this page')
+    selectInsertedElement(frame)
+    return frame
+  }
+
+  /** Place: cut or fit the file, keep what it made, write it to the page. The dialog shows progress until this settles. */
+  async function placeMediaFit(choice: ImageFitChoice) {
+    const pending = pendingMediaRef.current
+    if (!pending) return
+    const root = getRoot()
+    if (!root) throw new Error('The page is not ready yet')
+    // The page may have re-rendered while the dialog was open.
+    let target = pending.target
+    if (target && !root.contains(target)) target = pending.path ? findElementByPath(root, pending.path) : null
+    if (pending.target && !target) throw new Error('That element is gone from the page — select it and try again')
+
+    const { state, natural } = choice
+    const ratio = resolveAspectRatio(state.aspect, pending.frame, natural)
+    const aspectCss = aspectRatioCss(state.aspect, natural)
+    const frameRatio = pending.frame ? pending.frame.width / pending.frame.height : undefined
+    const slot = slotSize(pending.frame, state.aspect, ratio)
+    const keepsFiles = Boolean(pending.sourceRef)
+
+    if (pending.kind === 'video') {
+      // The first frame, shown while it loads — and instead of it, for reduced motion.
+      const posterBlob = await capturePoster(pending.sourceUrl)
+      const poster = posterBlob ? (await storeMedia(posterBlob)).ref : undefined
+      const src = pending.sourceRef ?? pending.sourceUrl
+      const media: MediaDraft = { kind: 'video', method: 'live', src, poster, playback: choice.playback ?? DEFAULT_PLAYBACK, source: src, fit: state }
+      const label = pending.isUpload ? 'Placed video' : 'Adjusted video'
+      if (target instanceof HTMLVideoElement) {
+        writeMediaTo(target, { media, styles: liveFitStyles({ kind: 'element', state, image: natural, slot: pending.frame, aspectCss, frameRatio }) }, label)
+      } else {
+        const host = target ?? newFrameForMedia()
+        const contained = liveFitStyles({ kind: 'contained', state, image: natural, slot: pending.frame, aspectCss: null })
+        const video = isImageFrame(host) ? ensureFrameVideo(host) : ensureBackgroundVideo(host).video
+        writeOwnedVideo(video, media, contained)
+        const hostStyles: Record<string, string> = { ...shapeStyles(aspectCss, isImageFrame(host)) }
+        if (isImageFrame(host)) {
+          hostStyles.backgroundImage = 'none'
+          syncImageFrameState(host, 'video')
+        } else {
+          // Behind the content and inside the box: the box is the stacking context.
+          hostStyles.isolation = 'isolate'
+          if (window.getComputedStyle(host).position === 'static') hostStyles.position = 'relative'
+        }
+        if (Object.keys(hostStyles).length) updateTargetDraft(host, (draft) => ({ ...draft, styles: { ...(draft.styles ?? {}), ...hostStyles } }), {}, label)
+        opPendingLabelRef.current = label
+        persistLiveRouteSnapshot()
+      }
+      closeMediaFit()
+      showToast(pending.isUpload ? 'Video placed' : 'Video adjusted')
+      return
+    }
+
+    let url: string
+    let media: MediaDraft
+    if (pending.method === 'baked') {
+      const blob = pending.blob ?? await fetchBlob(pending.sourceUrl)
+      const rect = sourceRect(natural, ratio, state)
+      const largest = outputSize({ width: rect.sw, height: rect.sh }, slot)
+      // An <img> gets several widths: phones download the small one.
+      const responsive = keepsFiles && target instanceof HTMLImageElement
+      const widths = responsive ? srcsetWidths(rect.sw, slot, largest.width) : [largest.width]
+      const encoded = await bakeCrop(blob, rect, widths, !/jpe?g/i.test(pending.sourceType))
+      if (keepsFiles) {
+        const kept = await Promise.all(encoded.map((item) => storeMedia(item.blob)))
+        url = kept[kept.length - 1].ref
+        media = { kind: 'image', method: 'baked', source: pending.sourceRef ?? undefined, fit: state }
+        if (responsive && kept.length > 1 && slot) {
+          media.srcset = kept.map((item, index) => `${item.ref} ${encoded[index].width}w`).join(', ')
+          media.sizes = `${Math.round(slot.width)}px`
+        }
+      } else {
+        // No bridge to keep files: one inline picture, as before, and the
+        // original remembered for this session.
+        url = await blobToDataUrl(encoded[encoded.length - 1].blob)
+        rememberImageFit(url, blob, state)
+        media = { kind: 'image', method: 'baked', fit: state }
+      }
+    } else {
+      // A GIF, an SVG, or a file whose pixels can't be read: shown as it is, cropped by CSS.
+      url = pending.sourceRef ?? (pending.sourceUrl.startsWith('blob:') ? await blobToDataUrl(pending.blob ?? await fetchBlob(pending.sourceUrl)) : pending.sourceUrl)
+      media = { kind: 'image', method: 'live', source: pending.sourceRef ?? undefined, fit: state }
+    }
+
+    const host = target ?? newFrameForMedia()
+    const isImg = host instanceof HTMLImageElement
+    const frame = isImageFrame(host)
+    const styles = media.method === 'baked'
+      ? imageFitStyles({ kind: isImg ? 'img' : 'background', state, url, aspectCss, isImageFrame: frame, frameRatio })
+      : liveFitStyles({ kind: isImg ? 'element' : 'background', state, image: natural, slot: pending.frame, url, aspectCss, isImageFrame: frame, frameRatio })
+    // A frame that played a video shows a picture again.
+    if (frame) host.querySelector(`:scope > video[${VIDEO_ATTR}]`)?.remove()
+    writeMediaTo(host, { imageUrl: url, media, styles }, pending.isUpload ? 'Placed image' : 'Adjusted image')
+    if (frame) syncImageFrameState(host, url)
+    if (!target) persistLiveRouteSnapshot()
+    closeMediaFit()
+    showToast(pending.isUpload ? (target ? 'Image placed' : 'Image added') : 'Image adjusted')
+  }
+
+  /**
+   * Adjust what an element already shows. The crop starts again from the
+   * original the design kept; a picture from the page itself or another site
+   * is first copied into the project, so it can be cut like an upload.
+   */
+  async function openSelectedImageFit() {
+    keepStudioPinned()
+    const root = getRoot()
+    const selected = root && selection ? findElementByPath(root, selection.path) : null
+    const target = mediaHostOf(selected)
+    const current = target ? currentMediaOf(target, target === selected ? routeDrafts[selection?.path ?? '']?.media : undefined) : null
+    if (!target || !current) {
+      showToast('Select an image or video to adjust')
+      return
+    }
+    const keepsFiles = await canStoreMedia()
+    const original = current.media?.source ?? current.url
+    let sourceRef = isMediaRef(original) ? original : null
+    let sourceUrl = sourceRef ? resolveMediaRefs(sourceRef, 'editor') : original
+    let sourceType = typeFromName(original)
+    let blob: Blob | null = null
+    if (!sourceRef) {
+      const remembered = recallImageFit(current.url)
+      if (remembered) {
+        blob = remembered.blob
+        sourceType = remembered.blob.type
+      } else if (keepsFiles) {
+        try {
+          if (/^https?:/i.test(sourceUrl) && !isSameOrigin(sourceUrl)) {
+            const imported = await importMedia(sourceUrl)
+            sourceRef = imported.ref
+            sourceUrl = imported.url
+            sourceType = imported.type
+          } else {
+            // The page's own file, or an inline picture: kept in the project
+            // from now on, so the design stops carrying it inline.
+            blob = await fetchBlob(sourceUrl)
+            const kept = await storeMedia(blob)
+            sourceRef = kept.ref
+            sourceUrl = kept.url
+            sourceType = blob.type || kept.type
+          }
+        } catch {
+          // Can't be read or copied: it is still fitted, by CSS.
+        }
+      }
+    }
+    const revoke = blob && !sourceRef ? URL.createObjectURL(blob) : null
+    const readable = Boolean(sourceRef || blob) || sourceUrl.startsWith('data:') || isSameOrigin(sourceUrl)
+    openMediaFit({
+      target,
+      role: current.role,
+      isUpload: false,
+      kind: current.kind,
+      method: current.kind === 'image' && readable && isBakeable(sourceType) ? 'baked' : 'live',
+      sourceRef,
+      sourceUrl: revoke ?? sourceUrl,
+      sourceType,
+      blob,
+      revoke,
+      initial: current.media?.fit,
+      playback: current.media?.playback,
+    })
   }
 
   function createInjectedBlock(kind: FroamBlockKind): HTMLElement {
@@ -4533,7 +4907,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
     selectInsertedElement(wrapper)
     persistLiveRouteSnapshot()
-    setLayers(collectLayers(root))
+    refreshLayers()
     showToast('Merged into movable stamp')
   }
 
@@ -4578,7 +4952,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const newSelections = children.map((child) => buildSelection(child, getElementPath(child, root)))
     updateSelectionsState(newSelections)
     persistLiveRouteSnapshot()
-    setLayers(collectLayers(root))
+    refreshLayers()
     showToast('Ungrouped elements')
   }
 
@@ -4633,7 +5007,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       persistPathStyle(target, node.path, { display: 'none' }, 'Hide element')
     }
     // Refresh layers
-    setLayers(collectLayers(root))
+    refreshLayers()
   }
 
   function selectedSectionElement(node: LayerNode) {
@@ -4774,12 +5148,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const file = event.target.files?.[0]
     if (!file) { event.target.value = ''; return }
     if (pendingCanvasImageRef.current) {
-      const reader = new FileReader()
-      reader.onload = () => {
-        const imageData = typeof reader.result === 'string' ? reader.result : undefined
-        if (imageData) applyCanvasImage(imageData)
-      }
-      reader.readAsDataURL(file)
+      void placePageBackground(file)
       pendingCanvasImageRef.current = false
       pendingImageTargetRef.current = null
       event.target.value = ''
@@ -4788,17 +5157,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const root = getRoot()
     if (!root) { event.target.value = ''; return }
     const selectedTarget = selection ? findElementByPath(root, selection.path) : null
+    // No target: Place adds a new image frame.
     const target = pendingImageTargetRef.current ?? selectedTarget
-    if (!target) {
-      const reader = new FileReader()
-      reader.onload = () => {
-        const imageData = typeof reader.result === 'string' ? reader.result : undefined
-        if (imageData) addImageBlockFromSource(imageData)
-      }
-      reader.readAsDataURL(file)
-      event.target.value = ''
-      return
-    }
     readImageFile(file, target)
     pendingImageTargetRef.current = null
     event.target.value = ''
@@ -5047,8 +5407,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   contextMenuPosRef.current = contextMenuPos
   const moveModeRef = useRef(moveMode)
   moveModeRef.current = moveMode
-  const actionsRef = useRef({ saveToRunam, saveDraft, saveToRepo, undo, redo, clearSelectionDraft, applyStyle, openSelectedImageUpload, wrapInContainer })
-  actionsRef.current = { saveToRunam, saveDraft, saveToRepo, undo, redo, clearSelectionDraft, applyStyle, openSelectedImageUpload, wrapInContainer }
+  const actionsRef = useRef({ saveToRunam, saveDraft, saveToRepo, undo, redo, clearSelectionDraft, applyStyle, openSelectedImageUpload, openSelectedImageFit, wrapInContainer })
+  actionsRef.current = { saveToRunam, saveDraft, saveToRepo, undo, redo, clearSelectionDraft, applyStyle, openSelectedImageUpload, openSelectedImageFit, wrapInContainer }
 
   /* Save automatically: a few seconds after the last change. */
   useEffect(() => {
@@ -5209,6 +5569,22 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   /* ─── Asset manager ─── */
   function addAssetEntry(url: string, name: string) {
+    // An uploaded asset becomes a project file: a data URL in localStorage
+    // filled the quota after a few photos.
+    if (url.startsWith('data:')) {
+      void (async () => {
+        let kept = url
+        try {
+          if (await canStoreMedia()) kept = (await storeMedia(await fetchBlob(url))).ref
+        } catch { /* stays inline */ }
+        addAssetRecord(kept, name)
+      })()
+      return
+    }
+    addAssetRecord(mediaRefsFromUrls(url), name)
+  }
+
+  function addAssetRecord(url: string, name: string) {
     const entry: AssetEntry = { id: `${Date.now()}`, name, url, addedAt: Date.now() }
     const next = [entry, ...assets]
     setAssets(next)
@@ -5221,21 +5597,53 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     window.localStorage.setItem(froamStorageKey('froam-assets-v1', projectKey), JSON.stringify(next))
   }
 
-  function applyAssetToSelection(url: string) {
-    if (!selection) {
-      addImageBlockFromSource(url, 'Asset added as image')
+  /** An asset goes through the same fit as an upload: it lands the shape of its spot. */
+  async function applyAssetToSelection(url: string) {
+    const root = getRoot()
+    const target = root && selection ? findElementByPath(root, selection.path) : null
+    const ref = mediaRefsFromUrls(url)
+    try {
+      if (isMediaRef(ref)) {
+        const name = ref.slice('froam-media:'.length)
+        await openMediaUpload({ ref, url: resolveMediaRefs(ref, 'editor'), name, bytes: 0, type: typeFromName(name) }, target)
+        return
+      }
+      if (/^https?:/i.test(url) && !isSameOrigin(url) && await canStoreMedia()) {
+        await openMediaUpload(await importMedia(url), target)
+        return
+      }
+      await openMediaUpload(await fetchBlob(url), target)
+    } catch {
+      showToast('That asset could not be opened')
+    }
+  }
+
+  /**
+   * A page background: kept as a file, at most 2560 px wide — a phone photo
+   * as a full-page background was megabytes in the design and the CSS.
+   */
+  async function placePageBackground(file: Blob) {
+    if (!file.type.startsWith('image/')) {
+      showToast('A page background is an image')
       return
     }
-    const root = getRoot()
-    if (!root) return
-    const target = findElementByPath(root, selection.path)
-    if (!target) return
-    if (target instanceof HTMLImageElement) {
-      updateDraft((d) => ({ ...d, imageUrl: url }))
-    } else {
-      applyStyle({ backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' })
+    try {
+      if (await canStoreMedia()) {
+        let blob: Blob = file
+        if (isBakeable(file.type)) {
+          const bitmap = await createImageBitmap(file)
+          const { width, height } = bitmap
+          bitmap.close()
+          const target = Math.min(width, 2560)
+          if (target < width) blob = (await bakeCrop(file, { sx: 0, sy: 0, sw: width, sh: height }, [target], !/jpe?g/i.test(file.type)))[0].blob
+        }
+        applyCanvasImage((await storeMedia(blob)).ref)
+        return
+      }
+    } catch {
+      // Fall back to an inline picture below.
     }
-    showToast('Asset applied')
+    applyCanvasImage(await blobToDataUrl(file))
   }
 
   function renameProject(name: string) {
@@ -5281,7 +5689,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     }
     else if (mode === 'understand') {
       setLabsOpen(false); setConnectedCanvasOpen(false); setRightPanelOpen(false)
-      if (section === 'reference' || section === 'layers') { setIntelligenceOpen(false); setLeftPanelOpen(true); setLeftWorkspaceMode(section); if (section === 'layers') { const root = getRoot(); if (root) setLayers(collectLayers(root)) } }
+      if (section === 'reference' || section === 'layers') { setIntelligenceOpen(false); setLeftPanelOpen(true); setLeftWorkspaceMode(section); if (section === 'layers') refreshLayers() }
       else { setLeftPanelOpen(false); setIntelligenceOpen(true); setRequestedIntelligenceTab(intelligenceTabs[section] ?? 'scan') }
     }
     else { setIntelligenceOpen(false); setConnectedCanvasOpen(false); setLeftPanelOpen(false); setRightPanelOpen(false); setLabsOpen(true); if (labTabs[section]) setRequestedLab(labTabs[section]!) }
@@ -5299,7 +5707,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     if (section === 'blueprint') { setBlueprintOpen(true); return }
     if (section === 'reference' || section === 'layers') {
       setLeftPanelOpen(true); if (!roomForBothPanels()) setRightPanelOpen(false); setLeftWorkspaceMode(section)
-      if (section === 'layers') { const root = getRoot(); if (root) setLayers(collectLayers(root)) }
+      if (section === 'layers') refreshLayers()
       return
     }
     if (mode === 'create') {
@@ -6226,7 +6634,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                       requestedTab={plannerRequestedTab}
                       selection={selection ? { nodeId: selection.nodeId, label: selection.label } : null}
                       archiveItems={plannerArchiveItems}
-                      assets={assets}
+                      assets={shownAssets}
                       onRenameProject={renameProject}
                       onAddAsset={addAssetEntry}
                       onApplyAsset={applyAssetToSelection}
@@ -6278,7 +6686,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     canMoveSection={canMoveSection}
                     onSetSectionVisibility={setSectionVisibility}
                     onDeleteSection={deleteSection}
-                    onRefresh={() => { const root = getRoot(); if (root) setLayers(collectLayers(root)) }}
+                    onRefresh={() => refreshLayers()}
                     routeKey={routeKey}
                     projectName={projectSession.project.name}
                     branchName={projectSession.project.branches[projectSession.project.activeBranchId]?.name ?? projectSession.project.activeBranchId}
@@ -6301,6 +6709,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   onApplyStyle={applyStyle}
                   onUpdateDraft={updateDraft}
                   onOpenImageUpload={openSelectedImageUpload}
+                  onAdjustImage={hasAdjustableMedia(currentSelectionRef.current) ? () => void openSelectedImageFit() : undefined}
                   onClearImage={clearAppliedImage}
                   onClearSelectionDraft={actionsRef.current.clearSelectionDraft}
                   marginLinked={marginLinked}
@@ -6858,6 +7267,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     <button type="button" className="fs-pill is-accent" onClick={openSelectedImageUpload}>
                       <ImagePlus size={13} /> Selected image
                     </button>
+                    {hasAdjustableMedia(currentSelectionRef.current) ? (
+                      <button type="button" className="fs-pill" onClick={openSelectedImageFit}>
+                        <Crop size={13} /> Adjust selected image
+                      </button>
+                    ) : null}
                     <button type="button" className="fs-pill" onClick={clearAppliedImage}>
                       <Eraser size={13} /> Clear selected image
                     </button>
@@ -7294,7 +7708,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   ))
                 )}
               </div>
-              <button type="button" className="fs-pill" onClick={() => { const root = getRoot(); if (root) setLayers(collectLayers(root)) }}>
+              <button type="button" className="fs-pill" onClick={() => refreshLayers()}>
                 <Search size={12} /> Refresh layers
               </button>
             </AccordionSection>
@@ -7733,9 +8147,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                   <input type="text" className="fs-input" placeholder="Search assets…" value={assetSearch} onChange={(e) => setAssetSearch(e.target.value)} />
                 )}
                 <div className="fs-assets-grid">
-                  {assets.filter((a) => !assetSearch || a.name.toLowerCase().includes(assetSearch.toLowerCase())).map((asset) => (
+                  {shownAssets.filter((a) => !assetSearch || a.name.toLowerCase().includes(assetSearch.toLowerCase())).map((asset) => (
                     <div key={asset.id} className="fs-asset-item" data-chef-editor-root="true">
-                      <img src={asset.url} alt={asset.name} className="fs-asset-item__thumb" onClick={() => applyAssetToSelection(asset.url)} loading="lazy" />
+                      <img src={asset.url} alt={asset.name} className="fs-asset-item__thumb" onClick={() => void applyAssetToSelection(asset.url)} loading="lazy" decoding="async" />
                       <span className="fs-asset-item__name" title={asset.name}>{asset.name}</span>
                       <button type="button" className="fs-asset-item__remove" onClick={() => removeAsset(asset.id)}><X size={10} /></button>
                     </div>
@@ -7766,7 +8180,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         className="fs-hidden-input"
         data-chef-editor-root="true"
         type="file"
-        accept="image/*"
+        accept="image/*,video/*"
         onChange={handleImageUpload}
       />
 
@@ -8069,7 +8483,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           selectionCount={selections.length}
           isTextLayer={currentSelectionRef.current ? isTextVisualLayer(currentSelectionRef.current) : false}
           hasText={currentSelectionRef.current ? hasOwnWords(currentSelectionRef.current) : true}
-          isImage={currentSelectionRef.current?.tagName === 'IMG' || currentSelectionRef.current?.tagName === 'PICTURE'}
+          isImage={currentSelectionRef.current?.tagName === 'IMG' || currentSelectionRef.current?.tagName === 'PICTURE' || currentSelectionRef.current?.tagName === 'VIDEO'}
+          canAdjustImage={hasAdjustableMedia(currentSelectionRef.current)}
           onSaveLook={({ name, states }) => {
             const style = createReusableStyle({ id: `style:look:${Date.now().toString(36)}`, name: `${name} custom`, states })
             replaceDesignSystem(saveReusableStyle(activeProjectState.designSystem, style), `Saved reusable style: ${style.name}`)
@@ -8110,6 +8525,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               case 'bring-front': applyStyle({ zIndex: '999' }, { zIndex: 999 }, 'Brought to front'); break
               case 'send-back': applyStyle({ zIndex: '0' }, { zIndex: 0 }, 'Sent to back'); break
               case 'image': actionsRef.current.openSelectedImageUpload(); break
+              case 'adjust-image': actionsRef.current.openSelectedImageFit(); break
               case 'merge': groupSelected(); break
               case 'unmerge': ungroupSelected(); break
               case 'duplicate': {
@@ -8157,6 +8573,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         hasClipboard={!!clipboardStyles}
         hasMultiSelection={selections.length > 1}
         isGroup={selection?.label?.toLowerCase().includes('group') || false}
+        canAdjustImage={hasAdjustableMedia(currentSelectionRef.current)}
         onAction={(action) => {
           switch (action) {
             case 'edit-with-ai': {
@@ -8243,6 +8660,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             }
             case 'wrap-container': actionsRef.current.wrapInContainer(); break
             case 'upload-image': actionsRef.current.openSelectedImageUpload(); break
+            case 'adjust-image': actionsRef.current.openSelectedImageFit(); break
             case 'customize-ui': setUICustomizerOpen(true); break
             case 'archive-component': archiveCurrentSelection('component'); break
             case 'archive-style': archiveCurrentSelection('style'); break
@@ -8262,6 +8680,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
       {/* v4: Smart guides */}
       <FroamSmartGuides guides={smartGuides} visible={smartGuides.length > 0} />
+
+      <FroamImageFit request={imageFitRequest} onApply={placeMediaFit} onCancel={closeMediaFit} />
 
       {/* v4: Keyboard shortcut overlay */}
       <FroamShortcutOverlay

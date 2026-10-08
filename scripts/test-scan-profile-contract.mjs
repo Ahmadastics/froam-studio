@@ -52,6 +52,9 @@ class Element {
     this.scrollHeight = rect.height; this.clientHeight = rect.height
     this.scrollLeft = 0; this.scrollTop = 0
   }
+  // Like the DOM: own text first, then child elements (the a11y name check reads these).
+  get childNodes() { return [...(this.textContent && !this.children.length ? [{ nodeType: 3, textContent: this.textContent }] : []), ...this.children] }
+  get nodeType() { return 1 }
   append(child) { child.parentElement = this; this.children.push(child); return child }
   setAttribute(name, value) { this.attributes.set(name, String(value)); if (name === 'data-froam-id') this.dataset.froamId = String(value) }
   getAttribute(name) { return this.attributes.get(name) ?? null }

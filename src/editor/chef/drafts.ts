@@ -4,6 +4,8 @@ import { type ElementDraft, INJECTION_KEY } from './types'
 import { persistedStyleKeys } from './style-options'
 import { getCanvasHost, applyGlobalCSS, camelToKebab, readImageUrl } from './dom'
 import { canApplyTextDraft } from './writing'
+import { applyMediaSource, readImageSource } from '../media/apply-media'
+import { hasMediaRef, mediaRefsFromUrls, resolveMediaRefs } from '../media/media-refs'
 
 export function sanitizeDraftForElement(element: HTMLElement, draft: ElementDraft): ElementDraft {
   if (draft.text === undefined || canApplyTextDraft(element)) return draft
@@ -41,18 +43,16 @@ export function applyDraft(element: HTMLElement, draft: ElementDraft) {
     if (safeDraft.text !== undefined && !isBeingWritten(element)) {
       applyDraftText(element, safeDraft.text)
     }
-    if (element instanceof HTMLImageElement && safeDraft.imageUrl !== undefined) {
-      if (safeDraft.imageUrl) {
-        element.src = safeDraft.imageUrl
-      } else {
-        element.removeAttribute('src')
-      }
+    if (safeDraft.imageUrl !== undefined || safeDraft.media !== undefined) {
+      applyMediaSource(element, safeDraft.imageUrl, safeDraft.media, 'editor')
     }
     if (safeDraft.styles) {
-      for (const [key, value] of Object.entries(safeDraft.styles)) {
+      for (const [key, raw] of Object.entries(safeDraft.styles)) {
         if (key.startsWith('__froamState:')) continue
         // setProperty requires kebab-case, but our store uses camelCase
         const kebabKey = camelToKebab(key)
+        // A placed picture is stored by reference and shown from the bridge.
+        const value = hasMediaRef(raw) ? resolveMediaRefs(raw, 'editor') : raw
         // Repaints are frequent; an unchanged value is not rewritten.
         if (element.style.getPropertyValue(kebabKey) === value) continue
         element.style.setProperty(kebabKey, value)
@@ -125,16 +125,18 @@ export function readLiveElementDraft(element: HTMLElement, existingDraft: Elemen
   const drafted = existingDraft.styles ?? {}
   const liveStyles: Record<string, string> = { ...drafted }
   persistedStyleKeys.forEach((key) => {
-    const value = element.style[key]
-    if (!value) return
+    const shown = element.style[key]
+    if (!shown) return
+    // What the page shows from the bridge is stored as the reference it came from.
+    const value = mediaRefsFromUrls(shown)
     // What the draft sets is refreshed; a new key is taken only when it is a
     // property of its own (an aligned element's left/top), not a restatement.
     if (key in drafted || !restates(key, drafted)) liveStyles[key] = value
   })
 
   const imageUrl = element instanceof HTMLImageElement
-    ? element.currentSrc || element.src || ''
-    : readImageUrl(element.style.backgroundImage)
+    ? readImageSource(element)
+    : mediaRefsFromUrls(readImageUrl(element.style.backgroundImage))
 
   if (imageUrl || existingDraft.imageUrl !== undefined) {
     nextDraft.imageUrl = imageUrl
@@ -159,7 +161,7 @@ export function applyCanvasDraftStyles(background?: string, color?: string, styl
   imageKeys.forEach((key) => {
     const value = styles?.[key]
     const cssKey = camelToKebab(key)
-    if (value) host.style.setProperty(cssKey, value)
+    if (value) host.style.setProperty(cssKey, hasMediaRef(value) ? resolveMediaRefs(value, 'editor') : value)
     else host.style.removeProperty(cssKey)
   })
 

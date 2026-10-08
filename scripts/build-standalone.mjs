@@ -23,6 +23,10 @@ const out = join(root, 'dist', 'standalone')
 const modules = join(out, 'modules')
 rmSync(modules, { recursive: true, force: true })
 
+// FROAM_READABLE_BUILD=1 keeps function names, for profiles that say where
+// the time went (scripts/benchmark-editor.mjs with FROAM_BENCH_PROFILE=1).
+const readable = Boolean(process.env.FROAM_READABLE_BUILD)
+
 const result = await build({
   absWorkingDir: root,
   entryPoints: { 'froam-editor': join(root, 'src', 'standalone.tsx') },
@@ -34,7 +38,10 @@ const result = await build({
   outExtension: { '.js': '.mjs' },
   tsconfig: join(root, 'tsconfig.json'),
   bundle: true,
-  minify: true,
+  minifyWhitespace: !readable,
+  minifySyntax: !readable,
+  minifyIdentifiers: !readable,
+  keepNames: readable,
   platform: 'browser',
   target: ['es2020'],
   jsx: 'automatic',

@@ -64,7 +64,13 @@ export type PageSweep = {
     fixes: PageFix[];
     note: string;
 };
-/** Every text that fails WCAG AA where it sits — its own fill, the colour behind it, or each colour of a gradient — moved to the nearest shade of its hue that passes. */
+/**
+ * Every text that fails WCAG AA where it sits — its own fill, every colour
+ * behind it, each stop of a gradient, any opacity it is faded by — moved to
+ * the nearest shade of its hue that passes. What it measured but could not
+ * fix, and what it could not measure, it says out loud: a sweep that reports
+ * "all pass" over a page that doesn't is worse than no sweep.
+ */
 export declare function sweepContrast(root: HTMLElement): PageSweep;
 /** The buttons as one family: the corners, font, weight, tracking and case most of them share, given to the ones that stray. Sizes stay — a large and a small button are both on-brand. */
 export declare function sweepButtons(root: HTMLElement): PageSweep;

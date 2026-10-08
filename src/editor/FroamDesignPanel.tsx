@@ -6,6 +6,7 @@ import {
   AlignRight,
   Bold,
   ChevronDown,
+  Crop,
   DraftingCompass,
   Eraser,
   ImagePlus,
@@ -109,6 +110,8 @@ type Props = {
   onApplyStyle: (styles: Record<string, string>, nextSel?: Partial<SelectionState>, label?: string) => void
   onUpdateDraft: (updater: (draft: { text?: string; imageUrl?: string; styles?: Record<string, string> }) => { text?: string; imageUrl?: string; styles?: Record<string, string> }, nextSelection?: Partial<SelectionState>) => void
   onOpenImageUpload: () => void
+  /** Crop, zoom and re-fit the selected picture. */
+  onAdjustImage?: () => void
   onClearImage: () => void
   onClearSelectionDraft: () => void
   // Spacing link state
@@ -274,6 +277,7 @@ export default function FroamDesignPanel({
   onApplyStyle,
   onUpdateDraft,
   onOpenImageUpload,
+  onAdjustImage,
   onClearImage,
   onClearSelectionDraft,
   marginLinked,
@@ -709,6 +713,11 @@ export default function FroamDesignPanel({
             <button type="button" className="froam-dp__mini-btn is-accent" onClick={onOpenImageUpload} data-chef-editor-root="true">
               <ImagePlus size={11} /> Image
             </button>
+            {onAdjustImage ? (
+              <button type="button" className="froam-dp__mini-btn" onClick={onAdjustImage} data-chef-editor-root="true" title="Crop, zoom and fit the image to its spot">
+                <Crop size={11} /> Adjust
+              </button>
+            ) : null}
             <button type="button" className="froam-dp__mini-btn" onClick={onClearImage} data-chef-editor-root="true">
               <Eraser size={11} /> Clear
             </button>

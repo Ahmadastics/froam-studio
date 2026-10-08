@@ -16,10 +16,14 @@ import { resolveAnchor } from '../collab/anchor'
 import { isBodyScopedPath, isFroamOwnedNode, isPathElement } from '../collab/paths'
 import { applyDraftText, writeElementText } from './draft-text'
 import type { FroamAnchorFingerprint } from '../collab/types'
+import { applyMediaSource, restorePageMedia } from './media/apply-media'
+import { hasMediaRef, resolveMediaRefs } from './media/media-refs'
 
 type ElementDraft = {
   text?: string
   imageUrl?: string
+  /** See MediaDraft in ./media/media-draft.ts. */
+  media?: string
   styles?: Record<string, string>
   /** See `ElementDraft` in src/collab/types.ts — how this edit re-finds its element. */
   fingerprint?: FroamAnchorFingerprint
@@ -30,7 +34,8 @@ type ViewportMode = 'desktop' | 'tablet' | 'mobile'
 type RuntimeSnapshot = {
   element: HTMLElement
   text?: string
-  imageSrc?: string | null
+  /** The element's picture or video was changed: restorePageMedia() puts the page's back. */
+  media?: boolean
   styles: Record<string, string>
 }
 
@@ -174,16 +179,14 @@ function canApplyTextDraft(element: HTMLElement) {
 function applyDraft(element: HTMLElement, draft: ElementDraft) {
   if (draft.text !== undefined && canApplyTextDraft(element)) applyDraftText(element, draft.text)
 
-  if (element instanceof HTMLImageElement && draft.imageUrl !== undefined) {
-    if (draft.imageUrl && element.getAttribute('src') !== draft.imageUrl) element.src = draft.imageUrl
-    if (!draft.imageUrl && element.hasAttribute('src')) element.removeAttribute('src')
-  }
+  if (draft.imageUrl !== undefined || draft.media !== undefined) applyMediaSource(element, draft.imageUrl, draft.media, 'runtime')
 
   if (!draft.styles) return
 
-  for (const [key, value] of Object.entries(draft.styles)) {
+  for (const [key, raw] of Object.entries(draft.styles)) {
     if (key.startsWith('__froamState:')) continue
     const cssKey = camelToKebab(key)
+    const value = hasMediaRef(raw) ? resolveMediaRefs(raw, 'runtime') : raw
     if (element.style.getPropertyValue(cssKey) === value) continue
     if (value) element.style.setProperty(cssKey, value)
     else element.style.removeProperty(cssKey)
@@ -198,10 +201,7 @@ function restoreRuntimeSnapshots(snapshots: RuntimeSnapshot[]) {
       writeElementText(element, snapshot.text)
     }
 
-    if (snapshot.imageSrc !== undefined && element instanceof HTMLImageElement) {
-      if (snapshot.imageSrc) element.src = snapshot.imageSrc
-      else element.removeAttribute('src')
-    }
+    if (snapshot.media) restorePageMedia(element)
 
     for (const [cssKey, value] of Object.entries(snapshot.styles)) {
       if (value) element.style.setProperty(cssKey, value)
@@ -217,8 +217,8 @@ function snapshotDraftTarget(element: HTMLElement, draft: ElementDraft, snapshot
     snapshot.text = element.innerText
   }
 
-  if (element instanceof HTMLImageElement && draft.imageUrl !== undefined) {
-    snapshot.imageSrc = element.getAttribute('src')
+  if ((element instanceof HTMLImageElement || element instanceof HTMLVideoElement) && (draft.imageUrl !== undefined || draft.media !== undefined)) {
+    snapshot.media = true
   }
 
   for (const key of Object.keys(draft.styles ?? {})) {
@@ -227,7 +227,7 @@ function snapshotDraftTarget(element: HTMLElement, draft: ElementDraft, snapshot
     snapshot.styles[cssKey] = element.style.getPropertyValue(cssKey)
   }
 
-  if (snapshot.text !== undefined || snapshot.imageSrc !== undefined || Object.keys(snapshot.styles).length > 0) {
+  if (snapshot.text !== undefined || snapshot.media || Object.keys(snapshot.styles).length > 0) {
     snapshots.push(snapshot)
   }
 
@@ -240,9 +240,10 @@ function applyCanvasDraftStyles(styles: Record<string, string> | undefined, snap
   if (!host) return
 
   const snapshot: RuntimeSnapshot = { element: host, styles: {} }
-  for (const [key, value] of Object.entries(styles)) {
+  for (const [key, raw] of Object.entries(styles)) {
     if (key === 'customCSS') continue
     const cssKey = camelToKebab(key)
+    const value = hasMediaRef(raw) ? resolveMediaRefs(raw, 'runtime') : raw
     snapshot.styles[cssKey] = host.style.getPropertyValue(cssKey)
     if (host.style.getPropertyValue(cssKey) === value) continue
     if (value) host.style.setProperty(cssKey, value)
@@ -383,15 +384,14 @@ function restoreInjectedBlocks(store: Record<string, ElementDraft>) {
     .filter((draft): draft is NonNullable<ReturnType<typeof readInjectionDraft>> => draft !== null)
     .sort((a, b) => a.order - b.order)
     .forEach((injection) => {
-      const parent = injection.parentId
-        ? root.querySelector<HTMLElement>(`[data-froam-id="${CSS.escape(injection.parentId)}"]`)
-        : injection.parentPath === ROOT_PARENT_KEY
-        ? root
-        : findElementByPath(root, injection.parentPath)
+      // The parent's node id is the sturdier address, but it is given out
+      // per session: a reloaded page (or a visitor's) has the path only.
+      const parent = (injection.parentId ? root.querySelector<HTMLElement>(`[data-froam-id="${CSS.escape(injection.parentId)}"]`) : null)
+        ?? (injection.parentPath === ROOT_PARENT_KEY ? root : findElementByPath(root, injection.parentPath))
       if (!parent) return
 
       const template = document.createElement('template')
-      template.innerHTML = injection.html.trim()
+      template.innerHTML = resolveMediaRefs(injection.html.trim(), 'runtime')
       const node = template.content.firstElementChild
       if (!(node instanceof HTMLElement)) return
       node.setAttribute('data-froam-runtime-injected', 'true')

@@ -4,6 +4,7 @@ import type { PendingChange } from './FroamCollaborate';
 type Draft = {
     text?: string;
     imageUrl?: string;
+    media?: string;
     styles?: Record<string, string>;
     fingerprint?: {
         text?: string;

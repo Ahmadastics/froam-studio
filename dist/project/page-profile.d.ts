@@ -166,7 +166,7 @@ export type FroamPageProfile = {
         coverage: number;
     };
 };
-/** Parse the colour forms computed styles actually emit. Returns null for gradients and keywords. */
+/** Parse the colour forms computed styles actually emit, channels 0–1. Returns null for gradients and keywords. */
 export declare function parseCssColor(value: string | undefined): {
     r: number;
     g: number;

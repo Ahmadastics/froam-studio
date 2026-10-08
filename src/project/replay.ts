@@ -16,7 +16,7 @@ export function replayCategory(event: FroamProjectEvent): FroamReplayCategory {
   const op = (event.payload as { op?: FroamOp }).op
   if (op?.structure) return 'structural'
   if (op?.field === 'text') return 'text'
-  if (op?.field?.startsWith('style:') || op?.field === 'imageUrl') return 'styling'
+  if (op?.field?.startsWith('style:') || op?.field === 'imageUrl' || op?.field === 'media') return 'styling'
   return 'other'
 }
 

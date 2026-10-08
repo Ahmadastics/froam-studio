@@ -1,6 +1,8 @@
 import { captureNodeRef } from './node-registry.js';
 import { ANCHOR_MATCH_THRESHOLD, createAnchor, scoreFingerprint } from '../collab/anchor.js';
 import { FROAM_DNA_SCHEMA_VERSION } from './types.js';
+import { accessibleName, imageAlternative, isInlineTarget } from './a11y.js';
+import { WCAG_MIN_TARGET_PX } from './wcag.js';
 function semanticRole(element) {
     const tag = element.tagName.toLowerCase();
     const explicit = element.getAttribute('role');
@@ -61,12 +63,15 @@ function accessibility(element, style) {
     const alt = tag === 'img' ? element.getAttribute('alt') : undefined;
     const focusable = element.tabIndex >= 0 || ['a', 'button', 'input', 'select', 'textarea'].includes(tag);
     const warnings = [];
-    if (tag === 'img' && alt === null)
+    // Same answers as the editor's checks (project/a11y): alt="" is decorative,
+    // a link around a described image is named, a labelledby to nothing is not.
+    if (tag === 'img' && imageAlternative(element) === 'missing')
         warnings.push('Image has no alt attribute');
-    if (['button', 'a'].includes(tag) && !label && !(element.textContent ?? '').trim())
+    if (['button', 'a'].includes(tag) && !element.closest('[aria-hidden="true"]') && !accessibleName(element))
         warnings.push('Interactive element has no accessible name');
     const rect = element.getBoundingClientRect();
-    if (focusable && (rect.width < 24 || rect.height < 24))
+    // Spacing is judged page-wide in page-profile; per element only the inline exception applies.
+    if (focusable && Math.min(rect.width, rect.height) < WCAG_MIN_TARGET_PX && !isInlineTarget(element))
         warnings.push('Small interactive target');
     return { semanticTag: tag, role: element.getAttribute('role') ?? undefined, ariaLabel: label, alt, focusable, outline: style.outline, warnings };
 }

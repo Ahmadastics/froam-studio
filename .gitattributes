@@ -1,0 +1,17 @@
+# Text is checked out with LF on every machine, whatever core.autocrlf says.
+# A CRLF on a script's #! line stops it running on Linux and macOS
+# (`/usr/bin/env: 'node\r': No such file or directory`) — 9.5.0 shipped one.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.mp4 binary
+*.webm binary
+*.tgz binary
+*.pdf binary

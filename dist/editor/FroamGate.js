@@ -8,6 +8,21 @@ function getEnvOwnerEmails() {
     const env = import.meta.env;
     return env?.VITE_FROAM_OWNER_EMAILS;
 }
+/**
+ * True in a production build of the host app. Bundlers replace the literal
+ * `process.env.NODE_ENV` in dependencies (React relies on it) and Vite also
+ * sets `import.meta.env.PROD`. Unbundled code has neither and counts as
+ * development.
+ */
+function isProductionBuild() {
+    try {
+        if (process.env.NODE_ENV === 'production')
+            return true;
+    }
+    catch { /* no `process` in an unbundled page */ }
+    const env = import.meta.env;
+    return env?.PROD === true;
+}
 function isFroamOwner(email, ownerEmails) {
     return Boolean(email && ownerEmails.includes(email.toLowerCase()));
 }
@@ -33,12 +48,17 @@ class FroamBoundary extends Component {
         return (_jsxs("div", { style: { position: 'fixed', left: 16, bottom: 16, zIndex: 1200, background: '#1e1e2e', border: '1px solid #ff6c4f', borderRadius: 8, padding: '10px 14px', maxWidth: 420, fontSize: 12 }, children: [_jsx("p", { style: { color: '#ff6c4f', margin: '0 0 6px', fontWeight: 700 }, children: "Froam crashed" }), _jsx("p", { style: { color: '#a0a0b0', margin: '0 0 8px', fontFamily: 'monospace', fontSize: 11, wordBreak: 'break-all' }, children: this.state.errorMessage }), _jsx("button", { type: "button", style: { color: 'var(--fs-accent-text)', background: 'none', border: '1px solid var(--fs-border-strong)', borderRadius: 6, cursor: 'pointer', padding: '3px 10px', fontSize: 11 }, onClick: () => { this.setState({ crashed: false, errorMessage: '' }); this.props.onReset(); }, children: "Restart Froam" })] }));
     }
 }
-export default function FroamGate({ apiBaseUrl, authProvider, enabled, fallback = null, fetch, initialOpen = false, localRoutes = '*', lockedFallback = null, ownerEmails, rootSelector, rootScope, routeKey: explicitRouteKey, projectKey: explicitProjectKey, allowLocalhost = true, }) {
+export default function FroamGate({ apiBaseUrl, authProvider, enabled, fallback = null, fetch, initialOpen = false, localRoutes = '*', lockedFallback = null, ownerEmails, rootSelector, rootScope, routeKey: explicitRouteKey, projectKey: explicitProjectKey, allowLocalhost = true, showInProduction = false, }) {
     const routeKey = useFroamRouteKey(explicitRouteKey);
     const projectKey = useMemo(() => resolveFroamProjectKey(explicitProjectKey), [explicitProjectKey]);
     const resolvedOwnerEmails = useMemo(() => normalizeOwnerEmails(ownerEmails ?? getFroamStudioConfig().ownerEmails ?? getEnvOwnerEmails()), [ownerEmails]);
-    const localAllowed = allowLocalhost && isLocalHost() && routeMatches(routeKey, localRoutes);
-    const [allowed, setAllowed] = useState(enabled === true || localAllowed);
+    // `<FroamGate enabled />` pasted into an app must not hand the editor to
+    // every visitor once it ships. In production only owners get in, unless the
+    // page asks for more.
+    const openToAll = !isProductionBuild() || showInProduction;
+    const forced = openToAll && enabled === true;
+    const localAllowed = openToAll && allowLocalhost && isLocalHost() && routeMatches(routeKey, localRoutes);
+    const [allowed, setAllowed] = useState(forced || localAllowed);
     const [key, setKey] = useState(0);
     useEffect(() => {
         configureFroamStudio({
@@ -57,7 +77,7 @@ export default function FroamGate({ apiBaseUrl, authProvider, enabled, fallback 
             setAllowed(false);
             return undefined;
         }
-        if (enabled === true || localAllowed) {
+        if (forced || localAllowed) {
             setAllowed(true);
             return undefined;
         }
@@ -77,7 +97,7 @@ export default function FroamGate({ apiBaseUrl, authProvider, enabled, fallback 
         return () => {
             cancelled = true;
         };
-    }, [authProvider, enabled, localAllowed, resolvedOwnerEmails]);
+    }, [authProvider, enabled, forced, localAllowed, resolvedOwnerEmails]);
     if (!allowed)
         return _jsx(_Fragment, { children: lockedFallback });
     return (_jsx(FroamBoundary, { onReset: () => setKey((k) => k + 1), children: _jsx(Suspense, { fallback: fallback, children: _jsx(GlobalChefEditor, { initialOpen: initialOpen, routeKey: routeKey, projectKey: projectKey }, `${key}:${projectKey}`) }) }));

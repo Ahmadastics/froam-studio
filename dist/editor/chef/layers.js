@@ -1,4 +1,4 @@
-import { getElementPath, isPathElement, pathChildren } from '../../collab/paths.js';
+import { getElementPath, isPathElement, pathChildren, pathSegmentsOfChildren } from '../../collab/paths.js';
 import { describeSelection } from '../selection-name.js';
 import { shouldSkipElement } from './dom.js';
 export function ensureFroamNodeId(element) {
@@ -34,9 +34,11 @@ export function syncStructureBoundaryLabel(element) {
         element.removeAttribute('data-froam-boundary-label');
 }
 export function buildLayerNode(element, root) {
-    const path = getElementPath(element, root);
+    const children = pathChildren(element).filter((child) => isPathElement(child) && !shouldSkipElement(child));
+    return layerNodeAt(element, getElementPath(element, root), children.length);
+}
+function layerNodeAt(element, path, childCount) {
     const computed = window.getComputedStyle(element);
-    const elementChildren = pathChildren(element).filter((child) => isPathElement(child) && !shouldSkipElement(child));
     return {
         element,
         path,
@@ -48,8 +50,8 @@ export function buildLayerNode(element, root) {
         hidden: computed.display === 'none',
         editorHidden: element.dataset.froamEditorHidden === 'true',
         exportHidden: element.dataset.froamExportHidden === 'true',
-        hasChildren: elementChildren.length > 0,
-        childCount: elementChildren.length,
+        hasChildren: childCount > 0,
+        childCount,
         nodeId: element.dataset.froamId || undefined,
     };
 }
@@ -57,21 +59,25 @@ export function buildLayerNode(element, root) {
 // the cap only protects the panel on pathological pages.
 export const LAYER_MAX_DEPTH = 64;
 export const LAYER_MAX_NODES = 6000;
+/**
+ * The whole tree, paths built top-down: a child's path is its parent's plus
+ * one segment, so the tree costs one pass over the page instead of a walk
+ * back up to the root for every node.
+ */
 export function collectLayers(root, maxDepth = LAYER_MAX_DEPTH) {
     const nodes = [];
-    function walk(el, depth) {
+    function walk(el, path, depth) {
         if (depth > maxDepth || nodes.length >= LAYER_MAX_NODES)
             return;
         if (shouldSkipElement(el))
             return;
-        const elementChildren = pathChildren(el).filter((child) => isPathElement(child) && !shouldSkipElement(child));
-        nodes.push(buildLayerNode(el, root));
-        elementChildren.forEach((child) => walk(child, depth + 1));
+        const shown = pathSegmentsOfChildren(el).filter(([child]) => !shouldSkipElement(child));
+        nodes.push(layerNodeAt(el, path, shown.length));
+        for (const [child, segment] of shown)
+            walk(child, `${path}/${segment}`, depth + 1);
     }
-    for (const child of pathChildren(root)) {
-        if (isPathElement(child))
-            walk(child, 0);
-    }
+    for (const [child, segment] of pathSegmentsOfChildren(root))
+        walk(child, segment, 0);
     return nodes;
 }
 //# sourceMappingURL=layers.js.map

@@ -1,5 +1,6 @@
 import { getElementPath, isFroamOwnedNode, isInPageScope, isPathElement } from '../../collab/paths.js';
 import { SVG_NS, shouldSkipElement } from './dom.js';
+import { subscribePageStyles } from './page-styles.js';
 import { isTextVisualLayer } from './writing.js';
 /**
  * What the pointer is over, as Froam sees the page: the editable element under
@@ -73,49 +74,24 @@ export function createHitTester(rootElement, getSelectedPath) {
         }
         return ancestors;
     }
-    /* Click-through layers are found once (and again when the page changes),
-       and marked so visualStackAtPoint() can switch just those on. */
+    /* Click-through layers come from the shared page-style index (found when
+       the page is idle, re-read only where it changes) and are marked so
+       visualStackAtPoint() can switch just those on. */
     const PE_ATTR = 'data-froam-pe';
     const body = rootElement.ownerDocument.body;
-    // With an app root (#root, <main>), content also lives beside it on <body>.
-    const scanBase = rootElement === body || !body ? rootElement : body;
     let clickThroughLayers = [];
-    function markClickThroughLayers() {
-        const found = [];
-        for (const el of Array.from(scanBase.querySelectorAll('*'))) {
-            if (el.closest('[data-chef-editor-root="true"]'))
-                continue;
-            if (scanBase !== rootElement && !isInPageScope(el, rootElement))
-                continue;
-            const none = window.getComputedStyle(el).pointerEvents === 'none';
-            if (none) {
-                found.push(el);
-                if (el.getAttribute(PE_ATTR) !== 'none')
-                    el.setAttribute(PE_ATTR, 'none');
-            }
-            else if (el.hasAttribute(PE_ATTR))
-                el.removeAttribute(PE_ATTR);
-        }
-        clickThroughLayers = found;
-    }
-    markClickThroughLayers();
-    let peDebounce = 0;
-    /** Changes inside Froam's own UI (or nodes it adds to <body>) aren't page changes. */
-    function isFroamRecord(record) {
-        const target = record.target;
-        if (target === body) {
-            const nodes = [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)];
-            return nodes.every((node) => !(node instanceof Element) || isFroamOwnedNode(node));
-        }
-        return target instanceof Element && !isInPageScope(target, rootElement);
-    }
-    const peObserver = new MutationObserver((records) => {
-        if (records.every((r) => (r.type === 'attributes' && (r.attributeName === PE_ATTR || r.attributeName?.startsWith('data-chef') || r.attributeName?.startsWith('data-froam'))) || isFroamRecord(r)))
+    const unsubscribe = subscribePageStyles(rootElement, (index, changed) => {
+        if (!changed.clickThrough)
             return;
-        window.clearTimeout(peDebounce);
-        peDebounce = window.setTimeout(markClickThroughLayers, 500);
+        const next = new Set(index.clickThrough);
+        for (const el of clickThroughLayers)
+            if (!next.has(el) && el.isConnected)
+                el.removeAttribute(PE_ATTR);
+        for (const el of next)
+            if (el.getAttribute(PE_ATTR) !== 'none')
+                el.setAttribute(PE_ATTR, 'none');
+        clickThroughLayers = [...next];
     });
-    peObserver.observe(scanBase, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
     /**
      * Everything under a point, in visual order — including layers the page
      * made click-through with `pointer-events: none` (overlays, decorations,
@@ -174,10 +150,26 @@ export function createHitTester(rootElement, getSelectedPath) {
             pushSelectionCandidate(stack, ancestor);
         return stack;
     }
+    /**
+     * Froam's UI, or anything inside a node Froam owns on <body> (the standalone
+     * host, a host page's own Froam chrome such as a demo's dialog).
+     */
+    function isOnFroamUi(target) {
+        if (!(target instanceof Element))
+            return false;
+        if (target.closest('[data-chef-editor-root="true"]'))
+            return true;
+        let top = target;
+        while (top.parentElement && top.parentElement !== body)
+            top = top.parentElement;
+        return top.parentElement === body && isFroamOwnedNode(top);
+    }
     /** What a click at this point should select, plus everything beneath it for Alt+click. */
     function resolveClick(event) {
-        // A click on Froam's own UI is never also a click on the page beneath it.
-        if (event.target instanceof Element && event.target.closest('[data-chef-editor-root="true"]')) {
+        // A click on Froam's own UI is never also a click on the page beneath it:
+        // the point-stack below would find the page under a dialog, select it, and
+        // swallow the click before the dialog's button ever saw it.
+        if (isOnFroamUi(event.target)) {
             return { target: null, stack: [] };
         }
         // Keyboard-activated clicks (Enter/Space on a focused control) carry no
@@ -206,9 +198,10 @@ export function createHitTester(rootElement, getSelectedPath) {
         return stack[(selectedIndex + 1 + stack.length) % stack.length] ?? stack[0] ?? null;
     }
     function disconnect() {
-        window.clearTimeout(peDebounce);
-        peObserver.disconnect();
-        scanBase.querySelectorAll('[data-froam-pe]').forEach((el) => el.removeAttribute('data-froam-pe'));
+        unsubscribe();
+        for (const el of clickThroughLayers)
+            el.removeAttribute(PE_ATTR);
+        clickThroughLayers = [];
     }
     return { resolveTarget, resolveClick, disconnect };
 }

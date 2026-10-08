@@ -35,6 +35,9 @@ class FakeElement {
     if (name === 'data-froam-id') this.dataset.froamId = text
     if (name === 'data-froam-injected') this.dataset.froamInjected = text
   }
+  // Like the DOM: own text first, then child elements (the a11y name check reads these).
+  get childNodes() { return [...(this.textContent && !this.children.length ? [{ nodeType: 3, textContent: this.textContent }] : []), ...this.children] }
+  get nodeType() { return 1 }
   getAttribute(name) { return this.attributes.get(name) ?? null }
   hasAttribute(name) { return this.attributes.has(name) }
   getBoundingClientRect() { return this.rect }

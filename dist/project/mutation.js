@@ -107,6 +107,8 @@ function storeField(state, op) {
         return draft?.text;
     if (op.field === 'imageUrl')
         return draft?.imageUrl;
+    if (op.field === 'media')
+        return draft?.media;
     return draft?.styles?.[op.field.slice(6)];
 }
 export function compareMutationBranches(document, sourceBranchId, mutationBranchId) {

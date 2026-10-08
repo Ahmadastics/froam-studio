@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kola Logistics</title>
+    <link rel="stylesheet" href="/site.css">
+  </head>
+  <body>
+    <header class="top" id="site-header">
+      <a class="brand" id="brand" href="/">Kola</a>
+      <nav><a href="#how">How it works</a> <a href="#pricing">Pricing</a></nav>
+    </header>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">Same-day delivery in Abuja</p>
+        <h1 id="headline">Send anything across the city before lunch.</h1>
+        <p id="subtitle">Riders you can track, prices you can see, and a receipt for every drop.</p>
+        <a class="cta" id="cta" href="#pricing">Book a rider</a>
+        <a class="ghost" id="ghost" href="#how">See how it works</a>
+      </section>
+      <section class="cards" id="how">
+        <article class="card" id="card-1"><img src="/pin.svg" alt="Pickup pin" width="40" height="40"><h3>Pick up</h3><p>A rider is at your door in under 20 minutes.</p></article>
+        <article class="card" id="card-2"><img src="/pin.svg" alt="Route pin" width="40" height="40"><h3>Track</h3><p>Watch the route live, share the link with anyone.</p></article>
+        <article class="card odd" id="card-3"><img src="/pin.svg" alt="Drop pin" width="40" height="40"><h3>Drop off</h3><p>Photo proof and a signed receipt, every time.</p></article>
+      </section>
+      <section class="pricing" id="pricing">
+        <h2 id="pricing-title">One flat price per zone</h2>
+        <p id="faint">No surge pricing. No hidden fees. Cancel free until pickup.</p>
+      </section>
+    </main>
+    <script>
+      // Content an app adds after load: the runtime has to reach it too.
+      setTimeout(() => {
+        const note = document.createElement('p')
+        note.id = 'late'
+        note.textContent = 'Riders online now: 42'
+        document.getElementById('pricing').appendChild(note)
+      }, 300)
+    </script>
+  </body>
+</html>
