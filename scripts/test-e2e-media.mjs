@@ -153,7 +153,23 @@ function serveStatic(dir) {
 }
 
 async function openEditor(page, url) {
-  await page.goto(url)
+  // If the page never finishes loading, say what it is still waiting for.
+  const pending = new Map()
+  const started = (request) => pending.set(request, Date.now())
+  const ended = (request) => pending.delete(request)
+  page.on('request', started)
+  page.on('requestfinished', ended)
+  page.on('requestfailed', ended)
+  try {
+    await page.goto(url)
+  } catch (error) {
+    const waiting = [...pending].map(([request, at]) => `${request.method()} ${request.url().replace(url, '/')} (${request.resourceType()}, ${Math.round((Date.now() - at) / 1000)} s)`)
+    throw new Error(`${error.message.split('\n')[0]} Still loading: ${waiting.join('; ') || 'nothing'}`)
+  } finally {
+    page.off('request', started)
+    page.off('requestfinished', ended)
+    page.off('requestfailed', ended)
+  }
   await page.waitForSelector('.global-chef-button', { timeout: 20000 })
   await page.keyboard.press('Control+.')
   await page.waitForSelector('#froam-editor-portal .froam-chrome', { timeout: 20000 })

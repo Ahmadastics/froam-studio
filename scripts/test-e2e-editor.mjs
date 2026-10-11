@@ -289,14 +289,19 @@ test('every visible element selects what is under the pointer', async ({ page })
       if (!hit || !(el === hit || el.contains(hit))) continue
       const expected = rollUp(hit)
       if (ambient(expected)) continue
-      // Start from nothing selected, so a click can't read as "click selected copy again".
+      // Start from nothing selected, so a click can't read as "click selected
+      // copy again" — and wait for that to be true, not a fixed time: a slow
+      // machine takes longer than a fast one to let go of a selection.
+      const selectedNow = () => document.querySelector('[data-chef-selected="true"]')
+      const until = async (done) => { for (let t = 0; t < 40 && !done(); t += 1) await sleep(15) }
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-      await sleep(30)
+      await until(() => !selectedNow())
+      const leftover = selectedNow()
       raw.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, detail: 1, view: window }))
-      await sleep(70)
+      await until(() => selectedNow() === expected)
       tested += 1
-      const selected = document.querySelector('[data-chef-selected="true"]')
-      if (selected !== expected) failures.push(`${describe(expected)} → ${describe(selected)}`)
+      const selected = selectedNow()
+      if (selected !== expected) failures.push(`${describe(expected)} → ${describe(selected)}${leftover ? ` (still selected before the click: ${describe(leftover)})` : ''}`)
     }
     return { tested, failures }
   })
@@ -461,10 +466,16 @@ test('::before content is editable from the design panel', async ({ page }) => {
 test('selection handles stay on the element when the page scrolls', async ({ page }) => {
   await deselect(page)
   await clickOn(page, '#cta')
-  const offset = () => page.evaluate(() => {
+  const measure = () => page.evaluate(() => {
     const element = document.getElementById('cta').getBoundingClientRect()
-    const handles = [...document.querySelectorAll('#froam-editor-portal [class*="handle"]')].map((h) => h.getBoundingClientRect()).filter((r) => r.width > 0)
-    return handles.length ? Math.round(Math.min(...handles.map((r) => r.top)) - element.top) : null
+    const handles = [...document.querySelectorAll('#froam-editor-portal [class*="handle"]')]
+      .map((h) => ({ name: String(h.className).split(' ')[0], top: h.getBoundingClientRect().top, width: h.getBoundingClientRect().width }))
+      .filter((h) => h.width > 0)
+    const highest = handles.length ? handles.reduce((a, b) => (b.top < a.top ? b : a)) : null
+    return {
+      offset: highest ? Math.round(highest.top - element.top) : null,
+      detail: `cta top ${element.top.toFixed(1)}, scrollY ${window.scrollY.toFixed(1)}, highest ${highest?.name} at ${highest?.top.toFixed(1)} (${handles.length} handles)`,
+    }
   })
   // macOS animates a wheel scroll; measure once it has come to rest.
   const settled = () => page.evaluate(() => new Promise((resolve) => {
@@ -479,16 +490,16 @@ test('selection handles stay on the element when the page scrolls', async ({ pag
     }
     requestAnimationFrame(tick)
   }))
-  const before = await offset()
+  const before = await measure()
   await page.mouse.move(700, 600)
   await page.mouse.wheel(0, 240)
   await page.waitForTimeout(100)
   await settled()
-  const after = await offset()
+  const after = await measure()
   await page.mouse.wheel(0, -240)
   await page.waitForTimeout(300)
-  assert(before !== null, 'no resize handles on the selection')
-  assert(Math.abs(after - before) <= 2, `handles drifted ${after - before}px from the element on scroll`)
+  assert(before.offset !== null, 'no resize handles on the selection')
+  assert(Math.abs(after.offset - before.offset) <= 2, `handles drifted ${after.offset - before.offset}px from the element on scroll. Before: ${before.detail}. After: ${after.detail}`)
 })
 
 test('opening a side panel moves the page out from under it', async ({ page }) => {
