@@ -328,7 +328,11 @@ test('findProjectDirForPort locates the project a running dev server belongs to'
       'a tester should never be asked where their own running project is',
     )
   } finally {
+    // Windows locks a running process's working directory: wait for it to
+    // exit before the folder can go.
+    const exited = new Promise((resolve) => child.once('exit', resolve))
     child.kill()
+    await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5000))])
     fs.rmSync(project, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
   }
 })
