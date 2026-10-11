@@ -26,24 +26,35 @@ function run(suite) {
     const started = Date.now()
     const child = spawn(suite, { cwd: ROOT, shell: true, env: process.env })
     let tail = ''
+    const fails = []
+    let pending = ''
     const keep = (chunk) => {
       process.stdout.write(chunk)
       tail = (tail + chunk).slice(-20000)
+      // Each failing check and the lines that explain it, wherever it falls in
+      // a long suite — a tail alone loses the early ones.
+      const lines = (pending + chunk).split(/\r?\n/)
+      pending = lines.pop()
+      for (const line of lines) {
+        if (/^\s*(FAIL|✗|not ok)\b/.test(line)) fails.push([line])
+        else if (fails.length && fails.at(-1).length < 4 && /^\s{4,}\S/.test(line)) fails.at(-1).push(line)
+      }
     }
     child.stdout.on('data', keep)
     child.stderr.on('data', keep)
-    child.on('close', (code) => resolve({ code, tail, seconds: Math.round((Date.now() - started) / 1000) }))
+    child.on('close', (code) => resolve({ code, tail, fails, seconds: Math.round((Date.now() - started) / 1000) }))
   })
 }
 
 const failed = []
 for (const suite of command.split('&&').map((part) => part.trim()).filter(Boolean)) {
   console.log(`\n▶ ${suite}`)
-  const { code, tail, seconds } = await run(suite)
+  const { code, tail, fails, seconds } = await run(suite)
   if (code === 0) continue
   failed.push(suite)
   const lines = tail.replace(/\x1b\[[0-9;]*m/g, '').split(/\r?\n/).filter((line) => line.trim())
-  const reason = lines.slice(-50).join('\n').slice(-6000)
+  const failures = fails.map((block) => block.join('\n')).join('\n').slice(0, 4000)
+  const reason = `${failures ? `${failures}\n── last lines ──\n` : ''}${lines.slice(-30).join('\n')}`.slice(0, 7000)
   console.log(`::error title=${escape(`${suite} (${system}, exit ${code}, ${seconds}s)`).replace(/[:,]/g, ' ')}::${escape(reason)}`)
 }
 

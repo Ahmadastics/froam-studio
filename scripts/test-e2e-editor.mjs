@@ -218,6 +218,35 @@ test("the site's sticky header sits below Froam's toolbar and is clickable", asy
   assert((await selectedId(page)) === 'logo-mark', `logo click selected ${await selectedId(page)}`)
 })
 
+test('a sticky bar the page adds while its scripts restyle every frame still clears the toolbar', async ({ page }) => {
+  const seen = await page.evaluate(async () => {
+    const root = document.querySelector('[data-froam-root]') ?? document.body
+    const ticker = document.createElement('div')
+    const bar = document.createElement('div')
+    bar.textContent = 'late sticky bar'
+    bar.style.cssText = 'position:sticky;top:0;height:20px'
+    root.append(ticker, bar)
+    // A busy carousel or parallax: most of every frame spent in script, and a
+    // style written each time. The page is never idle.
+    let frame = 0
+    const spin = () => {
+      const until = performance.now() + 14
+      while (performance.now() < until) { /* busy */ }
+      ticker.style.opacity = String(Math.random())
+      frame = requestAnimationFrame(spin)
+    }
+    frame = requestAnimationFrame(spin)
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    const top = Math.round(parseFloat(getComputedStyle(bar).top))
+    cancelAnimationFrame(frame)
+    const chrome = Math.round(document.querySelector('#froam-editor-portal .froam-chrome').getBoundingClientRect().bottom)
+    ticker.remove()
+    bar.remove()
+    return { top, chrome }
+  })
+  assert(Math.abs(seen.top - seen.chrome) <= 1, `the late sticky bar sticks at ${seen.top}px, under the toolbar (bottom ${seen.chrome}px)`)
+})
+
 test('every visible element selects what is under the pointer', async ({ page }) => {
   const result = await page.evaluate(async () => {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -437,10 +466,24 @@ test('selection handles stay on the element when the page scrolls', async ({ pag
     const handles = [...document.querySelectorAll('#froam-editor-portal [class*="handle"]')].map((h) => h.getBoundingClientRect()).filter((r) => r.width > 0)
     return handles.length ? Math.round(Math.min(...handles.map((r) => r.top)) - element.top) : null
   })
+  // macOS animates a wheel scroll; measure once it has come to rest.
+  const settled = () => page.evaluate(() => new Promise((resolve) => {
+    let last = -1
+    let still = 0
+    const started = performance.now()
+    const tick = () => {
+      still = window.scrollY === last ? still + 1 : 0
+      last = window.scrollY
+      if (still >= 5 || performance.now() - started > 3000) resolve()
+      else requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  }))
   const before = await offset()
   await page.mouse.move(700, 600)
   await page.mouse.wheel(0, 240)
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(100)
+  await settled()
   const after = await offset()
   await page.mouse.wheel(0, -240)
   await page.waitForTimeout(300)
@@ -1289,7 +1332,18 @@ test('History and Undo survive Save to Repo and a reload', async ({ page, siteDi
   const undone = await radius()
   if (process.env.FROAM_E2E_DEBUG) console.log({ before, styled, afterReload, rows: rows.slice(0, 4), undone, debug: await page.evaluate(() => { const d = window.__froamOpLog; const ops = d?.ops?.() ?? []; return { actor: d?.session?.actor, canUndo: d?.session?.canUndo?.(), last: ops.slice(-6).map((op) => `${op.actor}/${op.kind}/${op.label}/${op.field}`) } }) })
   assert(styled !== before, 'the look changed nothing')
-  assert(afterReload === styled, `after the reload the button reads ${afterReload}, not ${styled}`)
+  if (afterReload !== styled) {
+    // Lost, or only late? Say which, and where the edit got to.
+    const has = (file) => { try { return fs.readFileSync(path.join(siteDir, 'froam', file), 'utf8').includes(styled) } catch { return 'missing' } }
+    await page.waitForTimeout(3000)
+    const seen = await page.evaluate(async (value) => ({
+      later: getComputedStyle(document.getElementById('cta')).borderTopLeftRadius,
+      cta: `${document.getElementById('cta')?.outerHTML.slice(0, 160)}`,
+      sheets: [...document.styleSheets].map((sheet) => sheet.href?.replace(location.origin, '') ?? 'inline').join(' '),
+      bridge: await fetch('/__froam/repo/load', { cache: 'no-store' }).then((r) => r.text()).then((t) => t.includes(value)).catch((e) => String(e)),
+    }), styled)
+    assert(false, `after the reload the button reads ${afterReload}, not ${styled}; 3 s later ${seen.later}. Saved in design.json: ${has('froam.design.json')}, generated CSS: ${has('froam.generated.css')}, bridge load: ${seen.bridge}. Sheets: ${seen.sheets}. Button: ${seen.cta}`)
+  }
   assert(rows.some((row) => /Pill/.test(row)), `after Save to Repo and a reload, History lists: ${rows.slice(0, 3).join(' | ') || 'nothing'}`)
   assert(undone === before, `Ctrl+Z after the reload left the corners at ${undone} (was ${before})`)
 })

@@ -133,10 +133,12 @@ function createIndex(root: HTMLElement): Shared {
 
   let pending = new Set<Element>()
   let full = true
+  let scheduled = true
   let cancel = whenIdle(flush, 300)
 
   function flush() {
     cancel = () => {}
+    scheduled = false
     if (full) {
       full = false
       pending.clear()
@@ -162,8 +164,12 @@ function createIndex(root: HTMLElement): Shared {
     notify()
   }
 
+  // A read already waiting picks up later changes too. Restarting the wait on
+  // every change would let a page that touches styles all the time (a
+  // carousel, a ticker, parallax) put the read off forever.
   function schedule() {
-    cancel()
+    if (scheduled) return
+    scheduled = true
     cancel = whenIdle(flush, 400)
   }
 
