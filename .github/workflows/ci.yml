@@ -1,34 +1,73 @@
 name: CI
 
+# Every branch a release is cut from, every tag, every pull request — on the
+# three systems people run `npx @ahmadastic/froam` on. 9.5.0 shipped a CLI
+# that could not start on Linux or macOS; it passed on Windows, and CI only
+# ran on main, which releases are not made from.
 on:
   push:
-    branches: [main]
+    branches: [main, 'release/**']
+    tags: ['v*']
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  test:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
+          cache: npm
+      # One known Chrome on every runner; the browser tests read its path.
+      - id: chrome
+        uses: browser-actions/setup-chrome@v1
+      - run: npm ci
+      - run: npm run build
+      - name: Unit tests
+        run: npm test
+      - name: Browser tests (real Chrome against the real CLI)
+        run: npm run test:e2e
+        env:
+          FROAM_E2E_CHROME: ${{ steps.chrome.outputs.chrome-path }}
+      # The way people really start it: installed from a packed tarball and
+      # run through npm's bin link, so the #! line has to work.
+      - name: The packed CLI starts the way npx starts it
+        shell: bash
+        run: |
+          TARBALL="$(npm pack --silent | tail -1)"
+          mkdir -p "$RUNNER_TEMP/npx-check/site" && cd "$RUNNER_TEMP/npx-check"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "$GITHUB_WORKSPACE/$TARBALL"
+          npx --no-install froam version
+          cd site
+          echo '<!doctype html><html><head></head><body><h1>Hi</h1></body></html>' > index.html
+          npx --no-install froam init
+          npx --no-install froam build
+          npx --no-install froam doctor
+
+  # The oldest Node still supported upstream: the unit tests and the CLI.
+  node-22:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run build
-      - name: Op log tests
-        run: npm test
-      - name: Editor end-to-end (real Chrome against the real CLI)
-        run: npm run test:e2e
-      - name: Verify packed contents include the built editor
-        run: |
-          npm pack --dry-run 2>&1 | tee pack.log
-          grep -q "dist/standalone/froam-editor.js" pack.log
-      - name: Smoke-test the CLI
-        run: |
-          node bin/froam.mjs version
-          mkdir -p /tmp/froam-smoke && cd /tmp/froam-smoke
-          echo '<!doctype html><html><head></head><body><h1>Hi</h1></body></html>' > index.html
-          node "$GITHUB_WORKSPACE/bin/froam.mjs" init
-          node "$GITHUB_WORKSPACE/bin/froam.mjs" build
-          node "$GITHUB_WORKSPACE/bin/froam.mjs" doctor
+      - run: npm test
+      - run: node bin/froam.mjs version
