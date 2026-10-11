@@ -29,6 +29,10 @@ const stub = (name, pkg) => {
 }
 stub('stub-froam', { name: '@ahmadastic/froam', version: '0.0.0-test' })
 stub('stub-vite', { name: 'vite', version: '0.0.0-test' })
+// The frameworks a project already depends on are stubs too: installing next
+// to a real "react": "19" makes npm look react up, and offline that works
+// only on a machine whose npm cache happens to have it.
+for (const name of ['react', 'vue', 'next', 'astro']) stub(`stub-${name}`, { name, version: '0.0.0-test' })
 
 let count = 0
 function project(files) {
@@ -96,7 +100,7 @@ test('Vite: --no-install wires the config and puts the install first in the step
 })
 
 test('Vite + Vue: named as such, and the port comes from the dev script', () => {
-  const dir = viteProject({ 'package.json': { name: 'site', scripts: { dev: 'vite --port 5199' }, dependencies: { vue: '3' }, devDependencies: { vite: 'file:../stub-vite' } } })
+  const dir = viteProject({ 'package.json': { name: 'site', scripts: { dev: 'vite --port 5199' }, dependencies: { vue: 'file:../stub-vue' }, devDependencies: { vite: 'file:../stub-vite' } } })
   const { out } = init(dir, ['--no-install'])
   assert.match(out, /detected Vite \+ Vue/)
   assert.match(out, /dev --app http:\/\/localhost:5199/)
@@ -104,7 +108,7 @@ test('Vite + Vue: named as such, and the port comes from the dev script', () => 
 
 test('Vite + React in JavaScript: a dependency, index.js glue, a snippet with no types', () => {
   const dir = viteProject({
-    'package.json': { name: 'site', dependencies: { react: '19' }, devDependencies: { vite: 'file:../stub-vite' } },
+    'package.json': { name: 'site', dependencies: { react: 'file:../stub-react' }, devDependencies: { vite: 'file:../stub-vite' } },
     'src/main.jsx': '',
   })
   const { code, out } = init(dir)
@@ -118,7 +122,7 @@ test('Vite + React in JavaScript: a dependency, index.js glue, a snippet with no
 
 test('Vite + React in TypeScript: index.ts glue and the typed snippet', () => {
   const dir = viteProject({
-    'package.json': { name: 'site', dependencies: { react: '19' }, devDependencies: { vite: 'file:../stub-vite' } },
+    'package.json': { name: 'site', dependencies: { react: 'file:../stub-react' }, devDependencies: { vite: 'file:../stub-vite' } },
     'tsconfig.json': '{}',
     'src/main.tsx': '',
   })
@@ -130,7 +134,7 @@ test('Vite + React in TypeScript: index.ts glue and the typed snippet', () => {
 
 test('Next.js: a root layout with no <head> gets one, in JSX', () => {
   const dir = project({
-    'package.json': { name: 'site', dependencies: { next: '16', react: '19' } },
+    'package.json': { name: 'site', dependencies: { next: 'file:../stub-next', react: 'file:../stub-react' } },
     'app/layout.jsx': 'export default function RootLayout({ children }) {\n  return (\n    <html lang="en">\n      <body>{children}</body>\n    </html>\n  )\n}\n',
   })
   const { code, out } = init(dir)
@@ -143,7 +147,7 @@ test('Next.js: a root layout with no <head> gets one, in JSX', () => {
 
 test('Astro: every head gets the tags; a page backup is kept out of routing', () => {
   const dir = project({
-    'package.json': { name: 'site', dependencies: { astro: '7' } },
+    'package.json': { name: 'site', dependencies: { astro: 'file:../stub-astro' } },
     'src/pages/index.astro': '---\n---\n<html>\n  <head>\n    <title>A</title>\n  </head>\n  <body></body>\n</html>\n',
   })
   const { code, out } = init(dir)

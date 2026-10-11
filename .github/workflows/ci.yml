@@ -35,25 +35,19 @@ jobs:
         uses: browser-actions/setup-chrome@v1
       - run: npm ci
       - run: npm run build
-      # Each suite's output is kept so that, if it fails, its last lines become
-      # an annotation on the run page instead of something to dig out of logs.
+      # The suites of npm test / npm run test:e2e, but every one runs even after
+      # a failure, and each failure is annotated on the run page.
       - name: Unit tests
-        id: unit
-        shell: bash
-        run: set -o pipefail; npm test 2>&1 | tee "$RUNNER_TEMP/unit.log"
-      - if: failure() && steps.unit.outcome == 'failure'
-        run: node scripts/ci-annotate.mjs "Unit tests on ${{ matrix.os }}" "${{ runner.temp }}/unit.log"
+        run: node scripts/ci-run-all.mjs test
       - name: Browser tests (real Chrome against the real CLI)
-        id: e2e
-        shell: bash
-        run: set -o pipefail; npm run test:e2e 2>&1 | tee "$RUNNER_TEMP/e2e.log"
+        if: ${{ !cancelled() }}
+        run: node scripts/ci-run-all.mjs test:e2e
         env:
           FROAM_E2E_CHROME: ${{ steps.chrome.outputs.chrome-path }}
-      - if: failure() && steps.e2e.outcome == 'failure'
-        run: node scripts/ci-annotate.mjs "Browser tests on ${{ matrix.os }}" "${{ runner.temp }}/e2e.log"
       # The way people really start it: installed from a packed tarball and
       # run through npm's bin link, so the #! line has to work.
       - name: The packed CLI starts the way npx starts it
+        if: ${{ !cancelled() }}
         shell: bash
         run: |
           TARBALL="$(npm pack --silent | tail -1)"
@@ -80,7 +74,6 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Unit tests
-        run: set -o pipefail; npm test 2>&1 | tee "$RUNNER_TEMP/unit.log"
-      - if: failure()
-        run: node scripts/ci-annotate.mjs "Unit tests on Node 22" "${{ runner.temp }}/unit.log"
-      - run: node bin/froam.mjs version
+        run: node scripts/ci-run-all.mjs test
+      - if: ${{ !cancelled() }}
+        run: node bin/froam.mjs version

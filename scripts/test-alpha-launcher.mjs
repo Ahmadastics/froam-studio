@@ -111,6 +111,12 @@ test('isSystemDirectory flags protected Windows and system paths', () => {
   }
   const safeTemp = path.join(os.tmpdir(), 'froam-safe-test')
   assert.equal(isSystemDirectory(safeTemp), false)
+  assert.equal(isSystemDirectory(path.join(os.homedir(), 'sites', 'portfolio')), false)
+  if (process.platform !== 'win32') {
+    assert.equal(isSystemDirectory('/usr/lib'), true)
+    assert.equal(isSystemDirectory('/var/log'), true)
+    assert.equal(isSystemDirectory('/var/www/shop'), false)
+  }
 })
 
 test('resolveSafeWorkspaceDir routes online sites to ~/Froam/<website> and guards System32', () => {
@@ -338,6 +344,9 @@ test('findProjectDirForPort locates the project a running dev server belongs to'
 })
 
 test('windowsPathsIn survives the spaces in a real Windows home folder', () => {
+  // It reads Windows command lines and checks each guess against the disk,
+  // so it needs a disk with drive letters.
+  if (process.platform !== 'win32') return
   const project = path.join(os.tmpdir(), 'Ada Lovelace Projects', 'my portfolio site')
   const entry = path.join(project, 'node_modules', 'vite', 'bin', 'vite.js')
   fs.mkdirSync(path.dirname(entry), { recursive: true })
