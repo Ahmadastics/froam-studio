@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 9.6.0 - 2026-10-11
+
+**Fonts from around the world, a real font picker, Styles you can find your
+way around, and spacing you drag on the page.**
 
 - **Spacing on the canvas.** Hover a selection and its padding (green),
   margin (amber) and flex or grid gaps (violet) show as zones with handles.
