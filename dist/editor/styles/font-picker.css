@@ -1,0 +1,221 @@
+/* ===============================================================
+   FROAM STUDIO — Font picker
+   Every family drawn in its own face, filtered by job and by
+   writing system. Sits above the floating bar and Styles dock.
+   =============================================================== */
+
+.froam-font-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px 0 10px;
+  border-radius: 7px;
+  background: var(--fs-surface-control);
+  color: var(--fs-text-primary);
+  font-family: var(--fs-font);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  transition: background var(--fs-transition-fast);
+}
+.froam-font-trigger:hover { background: var(--fs-surface-control-hover); }
+.froam-font-trigger:focus-visible { outline: none; box-shadow: var(--fs-focus-ring); }
+.froam-font-trigger[aria-expanded='true'] { background: var(--fs-surface-control-active); }
+.froam-font-trigger__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.froam-font-trigger svg { flex: 0 0 auto; opacity: 0.6; }
+.froam-font-trigger--bar { width: 128px; margin-left: 2px; }
+.froam-floating-bar.is-narrow .froam-font-trigger--bar { width: 104px; }
+.froam-font-trigger--panel { width: 100%; height: 30px; border: 1px solid var(--fs-border); background: var(--fs-surface-1); }
+
+.froam-font-picker {
+  position: fixed;
+  z-index: 1360;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow: hidden;
+  border: 1px solid var(--fs-border);
+  border-radius: 12px;
+  background: var(--fs-surface-2);
+  color: var(--fs-text-primary);
+  font-family: var(--fs-font);
+  box-shadow: var(--fs-shadow-panel);
+  animation: froam-font-picker-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes froam-font-picker-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+
+.froam-font-picker__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--fs-border);
+  border-radius: 8px;
+  background: var(--fs-surface-1);
+  color: var(--fs-text-tertiary);
+}
+.froam-font-picker__search:focus-within { border-color: var(--fs-accent-control-border); color: var(--fs-text-secondary); }
+.froam-font-picker__search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  color: var(--fs-text-primary);
+  font-size: 12.5px;
+  outline: none;
+}
+.froam-font-picker__search input::placeholder { color: var(--fs-text-tertiary); }
+.froam-font-picker__clear { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; color: var(--fs-text-tertiary); }
+.froam-font-picker__clear:hover { background: var(--fs-bg-hover); color: var(--fs-text-primary); }
+
+/* Role tabs wrap onto two lines rather than scroll sideways out of sight. */
+.froam-font-picker__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.froam-font-picker__filters button {
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--fs-radius-pill);
+  background: var(--fs-surface-control);
+  color: var(--fs-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.froam-font-picker__filters button:hover { color: var(--fs-text-primary); background: var(--fs-surface-control-hover); }
+.froam-font-picker__filters button.is-active { background: var(--fs-accent-control); color: var(--fs-text-on-accent); }
+
+.froam-font-picker__world {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 4px 0 9px;
+  border-radius: 7px;
+  background: var(--fs-surface-1);
+  color: var(--fs-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.froam-font-picker__world span { white-space: nowrap; }
+.froam-font-picker__world select {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--fs-surface-control);
+  color: var(--fs-text-primary);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.froam-font-picker__world select option { background: var(--fs-option-bg, #15181e); color: inherit; }
+
+.froam-font-picker__list {
+  flex: 1 1 auto;
+  min-height: 120px;
+  margin: 0 -4px;
+  padding: 0 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.froam-font-picker__heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 8px 4px;
+  background: var(--fs-surface-2);
+  color: var(--fs-text-tertiary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.froam-font-picker__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: 'face sample check' 'meta meta meta';
+  align-items: center;
+  column-gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: 8px;
+  color: var(--fs-text-primary);
+  text-align: left;
+}
+.froam-font-picker__row.is-active { background: var(--fs-bg-hover); }
+.froam-font-picker__row.is-selected { box-shadow: inset 0 0 0 1px var(--fs-accent-control-border); }
+.froam-font-picker__face {
+  grid-area: face;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 17px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.froam-font-picker__sample {
+  grid-area: sample;
+  max-width: 120px;
+  overflow: hidden;
+  color: var(--fs-text-secondary);
+  font-size: 16px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.froam-font-picker__meta {
+  grid-area: meta;
+  color: var(--fs-text-tertiary);
+  font-family: var(--fs-font);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+.froam-font-picker__check { grid-area: check; color: var(--fs-accent-text); }
+.froam-font-picker__empty { padding: 24px 12px; color: var(--fs-text-tertiary); font-size: 12px; text-align: center; }
+
+.froam-font-picker__about {
+  display: grid;
+  gap: 3px;
+  min-height: 58px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: var(--fs-surface-1);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.froam-font-picker__about strong { color: var(--fs-text-primary); font-size: 12px; }
+.froam-font-picker__about span { color: var(--fs-text-secondary); }
+.froam-font-picker__about small { color: var(--fs-text-tertiary); font-size: 10.5px; }
+.froam-font-picker__pairs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 3px; }
+.froam-font-picker__pairs span { color: var(--fs-text-tertiary); font-size: 10.5px; }
+.froam-font-picker__pairs button {
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--fs-radius-pill);
+  background: var(--fs-surface-control);
+  color: var(--fs-text-primary);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.froam-font-picker__pairs button:hover { background: var(--fs-surface-control-hover); }
+
+@media (max-width: 640px) {
+  .froam-font-picker { left: 8px !important; right: 8px; width: auto !important; }
+  .froam-font-picker__row { padding: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .froam-font-picker { animation: none; }
+}
+
+/* Everything but the list keeps its size; the list takes what is left. */
+.froam-font-picker > :not(.froam-font-picker__list) { flex: 0 0 auto; }

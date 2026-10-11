@@ -1,12 +1,24 @@
 /**
- * Look Studio's recipes: 253 styles and what each one does. Loaded the first
+ * Look Studio's recipes: 289 styles and what each one does. Loaded the first
  * time Styles is opened — most sessions never open it, and they shouldn't
  * download it with the editor.
  */
 import type { CSSProperties } from 'react';
 type SelectionPatch = Record<string, string | number>;
-export declare const LOOK_GROUPS: readonly ["Alive", "Signature", "Photo", "Accent", "Surface", "Depth", "Shape", "Line", "Type", "Pattern", "Vibe", "Reset"];
+export declare const LOOK_GROUPS: readonly ["Alive", "Signature", "Photo", "World", "Now", "Accent", "Surface", "Depth", "Shape", "Line", "Type", "Pattern", "Vibe", "Reset"];
 export type LookGroup = (typeof LOOK_GROUPS)[number];
+/**
+ * What Styles calls each group. The ids above are stored nowhere but read by
+ * tests and saved styles, so they stay; these are the words people navigate by.
+ */
+export declare const LOOK_GROUP_LABELS: Record<LookGroup, string>;
+/** One line under each section heading: what you'd come to it for. */
+export declare const LOOK_GROUP_HINTS: Record<LookGroup, string>;
+/** The rail in Styles: groups gathered by the question you're asking. */
+export declare const LOOK_SHELVES: readonly {
+    title: string;
+    groups: readonly LookGroup[];
+}[];
 export type Look = {
     name: string;
     group: LookGroup;

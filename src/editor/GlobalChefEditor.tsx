@@ -82,6 +82,8 @@ import FroamSectionBoundary from './FroamSectionBoundary'
 import { apiGetFresh, apiPost } from '../lib/api'
 import { bridgeUrl } from '../lib/bridge'
 import FroamResizeHandles from './FroamResizeHandles'
+import FroamSpacingHandles from './FroamSpacingHandles'
+import FroamRedlines from './FroamRedlines'
 import FroamFloatingBar from './FroamFloatingBar'
 import FroamContextMenu from './FroamContextMenu'
 import FroamBottomSheet, { type SheetDetent } from './FroamBottomSheet'
@@ -293,6 +295,7 @@ import {
 import {
   sanitizeDraftForElement,
   applyDraft,
+  rememberPageStyle,
   restorePageStyle,
   isInjectionPath,
   isSectionStructurePath,
@@ -564,6 +567,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [smartGuides] = useState<AlignmentGuide[]>([])
   const [clipboardStyles, setClipboardStyles] = useState<Record<string, string> | null>(null)
   const [isResizing, setIsResizing] = useState(false)
+  /** Inline spacing values on the element when a spacing drag began, to put back a side a modifier lets go of. */
+  const spacingOriginRef = useRef<Record<string, string> | null>(null)
   const resizeBaseRef = useRef<{
     width: number
     height: number
@@ -8291,6 +8296,64 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         onActivityChange={setWorkspaceActivity}
       />
 
+      {/* Spacing on the canvas: padding, margin and gap handles that snap to the site's own rhythm. */}
+      {showPanel && selection && selections.length <= 1 && !inlineEditing && !isResizing && (
+        <FroamSpacingHandles
+          target={currentSelectionRef.current}
+          rect={selectionRect}
+          visible={!!selectionRect && !commandPaletteOpen}
+          onStart={() => {
+            if (!selection || guardRemoteLock(selection.path)) return false
+            const root = getRoot()
+            const target = root ? findElementByPath(root, selection.path) : null
+            if (!target) return false
+            const originalRoute = originalsRef.current[viewportStoreKey] ?? {}
+            if (!originalRoute[selection.path]) {
+              const inlineStyles = target.style as unknown as Record<string, string>
+              originalRoute[selection.path] = {
+                text: target.innerText,
+                imageUrl: target instanceof HTMLImageElement ? target.currentSrc || target.src || '' : undefined,
+                styles: Object.fromEntries(persistedStyleKeys.map((key) => [key, inlineStyles[key] || ''])),
+              }
+              originalsRef.current[viewportStoreKey] = originalRoute
+            }
+            rememberPageStyle(target)
+            spacingOriginRef.current = Object.fromEntries(
+              ['padding-top', 'padding-right', 'padding-bottom', 'padding-left', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'gap']
+                .map((property) => [property, target.style.getPropertyValue(property)]),
+            )
+            setRoomLockedPath(selection.path)
+            return true
+          }}
+          onPreview={(styles) => {
+            const target = currentSelectionRef.current
+            if (!target) return
+            for (const [property, value] of Object.entries(styles)) {
+              const css = camelToKebab(property)
+              const restore = value || spacingOriginRef.current?.[css] || ''
+              if (restore) target.style.setProperty(css, restore)
+              else target.style.removeProperty(css)
+            }
+            setSelectionRect(target.getBoundingClientRect())
+          }}
+          onCommit={(styles, label) => {
+            setRoomLockedPath(null)
+            spacingOriginRef.current = null
+            const nextSelection: Partial<SelectionState> = {}
+            for (const [property, value] of Object.entries(styles)) {
+              if (/^(padding|margin)(Top|Right|Bottom|Left)$/.test(property)) (nextSelection as Record<string, number>)[property] = parseFloat(value) || 0
+            }
+            if (styles.gap) nextSelection.gap = parseFloat(styles.gap.split(' ')[0]) || 0
+            applyStyle(styles, nextSelection, label)
+            const target = currentSelectionRef.current
+            if (target) setSelectionRect(target.getBoundingClientRect())
+          }}
+        />
+      )}
+
+      {/* Alt: redline distances from the selection to whatever the pointer is over. */}
+      <FroamRedlines selection={selection ? currentSelectionRef.current : null} root={getRoot} enabled={showPanel && !!selection && !inlineEditing && !commandPaletteOpen} />
+
       {/* v4: Resize handles on selected element */}
       {showPanel && selection && !inlineEditing && (
         <FroamResizeHandles
@@ -8304,6 +8367,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             if (!root) return
             const target = findElementByPath(root, selection.path)
             if (!target) return
+            rememberPageStyle(target)
             const rect = target.getBoundingClientRect()
             const computed = window.getComputedStyle(target)
             const originalRoute = originalsRef.current[viewportStoreKey] ?? {}

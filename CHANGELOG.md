@@ -2,6 +2,52 @@
 
 ## Unreleased
 
+- **Spacing on the canvas.** Hover a selection and its padding (green),
+  margin (amber) and flex or grid gaps (violet) show as zones with handles.
+  Drag one and the real page reflows under the pointer. Shift moves all four
+  sides, Alt moves the opposite side with it.
+- **Snaps to your site's rhythm.** A spacing drag snaps to the values the
+  page already repeats (its padding, margins and gaps), not to an arbitrary
+  8px grid, and the label says when it lands on your scale. Ctrl/⌘ drags
+  free. A page with no clear rhythm falls back to a 4/8 scale.
+- **Alt measures.** Hold Alt with something selected and point at anything to
+  see the distances between them in CSS pixels, true in phone and tablet
+  previews too. Point at nothing to measure against the parent's inner edges.
+  The floating bar steps back while you measure.
+- **205 fonts from 31 countries, 19 writing systems.** The font list grew from
+  42 families to 205, with weights checked against Google Fonts' and
+  Fontshare's own data. It now covers Arabic, Hebrew, Devanagari, Bengali,
+  Tamil, Gujarati, Japanese, Korean, Chinese, Thai, Vietnamese, Cyrillic,
+  Greek, Ge'ez, Adlam, N'Ko, Tifinagh, Georgian and Armenian, plus
+  accessibility faces (Atkinson Hyperlegible Next, Lexend) and 16 Fontshare
+  families.
+- **A real font picker.** It replaces the native dropdown in the floating bar
+  and the Design panel. Every family is drawn in its own face, and faces for
+  other scripts show a sample in that script. Search by name, mood, country or
+  script; filter by role or writing system; see Recent picks. Hover a row to
+  try it on the selection before you pick, and keyboard navigation works
+  throughout. Previews load only the letters they draw, under a private name,
+  so they never stand in for the page's real fonts.
+- **Styles, reorganised.** A category rail, with plain names (Interactive,
+  Trending, World, Aesthetics, Patterns, Gradients, Surfaces, Shadows,
+  Shapes, Borders, Text, Images), replaces a strip of twelve chips that ran
+  off the edge. The grid is one long list in sections that the rail jumps to
+  and follows as you scroll. The grid fills the dock's height, and Adjust
+  folds away beside an always-there accent colour. Star a style to keep it in
+  Favourites; Recent remembers what you tried. Reset moved to the header.
+- **26 World styles and 10 Trending.** World styles are CSS-only homages to
+  crafts from every continent: Adire, Ankara, Kente, Mud cloth, Ndebele,
+  Zellige, Persian tile, Kilim, Talavera, Papel picado, Azulejo, Terrazzo,
+  De Stijl, Constructivist, Tartan, Nordic, Art Deco, Washi, Sumi, Seigaiha,
+  Shibori, Dancheong, Celadon, Lacquer, Batik and Block print. Trending adds
+  Grain, Spatial glass, Dark bento, Soft UI, Acid, Tactile, Edge glow,
+  Frosted pill, Wireframe and Aurora text. That makes 289 styles.
+- **Undo after a first resize puts the size back.** Resizing an element Froam
+  had never styled before recorded its page style mid-drag, so Undo restored
+  the resized box. The page's own style is now noted before the first pixel
+  moves; spacing drags use the same path.
+- **The command palette covers the canvas.** The selection outline, handles
+  and floating bar used to draw over the palette's backdrop.
 - **Sticky headers clear the toolbar on busy pages.** Froam finds a page's
   sticky and fixed elements when the page is idle. A page whose scripts
   restyle something every frame (a carousel, a ticker, parallax) is never

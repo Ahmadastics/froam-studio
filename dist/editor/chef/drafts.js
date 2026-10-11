@@ -19,6 +19,16 @@ export function sanitizeDraftForElement(element, draft) {
    Cancel and Clear instead of being wiped with the edits. */
 const pageStyles = new WeakMap();
 /**
+ * Note the site's own style attribute before Froam writes to it directly —
+ * a resize or spacing drag previews on inline styles before any draft is
+ * painted, and without this the baseline would be taken mid-drag and Undo
+ * would put the drag back.
+ */
+export function rememberPageStyle(element) {
+    if (!pageStyles.has(element))
+        pageStyles.set(element, element.getAttribute('style'));
+}
+/**
  * Take Froam's styles off an element: back to the style attribute the site
  * gave it. For an element Froam hasn't seen being painted (the page replaced
  * it since), only the properties in `styles` — Froam's — are removed.

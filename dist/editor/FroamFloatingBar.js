@@ -1,10 +1,10 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FONT_GROUP_LABELS, groupFontOptions } from './fontSources.js';
+import FroamFontPicker from './FroamFontPicker.js';
 import { describeSelection } from './selection-name.js';
 import { contrast, luminance, parseColor, sampleAccent, toHex as brandHex } from './library/site-theme.js';
-import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, BringToFront, Check, ChevronDown, ChevronLeft, ChevronRight, Combine, Contrast, Copy, CornerLeftUp, CornerRightDown, Crop, Eraser, Eye, EyeOff, ImagePlus, Italic, MoreHorizontal, SendToBack, Search, SlidersHorizontal, Sparkles, Strikethrough, Trash2, Type, Underline, Undo2, Ungroup, WandSparkles, } from 'lucide-react';
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, BringToFront, Check, ChevronDown, ChevronLeft, ChevronRight, Combine, Contrast, Copy, CornerLeftUp, CornerRightDown, Crop, Eraser, Eye, EyeOff, ImagePlus, Italic, MoreHorizontal, SendToBack, Search, History, SlidersHorizontal, Sparkles, Star, Strikethrough, Trash2, Type, Underline, Undo2, X, Ungroup, WandSparkles, } from 'lucide-react';
 const VIEWPORT_GAP = 12;
 const TARGET_GAP = 12;
 const SCRUB_SLOP = 6;
@@ -146,6 +146,28 @@ function livingLooks(looks) {
 }
 const NO_NOTES = {};
 const NO_GROUPS = [];
+const NO_SHELVES = [];
+const NO_LABELS = {};
+/* Favourites, recents and whether Adjust is open are this person's habits in
+   this browser — conveniences, never project data. */
+const LOOK_FAVORITES_KEY = 'froam:look-favorites:v1';
+const LOOK_RECENTS_KEY = 'froam:look-recents:v1';
+const LOOK_ADJUST_KEY = 'froam:look-adjust-open:v1';
+function readList(key) {
+    try {
+        const parsed = JSON.parse(window.localStorage.getItem(key) ?? '[]');
+        return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
+    }
+    catch {
+        return [];
+    }
+}
+function writeValue(key, value) {
+    try {
+        window.localStorage.setItem(key, JSON.stringify(value));
+    }
+    catch { /* storage unavailable */ }
+}
 // Uniform corner-radius patch so the editor's own radius controls stay in sync.
 const corners = (n) => ({ borderRadiusTL: n, borderRadiusTR: n, borderRadiusBR: n, borderRadiusBL: n });
 export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, radius, opacity, isHidden = false, fontOptions, selectionCount, isTextLayer = false, hasText = true, isImage = false, canAdjustImage = false, docked = false, canUndo = false, onWalk, onAction, onStyle, selectionKey, onSaveLook, }) {
@@ -157,19 +179,34 @@ export default function FroamFloatingBar({ targetRect, visible, label, fontFamil
     const [palette, setPalette] = useState([]);
     const [paletteMode, setPaletteMode] = useState('fill');
     const [lookSearch, setLookSearch] = useState('');
-    const [lookGroup, setLookGroup] = useState('All');
+    /** 'all' browses every section; Favourites and Recent narrow the grid to just those. */
+    const [lookView, setLookView] = useState('all');
+    const [lookSection, setLookSection] = useState(null);
+    const [lookFavorites, setLookFavorites] = useState(() => readList(LOOK_FAVORITES_KEY));
+    const [lookRecents, setLookRecents] = useState(() => readList(LOOK_RECENTS_KEY));
+    const [adjustOpen, setAdjustOpen] = useState(() => { try {
+        return window.localStorage.getItem(LOOK_ADJUST_KEY) === 'true';
+    }
+    catch {
+        return false;
+    } });
+    const lookScrollRef = useRef(null);
     const [recipes, setRecipes] = useState(null);
     useEffect(() => {
         if (openPop !== 'looks' || recipes)
             return;
         let alive = true;
-        void import('./floating-bar-looks.js').then((m) => { if (alive)
-            setRecipes({ LOOKS: m.LOOKS, LOOK_NOTES: m.LOOK_NOTES, LOOK_GROUPS: m.LOOK_GROUPS }); });
+        void import('./floating-bar-looks.js').then((m) => {
+            if (alive)
+                setRecipes({ LOOKS: m.LOOKS, LOOK_NOTES: m.LOOK_NOTES, LOOK_GROUPS: m.LOOK_GROUPS, LOOK_GROUP_LABELS: m.LOOK_GROUP_LABELS, LOOK_GROUP_HINTS: m.LOOK_GROUP_HINTS, LOOK_SHELVES: m.LOOK_SHELVES });
+        });
         return () => { alive = false; };
     }, [openPop, recipes]);
     const LOOKS = recipes?.LOOKS ?? NO_LOOKS;
     const LOOK_NOTES = recipes?.LOOK_NOTES ?? NO_NOTES;
-    const LOOK_GROUPS = recipes?.LOOK_GROUPS ?? NO_GROUPS;
+    const LOOK_GROUP_LABELS = recipes?.LOOK_GROUP_LABELS ?? NO_LABELS;
+    const LOOK_GROUP_HINTS = recipes?.LOOK_GROUP_HINTS ?? NO_LABELS;
+    const LOOK_SHELVES = recipes?.LOOK_SHELVES ?? NO_SHELVES;
     const [selectedLookName, setSelectedLookName] = useState('Lift');
     const [lookAccent, setLookAccent] = useState('#14b8a6');
     const lookAccentPickedRef = useRef(false);
@@ -270,21 +307,22 @@ export default function FroamFloatingBar({ targetRect, visible, label, fontFamil
             const safeTop = toolbar && toolbar.top <= VIEWPORT_GAP ? toolbar.bottom + VIEWPORT_GAP : VIEWPORT_GAP;
             const availableWidth = Math.max(280, safeRight - safeLeft);
             if (availableWidth < 620 || window.innerWidth < 720) {
-                const panelHeight = Math.min(360, Math.round(window.innerHeight * 0.46));
+                const panelHeight = Math.min(420, Math.round(window.innerHeight * 0.52));
                 setLookDockStyle({
                     left: safeLeft,
                     top: Math.max(VIEWPORT_GAP, window.innerHeight - panelHeight - VIEWPORT_GAP),
                     width: Math.max(280, availableWidth),
-                    maxHeight: panelHeight,
+                    height: panelHeight,
                 });
                 return;
             }
-            const panelWidth = Math.min(380, Math.max(320, Math.round(availableWidth * 0.34)));
+            // Wide enough for the category rail beside a three-across grid; full height, so the grid gets the room.
+            const panelWidth = Math.min(500, Math.max(380, Math.round(availableWidth * 0.4)));
             setLookDockStyle({
                 left: lookDockSide === 'left' ? safeLeft : safeRight - panelWidth,
                 top: safeTop,
                 width: panelWidth,
-                maxHeight: window.innerHeight - safeTop - VIEWPORT_GAP,
+                height: Math.min(760, window.innerHeight - safeTop - VIEWPORT_GAP),
             });
         };
         placeLookDock();
@@ -362,6 +400,13 @@ export default function FroamFloatingBar({ targetRect, visible, label, fontFamil
         const previous = lookStateDrafts[lookState] ?? {};
         const next = { ...Object.fromEntries(Object.keys(previous).filter((key) => !(key in styles)).map((key) => [key, ''])), ...styles };
         setSelectedLookName(look.name);
+        if (look.group !== 'Reset') {
+            setLookRecents((current) => {
+                const next = [look.name, ...current.filter((name) => name !== look.name)].slice(0, 12);
+                writeValue(LOOK_RECENTS_KEY, next);
+                return next;
+            });
+        }
         setLookStateDrafts((current) => ({ ...current, [lookState]: styles }));
         if (lookState === 'base')
             onStyle(next, patch, `Look: ${look.name}`, { asWritten });
@@ -372,15 +417,71 @@ export default function FroamFloatingBar({ targetRect, visible, label, fontFamil
             navigator.vibrate?.(6);
     }
     const selectedLook = LOOKS.find((look) => look.name === selectedLookName) ?? LOOKS[0];
-    const visibleLooks = LOOKS.filter((look) => {
-        const query = lookSearch.trim().toLowerCase();
-        // Search the description too, so "shadow" finds the shadows and
-        // "uppercase" finds Eyebrow — the names alone are not searchable words.
-        return (lookGroup === 'All' || look.group === lookGroup)
-            && (!isTextLayer || look.text !== null)
-            && (!query || `${look.name} ${look.group} ${LOOK_NOTES[look.name] ?? ''}`.toLowerCase().includes(query));
-    });
-    const lookCount = isTextLayer ? LOOKS.filter((look) => look.text !== null).length : LOOKS.length;
+    const lookQuery = lookSearch.trim().toLowerCase();
+    // On words, box-only looks aren't offered at all; Reset lives in the header.
+    const offeredLooks = LOOKS.filter((look) => look.group !== 'Reset' && (!isTextLayer || look.text !== null));
+    // Search the description and the group's plain name too, so "shadow" finds
+    // the shadows, "uppercase" finds Eyebrow and "japan" finds Seigaiha.
+    const searchHit = (look) => lookQuery.split(/\s+/).every((word) => `${look.name} ${LOOK_GROUP_LABELS[look.group] ?? ''} ${look.group} ${LOOK_NOTES[look.name] ?? ''}`.toLowerCase().includes(word));
+    const lookSections = (() => {
+        if (lookQuery) {
+            const hits = offeredLooks.filter(searchHit);
+            return [{ id: 'results', group: null, title: `${hits.length} ${hits.length === 1 ? 'match' : 'matches'}`, looks: hits }];
+        }
+        if (lookView !== 'all') {
+            const names = lookView === 'favorites' ? lookFavorites : lookRecents;
+            const looks = names.map((name) => offeredLooks.find((look) => look.name === name)).filter((look) => Boolean(look));
+            return [{ id: lookView, group: null, title: lookView === 'favorites' ? 'Favourites' : 'Recently used', looks }];
+        }
+        return LOOK_SHELVES.flatMap((shelf) => shelf.groups).map((group) => ({
+            id: group, group, title: LOOK_GROUP_LABELS[group], hint: LOOK_GROUP_HINTS[group], looks: offeredLooks.filter((look) => look.group === group),
+        })).filter((section) => section.looks.length > 0);
+    })();
+    const groupCount = (group) => offeredLooks.filter((look) => look.group === group).length;
+    // Until the grid scrolls, the first section is the one in view.
+    const railSection = lookSection ?? (lookSections[0]?.group ?? null);
+    const lookCount = offeredLooks.length;
+    const resetLook = LOOKS.find((look) => look.group === 'Reset');
+    function toggleFavorite(name) {
+        setLookFavorites((current) => {
+            const next = current.includes(name) ? current.filter((item) => item !== name) : [name, ...current];
+            writeValue(LOOK_FAVORITES_KEY, next);
+            return next;
+        });
+    }
+    function toggleAdjust() {
+        setAdjustOpen((open) => {
+            writeValue(LOOK_ADJUST_KEY, !open);
+            return !open;
+        });
+    }
+    /** Rail: a group jumps to its section in All (leaving Favourites, Recent or a search first). */
+    function jumpToSection(group) {
+        setLookSearch('');
+        setLookView('all');
+        setLookSection(group);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            const scroller = lookScrollRef.current;
+            const section = scroller?.querySelector(`[data-look-section="${group}"]`);
+            if (scroller && section)
+                scroller.scrollTo({ top: scroller.scrollTop + section.getBoundingClientRect().top - scroller.getBoundingClientRect().top, behavior: 'smooth' });
+        }));
+    }
+    /** Scroll spy: the rail follows the section at the top of the grid. */
+    function trackSection() {
+        const scroller = lookScrollRef.current;
+        if (!scroller || lookQuery || lookView !== 'all')
+            return;
+        const top = scroller.getBoundingClientRect().top + 24;
+        let current = null;
+        scroller.querySelectorAll('[data-look-section]').forEach((section) => {
+            if (section.getBoundingClientRect().top <= top)
+                current = section.dataset.lookSection;
+        });
+        current ??= scroller.querySelector('[data-look-section]')?.dataset.lookSection ?? null;
+        if (current !== lookSection)
+            setLookSection(current);
+    }
     // Looks that answer the pointer: their tiles move when hovered, too.
     const aliveLooks = livingLooks(LOOKS);
     const alignIcon = textAlign === 'center' ? _jsx(AlignCenter, { size: 15 }) : textAlign === 'right' || textAlign === 'end' ? _jsx(AlignRight, { size: 15 }) : textAlign === 'justify' ? _jsx(AlignJustify, { size: 15 }) : _jsx(AlignLeft, { size: 15 });
@@ -397,15 +498,26 @@ export default function FroamFloatingBar({ targetRect, visible, label, fontFamil
         setMenuLeft(bar ? Math.max(0, own.left - bar.left + own.width / 2) : 0);
     }
     const walk = (direction) => { setOpenPop(null); onWalk?.(direction); };
-    return (_jsxs("div", { ref: barRef, className: `froam-floating-bar ${narrow ? 'is-narrow' : ''} ${docked ? 'is-docked' : ''}`, "data-chef-editor-root": "true", style: docked ? undefined : { left: position.left, top: position.top }, role: "toolbar", "aria-label": `${kind} tools`, children: [_jsxs("div", { className: "froam-floating-bar__primary", children: [onWalk && (_jsx("button", { type: "button", className: "froam-floating-bar__btn froam-floating-bar__walker", title: "Select the parent (Esc climbs too)", "aria-label": "Select parent", onClick: () => onWalk('parent'), children: _jsx(CornerLeftUp, { size: 15 }) })), _jsxs("div", { className: "froam-floating-bar__identity", title: label, children: [_jsx("strong", { children: selectionCount > 1 ? `${selectionCount} selected` : kind }), selectionCount <= 1 && detail && _jsx("small", { children: detail })] }), showType && (_jsxs(_Fragment, { children: [_jsx("span", { className: "froam-floating-bar__sep" }), _jsx("button", { type: "button", className: "froam-floating-bar__btn froam-floating-bar__edit-text", title: "Edit the words (or double-click them)", "aria-label": "Edit text", onClick: () => onAction('edit-text'), children: _jsx(Type, { size: 15 }) }), _jsx("select", { className: "froam-floating-bar__select froam-floating-bar__font", value: fontFamily, title: "Font", "aria-label": "Font family", onChange: (event) => onStyle({ fontFamily: event.target.value }, { fontFamily: event.target.value }, 'Changed font family'), children: groupFontOptions(fontOptions).map(([role, options]) => (_jsx("optgroup", { label: FONT_GROUP_LABELS[role], children: options.map((font) => _jsx("option", { value: font.value, children: font.label }, font.value)) }, role))) }), _jsx("div", { className: "froam-floating-bar__stepper froam-floating-bar__stepper--scrub", title: "Size \u2014 drag the number to scrub", ...fontScrub, style: { touchAction: 'none' }, children: _jsx("input", { type: "number", value: Math.round(fontSize), min: 6, max: 400, "aria-label": "Font size", onChange: (event) => {
+    return (_jsxs("div", { ref: barRef, className: `froam-floating-bar ${narrow ? 'is-narrow' : ''} ${docked ? 'is-docked' : ''}`, "data-chef-editor-root": "true", style: docked ? undefined : { left: position.left, top: position.top }, role: "toolbar", "aria-label": `${kind} tools`, children: [_jsxs("div", { className: "froam-floating-bar__primary", children: [onWalk && (_jsx("button", { type: "button", className: "froam-floating-bar__btn froam-floating-bar__walker", title: "Select the parent (Esc climbs too)", "aria-label": "Select parent", onClick: () => onWalk('parent'), children: _jsx(CornerLeftUp, { size: 15 }) })), _jsxs("div", { className: "froam-floating-bar__identity", title: label, children: [_jsx("strong", { children: selectionCount > 1 ? `${selectionCount} selected` : kind }), selectionCount <= 1 && detail && _jsx("small", { children: detail })] }), showType && (_jsxs(_Fragment, { children: [_jsx("span", { className: "froam-floating-bar__sep" }), _jsx("button", { type: "button", className: "froam-floating-bar__btn froam-floating-bar__edit-text", title: "Edit the words (or double-click them)", "aria-label": "Edit text", onClick: () => onAction('edit-text'), children: _jsx(Type, { size: 15 }) }), _jsx(FroamFontPicker, { value: fontFamily, options: fontOptions, variant: "bar", onPick: (next) => onStyle({ fontFamily: next }, { fontFamily: next }, 'Changed font family') }), _jsx("div", { className: "froam-floating-bar__stepper froam-floating-bar__stepper--scrub", title: "Size \u2014 drag the number to scrub", ...fontScrub, style: { touchAction: 'none' }, children: _jsx("input", { type: "number", value: Math.round(fontSize), min: 6, max: 400, "aria-label": "Font size", onChange: (event) => {
                                         const next = Math.max(6, Number(event.target.value));
                                         onStyle({ fontSize: `${next}px` }, { fontSize: next }, 'Changed font size');
                                     } }) }), _jsx("select", { className: "froam-floating-bar__select froam-floating-bar__weight", value: fontWeight, title: "Weight", "aria-label": "Font weight", onChange: (event) => onStyle({ fontWeight: event.target.value }, { fontWeight: event.target.value }, 'Changed font weight'), children: [['300', 'Light'], ['400', 'Regular'], ['500', 'Medium'], ['600', 'Semibold'], ['700', 'Bold'], ['800', 'Extra bold'], ['900', 'Black']].map(([weight, name]) => _jsx("option", { value: weight, children: name }, weight)) }), _jsx("span", { className: "froam-floating-bar__sep" }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${isBold ? 'is-active' : ''}`, title: "Bold (Ctrl+B)", "aria-label": "Bold", "aria-pressed": Boolean(isBold), onClick: () => onAction('bold'), children: _jsx(Bold, { size: 15 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${isItalic ? 'is-active' : ''}`, title: "Italic (Ctrl+I)", "aria-label": "Italic", "aria-pressed": Boolean(isItalic), onClick: () => onAction('italic'), children: _jsx(Italic, { size: 15 }) }), _jsx("button", { type: "button", className: `froam-floating-bar__btn ${isUnderline ? 'is-active' : ''}`, title: "Underline (Ctrl+U)", "aria-label": "Underline", "aria-pressed": Boolean(isUnderline), onClick: () => onAction('underline'), children: _jsx(Underline, { size: 15 }) }), _jsx("div", { className: "froam-floating-bar__anchor", children: _jsxs("button", { type: "button", className: `froam-floating-bar__btn froam-floating-bar__btn--menu ${openPop === 'align' ? 'is-open' : ''}`, title: "Alignment", "aria-label": "Text alignment", "aria-haspopup": "menu", "aria-expanded": openPop === 'align', onClick: (event) => { anchorAt(event.currentTarget); togglePop('align'); }, children: [alignIcon, _jsx(ChevronDown, { size: 11 })] }) })] })), _jsx("span", { className: "froam-floating-bar__sep" }), showType && (_jsx("button", { type: "button", className: `froam-floating-bar__swatch ${openPop === 'palette' && paletteMode === 'text' ? 'is-open' : ''}`, title: "Text colour", "aria-label": "Text colour", onClick: (event) => { anchorAt(event.currentTarget); togglePop('palette', 'text'); }, children: _jsx("span", { className: "froam-floating-bar__swatch-text", style: { '--froam-swatch': color }, children: "A" }) })), _jsx("button", { type: "button", className: `froam-floating-bar__swatch ${openPop === 'palette' && paletteMode === 'fill' ? 'is-open' : ''}`, title: isTextLayer ? 'Text fill' : 'Fill', "aria-label": isTextLayer ? 'Text fill' : 'Fill colour', onClick: (event) => { anchorAt(event.currentTarget); togglePop('palette', 'fill'); }, children: _jsx("span", { className: "froam-floating-bar__swatch-fill", style: { '--froam-swatch': isTextLayer ? color : background } }) }), isImage && (_jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Replace \u2014 a new image or video", "aria-label": "Replace image or video", onClick: () => onAction('image'), children: _jsx(ImagePlus, { size: 15 }) })), canAdjustImage && (_jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Adjust \u2014 crop, zoom and fit it to its spot", "aria-label": "Adjust image or video", onClick: () => onAction('adjust-image'), children: _jsx(Crop, { size: 15 }) })), _jsxs("button", { type: "button", className: `froam-floating-bar__looks-btn ${openPop === 'looks' ? 'is-active' : ''}`, title: "Styles \u2014 one-tap looks, previewed live", onClick: () => togglePop('looks'), children: [_jsx(Sparkles, { size: 14 }), _jsx("span", { children: "Styles" })] }), docked && (_jsx("button", { type: "button", className: "froam-floating-bar__btn", title: "Undo", "aria-label": "Undo", disabled: !canUndo, onClick: () => onAction('undo'), children: _jsx(Undo2, { size: 15 }) })), _jsx("div", { className: "froam-floating-bar__anchor", children: _jsx("button", { type: "button", className: `froam-floating-bar__btn ${openPop === 'more' ? 'is-open' : ''}`, onClick: () => togglePop('more'), "aria-haspopup": "menu", "aria-expanded": openPop === 'more', "aria-label": "More actions", title: "More", children: _jsx(MoreHorizontal, { size: 16 }) }) })] }), openPop === 'align' && (_jsxs("div", { className: `froam-floating-bar__menu is-row${menuUp ? ' is-up' : ''}`, style: { left: menuLeft }, role: "menu", "aria-label": "Text alignment", children: [_jsx("button", { type: "button", role: "menuitemradio", "aria-checked": textAlign === 'left' || textAlign === 'start', className: textAlign === 'left' || textAlign === 'start' ? 'is-active' : '', title: "Align left", onClick: () => act('align-left'), children: _jsx(AlignLeft, { size: 15 }) }), _jsx("button", { type: "button", role: "menuitemradio", "aria-checked": textAlign === 'center', className: textAlign === 'center' ? 'is-active' : '', title: "Align center", onClick: () => act('align-center'), children: _jsx(AlignCenter, { size: 15 }) }), _jsx("button", { type: "button", role: "menuitemradio", "aria-checked": textAlign === 'right' || textAlign === 'end', className: textAlign === 'right' || textAlign === 'end' ? 'is-active' : '', title: "Align right", onClick: () => act('align-right'), children: _jsx(AlignRight, { size: 15 }) }), _jsx("button", { type: "button", role: "menuitemradio", "aria-checked": textAlign === 'justify', className: textAlign === 'justify' ? 'is-active' : '', title: "Justify", onClick: () => act('align-justify'), children: _jsx(AlignJustify, { size: 15 }) })] })), openPop === 'more' && (_jsxs("div", { className: `froam-floating-bar__menu is-list${menuUp ? ' is-up' : ''}`, style: { maxHeight: docked ? undefined : menuRoom }, role: "menu", "aria-label": "More actions", children: [_jsxs("button", { type: "button", role: "menuitem", onClick: () => act('open-design'), children: [_jsx(SlidersHorizontal, { size: 14 }), _jsx("span", { children: "All design controls" })] }), _jsxs("button", { type: "button", role: "menuitem", onClick: () => act('animate'), children: [_jsx(WandSparkles, { size: 14 }), _jsx("span", { children: "Animate\u2026" })] }), _jsxs("button", { type: "button", role: "menuitem", onClick: () => act('duplicate'), children: [_jsx(Copy, { size: 14 }), _jsx("span", { children: "Duplicate" }), _jsx("kbd", { children: "Ctrl D" })] }), !isImage && _jsxs("button", { type: "button", role: "menuitem", onClick: () => act('image'), children: [_jsx(ImagePlus, { size: 14 }), _jsx("span", { children: "Add an image" })] }), _jsx("div", { className: "froam-floating-bar__menu-divider" }), _jsxs("div", { className: "froam-floating-bar__menu-row", role: "group", "aria-label": "Opacity", children: [_jsx(Contrast, { size: 14 }), _jsx("span", { children: "Opacity" }), _jsx("input", { type: "range", min: 0, max: 100, value: Math.round(opacity * 100), "aria-label": "Opacity", onChange: (event) => setOpacity(Number(event.target.value) / 100) }), _jsxs("output", { children: [Math.round(opacity * 100), "%"] })] }), showType && _jsxs("button", { type: "button", role: "menuitemcheckbox", "aria-checked": Boolean(isStrike), onClick: () => act('strike'), children: [_jsx(Strikethrough, { size: 14 }), _jsx("span", { children: "Strikethrough" }), isStrike && _jsx(Check, { size: 13 })] }), _jsxs("button", { type: "button", role: "menuitem", onClick: () => act('clear-bg'), children: [_jsx(Eraser, { size: 14 }), _jsx("span", { children: "Remove fill" })] }), _jsxs("button", { type: "button", role: "menuitem", onClick: () => act('toggle-hidden'), children: [isHidden ? _jsx(Eye, { size: 14 }) : _jsx(EyeOff, { size: 14 }), _jsx("span", { children: isHidden ? 'Show element' : 'Hide element' })] }), _jsx("div", { className: "froam-floating-bar__menu-divider" }), _jsx("div", { className: "froam-floating-bar__menu-label", children: "Select" }), _jsxs("button", { type: "button", role: "menuitem", onClick: () => walk('parent'), children: [_jsx(CornerLeftUp, { size: 14 }), _jsx("span", { children: "Parent" })] }), _jsxs("button", { type: "button", role: "menuitem", onClick: () => walk('child'), children: [_jsx(CornerRightDown, { size: 14 }), _jsx("span", { children: "First inside" })] }), _jsxs("button", { type: "button", role: "menuitem", onClick: () => walk('prev'), children: [_jsx(ChevronLeft, { size: 14 }), _jsx("span", { children: "Previous" })] }), _jsxs("button", { type: "button", role: "menuitem", onClick: () => walk('next'), children: [_jsx(ChevronRight, { size: 14 }), _jsx("span", { children: "Next" })] }), _jsx("div", { className: "froam-floating-bar__menu-divider" }), _jsxs("button", { type: "button", role: "menuitem", onClick: () => act('bring-front'), children: [_jsx(BringToFront, { size: 14 }), _jsx("span", { children: "Bring to front" })] }), _jsxs("button", { type: "button", role: "menuitem", onClick: () => act('send-back'), children: [_jsx(SendToBack, { size: 14 }), _jsx("span", { children: "Send to back" })] }), _jsxs("button", { type: "button", role: "menuitem", title: selectionCount > 1 ? 'Merge selected into one movable stamp' : 'Merge this with overlapping sibling shapes', onClick: () => act('merge'), children: [_jsx(Combine, { size: 14 }), _jsx("span", { children: "Merge shapes" })] }), _jsxs("button", { type: "button", role: "menuitem", onClick: () => act('unmerge'), children: [_jsx(Ungroup, { size: 14 }), _jsx("span", { children: "Ungroup" })] }), _jsx("div", { className: "froam-floating-bar__menu-divider" }), _jsxs("button", { type: "button", role: "menuitem", className: "is-danger", onClick: () => act('delete'), children: [_jsx(Trash2, { size: 14 }), _jsx("span", { children: "Reset styles" })] })] })), openPop === 'palette' && (_jsxs("div", { className: `froam-floating-bar__pop is-anchored${menuUp ? ' is-up' : ''}`, style: docked ? undefined : { left: Math.max(4, menuLeft - 136) }, "data-chef-editor-root": "true", children: [_jsxs("div", { className: "froam-floating-bar__pop-head", children: [_jsx("span", { children: paletteMode === 'text' ? 'Text colour' : isTextLayer ? 'Text fill' : 'Fill' }), _jsxs("div", { className: "froam-floating-bar__pop-toggle", role: "group", "aria-label": "Apply as", children: [_jsx("button", { type: "button", className: paletteMode === 'fill' ? 'is-active' : '', onClick: () => setPaletteMode('fill'), children: isTextLayer ? 'Glyph' : 'Fill' }), showType && _jsx("button", { type: "button", className: paletteMode === 'text' ? 'is-active' : '', onClick: () => setPaletteMode('text'), children: "Text" })] })] }), _jsx("small", { className: "froam-floating-bar__pop-note", children: "From this page" }), _jsxs("div", { className: "froam-floating-bar__chips", children: [palette.map((hex) => {
                                 const readable = paletteMode === 'text' && contrastRatio(hex, backgroundHex) >= 4.5;
                                 return (_jsxs("button", { type: "button", className: "froam-floating-bar__chip", style: { '--froam-chip': hex }, title: `${hex}${readable ? ' — easy to read on this fill' : ''}`, onClick: () => applyChip(hex), children: [paletteMode === 'text' && _jsx("span", { style: { color: hex }, children: "Aa" }), readable && _jsx("i", { className: "froam-floating-bar__chip-ok" })] }, hex));
-                            }), palette.length === 0 && _jsx("span", { className: "froam-floating-bar__pop-empty", children: "No colours found on this page yet" })] }), _jsxs("div", { className: "froam-floating-bar__pop-actions", children: [_jsxs("label", { className: "froam-floating-bar__custom-color", children: [_jsx("input", { type: "color", value: normalizeToHex(paletteMode === 'text' ? color : background) ?? '#000000', onChange: (event) => onAction(paletteMode === 'text' ? 'color' : 'bg-color', event.target.value) }), _jsx("span", { children: "Any colour\u2026" })] }), paletteMode === 'fill' && _jsxs("button", { type: "button", onClick: () => act('clear-bg'), children: [_jsx(Eraser, { size: 13 }), " No fill"] })] })] })), openPop === 'looks' && recipes && typeof document !== 'undefined' && createPortal(_jsxs("div", { className: "froam-floating-bar__pop froam-floating-bar__pop--looks", "data-chef-editor-root": "true", role: "dialog", "aria-label": "Look Studio live editor", style: lookDockStyle, children: [_jsxs("div", { className: "froam-floating-bar__pop-head", children: [_jsxs("span", { children: ["Styles ", _jsxs("small", { children: [lookCount, " ", isTextLayer ? 'text-safe ' : '', "looks \u00B7 live preview"] })] }), _jsxs("div", { className: "froam-floating-bar__look-window-actions", children: [_jsx("button", { type: "button", onClick: () => setLookDockSide((side) => side === 'left' ? 'right' : 'left'), title: "Move to the other side", "aria-label": "Move to the other side", children: lookDockSide === 'left' ? _jsx(ChevronRight, { size: 13 }) : _jsx(ChevronLeft, { size: 13 }) }), _jsx("button", { type: "button", className: "froam-floating-bar__look-apply", onClick: () => setOpenPop(null), children: "Done" })] })] }), _jsxs("label", { className: "froam-floating-bar__look-search", children: [_jsx(Search, { size: 13 }), _jsx("input", { value: lookSearch, onChange: (event) => setLookSearch(event.target.value), placeholder: "Search styles\u2026" })] }), _jsx("div", { className: "froam-floating-bar__look-groups", role: "tablist", "aria-label": "Look categories", children: ['All', ...LOOK_GROUPS].map((group) => (_jsx("button", { type: "button", role: "tab", "aria-selected": lookGroup === group, className: lookGroup === group ? 'is-active' : '', onClick: () => setLookGroup(group), children: group }, group))) }), _jsx("div", { className: "froam-floating-bar__looks-scroll", children: _jsxs("div", { className: "froam-floating-bar__looks", children: [visibleLooks.map((look) => (_jsxs("button", { type: "button", className: `${selectedLookName === look.name ? 'is-active' : ''}${aliveLooks.has(look.name) ? ' is-alive' : ''}`, onClick: () => applyLook(look), title: LOOK_NOTES[look.name] ?? `${look.group} · ${look.name}`, children: [_jsx("i", { style: look.swatch }), _jsx("span", { children: look.name }), _jsx("small", { children: look.group })] }, look.name))), visibleLooks.length === 0 && _jsxs("span", { className: "froam-floating-bar__pop-empty", children: ["No styles match \u201C", lookSearch, "\u201D"] })] }) }), _jsxs("div", { className: "froam-floating-bar__look-editor", children: [_jsxs("div", { className: "froam-floating-bar__look-editor-title", children: [_jsx(SlidersHorizontal, { size: 13 }), _jsxs("span", { children: ["Adjust ", selectedLook.name] })] }), _jsx("div", { className: "froam-floating-bar__look-states", role: "tablist", "aria-label": "Style state", children: ['base', 'hover', 'focus', 'active'].map((state) => _jsx("button", { type: "button", role: "tab", "aria-selected": lookState === state, className: lookState === state ? 'is-active' : '', onClick: () => setLookState(state), children: state === 'base' ? 'Normal' : state[0].toUpperCase() + state.slice(1) }, state)) }), _jsxs("div", { className: "froam-floating-bar__look-colors", children: [_jsxs("label", { title: "Accent used by accent-aware looks", children: [_jsx("span", { children: "Accent" }), _jsx("input", { type: "color", value: lookAccent, onChange: (event) => { const next = event.target.value; setLookAccent(next); applyLook(selectedLook, { accent: next }); } })] }), _jsxs("label", { className: overrideLookFill ? 'is-enabled' : '', children: [_jsx("input", { type: "checkbox", checked: overrideLookFill, onChange: (event) => { const next = event.target.checked; setOverrideLookFill(next); applyLook(selectedLook, { overrideFill: next }); } }), _jsx("span", { children: isTextLayer ? 'Glyph' : 'Fill' }), _jsx("input", { type: "color", value: lookFill, onChange: (event) => { const next = event.target.value; setLookFill(next); if (overrideLookFill)
-                                                    applyLook(selectedLook, { fill: next }); }, disabled: !overrideLookFill })] }), _jsxs("label", { className: overrideLookText ? 'is-enabled' : '', children: [_jsx("input", { type: "checkbox", checked: overrideLookText, onChange: (event) => { const next = event.target.checked; setOverrideLookText(next); applyLook(selectedLook, { overrideText: next }); } }), _jsx("span", { children: "Text" }), _jsx("input", { type: "color", value: lookText, onChange: (event) => { const next = event.target.value; setLookText(next); if (overrideLookText)
-                                                    applyLook(selectedLook, { text: next }); }, disabled: !overrideLookText })] })] }), !isTextLayer && _jsxs("label", { className: `froam-floating-bar__look-radius ${overrideLookRadius ? 'is-enabled' : ''}`, children: [_jsx("input", { type: "checkbox", checked: overrideLookRadius, onChange: (event) => { const next = event.target.checked; setOverrideLookRadius(next); applyLook(selectedLook, { overrideRadius: next }); } }), _jsx("span", { children: "Corner radius" }), _jsx("input", { type: "range", min: "0", max: "64", value: lookRadius, onChange: (event) => { const next = Number(event.target.value); setLookRadius(next); if (overrideLookRadius)
-                                            applyLook(selectedLook, { radius: next }); }, disabled: !overrideLookRadius }), _jsxs("output", { children: [lookRadius, "px"] })] }), _jsx("p", { children: isTextLayer ? 'On text, box effects become glyph effects: fill, gradient, stroke and shadow stay on the words.' : 'Every style previews on the selected element as you pick it.' }), onSaveLook && _jsx("button", { type: "button", className: "froam-floating-bar__look-save", onClick: () => onSaveLook({ name: selectedLook.name, states: { ...lookStateDrafts, [lookState]: customizedLook(selectedLook).styles } }), children: "Save as a reusable style" })] })] }), document.body)] }));
+                            }), palette.length === 0 && _jsx("span", { className: "froam-floating-bar__pop-empty", children: "No colours found on this page yet" })] }), _jsxs("div", { className: "froam-floating-bar__pop-actions", children: [_jsxs("label", { className: "froam-floating-bar__custom-color", children: [_jsx("input", { type: "color", value: normalizeToHex(paletteMode === 'text' ? color : background) ?? '#000000', onChange: (event) => onAction(paletteMode === 'text' ? 'color' : 'bg-color', event.target.value) }), _jsx("span", { children: "Any colour\u2026" })] }), paletteMode === 'fill' && _jsxs("button", { type: "button", onClick: () => act('clear-bg'), children: [_jsx(Eraser, { size: 13 }), " No fill"] })] })] })), openPop === 'looks' && recipes && typeof document !== 'undefined' && createPortal(_jsxs("div", { className: "froam-floating-bar__pop froam-floating-bar__pop--looks", "data-chef-editor-root": "true", role: "dialog", "aria-label": "Look Studio live editor", style: lookDockStyle, children: [_jsxs("div", { className: "froam-floating-bar__pop-head", children: [_jsxs("span", { children: ["Styles ", _jsxs("small", { children: [lookCount, " ", isTextLayer ? 'text-safe looks' : 'looks', " \u00B7 live preview"] })] }), _jsxs("div", { className: "froam-floating-bar__look-window-actions", children: [resetLook && (_jsx("button", { type: "button", onClick: () => applyLook(resetLook), title: "Take every look off this element", "aria-label": "Reset look", children: _jsx(Eraser, { size: 13 }) })), _jsx("button", { type: "button", onClick: () => setLookDockSide((side) => side === 'left' ? 'right' : 'left'), title: "Move to the other side", "aria-label": "Move to the other side", children: lookDockSide === 'left' ? _jsx(ChevronRight, { size: 13 }) : _jsx(ChevronLeft, { size: 13 }) }), _jsx("button", { type: "button", className: "froam-floating-bar__look-apply", onClick: () => setOpenPop(null), children: "Done" })] })] }), _jsxs("label", { className: "froam-floating-bar__look-search", children: [_jsx(Search, { size: 13 }), _jsx("input", { value: lookSearch, onChange: (event) => { setLookSearch(event.target.value); setLookSection(null); }, placeholder: "Search \u2014 try \u201Cglass\u201D, \u201Chover\u201D, \u201CJapan\u201D, \u201Cgold\u201D", "aria-label": "Search styles" }), lookSearch && _jsx("button", { type: "button", className: "froam-look-search-clear", onClick: () => { setLookSearch(''); setLookSection(null); }, "aria-label": "Clear search", children: _jsx(X, { size: 12 }) })] }), _jsxs("div", { className: "froam-looks-body", children: [_jsxs("nav", { className: "froam-looks-rail", "aria-label": "Style categories", children: [_jsxs("button", { type: "button", className: lookView === 'favorites' && !lookQuery ? 'is-active' : '', onClick: () => { setLookSearch(''); setLookView('favorites'); }, "aria-pressed": lookView === 'favorites' && !lookQuery, children: [_jsx(Star, { size: 12, "aria-hidden": "true" }), _jsx("span", { children: "Favourites" }), _jsx("small", { children: lookFavorites.filter((name) => offeredLooks.some((look) => look.name === name)).length || '' })] }), _jsxs("button", { type: "button", className: lookView === 'recent' && !lookQuery ? 'is-active' : '', onClick: () => { setLookSearch(''); setLookView('recent'); }, "aria-pressed": lookView === 'recent' && !lookQuery, children: [_jsx(History, { size: 12, "aria-hidden": "true" }), _jsx("span", { children: "Recent" }), _jsx("small", { children: lookRecents.filter((name) => offeredLooks.some((look) => look.name === name)).length || '' })] }), LOOK_SHELVES.map((shelf) => {
+                                        const groups = shelf.groups.filter((group) => groupCount(group) > 0);
+                                        if (!groups.length)
+                                            return null;
+                                        return (_jsxs("div", { className: "froam-looks-rail__shelf", children: [_jsx("span", { className: "froam-looks-rail__title", children: shelf.title }), groups.map((group) => {
+                                                    const current = lookView === 'all' && !lookQuery && railSection === group;
+                                                    return (_jsxs("button", { type: "button", className: current ? 'is-active' : '', "aria-current": current ? 'true' : undefined, onClick: () => jumpToSection(group), title: LOOK_GROUP_HINTS[group], children: [_jsx("span", { children: LOOK_GROUP_LABELS[group] }), _jsx("small", { children: groupCount(group) })] }, group));
+                                                })] }, shelf.title));
+                                    })] }), _jsx("div", { className: "froam-floating-bar__looks-scroll", ref: lookScrollRef, onScroll: trackSection, children: lookSections.map((section) => (_jsxs("section", { className: "froam-looks-section", "data-look-section": section.group ?? undefined, children: [_jsxs("h4", { className: "froam-looks-section__head", children: [_jsx("span", { children: section.title }), section.hint && _jsx("small", { children: section.hint })] }), _jsx("div", { className: "froam-floating-bar__looks", children: section.looks.map((look) => {
+                                                const favorite = lookFavorites.includes(look.name);
+                                                return (_jsxs("div", { className: "froam-look-tile", children: [_jsxs("button", { type: "button", className: `${selectedLookName === look.name ? 'is-active' : ''}${aliveLooks.has(look.name) ? ' is-alive' : ''}`, onClick: () => applyLook(look), title: LOOK_NOTES[look.name] ?? look.name, children: [_jsx("i", { style: look.swatch }), _jsx("span", { children: look.name }), (lookQuery || lookView !== 'all') && _jsx("small", { children: LOOK_GROUP_LABELS[look.group] })] }), _jsx("button", { type: "button", className: `froam-look-tile__fav ${favorite ? 'is-on' : ''}`, onClick: () => toggleFavorite(look.name), "aria-pressed": favorite, "aria-label": favorite ? `Remove ${look.name} from favourites` : `Add ${look.name} to favourites`, title: favorite ? 'Remove from favourites' : 'Add to favourites', children: _jsx(Star, { size: 11, "aria-hidden": "true" }) })] }, look.name));
+                                            }) }), section.looks.length === 0 && (_jsx("p", { className: "froam-looks-section__empty", children: lookQuery ? `No styles match “${lookSearch}”.` : lookView === 'favorites' ? 'Star a style to keep it here.' : 'Styles you try show up here.' }))] }, section.id))) })] }), _jsxs("div", { className: `froam-floating-bar__look-editor ${adjustOpen ? 'is-open' : ''}`, children: [_jsxs("div", { className: "froam-floating-bar__look-editor-bar", children: [_jsxs("label", { className: "froam-look-accent", title: "The accent colour accent-aware styles are built from \u2014 starts as the site's own brand colour", children: [_jsx("input", { type: "color", value: lookAccent, onChange: (event) => { const next = event.target.value; setLookAccent(next); applyLook(selectedLook, { accent: next }); }, "aria-label": "Accent colour" }), _jsx("span", { children: "Accent" })] }), _jsx("span", { className: "froam-look-current", title: LOOK_NOTES[selectedLook.name], children: selectedLook.name }), _jsxs("button", { type: "button", className: "froam-look-adjust-toggle", "aria-expanded": adjustOpen, onClick: toggleAdjust, children: [_jsx(SlidersHorizontal, { size: 12, "aria-hidden": "true" }), _jsx("span", { children: "Adjust" }), _jsx(ChevronDown, { size: 12, "aria-hidden": "true" })] })] }), adjustOpen && (_jsxs(_Fragment, { children: [_jsx("div", { className: "froam-floating-bar__look-states", role: "tablist", "aria-label": "Style state", children: ['base', 'hover', 'focus', 'active'].map((state) => _jsx("button", { type: "button", role: "tab", "aria-selected": lookState === state, className: lookState === state ? 'is-active' : '', onClick: () => setLookState(state), children: state === 'base' ? 'Normal' : state[0].toUpperCase() + state.slice(1) }, state)) }), _jsxs("div", { className: "froam-floating-bar__look-colors", children: [_jsxs("label", { className: overrideLookFill ? 'is-enabled' : '', children: [_jsx("input", { type: "checkbox", checked: overrideLookFill, onChange: (event) => { const next = event.target.checked; setOverrideLookFill(next); applyLook(selectedLook, { overrideFill: next }); } }), _jsx("span", { children: isTextLayer ? 'Glyph' : 'Fill' }), _jsx("input", { type: "color", value: lookFill, onChange: (event) => { const next = event.target.value; setLookFill(next); if (overrideLookFill)
+                                                            applyLook(selectedLook, { fill: next }); }, disabled: !overrideLookFill })] }), _jsxs("label", { className: overrideLookText ? 'is-enabled' : '', children: [_jsx("input", { type: "checkbox", checked: overrideLookText, onChange: (event) => { const next = event.target.checked; setOverrideLookText(next); applyLook(selectedLook, { overrideText: next }); } }), _jsx("span", { children: "Text" }), _jsx("input", { type: "color", value: lookText, onChange: (event) => { const next = event.target.value; setLookText(next); if (overrideLookText)
+                                                            applyLook(selectedLook, { text: next }); }, disabled: !overrideLookText })] })] }), !isTextLayer && _jsxs("label", { className: `froam-floating-bar__look-radius ${overrideLookRadius ? 'is-enabled' : ''}`, children: [_jsx("input", { type: "checkbox", checked: overrideLookRadius, onChange: (event) => { const next = event.target.checked; setOverrideLookRadius(next); applyLook(selectedLook, { overrideRadius: next }); } }), _jsx("span", { children: "Corner radius" }), _jsx("input", { type: "range", min: "0", max: "64", value: lookRadius, onChange: (event) => { const next = Number(event.target.value); setLookRadius(next); if (overrideLookRadius)
+                                                    applyLook(selectedLook, { radius: next }); }, disabled: !overrideLookRadius }), _jsxs("output", { children: [lookRadius, "px"] })] }), _jsx("p", { children: isTextLayer ? 'On text, box effects become glyph effects: fill, gradient, stroke and shadow stay on the words.' : 'Every style previews on the selected element as you pick it.' }), onSaveLook && _jsx("button", { type: "button", className: "froam-floating-bar__look-save", onClick: () => onSaveLook({ name: selectedLook.name, states: { ...lookStateDrafts, [lookState]: customizedLook(selectedLook).styles } }), children: "Save as a reusable style" })] }))] })] }), document.body)] }));
 }
 //# sourceMappingURL=FroamFloatingBar.js.map

@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { FroamStyleState } from '../project/types'
-import { FONT_GROUP_LABELS, groupFontOptions, type FontOption } from './fontSources'
+import type { FontOption } from './fontSources'
+import FroamFontPicker from './FroamFontPicker'
 import { describeSelection } from './selection-name'
-import type { Look, LookGroup, LookOverrides } from './floating-bar-looks'
+import type { Look, LookGroup, LookOverrides, LOOK_SHELVES as LookShelves } from './floating-bar-looks'
 import { contrast, luminance, parseColor, sampleAccent, toHex as brandHex } from './library/site-theme'
 import {
   AlignCenter,
@@ -30,13 +31,16 @@ import {
   MoreHorizontal,
   SendToBack,
   Search,
+  History,
   SlidersHorizontal,
   Sparkles,
+  Star,
   Strikethrough,
   Trash2,
   Type,
   Underline,
   Undo2,
+  X,
   Ungroup,
   WandSparkles,
 } from 'lucide-react'
@@ -262,6 +266,25 @@ function livingLooks(looks: Look[]) {
 }
 const NO_NOTES: Record<string, string> = {}
 const NO_GROUPS: readonly LookGroup[] = []
+const NO_SHELVES: typeof LookShelves = []
+const NO_LABELS = {} as Record<LookGroup, string>
+
+/* Favourites, recents and whether Adjust is open are this person's habits in
+   this browser — conveniences, never project data. */
+const LOOK_FAVORITES_KEY = 'froam:look-favorites:v1'
+const LOOK_RECENTS_KEY = 'froam:look-recents:v1'
+const LOOK_ADJUST_KEY = 'froam:look-adjust-open:v1'
+function readList(key: string): string[] {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) ?? '[]')
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+  } catch {
+    return []
+  }
+}
+function writeValue(key: string, value: unknown) {
+  try { window.localStorage.setItem(key, JSON.stringify(value)) } catch { /* storage unavailable */ }
+}
 // Uniform corner-radius patch so the editor's own radius controls stay in sync.
 const corners = (n: number): SelectionPatch => ({ borderRadiusTL: n, borderRadiusTR: n, borderRadiusBR: n, borderRadiusBL: n })
 
@@ -306,17 +329,34 @@ export default function FroamFloatingBar({
   const [palette, setPalette] = useState<string[]>([])
   const [paletteMode, setPaletteMode] = useState<'fill' | 'text'>('fill')
   const [lookSearch, setLookSearch] = useState('')
-  const [lookGroup, setLookGroup] = useState<'All' | LookGroup>('All')
-  const [recipes, setRecipes] = useState<null | { LOOKS: Look[]; LOOK_NOTES: Record<string, string>; LOOK_GROUPS: readonly LookGroup[] }>(null)
+  /** 'all' browses every section; Favourites and Recent narrow the grid to just those. */
+  const [lookView, setLookView] = useState<'all' | 'favorites' | 'recent'>('all')
+  const [lookSection, setLookSection] = useState<LookGroup | null>(null)
+  const [lookFavorites, setLookFavorites] = useState<string[]>(() => readList(LOOK_FAVORITES_KEY))
+  const [lookRecents, setLookRecents] = useState<string[]>(() => readList(LOOK_RECENTS_KEY))
+  const [adjustOpen, setAdjustOpen] = useState(() => { try { return window.localStorage.getItem(LOOK_ADJUST_KEY) === 'true' } catch { return false } })
+  const lookScrollRef = useRef<HTMLDivElement>(null)
+  const [recipes, setRecipes] = useState<null | {
+    LOOKS: Look[]
+    LOOK_NOTES: Record<string, string>
+    LOOK_GROUPS: readonly LookGroup[]
+    LOOK_GROUP_LABELS: Record<LookGroup, string>
+    LOOK_GROUP_HINTS: Record<LookGroup, string>
+    LOOK_SHELVES: typeof LookShelves
+  }>(null)
   useEffect(() => {
     if (openPop !== 'looks' || recipes) return
     let alive = true
-    void import('./floating-bar-looks').then((m) => { if (alive) setRecipes({ LOOKS: m.LOOKS, LOOK_NOTES: m.LOOK_NOTES, LOOK_GROUPS: m.LOOK_GROUPS }) })
+    void import('./floating-bar-looks').then((m) => {
+      if (alive) setRecipes({ LOOKS: m.LOOKS, LOOK_NOTES: m.LOOK_NOTES, LOOK_GROUPS: m.LOOK_GROUPS, LOOK_GROUP_LABELS: m.LOOK_GROUP_LABELS, LOOK_GROUP_HINTS: m.LOOK_GROUP_HINTS, LOOK_SHELVES: m.LOOK_SHELVES })
+    })
     return () => { alive = false }
   }, [openPop, recipes])
   const LOOKS = recipes?.LOOKS ?? NO_LOOKS
   const LOOK_NOTES = recipes?.LOOK_NOTES ?? NO_NOTES
-  const LOOK_GROUPS = recipes?.LOOK_GROUPS ?? NO_GROUPS
+  const LOOK_GROUP_LABELS = recipes?.LOOK_GROUP_LABELS ?? NO_LABELS
+  const LOOK_GROUP_HINTS = recipes?.LOOK_GROUP_HINTS ?? NO_LABELS
+  const LOOK_SHELVES = recipes?.LOOK_SHELVES ?? NO_SHELVES
   const [selectedLookName, setSelectedLookName] = useState('Lift')
   const [lookAccent, setLookAccent] = useState('#14b8a6')
   const lookAccentPickedRef = useRef(false)
@@ -425,22 +465,23 @@ export default function FroamFloatingBar({
       const availableWidth = Math.max(280, safeRight - safeLeft)
 
       if (availableWidth < 620 || window.innerWidth < 720) {
-        const panelHeight = Math.min(360, Math.round(window.innerHeight * 0.46))
+        const panelHeight = Math.min(420, Math.round(window.innerHeight * 0.52))
         setLookDockStyle({
           left: safeLeft,
           top: Math.max(VIEWPORT_GAP, window.innerHeight - panelHeight - VIEWPORT_GAP),
           width: Math.max(280, availableWidth),
-          maxHeight: panelHeight,
+          height: panelHeight,
         })
         return
       }
 
-      const panelWidth = Math.min(380, Math.max(320, Math.round(availableWidth * 0.34)))
+      // Wide enough for the category rail beside a three-across grid; full height, so the grid gets the room.
+      const panelWidth = Math.min(500, Math.max(380, Math.round(availableWidth * 0.4)))
       setLookDockStyle({
         left: lookDockSide === 'left' ? safeLeft : safeRight - panelWidth,
         top: safeTop,
         width: panelWidth,
-        maxHeight: window.innerHeight - safeTop - VIEWPORT_GAP,
+        height: Math.min(760, window.innerHeight - safeTop - VIEWPORT_GAP),
       })
     }
 
@@ -518,6 +559,13 @@ export default function FroamFloatingBar({
     const previous = lookStateDrafts[lookState] ?? {}
     const next = { ...Object.fromEntries(Object.keys(previous).filter((key) => !(key in styles)).map((key) => [key, ''])), ...styles }
     setSelectedLookName(look.name)
+    if (look.group !== 'Reset') {
+      setLookRecents((current) => {
+        const next = [look.name, ...current.filter((name) => name !== look.name)].slice(0, 12)
+        writeValue(LOOK_RECENTS_KEY, next)
+        return next
+      })
+    }
     setLookStateDrafts((current) => ({ ...current, [lookState]: styles }))
     if (lookState === 'base') onStyle(next, patch, `Look: ${look.name}`, { asWritten })
     // On a state tab the look's plain styles become that state's; a living look's own states stay out of it.
@@ -526,15 +574,68 @@ export default function FroamFloatingBar({
   }
 
   const selectedLook = LOOKS.find((look) => look.name === selectedLookName) ?? LOOKS[0]
-  const visibleLooks = LOOKS.filter((look) => {
-    const query = lookSearch.trim().toLowerCase()
-    // Search the description too, so "shadow" finds the shadows and
-    // "uppercase" finds Eyebrow — the names alone are not searchable words.
-    return (lookGroup === 'All' || look.group === lookGroup)
-      && (!isTextLayer || look.text !== null)
-      && (!query || `${look.name} ${look.group} ${LOOK_NOTES[look.name] ?? ''}`.toLowerCase().includes(query))
-  })
-  const lookCount = isTextLayer ? LOOKS.filter((look) => look.text !== null).length : LOOKS.length
+  const lookQuery = lookSearch.trim().toLowerCase()
+  // On words, box-only looks aren't offered at all; Reset lives in the header.
+  const offeredLooks = LOOKS.filter((look) => look.group !== 'Reset' && (!isTextLayer || look.text !== null))
+  // Search the description and the group's plain name too, so "shadow" finds
+  // the shadows, "uppercase" finds Eyebrow and "japan" finds Seigaiha.
+  const searchHit = (look: Look) => lookQuery.split(/\s+/).every((word) => `${look.name} ${LOOK_GROUP_LABELS[look.group] ?? ''} ${look.group} ${LOOK_NOTES[look.name] ?? ''}`.toLowerCase().includes(word))
+  const lookSections: { id: string; group: LookGroup | null; title: string; hint?: string; looks: Look[] }[] = (() => {
+    if (lookQuery) {
+      const hits = offeredLooks.filter(searchHit)
+      return [{ id: 'results', group: null, title: `${hits.length} ${hits.length === 1 ? 'match' : 'matches'}`, looks: hits }]
+    }
+    if (lookView !== 'all') {
+      const names = lookView === 'favorites' ? lookFavorites : lookRecents
+      const looks = names.map((name) => offeredLooks.find((look) => look.name === name)).filter((look): look is Look => Boolean(look))
+      return [{ id: lookView, group: null, title: lookView === 'favorites' ? 'Favourites' : 'Recently used', looks }]
+    }
+    return LOOK_SHELVES.flatMap((shelf) => shelf.groups).map((group) => ({
+      id: group, group, title: LOOK_GROUP_LABELS[group], hint: LOOK_GROUP_HINTS[group], looks: offeredLooks.filter((look) => look.group === group),
+    })).filter((section) => section.looks.length > 0)
+  })()
+  const groupCount = (group: LookGroup) => offeredLooks.filter((look) => look.group === group).length
+  // Until the grid scrolls, the first section is the one in view.
+  const railSection = lookSection ?? (lookSections[0]?.group ?? null)
+  const lookCount = offeredLooks.length
+  const resetLook = LOOKS.find((look) => look.group === 'Reset')
+
+  function toggleFavorite(name: string) {
+    setLookFavorites((current) => {
+      const next = current.includes(name) ? current.filter((item) => item !== name) : [name, ...current]
+      writeValue(LOOK_FAVORITES_KEY, next)
+      return next
+    })
+  }
+  function toggleAdjust() {
+    setAdjustOpen((open) => {
+      writeValue(LOOK_ADJUST_KEY, !open)
+      return !open
+    })
+  }
+  /** Rail: a group jumps to its section in All (leaving Favourites, Recent or a search first). */
+  function jumpToSection(group: LookGroup) {
+    setLookSearch('')
+    setLookView('all')
+    setLookSection(group)
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const scroller = lookScrollRef.current
+      const section = scroller?.querySelector<HTMLElement>(`[data-look-section="${group}"]`)
+      if (scroller && section) scroller.scrollTo({ top: scroller.scrollTop + section.getBoundingClientRect().top - scroller.getBoundingClientRect().top, behavior: 'smooth' })
+    }))
+  }
+  /** Scroll spy: the rail follows the section at the top of the grid. */
+  function trackSection() {
+    const scroller = lookScrollRef.current
+    if (!scroller || lookQuery || lookView !== 'all') return
+    const top = scroller.getBoundingClientRect().top + 24
+    let current: LookGroup | null = null
+    scroller.querySelectorAll<HTMLElement>('[data-look-section]').forEach((section) => {
+      if (section.getBoundingClientRect().top <= top) current = section.dataset.lookSection as LookGroup
+    })
+    current ??= (scroller.querySelector<HTMLElement>('[data-look-section]')?.dataset.lookSection as LookGroup | undefined) ?? null
+    if (current !== lookSection) setLookSection(current)
+  }
   // Looks that answer the pointer: their tiles move when hovered, too.
   const aliveLooks = livingLooks(LOOKS)
 
@@ -586,25 +687,13 @@ export default function FroamFloatingBar({
             >
               <Type size={15} />
             </button>
-            <select
-              className="froam-floating-bar__select froam-floating-bar__font"
+            {/* Every face drawn in itself, searchable, filterable by writing system. */}
+            <FroamFontPicker
               value={fontFamily}
-              title="Font"
-              aria-label="Font family"
-              onChange={(event) => onStyle(
-                { fontFamily: event.target.value },
-                { fontFamily: event.target.value },
-                'Changed font family',
-              )}
-            >
-              {/* Grouped by the job the face does — forty-five names in a flat
-                  list is a scroll, not a choice. */}
-              {groupFontOptions(fontOptions).map(([role, options]) => (
-                <optgroup key={role} label={FONT_GROUP_LABELS[role]}>
-                  {options.map((font) => <option key={font.value} value={font.value}>{font.label}</option>)}
-                </optgroup>
-              ))}
-            </select>
+              options={fontOptions}
+              variant="bar"
+              onPick={(next) => onStyle({ fontFamily: next }, { fontFamily: next }, 'Changed font family')}
+            />
 
             <div className="froam-floating-bar__stepper froam-floating-bar__stepper--scrub" title="Size — drag the number to scrub" {...fontScrub} style={{ touchAction: 'none' }}>
               <input
@@ -814,8 +903,13 @@ export default function FroamFloatingBar({
           style={lookDockStyle}
         >
           <div className="froam-floating-bar__pop-head">
-            <span>Styles <small>{lookCount} {isTextLayer ? 'text-safe ' : ''}looks · live preview</small></span>
+            <span>Styles <small>{lookCount} {isTextLayer ? 'text-safe looks' : 'looks'} · live preview</small></span>
             <div className="froam-floating-bar__look-window-actions">
+              {resetLook && (
+                <button type="button" onClick={() => applyLook(resetLook)} title="Take every look off this element" aria-label="Reset look">
+                  <Eraser size={13} />
+                </button>
+              )}
               <button type="button" onClick={() => setLookDockSide((side) => side === 'left' ? 'right' : 'left')} title="Move to the other side" aria-label="Move to the other side">
                 {lookDockSide === 'left' ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
               </button>
@@ -824,43 +918,98 @@ export default function FroamFloatingBar({
           </div>
           <label className="froam-floating-bar__look-search">
             <Search size={13} />
-            <input value={lookSearch} onChange={(event) => setLookSearch(event.target.value)} placeholder="Search styles…" />
+            <input value={lookSearch} onChange={(event) => { setLookSearch(event.target.value); setLookSection(null) }} placeholder="Search — try “glass”, “hover”, “Japan”, “gold”" aria-label="Search styles" />
+            {lookSearch && <button type="button" className="froam-look-search-clear" onClick={() => { setLookSearch(''); setLookSection(null) }} aria-label="Clear search"><X size={12} /></button>}
           </label>
-          <div className="froam-floating-bar__look-groups" role="tablist" aria-label="Look categories">
-            {(['All', ...LOOK_GROUPS] as const).map((group) => (
-              <button key={group} type="button" role="tab" aria-selected={lookGroup === group} className={lookGroup === group ? 'is-active' : ''} onClick={() => setLookGroup(group)}>{group}</button>
-            ))}
-          </div>
-          <div className="froam-floating-bar__looks-scroll">
-            <div className="froam-floating-bar__looks">
-              {visibleLooks.map((look) => (
-                <button key={look.name} type="button" className={`${selectedLookName === look.name ? 'is-active' : ''}${aliveLooks.has(look.name) ? ' is-alive' : ''}`} onClick={() => applyLook(look)} title={LOOK_NOTES[look.name] ?? `${look.group} · ${look.name}`}>
-                  <i style={look.swatch} />
-                  <span>{look.name}</span>
-                  <small>{look.group}</small>
-                </button>
+          <div className="froam-looks-body">
+            <nav className="froam-looks-rail" aria-label="Style categories">
+              <button type="button" className={lookView === 'favorites' && !lookQuery ? 'is-active' : ''} onClick={() => { setLookSearch(''); setLookView('favorites') }} aria-pressed={lookView === 'favorites' && !lookQuery}>
+                <Star size={12} aria-hidden="true" /><span>Favourites</span><small>{lookFavorites.filter((name) => offeredLooks.some((look) => look.name === name)).length || ''}</small>
+              </button>
+              <button type="button" className={lookView === 'recent' && !lookQuery ? 'is-active' : ''} onClick={() => { setLookSearch(''); setLookView('recent') }} aria-pressed={lookView === 'recent' && !lookQuery}>
+                <History size={12} aria-hidden="true" /><span>Recent</span><small>{lookRecents.filter((name) => offeredLooks.some((look) => look.name === name)).length || ''}</small>
+              </button>
+              {LOOK_SHELVES.map((shelf) => {
+                const groups = shelf.groups.filter((group) => groupCount(group) > 0)
+                if (!groups.length) return null
+                return (
+                  <div key={shelf.title} className="froam-looks-rail__shelf">
+                    <span className="froam-looks-rail__title">{shelf.title}</span>
+                    {groups.map((group) => {
+                      const current = lookView === 'all' && !lookQuery && railSection === group
+                      return (
+                        <button key={group} type="button" className={current ? 'is-active' : ''} aria-current={current ? 'true' : undefined} onClick={() => jumpToSection(group)} title={LOOK_GROUP_HINTS[group]}>
+                          <span>{LOOK_GROUP_LABELS[group]}</span><small>{groupCount(group)}</small>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+            </nav>
+            <div className="froam-floating-bar__looks-scroll" ref={lookScrollRef} onScroll={trackSection}>
+              {lookSections.map((section) => (
+                <section key={section.id} className="froam-looks-section" data-look-section={section.group ?? undefined}>
+                  <h4 className="froam-looks-section__head">
+                    <span>{section.title}</span>
+                    {section.hint && <small>{section.hint}</small>}
+                  </h4>
+                  <div className="froam-floating-bar__looks">
+                    {section.looks.map((look) => {
+                      const favorite = lookFavorites.includes(look.name)
+                      return (
+                        <div key={look.name} className="froam-look-tile">
+                          <button type="button" className={`${selectedLookName === look.name ? 'is-active' : ''}${aliveLooks.has(look.name) ? ' is-alive' : ''}`} onClick={() => applyLook(look)} title={LOOK_NOTES[look.name] ?? look.name}>
+                            <i style={look.swatch} />
+                            <span>{look.name}</span>
+                            {(lookQuery || lookView !== 'all') && <small>{LOOK_GROUP_LABELS[look.group]}</small>}
+                          </button>
+                          <button type="button" className={`froam-look-tile__fav ${favorite ? 'is-on' : ''}`} onClick={() => toggleFavorite(look.name)} aria-pressed={favorite} aria-label={favorite ? `Remove ${look.name} from favourites` : `Add ${look.name} to favourites`} title={favorite ? 'Remove from favourites' : 'Add to favourites'}>
+                            <Star size={11} aria-hidden="true" />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {section.looks.length === 0 && (
+                    <p className="froam-looks-section__empty">
+                      {lookQuery ? `No styles match “${lookSearch}”.` : lookView === 'favorites' ? 'Star a style to keep it here.' : 'Styles you try show up here.'}
+                    </p>
+                  )}
+                </section>
               ))}
-              {visibleLooks.length === 0 && <span className="froam-floating-bar__pop-empty">No styles match “{lookSearch}”</span>}
             </div>
           </div>
-          <div className="froam-floating-bar__look-editor">
-            <div className="froam-floating-bar__look-editor-title"><SlidersHorizontal size={13} /><span>Adjust {selectedLook.name}</span></div>
-            <div className="froam-floating-bar__look-states" role="tablist" aria-label="Style state">
-              {(['base', 'hover', 'focus', 'active'] as const).map((state) => <button key={state} type="button" role="tab" aria-selected={lookState === state} className={lookState === state ? 'is-active' : ''} onClick={() => setLookState(state)}>{state === 'base' ? 'Normal' : state[0].toUpperCase() + state.slice(1)}</button>)}
+          <div className={`froam-floating-bar__look-editor ${adjustOpen ? 'is-open' : ''}`}>
+            <div className="froam-floating-bar__look-editor-bar">
+              <label className="froam-look-accent" title="The accent colour accent-aware styles are built from — starts as the site's own brand colour">
+                <input type="color" value={lookAccent} onChange={(event) => { const next = event.target.value; setLookAccent(next); applyLook(selectedLook, { accent: next }) }} aria-label="Accent colour" />
+                <span>Accent</span>
+              </label>
+              <span className="froam-look-current" title={LOOK_NOTES[selectedLook.name]}>{selectedLook.name}</span>
+              <button type="button" className="froam-look-adjust-toggle" aria-expanded={adjustOpen} onClick={toggleAdjust}>
+                <SlidersHorizontal size={12} aria-hidden="true" /><span>Adjust</span><ChevronDown size={12} aria-hidden="true" />
+              </button>
             </div>
-            <div className="froam-floating-bar__look-colors">
-              <label title="Accent used by accent-aware looks"><span>Accent</span><input type="color" value={lookAccent} onChange={(event) => { const next = event.target.value; setLookAccent(next); applyLook(selectedLook, { accent: next }) }} /></label>
-              <label className={overrideLookFill ? 'is-enabled' : ''}><input type="checkbox" checked={overrideLookFill} onChange={(event) => { const next = event.target.checked; setOverrideLookFill(next); applyLook(selectedLook, { overrideFill: next }) }} /><span>{isTextLayer ? 'Glyph' : 'Fill'}</span><input type="color" value={lookFill} onChange={(event) => { const next = event.target.value; setLookFill(next); if (overrideLookFill) applyLook(selectedLook, { fill: next }) }} disabled={!overrideLookFill} /></label>
-              <label className={overrideLookText ? 'is-enabled' : ''}><input type="checkbox" checked={overrideLookText} onChange={(event) => { const next = event.target.checked; setOverrideLookText(next); applyLook(selectedLook, { overrideText: next }) }} /><span>Text</span><input type="color" value={lookText} onChange={(event) => { const next = event.target.value; setLookText(next); if (overrideLookText) applyLook(selectedLook, { text: next }) }} disabled={!overrideLookText} /></label>
-            </div>
-            {!isTextLayer && <label className={`froam-floating-bar__look-radius ${overrideLookRadius ? 'is-enabled' : ''}`}>
-              <input type="checkbox" checked={overrideLookRadius} onChange={(event) => { const next = event.target.checked; setOverrideLookRadius(next); applyLook(selectedLook, { overrideRadius: next }) }} />
-              <span>Corner radius</span>
-              <input type="range" min="0" max="64" value={lookRadius} onChange={(event) => { const next = Number(event.target.value); setLookRadius(next); if (overrideLookRadius) applyLook(selectedLook, { radius: next }) }} disabled={!overrideLookRadius} />
-              <output>{lookRadius}px</output>
-            </label>}
-            <p>{isTextLayer ? 'On text, box effects become glyph effects: fill, gradient, stroke and shadow stay on the words.' : 'Every style previews on the selected element as you pick it.'}</p>
-            {onSaveLook && <button type="button" className="froam-floating-bar__look-save" onClick={() => onSaveLook({ name: selectedLook.name, states: { ...lookStateDrafts, [lookState]: customizedLook(selectedLook).styles } })}>Save as a reusable style</button>}
+            {adjustOpen && (
+              <>
+                <div className="froam-floating-bar__look-states" role="tablist" aria-label="Style state">
+                  {(['base', 'hover', 'focus', 'active'] as const).map((state) => <button key={state} type="button" role="tab" aria-selected={lookState === state} className={lookState === state ? 'is-active' : ''} onClick={() => setLookState(state)}>{state === 'base' ? 'Normal' : state[0].toUpperCase() + state.slice(1)}</button>)}
+                </div>
+                <div className="froam-floating-bar__look-colors">
+                  <label className={overrideLookFill ? 'is-enabled' : ''}><input type="checkbox" checked={overrideLookFill} onChange={(event) => { const next = event.target.checked; setOverrideLookFill(next); applyLook(selectedLook, { overrideFill: next }) }} /><span>{isTextLayer ? 'Glyph' : 'Fill'}</span><input type="color" value={lookFill} onChange={(event) => { const next = event.target.value; setLookFill(next); if (overrideLookFill) applyLook(selectedLook, { fill: next }) }} disabled={!overrideLookFill} /></label>
+                  <label className={overrideLookText ? 'is-enabled' : ''}><input type="checkbox" checked={overrideLookText} onChange={(event) => { const next = event.target.checked; setOverrideLookText(next); applyLook(selectedLook, { overrideText: next }) }} /><span>Text</span><input type="color" value={lookText} onChange={(event) => { const next = event.target.value; setLookText(next); if (overrideLookText) applyLook(selectedLook, { text: next }) }} disabled={!overrideLookText} /></label>
+                </div>
+                {!isTextLayer && <label className={`froam-floating-bar__look-radius ${overrideLookRadius ? 'is-enabled' : ''}`}>
+                  <input type="checkbox" checked={overrideLookRadius} onChange={(event) => { const next = event.target.checked; setOverrideLookRadius(next); applyLook(selectedLook, { overrideRadius: next }) }} />
+                  <span>Corner radius</span>
+                  <input type="range" min="0" max="64" value={lookRadius} onChange={(event) => { const next = Number(event.target.value); setLookRadius(next); if (overrideLookRadius) applyLook(selectedLook, { radius: next }) }} disabled={!overrideLookRadius} />
+                  <output>{lookRadius}px</output>
+                </label>}
+                <p>{isTextLayer ? 'On text, box effects become glyph effects: fill, gradient, stroke and shadow stay on the words.' : 'Every style previews on the selected element as you pick it.'}</p>
+                {onSaveLook && <button type="button" className="froam-floating-bar__look-save" onClick={() => onSaveLook({ name: selectedLook.name, states: { ...lookStateDrafts, [lookState]: customizedLook(selectedLook).styles } })}>Save as a reusable style</button>}
+              </>
+            )}
           </div>
         </div>,
         document.body,

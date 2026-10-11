@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { FONT_GROUP_LABELS, groupFontOptions, type FontOption } from './fontSources'
+import type { FontOption } from './fontSources'
+import FroamFontPicker from './FroamFontPicker'
 import {
   AlignCenter,
   AlignLeft,
@@ -805,15 +806,9 @@ export default function FroamDesignPanel({
         {/* ═══ TYPOGRAPHY ═══ */}
         <SectionHeader title="Text" icon={<Type size={12} />} isOpen={openSections.typography} onToggle={() => toggle('typography')}>
           <div className="froam-dp__stack">
-            {/* Font family — grouped by the job the face does, because a flat
-                list of forty families is a scroll, not a choice. */}
-            <select className="froam-dp__compact-select froam-dp__full-width" value={s.fontFamily} onChange={(e) => onApplyStyle({ fontFamily: e.target.value }, { fontFamily: e.target.value })} data-chef-editor-root="true">
-              {groupFontOptions(fontOptions).map(([role, options]) => (
-                <optgroup key={role} label={FONT_GROUP_LABELS[role]}>
-                  {options.map((f) => <option key={f.label} value={f.value}>{f.label}</option>)}
-                </optgroup>
-              ))}
-            </select>
+            {/* Font family — every face drawn in itself, searchable by job,
+                country and writing system. */}
+            <FroamFontPicker value={s.fontFamily} options={fontOptions} variant="panel" onPick={(next) => onApplyStyle({ fontFamily: next }, { fontFamily: next })} />
 
             {onAddBrandFont && (
               <button type="button" className="froam-dp__compact-select froam-dp__full-width" onClick={onAddBrandFont} data-chef-editor-root="true">

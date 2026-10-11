@@ -5,10 +5,15 @@
 .froam-studio,
 .global-chef-button,
 .fs-toast,
-.fs-command-palette,
 .fs-measure,
 .froam-selection-handoff {
   z-index: 1300 !important;
+}
+
+/* The palette is modal: it covers the canvas overlays (selection outline,
+   handles, floating bar, guides: 1304-1350), not just the page. */
+.fs-command-palette {
+  z-index: 1380 !important;
 }
 
 .froam-selection-handoff {

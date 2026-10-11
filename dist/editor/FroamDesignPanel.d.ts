@@ -1,4 +1,4 @@
-import { type FontOption } from './fontSources';
+import type { FontOption } from './fontSources';
 import type { PseudoElement } from './chef/pseudo';
 type SelectionState = {
     path: string;

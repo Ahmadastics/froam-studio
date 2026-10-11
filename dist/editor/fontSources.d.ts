@@ -23,14 +23,32 @@ export interface FontCatalogEntry {
     note: string;
     /** Families that hold up beside it. */
     pairsWith?: string[];
+    /** Country the foundry or designer works from, where well documented. */
+    origin?: string;
+    /** The writing system the face was made for, when it isn't Latin. */
+    script?: FontScript;
+    /** Every writing system it covers beyond Latin. */
+    scripts?: FontScript[];
 }
+export type FontScript = 'arabic' | 'hebrew' | 'devanagari' | 'bengali' | 'tamil' | 'gujarati' | 'japanese' | 'korean' | 'chinese' | 'thai' | 'vietnamese' | 'cyrillic' | 'greek' | 'ethiopic' | 'adlam' | 'nko' | 'tifinagh' | 'georgian' | 'armenian';
+/** Picker filter order: the scripts with the most readers first. */
+export declare const FONT_SCRIPT_ORDER: readonly FontScript[];
+export declare const FONT_SCRIPT_LABELS: Record<FontScript, string>;
+/**
+ * A few real characters per script, so the picker shows what a face does
+ * in the writing system it was made for instead of only its Latin.
+ */
+export declare const FONT_SCRIPT_SAMPLES: Record<FontScript, string>;
+/** Catalog entry for a family, if Froam offers it. */
+export declare function catalogEntry(family: string | null | undefined): FontCatalogEntry | undefined;
 export declare const FONT_CATALOG: readonly FontCatalogEntry[];
-/** Catalog entries for one role, in catalog order. */
 export declare function fontsByRole(role: FontRole): FontCatalogEntry[];
 export interface FontOption {
     label: string;
     value: string;
     role: FontRole | 'brand' | 'system';
+    /** The family to load for a preview; absent for system stacks. */
+    family?: string;
 }
 /**
  * The font picker's list, derived from the catalog rather than hand-kept.

@@ -6,6 +6,8 @@ import FroamSectionBoundary from './FroamSectionBoundary.js';
 import { apiGetFresh, apiPost } from '../lib/api.js';
 import { bridgeUrl } from '../lib/bridge.js';
 import FroamResizeHandles from './FroamResizeHandles.js';
+import FroamSpacingHandles from './FroamSpacingHandles.js';
+import FroamRedlines from './FroamRedlines.js';
 import FroamFloatingBar from './FroamFloatingBar.js';
 import FroamContextMenu from './FroamContextMenu.js';
 import FroamBottomSheet from './FroamBottomSheet.js';
@@ -96,7 +98,7 @@ import { MAX_PERSONA_IMAGE_BYTES, SAVE_META_KEY, BRAND_FONT_MAX_BYTES, loadBrand
 import { getRoot, getCanvasHost, applyGlobalCSS, isSvgInternal, shouldSkipElement, readNumber, camelToKebab, readImageUrl, buildSelection, } from './chef/dom.js';
 import { describeChange, relativeTime, changeByline, buildFroamChangeReport, smallHash } from './chef/change-report.js';
 import { SINGLE_LINE_TAGS, isWritableElement, placeCaret, isEditableField, isTextVisualLayer, } from './chef/writing.js';
-import { sanitizeDraftForElement, applyDraft, restorePageStyle, isInjectionPath, isSectionStructurePath, readInjectionDraft, readLiveElementDraft, applyCanvasDraftStyles, clearCanvasDraftStyles, } from './chef/drafts.js';
+import { sanitizeDraftForElement, applyDraft, rememberPageStyle, restorePageStyle, isInjectionPath, isSectionStructurePath, readInjectionDraft, readLiveElementDraft, applyCanvasDraftStyles, clearCanvasDraftStyles, } from './chef/drafts.js';
 import { ensureFroamNodeId, isStructuralLayerElement, syncStructureBoundaryLabel, buildLayerNode, collectLayers, } from './chef/layers.js';
 import { collectCSSVars, readCanvasState, capturePageThumb, syncFroamArtboardMetadata, buildGradientCSS, } from './chef/canvas.js';
 import { AccordionSection, Toast, FroamWelcomeTips, SCAN_DONE_KEY, BLUEPRINT_SEEN_KEY, FroamScan, MeasurementOverlay, ClickPulseOverlay, SelectionHandoffOverlay, } from './chef/overlays.js';
@@ -335,6 +337,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [smartGuides] = useState([]);
     const [clipboardStyles, setClipboardStyles] = useState(null);
     const [isResizing, setIsResizing] = useState(false);
+    /** Inline spacing values on the element when a spacing drag began, to put back a side a modifier lets go of. */
+    const spacingOriginRef = useRef(null);
     const resizeBaseRef = useRef(null);
     // Drag-to-move mode
     const [moveMode, setMoveMode] = useState(false);
@@ -6549,7 +6553,56 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     storeRef.current = nextStore;
                     setStore(nextStore);
                     applyStyle({ animation: inline }, undefined, 'Animation');
-                }, onToast: showToast, project: projectSession.project, onProjectChange: projectSession.setProject, requestedTab: requestedConnectedTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'replay' || current === 'animator' ? null : current)) }), _jsx(FroamIntelligence, { open: showPanel && intelligenceOpen, onClose: () => { setIntelligenceOpen(false); setTemporalOwner((owner) => owner === 'breakpoint-cinema' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, root: getRoot(), registry: nodeRegistryRef.current, onRegistryChange: (registry) => { nodeRegistryRef.current = registry; saveNodeRegistry(registry); }, routeKey: routeKey, viewport: viewportMode, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, selectedElement: currentSelectionRef.current, onSelectNode: selectConnectedNode, onInsertArchived: insertArchivedHtml, onApplyArchivedStyle: (styles) => applyStyle(styles, undefined, 'Archive style'), onPreviewWidth: previewIntelligenceWidth, onToast: showToast, requestedTab: requestedIntelligenceTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'breakpoint-cinema' ? null : current)), onActivityChange: setWorkspaceActivity }), _jsx(FroamLabs, { open: showPanel && labsOpen, onClose: () => { setLabsOpen(false); setTemporalOwner((owner) => owner === 'sampling' || owner === 'trailer' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, selectedNodeId: selection?.nodeId, selectedElement: currentSelectionRef.current, onToast: showToast, requestedLab: requestedLab, flags: labsFlags, onFlagsChange: setLabsFlags, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'sampling' || current === 'trailer' ? null : current)), onActivityChange: setWorkspaceActivity }), showPanel && selection && !inlineEditing && (_jsx(FroamResizeHandles, { targetRect: selectionRect, visible: !!selectionRect, lockKey: selectionHandoffKey, onResizeStart: () => {
+                }, onToast: showToast, project: projectSession.project, onProjectChange: projectSession.setProject, requestedTab: requestedConnectedTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'replay' || current === 'animator' ? null : current)) }), _jsx(FroamIntelligence, { open: showPanel && intelligenceOpen, onClose: () => { setIntelligenceOpen(false); setTemporalOwner((owner) => owner === 'breakpoint-cinema' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, root: getRoot(), registry: nodeRegistryRef.current, onRegistryChange: (registry) => { nodeRegistryRef.current = registry; saveNodeRegistry(registry); }, routeKey: routeKey, viewport: viewportMode, selection: selection ? { nodeId: selection.nodeId, path: selection.path, label: selection.label } : null, selectedElement: currentSelectionRef.current, onSelectNode: selectConnectedNode, onInsertArchived: insertArchivedHtml, onApplyArchivedStyle: (styles) => applyStyle(styles, undefined, 'Archive style'), onPreviewWidth: previewIntelligenceWidth, onToast: showToast, requestedTab: requestedIntelligenceTab, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'breakpoint-cinema' ? null : current)), onActivityChange: setWorkspaceActivity }), _jsx(FroamLabs, { open: showPanel && labsOpen, onClose: () => { setLabsOpen(false); setTemporalOwner((owner) => owner === 'sampling' || owner === 'trailer' ? null : owner); }, project: projectSession.project, onProjectChange: projectSession.setProject, actorId: room.identity?.actor ?? LOCAL_ACTOR, selectedNodeId: selection?.nodeId, selectedElement: currentSelectionRef.current, onToast: showToast, requestedLab: requestedLab, flags: labsFlags, onFlagsChange: setLabsFlags, onTemporalOwnerChange: (owner) => setTemporalOwner((current) => owner ?? (current === 'sampling' || current === 'trailer' ? null : current)), onActivityChange: setWorkspaceActivity }), showPanel && selection && selections.length <= 1 && !inlineEditing && !isResizing && (_jsx(FroamSpacingHandles, { target: currentSelectionRef.current, rect: selectionRect, visible: !!selectionRect && !commandPaletteOpen, onStart: () => {
+                    if (!selection || guardRemoteLock(selection.path))
+                        return false;
+                    const root = getRoot();
+                    const target = root ? findElementByPath(root, selection.path) : null;
+                    if (!target)
+                        return false;
+                    const originalRoute = originalsRef.current[viewportStoreKey] ?? {};
+                    if (!originalRoute[selection.path]) {
+                        const inlineStyles = target.style;
+                        originalRoute[selection.path] = {
+                            text: target.innerText,
+                            imageUrl: target instanceof HTMLImageElement ? target.currentSrc || target.src || '' : undefined,
+                            styles: Object.fromEntries(persistedStyleKeys.map((key) => [key, inlineStyles[key] || ''])),
+                        };
+                        originalsRef.current[viewportStoreKey] = originalRoute;
+                    }
+                    rememberPageStyle(target);
+                    spacingOriginRef.current = Object.fromEntries(['padding-top', 'padding-right', 'padding-bottom', 'padding-left', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'gap']
+                        .map((property) => [property, target.style.getPropertyValue(property)]));
+                    setRoomLockedPath(selection.path);
+                    return true;
+                }, onPreview: (styles) => {
+                    const target = currentSelectionRef.current;
+                    if (!target)
+                        return;
+                    for (const [property, value] of Object.entries(styles)) {
+                        const css = camelToKebab(property);
+                        const restore = value || spacingOriginRef.current?.[css] || '';
+                        if (restore)
+                            target.style.setProperty(css, restore);
+                        else
+                            target.style.removeProperty(css);
+                    }
+                    setSelectionRect(target.getBoundingClientRect());
+                }, onCommit: (styles, label) => {
+                    setRoomLockedPath(null);
+                    spacingOriginRef.current = null;
+                    const nextSelection = {};
+                    for (const [property, value] of Object.entries(styles)) {
+                        if (/^(padding|margin)(Top|Right|Bottom|Left)$/.test(property))
+                            nextSelection[property] = parseFloat(value) || 0;
+                    }
+                    if (styles.gap)
+                        nextSelection.gap = parseFloat(styles.gap.split(' ')[0]) || 0;
+                    applyStyle(styles, nextSelection, label);
+                    const target = currentSelectionRef.current;
+                    if (target)
+                        setSelectionRect(target.getBoundingClientRect());
+                } })), _jsx(FroamRedlines, { selection: selection ? currentSelectionRef.current : null, root: getRoot, enabled: showPanel && !!selection && !inlineEditing && !commandPaletteOpen }), showPanel && selection && !inlineEditing && (_jsx(FroamResizeHandles, { targetRect: selectionRect, visible: !!selectionRect, lockKey: selectionHandoffKey, onResizeStart: () => {
                     if (!selection)
                         return;
                     if (guardRemoteLock(selection.path))
@@ -6560,6 +6613,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                     const target = findElementByPath(root, selection.path);
                     if (!target)
                         return;
+                    rememberPageStyle(target);
                     const rect = target.getBoundingClientRect();
                     const computed = window.getComputedStyle(target);
                     const originalRoute = originalsRef.current[viewportStoreKey] ?? {};

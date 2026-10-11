@@ -36,7 +36,7 @@ test('three new tabs lead Styles: Alive, Signature, Photo', () => {
   assert.equal(count('Signature'), 13)
   assert.equal(count('Photo'), 10)
   assert.equal(fresh.length, 48)
-  assert.equal(LOOKS.length, 253)
+  assert.equal(LOOKS.length, 289)
   assert.deepEqual(LOOKS.slice(0, 3).map((look) => look.name), ['Shine sweep', 'Levitate', 'Clicky'], 'the new looks come first in All')
 })
 

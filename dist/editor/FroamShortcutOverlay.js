@@ -34,6 +34,16 @@ const SHORTCUT_GROUPS = [
             { keys: 'Double-click', label: 'Edit the words' },
             { keys: 'Right-click', label: 'More actions and Quick Edit' },
             { keys: 'Delete', label: 'Reset styles' },
+            { keys: 'Alt', label: 'Hold to measure to what you point at' },
+        ],
+    },
+    {
+        title: 'Spacing',
+        shortcuts: [
+            { keys: 'Drag a handle', label: 'Padding, margin or gap — snaps to the site’s own scale' },
+            { keys: 'Shift + Drag', label: 'All four sides together' },
+            { keys: 'Alt + Drag', label: 'Both opposite sides' },
+            { keys: 'Ctrl + Drag', label: 'Ignore the scale' },
         ],
     },
     {

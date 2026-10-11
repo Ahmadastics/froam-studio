@@ -21,6 +21,9 @@
 @import './canvas-tools.css';
 @import './image-fit.css';
 @import './floating-bar.css';
+@import './font-picker.css';
+@import './looks-dock.css';
+@import './spacing.css';
 @import './shape-library.css';
 @import './export.css';
 @import './animator.css';

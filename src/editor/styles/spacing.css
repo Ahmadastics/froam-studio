@@ -1,0 +1,122 @@
+/* ===============================================================
+   FROAM STUDIO — Spacing handles and redlines
+   Padding is green, margin amber, gap violet: the box-model colours
+   people already read in browser dev tools. Redlines are red.
+   Everything sits just above the selection outline (1304) and below
+   the resize handles (1305+), so a handle on the border always wins.
+   =============================================================== */
+
+.froam-spacing { position: fixed; inset: 0; z-index: 1304; pointer-events: none; }
+
+.froam-spacing__zone {
+  position: fixed;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+.froam-spacing.is-near .froam-spacing__zone { opacity: 0.55; }
+.froam-spacing__zone.is-hot,
+.froam-spacing.is-dragging .froam-spacing__zone.is-hot { opacity: 1; }
+.froam-spacing.is-dragging .froam-spacing__zone:not(.is-hot) { opacity: 0.25; }
+
+.froam-spacing__zone--padding {
+  background: repeating-linear-gradient(135deg, rgba(34, 197, 94, 0.22) 0 4px, rgba(34, 197, 94, 0.08) 4px 8px);
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.35);
+}
+.froam-spacing__zone--margin {
+  background: repeating-linear-gradient(135deg, rgba(245, 158, 11, 0.24) 0 4px, rgba(245, 158, 11, 0.08) 4px 8px);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.35);
+}
+.froam-spacing__zone--gap {
+  background: repeating-linear-gradient(135deg, rgba(168, 85, 247, 0.24) 0 4px, rgba(168, 85, 247, 0.08) 4px 8px);
+  box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.4);
+}
+
+.froam-spacing__pill {
+  position: fixed;
+  z-index: 1;
+  pointer-events: auto;
+  touch-action: none;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.25), 0 1px 3px rgba(15, 23, 42, 0.3);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.8);
+  transition: opacity 140ms ease, transform 140ms ease, background 140ms ease;
+}
+.froam-spacing__pill.is-h { width: 18px; height: 5px; }
+.froam-spacing__pill.is-v { width: 5px; height: 18px; }
+/* A generous invisible grab area around the small visible pill. */
+.froam-spacing__pill::after { content: ''; position: absolute; inset: -6px; }
+.froam-spacing.is-near .froam-spacing__pill { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.froam-spacing.is-dragging .froam-spacing__pill:not(.is-hot) { opacity: 0; }
+.froam-spacing__pill--padding.is-hot { background: #22c55e; }
+.froam-spacing__pill--margin.is-hot { background: #f59e0b; }
+.froam-spacing__pill--gap.is-hot { background: #a855f7; }
+.froam-spacing__pill.is-hot { transform: translate(-50%, -50%) scale(1.25); }
+
+.froam-spacing__label {
+  position: fixed;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #ffffff;
+  font: 600 11px/1.2 var(--fs-font);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 12px));
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+.froam-spacing__label span {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(34, 197, 94, 0.22);
+  color: #86efac;
+  font-size: 10px;
+}
+.froam-spacing__label.is-snapped { box-shadow: 0 0 0 1px rgba(134, 239, 172, 0.45), 0 6px 16px rgba(0, 0, 0, 0.3); }
+
+/* ── redlines ── */
+.froam-redlines { position: fixed; inset: 0; z-index: 1309; pointer-events: none; }
+.froam-redlines__box { position: fixed; box-sizing: border-box; }
+.froam-redlines__box.is-selection { box-shadow: 0 0 0 1px #f2453d; }
+.froam-redlines__box.is-other { box-shadow: 0 0 0 1px #f2453d; background: rgba(242, 69, 61, 0.05); }
+.froam-redlines__box.is-parent { outline: 1px dashed rgba(242, 69, 61, 0.7); }
+.froam-redlines__svg { position: fixed; inset: 0; overflow: visible; }
+.froam-redlines__svg line { stroke: #f2453d; stroke-width: 1; shape-rendering: crispEdges; }
+.froam-redlines__label {
+  position: fixed;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #f2453d;
+  color: #ffffff;
+  font: 700 11px/1.2 var(--fs-font);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+@media (hover: none) {
+  /* On touch the zones come up with the selection; there is no hover to wait for. */
+  .froam-spacing .froam-spacing__zone { opacity: 0.4; }
+  .froam-spacing .froam-spacing__pill { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  .froam-spacing__pill.is-h { width: 26px; height: 7px; }
+  .froam-spacing__pill.is-v { width: 7px; height: 26px; }
+  .froam-spacing__pill::after { inset: -12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .froam-spacing__zone,
+  .froam-spacing__pill { transition: none; }
+}
+
+/* Holding Alt to measure: the floating bar and size badge step back. */
+html[data-froam-measuring] .froam-floating-bar,
+html[data-froam-measuring] .froam-resize-size-badge,
+html[data-froam-measuring] .froam-selection-handoff { opacity: 0.08; pointer-events: none; transition: opacity 120ms ease; }

@@ -841,7 +841,7 @@ test('Styles fetches its looks the first time it opens, and a look applies and u
   assert(undos === 1, `taking one look back took ${undos} presses of Ctrl+Z`)
 })
 
-test('all 253 looks write CSS a real browser accepts — every property, every hover and ::after', async ({ page }) => {
+test('all 289 looks write CSS a real browser accepts — every property, every hover and ::after', async ({ page }) => {
   const recipes = LOOKS.flatMap((look) => [['', look.styles('#6366f1')], ...(look.text ? [[' (words)', look.text('#6366f1')]] : [])].map(([kind, recipe]) => [`${look.name}${kind}`, recipe]))
   const rejected = await page.evaluate((all) => {
     const probe = document.createElement('div')
@@ -860,7 +860,7 @@ test('all 253 looks write CSS a real browser accepts — every property, every h
     }
     return out
   }, recipes)
-  assert(recipes.length > 253, `only ${recipes.length} recipes checked`)
+  assert(recipes.length > 289, `only ${recipes.length} recipes checked`)
   assert(rejected.length === 0, `the browser drops ${rejected.length} declaration(s): ${rejected.slice(0, 6).join(' | ')}`)
 })
 
@@ -1317,6 +1317,169 @@ appTest('Save writes @body paths, and production paints them whenever the dialog
     server.close()
     fs.rmSync(prodDir, { recursive: true, force: true })
   }
+})
+
+/* ─── 9.6: spacing on the canvas, redlines, the font picker, the Styles rail ─── */
+
+/** The centre of a spacing handle by its accessible name. */
+async function spacingPill(page, label) {
+  const found = await page.evaluate((name) => {
+    const pill = [...document.querySelectorAll('.froam-spacing__pill')].find((p) => p.getAttribute('aria-label') === name)
+    if (!pill) return null
+    const r = pill.getBoundingClientRect()
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+  }, label)
+  assert(found, `no "${label}" handle on the selection`)
+  return found
+}
+
+async function dragBy(page, from, dx, dy, steps = 8) {
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  for (let i = 1; i <= steps; i += 1) {
+    await page.mouse.move(from.x + (dx * i) / steps, from.y + (dy * i) / steps)
+    await page.waitForTimeout(20)
+  }
+  await page.mouse.up()
+  await page.waitForTimeout(300)
+}
+
+const paddings = (page, selector) => page.evaluate((s) => { const c = getComputedStyle(document.querySelector(s)); return [c.paddingTop, c.paddingRight, c.paddingBottom, c.paddingLeft].map((v) => Math.round(parseFloat(v))) }, selector)
+
+test('a padding handle drags the real padding, snaps to the page’s own spacing, and undoes', async ({ page }) => {
+  await deselect(page)
+  await clickOn(page, '.features li', 0.92, 0.12)
+  assert(await page.evaluate(() => document.querySelector('[data-chef-selected="true"]')?.tagName === 'LI'), `selected ${await selectedId(page)}, not the card`)
+  const before = await paddings(page, '.features li')
+  await dragBy(page, await spacingPill(page, 'Padding top'), 0, 21)
+  const after = await paddings(page, '.features li')
+  assert(after[0] !== before[0], `padding-top stayed ${after[0]}px`)
+  // Snapping reaches 4px: the drag ends on the pointer or on a value the page already uses near it.
+  assert(Math.abs(after[0] - (before[0] + 21)) <= 4, `padding-top went to ${after[0]}px for a 21px drag from ${before[0]}px`)
+  assert(after.slice(1).join() === before.slice(1).join(), `other sides moved too: ${before} → ${after}`)
+  await page.keyboard.down('Shift')
+  await dragBy(page, await spacingPill(page, 'Padding left'), 6, 0, 4)
+  await page.keyboard.up('Shift')
+  const all = await paddings(page, '.features li')
+  assert(new Set(all).size === 1, `Shift-drag left the sides uneven: ${all}`)
+  await deselect(page)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(350)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(350)
+  const undone = await paddings(page, '.features li')
+  assert(undone.join() === before.join(), `two Ctrl+Z left padding at ${undone}, not ${before}`)
+})
+
+test('a gap handle between grid items changes the gap', async ({ page }) => {
+  await deselect(page)
+  // The space between the first two cards belongs to the grid itself.
+  const geo = await page.evaluate(() => {
+    const [a, b] = document.querySelectorAll('.features li')
+    a.scrollIntoView({ block: 'center', behavior: 'instant' })
+    const ra = a.getBoundingClientRect()
+    const rb = b.getBoundingClientRect()
+    return { x: (ra.right + rb.left) / 2, y: ra.top + ra.height / 2 }
+  })
+  await page.mouse.click(geo.x, geo.y)
+  await page.waitForTimeout(300)
+  assert((await selectedId(page)) === 'features', `clicking between cards selected ${await selectedId(page)}`)
+  const before = await page.evaluate(() => getComputedStyle(document.getElementById('features')).columnGap)
+  const pill = await page.evaluate(() => { const p = document.querySelector('.froam-spacing__pill--gap'); if (!p) return null; const r = p.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })
+  assert(pill, 'no gap handle on a grid')
+  await dragBy(page, pill, 12, 0)
+  const after = await page.evaluate(() => getComputedStyle(document.getElementById('features')).columnGap)
+  assert(parseFloat(after) > parseFloat(before), `gap stayed ${before} → ${after}`)
+  await deselect(page)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(400)
+  const undone = await page.evaluate(() => getComputedStyle(document.getElementById('features')).columnGap)
+  assert(undone === before, `Ctrl+Z left the gap at ${undone}`)
+})
+
+test('holding Alt measures from the selection to what the pointer is over, then gets out of the way', async ({ page }) => {
+  await deselect(page)
+  await clickOn(page, '#cta')
+  const expected = await page.evaluate(() => Math.round((document.getElementById('cta').getBoundingClientRect().top - document.getElementById('subtitle').getBoundingClientRect().bottom) * 10) / 10)
+  const sub = await page.locator('#subtitle').boundingBox()
+  await page.mouse.move(sub.x + 10, sub.y + sub.height / 2)
+  await page.keyboard.down('Alt')
+  await page.mouse.move(sub.x + 12, sub.y + sub.height / 2)
+  await page.waitForTimeout(250)
+  const labels = await page.evaluate(() => [...document.querySelectorAll('.froam-redlines__label')].map((label) => label.textContent))
+  const faded = await page.evaluate(() => getComputedStyle(document.querySelector('.froam-floating-bar')).opacity)
+  await page.keyboard.up('Alt')
+  await page.waitForTimeout(200)
+  const gone = await page.evaluate(() => document.querySelectorAll('.froam-redlines').length)
+  assert(labels.includes(String(expected)), `redlines read ${labels.join(', ') || 'nothing'}, not ${expected}`)
+  assert(Number(faded) < 0.5, `the floating bar stayed over the measurement (opacity ${faded})`)
+  assert(gone === 0, 'redlines stayed after Alt was released')
+  assert((await selectedId(page)) === 'cta', 'measuring changed the selection')
+})
+
+test('the font picker searches the world catalogue, filters by writing system, and picks', async ({ page }) => {
+  await deselect(page)
+  await clickOn(page, '#subtitle')
+  await page.click('.froam-floating-bar .froam-font-trigger')
+  await page.waitForSelector('.froam-font-picker')
+  const total = await page.locator('.froam-font-picker__row').count()
+  assert(total > 190, `the picker offers ${total} fonts`)
+  await page.selectOption('.froam-font-picker__world select', 'arabic')
+  const arabic = await page.$$eval('.froam-font-picker__row', (rows) => rows.map((row) => row.dataset.family))
+  assert(arabic.includes('Cairo') && arabic.includes('Amiri') && !arabic.includes('Inter'), `Arabic filter shows ${arabic.slice(0, 8).join(', ')}`)
+  await page.selectOption('.froam-font-picker__world select', 'any')
+  await page.fill('.froam-font-picker__search input', 'clash display')
+  const hits = await page.$$eval('.froam-font-picker__row', (rows) => rows.map((row) => row.dataset.family))
+  assert(hits[0] === 'Clash Display', `searching "clash display" found ${hits.join(', ') || 'nothing'}`)
+  // A preview subset must never be registered under the real family name.
+  const shadowed = await page.evaluate(() => [...document.styleSheets].some((sheet) => { try { return [...sheet.cssRules].some((rule) => rule instanceof CSSFontFaceRule && rule.style.fontFamily.replace(/["']/g, '') === 'Clash Display' && sheet.ownerNode?.hasAttribute?.('data-froam-font-preview')) } catch { return false } }))
+  assert(!shadowed, 'a preview subset was registered as the real "Clash Display"')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(400)
+  const family = await page.evaluate(() => getComputedStyle(document.getElementById('subtitle')).fontFamily)
+  assert(/Clash Display/.test(family), `picking wrote font-family: ${family}`)
+  assert(!(await page.locator('.froam-font-picker').count()), 'the picker stayed open after a pick')
+  await deselect(page)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(400)
+  assert(!/Clash Display/.test(await page.evaluate(() => getComputedStyle(document.getElementById('subtitle')).fontFamily)), 'Ctrl+Z left Clash Display on the subtitle')
+})
+
+test('Styles: the rail jumps to a section, favourites and recents remember, World looks apply', async ({ page }) => {
+  await deselect(page)
+  await clickOn(page, '#stage', 0.5, 0.2)
+  await openStyles(page)
+  await page.locator('.froam-looks-rail button', { hasText: 'World' }).click()
+  // The jump scrolls smoothly; wait for it to land rather than for a fixed time.
+  const offset = () => page.evaluate(() => {
+    const scroller = document.querySelector('.froam-floating-bar__pop--looks .froam-floating-bar__looks-scroll')
+    const section = scroller.querySelector('[data-look-section="World"]')
+    return Math.abs(section.getBoundingClientRect().top - scroller.getBoundingClientRect().top)
+  })
+  let inView = await offset()
+  for (let waited = 0; inView >= 6 && waited < 3000; waited += 100) {
+    await page.waitForTimeout(100)
+    inView = await offset()
+  }
+  assert(inView < 6, `World section is ${inView}px from the top after the rail jump`)
+  assert(await page.locator('.froam-looks-rail button.is-active', { hasText: 'World' }).count() === 1, 'the rail does not mark World as the section in view')
+  await lookTile(page, 'Kente').click()
+  await page.waitForTimeout(300)
+  const image = await page.evaluate(() => getComputedStyle(document.getElementById('stage')).backgroundImage)
+  assert(/repeating-linear-gradient/.test(image), `Kente didn't apply: ${image.slice(0, 80)}`)
+  await page.locator('.froam-look-tile', { has: page.locator('span', { hasText: /^Kente$/ }) }).hover()
+  await page.locator('.froam-look-tile', { has: page.locator('span', { hasText: /^Kente$/ }) }).locator('.froam-look-tile__fav').click()
+  await page.locator('.froam-looks-rail button', { hasText: 'Favourites' }).click()
+  const favs = await page.$$eval('.froam-floating-bar__pop--looks .froam-floating-bar__looks button span', (spans) => spans.map((span) => span.textContent))
+  await page.locator('.froam-looks-rail button', { hasText: 'Recent' }).click()
+  const recents = await page.$$eval('.froam-floating-bar__pop--looks .froam-floating-bar__looks button span', (spans) => spans.map((span) => span.textContent))
+  await closeStyles(page)
+  await deselect(page)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(400)
+  assert(favs.length === 1 && favs[0] === 'Kente', `Favourites shows ${favs.join(', ')}`)
+  assert(recents[0] === 'Kente', `Recent starts with ${recents[0]}`)
+  await page.evaluate(() => { localStorage.removeItem('froam:look-favorites:v1'); localStorage.removeItem('froam:look-recents:v1') })
 })
 
 test('History and Undo survive Save to Repo and a reload', async ({ page, siteDir, url }) => {

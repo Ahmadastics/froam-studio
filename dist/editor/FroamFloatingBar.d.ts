@@ -1,5 +1,5 @@
 import type { FroamStyleState } from '../project/types';
-import { type FontOption } from './fontSources';
+import type { FontOption } from './fontSources';
 type FloatingAction = 'bold' | 'italic' | 'underline' | 'strike' | 'align-left' | 'align-center' | 'align-right' | 'align-justify' | 'color' | 'bg-color' | 'clear-bg' | 'image' | 'adjust-image' | 'duplicate' | 'merge' | 'unmerge' | 'delete' | 'edit-text' | 'undo' | 'toggle-hidden' | 'bring-front' | 'send-back' | 'open-design' | 'animate';
 type WalkDirection = 'parent' | 'prev' | 'next' | 'child';
 type SelectionPatch = Record<string, string | number>;
