@@ -315,7 +315,9 @@ test('findProjectDirForPort locates the project a running dev server belongs to'
   const entry = path.join(binDir, 'serve.cjs')
   fs.writeFileSync(entry, `require('node:http').createServer((q,s)=>{s.end('ok')}).listen(${port},'127.0.0.1')`)
 
-  const child = spawn(process.execPath, [entry], { stdio: 'ignore' })
+  // Started from inside its project, as a real dev server is: on Linux and
+  // macOS the process's working directory is what the lookup trusts first.
+  const child = spawn(process.execPath, [entry], { stdio: 'ignore', cwd: project })
   try {
     // Give the OS a moment to register the listening socket
     await new Promise((resolve) => setTimeout(resolve, 1200))
