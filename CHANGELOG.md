@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- **Sticky headers clear the toolbar on busy pages.** Froam finds a page's
+  sticky and fixed elements when the page is idle. A page whose scripts
+  restyle something every frame (a carousel, a ticker, parallax) is never
+  idle, and each change restarted the wait, so on such a page a sticky header
+  could stay under Froam's toolbar and click-through layers went unnoticed.
+  The first change now sets the deadline (at most 0.4 s) and later ones join
+  it.
+- **macOS: your temp folder isn't a system folder.** It lives under
+  `/var/folders`, which the launcher refused as part of `/var`. Your home,
+  the temp folder and `/var/www` never count as system folders.
+- **CI on Linux, macOS and Windows.** Every release branch, tag and pull
+  request runs the unit tests, the browser tests in real Chrome, and the CLI
+  installed from a packed tarball the way `npx` runs it. Every suite runs even
+  after one fails, and each failure is annotated on the run page.
+
 ## 9.5.1 - 2026-10-08
 
 **`npx @ahmadastic/froam` runs on Linux and macOS again. Pictures and video
