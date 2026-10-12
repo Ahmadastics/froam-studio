@@ -692,6 +692,7 @@ export default function FroamFloatingBar({
               value={fontFamily}
               options={fontOptions}
               variant="bar"
+              className="froam-floating-bar__font"
               onPick={(next) => onStyle({ fontFamily: next }, { fontFamily: next }, 'Changed font family')}
             />
 
@@ -910,7 +911,7 @@ export default function FroamFloatingBar({
                   <Eraser size={13} />
                 </button>
               )}
-              <button type="button" onClick={() => setLookDockSide((side) => side === 'left' ? 'right' : 'left')} title="Move to the other side" aria-label="Move to the other side">
+              <button type="button" className="froam-look-side" onClick={() => setLookDockSide((side) => side === 'left' ? 'right' : 'left')} title="Move to the other side" aria-label="Move to the other side">
                 {lookDockSide === 'left' ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
               </button>
               <button type="button" className="froam-floating-bar__look-apply" onClick={() => setOpenPop(null)}>Done</button>

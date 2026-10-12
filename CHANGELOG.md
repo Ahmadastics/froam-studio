@@ -1,9 +1,60 @@
 # Changelog
 
-## 9.6.0 - 2026-10-11
+## 9.6.0 - 2026-10-12
 
-**Fonts from around the world, a real font picker, Styles you can find your
-way around, and spacing you drag on the page.**
+**Desktop edits reach phones, you can edit and save from your own phone,
+fonts from around the world, Styles you can find your way around, and
+spacing you drag on the page.**
+
+- **Desktop flows down to tablet and phone.** Each screen size used to be its
+  own island: an edit made in Desktop mode — the default, on a phone too —
+  shipped inside `@media (min-width: 1025px)`, so phone and tablet visitors
+  never saw it, and text edits shown in the editor's phone preview never
+  reached a phone. Now desktop is the base, Tablet edits override it at
+  1024px and below, Mobile at 640px and below, the way Webflow and Framer
+  cascade. The generated stylesheet, both runtimes and the editor's previews
+  share one rule (`src/editor/chef/cascade.ts`), and saving at tablet or
+  phone size keeps only what that size changes — never frozen copies of the
+  desktop values — so a later desktop edit still reaches phones. Existing
+  desktop edits now show at every width.
+- **No more repaint loop under `froam dev`.** On a page that loads Froam's
+  runtime, the runtime answered the editor swapping injected blocks by
+  rebuilding them, and the two took turns forever — hundreds of repaints,
+  a background video downloaded again each time, and sometimes a page that
+  never finished loading. Blocks coming and going are Froam's own changes
+  now, whoever made them; changes the page makes still repaint.
+- **Pair your phone and save from it.** `froam dev --host` prints a pairing
+  link for your own phone, with a QR code to scan. A phone opened from it can
+  **Save to Repo** straight into your project, like the computer. The key is
+  new every run, travels in the link's `#` part so no server or log sees it,
+  and leaves the address bar as soon as the editor reads it. Other devices on
+  the Wi-Fi, and anyone on a share link, still can't write your files.
+- **Honest saving on a phone.** An unpaired phone's Save to Repo said
+  "Repo bridge offline" when the bridge was online and had refused. It now
+  sends the edit to your computer and says so. Save says where an edit went
+  ("Sent to your computer", "Saved — Save to Repo puts it in your code")
+  instead of "Published", which read as "live for everyone". The computer
+  says when edits from another device arrive.
+- **The phone link points at your Wi-Fi.** The network address list, and the
+  pairing link, put Wi-Fi and Ethernet ahead of VPN and virtual adapters
+  (Cloudflare WARP, WSL, Docker…), which a phone can't reach.
+- **The selection bar stays in thumb reach.** On a phone, a keyboard was
+  detected when there wasn't one (a pinch-zoom or the browser bars changing),
+  lifting the docked bar into the middle of the page. Only a focused field now
+  counts.
+- **Every control on screen.** The phone's selection bar wraps instead of
+  hiding bold, colour and Styles off the edge, and the font sits after the
+  controls you reach for most.
+- **Tapping words writes in them.** On touch, the resize strips sat across the
+  element's edge, so on a single line of text a tap mostly grabbed the edge.
+  They sit outside it now. A quick second tap (which phones report as a
+  double-tap) starts writing too.
+- **Handles you can see past.** Touch handles keep a finger-sized target but
+  draw a small dot, corners only. The size badge and spacing handles stay off
+  phones, and the first-run hint says "Tap" without a Ctrl K.
+- **Phone tests.** `scripts/test-e2e-phone.mjs` runs an emulated iPhone
+  against `froam dev --host` over the network address: the docked bar, the
+  handles, an unpaired save, pairing, Save to Repo and what a visitor sees.
 
 - **Spacing on the canvas.** Hover a selection and its padding (green),
   margin (amber) and flex or grid gaps (violet) show as zones with handles.

@@ -84,7 +84,9 @@ export default function FroamWorkspaceShell(props: Props) {
     {!hintSeen && !props.activity && !props.hasSelection && (
       <div className="froam-first-hint" role="status" data-chef-editor-root="true">
         <MousePointer2 size={14} />
-        <span>Click anything on the page to edit it</span>
+        <span className="froam-first-hint__pointer">Click anything on the page to edit it</span>
+        {/* A phone has no Ctrl K and nothing to click: it taps. */}
+        <span className="froam-first-hint__touch">Tap anything on the page to edit it</span>
         <kbd>Ctrl K</kbd>
         <span className="froam-first-hint__more">for everything else</span>
         <button type="button" onClick={() => { writeHintSeen(); setHintSeen(true) }}>Got it</button>

@@ -39,15 +39,36 @@ html[data-froam-touch] [contenteditable='true'] {
   }
 }
 
-/* ─── Resize handles: bigger visuals to match the bigger hit boxes ─── */
+/* ─── Resize handles: a finger-sized target, a small dot ───
+   The 26px square used to be drawn in full, so on a line of text the eight
+   handles covered the first and last letters. The target stays 26px; what
+   you see is a 12px dot in its middle. The mid-edge handles go: the edges
+   themselves are still drag targets, and four fewer blobs sit on the copy. */
 
 @media (pointer: coarse) {
   .froam-resize-handle {
     width: 26px !important;
     height: 26px !important;
-    border-radius: 9px;
-    border-width: 2px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: none;
   }
+  .froam-resize-handle::after {
+    content: '';
+    position: absolute;
+    inset: 7px;
+    border: 2px solid var(--fs-accent-control);
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  }
+  .froam-resize-handle--n,
+  .froam-resize-handle--e,
+  .froam-resize-handle--s,
+  .froam-resize-handle--w { display: none; }
+  /* The size badge is for fine pointer work; on a phone it sat on the next element. */
+  .froam-resize-size-badge { display: none; }
 }
 
 /* ─── Toolbar touch targets ─── */
@@ -107,12 +128,17 @@ html[data-froam-touch] [contenteditable='true'] {
   .froam-floating-bar.is-docked .froam-floating-bar__weight { order: 2; }
   .froam-floating-bar.is-docked .froam-floating-bar__primary > .froam-floating-bar__anchor:last-child { order: 3; }
 
-  /* More controls than fit: the row fades at its edge, so a swipe is the obvious next move. */
+  /* Every control in reach: the row wraps instead of scrolling sideways. A
+     sideways strip hid bold, colour and Styles past the edge of the screen,
+     and a swipe on it was easily taken for a scroll of the page. */
   .froam-floating-bar.is-docked .froam-floating-bar__primary {
-    padding-right: 28px;
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
-    mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    row-gap: 4px;
+    overflow: visible;
   }
+  .froam-floating-bar.is-docked .froam-floating-bar__sep { display: none; }
+  .froam-floating-bar.is-docked .froam-font-trigger--bar { width: 132px; height: 40px; }
 
   .froam-floating-bar.is-docked .froam-floating-bar__primary > * {
     flex-shrink: 0;

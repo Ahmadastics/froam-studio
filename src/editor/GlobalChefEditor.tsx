@@ -80,8 +80,9 @@ import {
 } from 'lucide-react'
 import FroamSectionBoundary from './FroamSectionBoundary'
 import { apiGetFresh, apiPost } from '../lib/api'
-import { bridgeUrl } from '../lib/bridge'
+import { bridgeHeaders, bridgeUrl, pairedDeviceKey } from '../lib/bridge'
 import FroamResizeHandles from './FroamResizeHandles'
+import { inheritedDrafts, layeredDrafts, routeSizes, withoutInherited } from './chef/cascade'
 import FroamSpacingHandles from './FroamSpacingHandles'
 import FroamRedlines from './FroamRedlines'
 import FroamFloatingBar from './FroamFloatingBar'
@@ -514,19 +515,38 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   }, [commandPaletteOpen])
   // A phone's on-screen keyboard covers the bottom of the page without resizing
   // it (iOS): what sits at the bottom — Quick Edit, the selection bar — moves up.
+  // Only a keyboard counts: a pinch-zoom or the browser's bars also shrink the
+  // visual viewport, and read as a keyboard they lifted the docked bar into the
+  // middle of the page. A keyboard is only up while something takes typing.
   useEffect(() => {
     const viewport = window.visualViewport
     if (!viewport) return
+    const typing = () => {
+      const active = document.activeElement as HTMLElement | null
+      return Boolean(active && (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)))
+    }
+    let frame = 0
     const update = () => {
-      const covered = Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop))
-      document.documentElement.style.setProperty('--froam-keyboard', `${covered > 80 ? covered : 0}px`)
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const zoomed = Math.abs(viewport.scale - 1) > 0.01
+        const covered = typing() && !zoomed ? Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop)) : 0
+        document.documentElement.style.setProperty('--froam-keyboard', `${covered > 80 ? covered : 0}px`)
+      })
     }
     update()
     viewport.addEventListener('resize', update)
     viewport.addEventListener('scroll', update)
+    window.addEventListener('resize', update)
+    document.addEventListener('focusin', update)
+    document.addEventListener('focusout', update)
     return () => {
+      cancelAnimationFrame(frame)
       viewport.removeEventListener('resize', update)
       viewport.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+      document.removeEventListener('focusin', update)
+      document.removeEventListener('focusout', update)
       document.documentElement.style.removeProperty('--froam-keyboard')
     }
   }, [])
@@ -745,6 +765,19 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const viewportStoreKeyRef = useRef(viewportStoreKey)
   viewportStoreKeyRef.current = viewportStoreKey
   const routeDrafts = useMemo(() => store[viewportStoreKey] ?? {}, [store, viewportStoreKey])
+  /**
+   * What this screen size shows: the wider sizes' drafts with this one's on top
+   * (chef/cascade.ts). It changes only when one of those sizes' drafts does —
+   * a new object on every store update re-ran the painter, which re-attached
+   * a background video over and over. Desktop is its own drafts, as before.
+   */
+  const desktopDrafts = store[`${routeKey}@@desktop`]
+  const tabletDrafts = store[`${routeKey}@@tablet`]
+  const mobileDrafts = store[`${routeKey}@@mobile`]
+  const paintedDrafts = useMemo(() => {
+    if (viewportMode === 'desktop') return routeDrafts
+    return layeredDrafts({ desktop: desktopDrafts, tablet: tabletDrafts, mobile: mobileDrafts }, viewportMode)
+  }, [viewportMode, routeDrafts, desktopDrafts, tabletDrafts, mobileDrafts])
   /** What people did on this route + viewport, newest first. */
   const changeLog = useMemo(
     () => opLog.changes(60).filter((c) => scopeKey(c.routeKey, c.viewport) === viewportStoreKey),
@@ -809,7 +842,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [roomCursor, setRoomCursor] = useState<{ x: number; y: number } | null>(null)
   const [composingMessage, setComposingMessage] = useState(false)
   // What the bridge knows about this machine: who's here (git), and whether the project uses Tailwind.
-  const [bridgeInfo, setBridgeInfo] = useState<{ name: string | null; tailwind: boolean }>({ name: null, tailwind: false })
+  /**
+   * What the dev bridge says about this device. `device`: 'computer' (the one
+   * running froam dev), 'paired' (a phone it paired), 'other' (anything else on
+   * the network), or null when there is no bridge — a hosted site, where Save
+   * goes to the site's own publish API.
+   */
+  const [bridgeInfo, setBridgeInfo] = useState<{ name: string | null; tailwind: boolean; device: 'computer' | 'paired' | 'other' | null }>({ name: null, tailwind: false, device: null })
+  const canSaveRepoHere = bridgeInfo.device === 'computer' || bridgeInfo.device === 'paired'
   // A notification link: ?froam-room-id=…&froam-open=request:… (never a token).
   const [pendingOpen, setPendingOpen] = useState(() => {
     if (typeof window === 'undefined') return null
@@ -1493,11 +1533,20 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   useEffect(() => {
     let cancelled = false
-    window.fetch(bridgeUrl('/__froam/whoami'))
+    // Reading the key first also takes a fresh #froam-pair= out of the address bar.
+    const heldKey = pairedDeviceKey()
+    window.fetch(bridgeUrl('/__froam/whoami'), { headers: bridgeHeaders() })
       .then((response) => (response.ok ? response.json() : null))
-      .then((data: { name?: string | null; tailwind?: boolean } | null) => {
+      .then((data: { name?: string | null; tailwind?: boolean; device?: 'computer' | 'paired' | 'other' } | null) => {
         if (cancelled || !data) return
-        setBridgeInfo({ name: data.name ?? null, tailwind: Boolean(data.tailwind) })
+        const device = data.device ?? 'computer'
+        setBridgeInfo({ name: data.name ?? null, tailwind: Boolean(data.tailwind), device })
+        // Each froam dev run pairs afresh: a key from an earlier run no longer opens anything.
+        if (heldKey && device === 'other') {
+          try { window.localStorage.removeItem('froam:device-key:v1') } catch { /* storage blocked */ }
+          showToast('This phone was paired with an earlier froam dev — scan the new code in your terminal to save from here')
+        }
+        if (heldKey && device === 'paired') showToast('Paired — this phone saves straight into your code')
         // Nobody is called "Froam": the person at this machine is who git says.
         if (data.name) {
           setPersona((current) => (current.name === DEFAULT_FROAM_PERSONA.name ? sanitizeFroamPersona({ ...current, name: data.name as string }) : current))
@@ -2220,7 +2269,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         bumpLog()
         showToast(result.kept
           ? `Design updated — ${result.kept} newer local change${result.kept === 1 ? '' : 's'} kept`
-          : 'Design updated from your other device')
+          : 'Edits from your other device are here — Save to Repo to put them in your code')
       } catch {
         // Stay usable offline or while backend is restarting.
         settled = true
@@ -2249,7 +2298,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   }, [routeKey])
 
   /* ─── Paint drafts (re-apply on DOM mutations, e.g. React re-renders) ─── */
-  useDraftPainter({ hasRouteDrafts, routeDrafts, viewportStoreKey, suspendDraftPaintingRef, applySectionStructure, restoreInjectedBlocks })
+  useDraftPainter({ hasRouteDrafts: Object.keys(paintedDrafts).length > 0, routeDrafts: paintedDrafts, viewportStoreKey, suspendDraftPaintingRef, applySectionStructure, restoreInjectedBlocks })
 
   useEffect(() => {
     if (!showPanel || studioMinimized) return
@@ -3064,6 +3113,24 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       }
     })
 
+    // At tablet or mobile size the page also shows what flows down from the
+    // wider sizes. Read back as it is, that would be saved here as copies that
+    // never change again when desktop does; only what this size sets is kept.
+    if (viewportMode !== 'desktop') {
+      const inherited = inheritedDrafts(routeSizes(storeRef.current, routeKey), viewportMode)
+      for (const [path, draft] of Object.entries(nextRouteDrafts)) {
+        const above = inherited[path]
+        if (isFroamPersonaPath(path) || path === CANVAS_KEY) continue
+        if (isInjectionPath(path) || isSectionStructurePath(path)) {
+          if (above && above.text === draft.text && !latestRouteDrafts[path]) delete nextRouteDrafts[path]
+          continue
+        }
+        const kept = withoutInherited(draft, latestRouteDrafts[path], above, originalRouteDrafts[path]?.text)
+        if (Object.keys(kept).some((field) => field !== 'fingerprint')) nextRouteDrafts[path] = kept
+        else delete nextRouteDrafts[path]
+      }
+    }
+
     return withPersonaDraft(nextRouteDrafts, persona)
   }
 
@@ -3130,9 +3197,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   function applyStoreToDOM(targetStore: EditorStore, options: { clearCurrent?: boolean; previousStore?: EditorStore } = {}) {
     const root = getRoot()
     if (!root) return
-    const routeDraftsToApply = targetStore[viewportStoreKey] ?? {}
+    const routeDraftsToApply = layeredDrafts(routeSizes(targetStore, routeKey), viewportMode)
     if (options.clearCurrent) {
-      const previous = (options.previousStore ?? store)[viewportStoreKey] ?? {}
+      const previous = layeredDrafts(routeSizes(options.previousStore ?? store, routeKey), viewportMode)
       clearDraftsFromDOM(previous)
       // Styles live in the element's style attribute and are cleared above.
       // Text and image swaps were written into the DOM itself, so a draft
@@ -3723,7 +3790,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         viewportMode,
         store: routeSnapshot,
       })
-      if (!quiet) showToast('Published')
+      if (!quiet) {
+        showToast(bridgeInfo.device === null
+          ? 'Published'
+          : canSaveRepoHere
+            ? 'Saved — Save to Repo puts it in your code'
+            : 'Sent to your computer — Save to Repo there puts it in your code')
+      }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : ''
       // Automatic saves say it once, not every five seconds.
@@ -3753,7 +3826,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     try {
       const response = await window.fetch(bridgeUrl('/__froam/source/text'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: bridgeHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ edits: edits.map(({ from, to }) => ({ from, to })) }),
       })
       const data = await response.json().catch(() => null) as { success?: boolean; results?: Array<{ status: string; file?: string }> } | null
@@ -3800,7 +3873,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     try {
       const response = await window.fetch(bridgeUrl('/__froam/source/styles'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: bridgeHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ edits: edits.map(({ tag, className, styles }) => ({ tag, className, styles })) }),
       })
       const data = await response.json().catch(() => null) as { success?: boolean; results?: Array<{ status: string; file?: string; written?: string[]; to?: string }> } | null
@@ -3847,12 +3920,19 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     try {
       const response = await window.fetch(bridgeUrl('/__froam/repo/save'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: bridgeHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ routeKey, viewportMode, store: cleanDrafts, brandFonts, rootScope: getFroamStudioConfig().rootScope }),
       })
-      const data = await response.json().catch(() => null) as { success?: boolean; error?: string } | null
+      const data = await response.json().catch(() => null) as { success?: boolean; error?: string; code?: string } | null
+      if (response.status === 403 && data?.code === 'not-paired') {
+        // This device may not write the project. The edit still goes to the computer,
+        // where Froam picks it up; saying "offline" here sent people looking for a fault.
+        await saveDraft(true)
+        showToast('Sent to your computer — Save to Repo there, or pair this phone with the code froam dev --host prints')
+        return
+      }
       if (!response.ok || !data?.success) throw new Error(data?.error || 'Repo bridge unavailable')
-      showToast(`Saved to repo${sourceNote} — commit & push to ship it`)
+      showToast(`Saved to your code${sourceNote} — commit and push to put it live`)
     } catch {
       showToast('Repo bridge offline — run `froam dev` or add froamStudio() to vite.config')
     }
@@ -5430,13 +5510,13 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
 
   /* ─── Repo bridge status polling (dev only) ─── */
   useEffect(() => {
-    if (!showPanel || !['127.0.0.1', 'localhost', '::1'].includes(window.location.hostname)) { setRepoStatus('offline'); return }
+    if (!showPanel || (!['127.0.0.1', 'localhost', '::1'].includes(window.location.hostname) && !canSaveRepoHere)) { setRepoStatus('offline'); return }
     let active = true
     let timer = 0
 
     async function poll() {
       try {
-        const res = await window.fetch(bridgeUrl('/__froam/repo/status'), { cache: 'no-store' })
+        const res = await window.fetch(bridgeUrl('/__froam/repo/status'), { cache: 'no-store', headers: bridgeHeaders() })
         if (!res.ok) throw new Error('no bridge')
         const data = await res.json() as { success?: boolean; dirty?: boolean | null; files?: string[] }
         if (!active) return
@@ -5451,7 +5531,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     void poll()
     timer = window.setInterval(poll, 4000)
     return () => { active = false; window.clearInterval(timer) }
-  }, [showPanel])
+  }, [showPanel, canSaveRepoHere])
+
+  // A phone shows Save to Repo only when it may use it (the toolbar hides it on phones otherwise).
+  useEffect(() => {
+    if (canSaveRepoHere) document.documentElement.setAttribute('data-froam-repo-here', 'true')
+    else document.documentElement.removeAttribute('data-froam-repo-here')
+    return () => document.documentElement.removeAttribute('data-froam-repo-here')
+  }, [canSaveRepoHere])
 
   function updateCSSVar(name: string, value: string) {
     document.documentElement.style.setProperty(name, value)

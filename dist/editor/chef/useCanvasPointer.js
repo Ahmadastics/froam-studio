@@ -159,7 +159,12 @@ export function useCanvasPointer(options) {
             event.preventDefault();
             event.stopPropagation();
             // A second click on copy that's already selected means "let me write here".
-            if (event.detail === 1
+            // With a mouse only a lone click counts: a double-click is handled below,
+            // with the word under the pointer selected. A finger's quick second tap
+            // arrives as a double-tap (detail 2) and phones don't reliably follow it
+            // with dblclick — so on touch any tap on the selected copy starts writing.
+            const touched = performance.now() - lastTouch < 1000;
+            if ((event.detail === 1 || touched)
                 && !event.shiftKey
                 && !event.altKey
                 && activeToolRef.current === 'pointer'

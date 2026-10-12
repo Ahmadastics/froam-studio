@@ -1,4 +1,4 @@
-import { bridgeUrl } from '../lib/bridge.js';
+import { bridgeHeaders, bridgeUrl } from '../lib/bridge.js';
 import { coerceFroamProjectFile, isFroamProjectFile } from './serialization.js';
 export async function loadProjectFromBridge(fetchImpl = fetch) {
     const response = await fetchImpl(bridgeUrl('/__froam/repo/project/load'), { cache: 'no-store' });
@@ -12,7 +12,7 @@ export async function saveProjectToBridge(project, fetchImpl = fetch) {
         throw new Error('Cannot save an invalid Froam project');
     const response = await fetchImpl(bridgeUrl('/__froam/repo/project/save'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: bridgeHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(project),
     });
     const payload = await response.json();

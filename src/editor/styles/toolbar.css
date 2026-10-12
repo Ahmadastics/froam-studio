@@ -852,3 +852,20 @@ html[data-froam-device] .froam-first-hint { display: none; }
 /* The smallest phones: the page name gives way, then History. */
 @media(max-width:400px){ .froam-tb__route{display:none} }
 @media(max-width:370px){ .froam-tb__history>.froam-tb__menu-anchor{display:none} }
+
+/* The hint speaks to the pointer in hand: a phone taps and has no Ctrl K. */
+.froam-first-hint__touch { display: none; }
+@media (pointer: coarse) {
+  .froam-first-hint__pointer,
+  .froam-first-hint kbd,
+  .froam-first-hint__more { display: none; }
+  .froam-first-hint__touch { display: inline; }
+}
+@media (max-width: 640px) {
+  .froam-first-hint { max-width: calc(100vw - 24px); font-size: 13px; }
+}
+
+/* A phone paired with froam dev may Save to Repo: it gets the button back. */
+@media (max-width: 768px) {
+  html[data-froam-repo-here] .froam-tb__save-btn--repo { display: inline-flex; }
+}

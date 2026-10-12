@@ -55,19 +55,25 @@ function getHandlePositions(rect: DOMRect, handleSize: number) {
   }
 }
 
-function getEdgeSegments(rect: DOMRect, handleSize: number, edgeSize: number) {
+/**
+ * Draggable strips along the border. With a mouse they straddle it. On touch
+ * they sit just outside: an 18px strip straddling the edge of a 24px line of
+ * text left only its middle 6px tappable, so tapping the words to write in
+ * them grabbed the edge and started a resize instead.
+ */
+function getEdgeSegments(rect: DOMRect, handleSize: number, edgeSize: number, outside = false) {
   const { left: l, top: t, width: w, height: h } = rect
-  const edgeHalf = edgeSize / 2
+  const reach = outside ? edgeSize : edgeSize / 2
   const inset = handleSize + 4
   return [
     // top edge
-    { dir: 'n' as HandleDirection, x: l + inset, y: t - edgeHalf, w: w - inset * 2, h: edgeSize, cursor: 'ns-resize' },
+    { dir: 'n' as HandleDirection, x: l + inset, y: t - reach, w: w - inset * 2, h: edgeSize, cursor: 'ns-resize' },
     // right edge
-    { dir: 'e' as HandleDirection, x: l + w - edgeHalf, y: t + inset, w: edgeSize, h: h - inset * 2, cursor: 'ew-resize' },
+    { dir: 'e' as HandleDirection, x: l + w + reach - edgeSize, y: t + inset, w: edgeSize, h: h - inset * 2, cursor: 'ew-resize' },
     // bottom edge
-    { dir: 's' as HandleDirection, x: l + inset, y: t + h - edgeHalf, w: w - inset * 2, h: edgeSize, cursor: 'ns-resize' },
+    { dir: 's' as HandleDirection, x: l + inset, y: t + h + reach - edgeSize, w: w - inset * 2, h: edgeSize, cursor: 'ns-resize' },
     // left edge
-    { dir: 'w' as HandleDirection, x: l - edgeHalf, y: t + inset, w: edgeSize, h: h - inset * 2, cursor: 'ew-resize' },
+    { dir: 'w' as HandleDirection, x: l - reach, y: t + inset, w: edgeSize, h: h - inset * 2, cursor: 'ew-resize' },
   ]
 }
 
@@ -179,7 +185,7 @@ export default function FroamResizeHandles({ targetRect, onResizeStart, onResize
   const handleSize = coarsePointer ? HANDLE_SIZE_TOUCH : HANDLE_SIZE
   const edgeSize = coarsePointer ? EDGE_SIZE_TOUCH : EDGE_SIZE
   const handles = getHandlePositions(targetRect, handleSize)
-  const edges = getEdgeSegments(targetRect, handleSize, edgeSize)
+  const edges = getEdgeSegments(targetRect, handleSize, edgeSize, coarsePointer)
 
   return (
     <>

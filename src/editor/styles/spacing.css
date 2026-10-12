@@ -102,13 +102,10 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
-@media (hover: none) {
-  /* On touch the zones come up with the selection; there is no hover to wait for. */
-  .froam-spacing .froam-spacing__zone { opacity: 0.4; }
-  .froam-spacing .froam-spacing__pill { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  .froam-spacing__pill.is-h { width: 26px; height: 7px; }
-  .froam-spacing__pill.is-v { width: 7px; height: 26px; }
-  .froam-spacing__pill::after { inset: -12px; }
+/* On touch, spacing is set from the design sheet: handles on a phone-sized page
+   covered the copy, and a finger meant to scroll grabbed them instead. */
+@media (pointer: coarse) {
+  .froam-spacing { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

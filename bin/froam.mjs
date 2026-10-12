@@ -33,6 +33,7 @@ import {
   writeArtifacts,
 } from '../lib/codegen.mjs'
 import { createBridgeServer, normalizeAppTarget } from '../lib/dev-server.mjs'
+import { qrTerminal } from '../lib/qr.mjs'
 import {
   createPrompter,
   describeTargetFailure,
@@ -68,14 +69,25 @@ function openBrowser(url) {
   } catch { /* opening the browser is best-effort */ }
 }
 
+/**
+ * This machine's network addresses, the one a phone on the same Wi-Fi can
+ * reach first. VPNs and virtual adapters (Cloudflare WARP, WSL, Docker,
+ * Hyper-V, Tailscale…) have addresses too, but a phone on the Wi-Fi can't
+ * reach them, and leading with one made the pairing link a dead end.
+ */
 function lanAddresses() {
-  const addresses = []
-  for (const nets of Object.values(os.networkInterfaces())) {
+  const VIRTUAL = /warp|vpn|tun|tap|utun|vethernet|wsl|docker|virtualbox|vmware|vbox|hyper-?v|zerotier|tailscale|wireguard|^br-|^veth|loopback/i
+  const PHYSICAL = /wi-?fi|wlan|wireless|ethernet|^en\d|^eth\d|^wl/i
+  const rangeRank = (address) => (address.startsWith('192.168.') ? 0 : address.startsWith('10.') ? 1 : /^172\.(1[6-9]|2\d|3[01])\./.test(address) ? 2 : 3)
+  const found = []
+  for (const [name, nets] of Object.entries(os.networkInterfaces())) {
     for (const net of nets ?? []) {
-      if (net.family === 'IPv4' && !net.internal) addresses.push(net.address)
+      if (net.family !== 'IPv4' || net.internal || net.address.startsWith('169.254.')) continue
+      const kind = VIRTUAL.test(name) ? 2 : PHYSICAL.test(name) ? 0 : 1
+      found.push({ address: net.address, rank: kind * 10 + rangeRank(net.address) })
     }
   }
-  return addresses
+  return found.sort((a, b) => a.rank - b.rank).map((entry) => entry.address)
 }
 
 const cwd = process.cwd()
@@ -764,7 +776,7 @@ async function dev(flags) {
   const sourceRoot = !writeSource ? null
     : serveDir ?? (!remoteApp && path.resolve(cwd) !== os.homedir() && looksLikeProjectDir(cwd) ? cwd : null)
 
-  const { server, appTarget, startShare } = createBridgeServer({
+  const { server, appTarget, startShare, deviceKey } = createBridgeServer({
     port,
     froamDir,
     app,
@@ -801,7 +813,17 @@ async function dev(flags) {
     }
     if (exposeHost) {
       for (const address of lanAddresses()) {
-        log(`  ${bold('network')}  ${teal(`http://${address}:${port}`)} ${dim('← open on your phone (same Wi-Fi)')}`)
+        log(`  ${bold('network')}  ${teal(`http://${address}:${port}`)} ${dim('← any device on your Wi-Fi')}`)
+      }
+      // The pairing key rides in the #fragment: browsers never send it to a server or a log.
+      const [phoneAddress] = lanAddresses()
+      if (phoneAddress) {
+        log(`  ${bold('your phone')} ${teal(`http://${phoneAddress}:${port}/#froam-pair=${deviceKey}`)}`)
+        log(`             ${dim('← open this on your own phone: it can Save to Repo like this computer. Keep it to yourself.')}`)
+        // Scanning beats typing a sixty-character link on a phone. A terminal that can't draw it still has the link.
+        if (process.stdout.isTTY && !process.env.NO_COLOR) {
+          try { log(); log(qrTerminal(`http://${phoneAddress}:${port}/#froam-pair=${deviceKey}`, { indent: '  ' })); log(`  ${dim('Scan with your phone camera to pair it.')}`) } catch { /* too long for a terminal code: the link above still works */ }
+        }
       }
     } else if (appTarget || serveDir) {
       log(`  ${dim('network')}  ${dim('add --host for your network, --share for anywhere')}`)

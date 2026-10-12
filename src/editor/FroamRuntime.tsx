@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   configureFroamStudio,
   getFroamRootElement,
@@ -18,6 +18,7 @@ import { applyDraftText, writeElementText } from './draft-text'
 import type { FroamAnchorFingerprint } from '../collab/types'
 import { applyMediaSource, restorePageMedia } from './media/apply-media'
 import { hasMediaRef, resolveMediaRefs } from './media/media-refs'
+import { SIZE_ORDER, layeredDrafts } from './chef/cascade'
 
 type ElementDraft = {
   text?: string
@@ -456,17 +457,23 @@ export default function FroamRuntime({
   const runtimeRoutes = routes ?? getFroamStudioConfig().runtimeRoutes ?? DEFAULT_RUNTIME_ROUTES
   const isRuntimeRoute = enabled && routeMatches(routeKey, runtimeRoutes)
   const [viewportMode, setViewportMode] = useState<ViewportMode>(() => getRuntimeViewportMode())
-  const [publishedStore, setPublishedStore] = useState<Record<string, ElementDraft> | null>(null)
+  const [publishedStore, setPublishedStoreState] = useState<Record<string, ElementDraft> | null>(null)
+  // A layered design is a new object each time it's built: keep the one in hand when nothing in it
+  // changed, or every poll and render repaints the page (and restarts any video on it).
+  const setPublishedStore = useCallback((next: Record<string, ElementDraft> | null) => {
+    setPublishedStoreState((current) => (current === next || (current && next && JSON.stringify(current) === JSON.stringify(next)) ? current : next))
+  }, [])
   // Fixed for the life of the page: an invite in the URL is what makes this a
   // session, and nothing else should start a poll loop.
   const inSession = useMemo(() => readRoomFromLocation() !== null, [])
   const appliedSnapshotsRef = useRef<RuntimeSnapshot[]>([])
   const appliedSectionSnapshotsRef = useRef<SectionRuntimeSnapshot[]>([])
 
-  const endpoint = useMemo(() => {
-    const params = new URLSearchParams({ routeKey, viewportMode })
-    return `/api/froam/published?${params.toString()}`
-  }, [routeKey, viewportMode])
+  // Desktop flows down (chef/cascade.ts): a phone needs desktop's and tablet's published designs under its own.
+  const endpoints = useMemo(() => SIZE_ORDER.slice(0, SIZE_ORDER.indexOf(viewportMode) + 1).map((size) => {
+    const params = new URLSearchParams({ routeKey, viewportMode: size })
+    return { size, url: `/api/froam/published?${params.toString()}` }
+  }), [routeKey, viewportMode])
 
   useEffect(() => {
     configureFroamStudio({
@@ -517,8 +524,9 @@ export default function FroamRuntime({
     // normalized form so a slash never hides a shipped design.
     const localRoute = design?.routes?.[routeKey]
       ?? Object.entries(design?.routes ?? {}).find(([key]) => normalizeFroamRouteKey(key) === routeKey)?.[1]
-    const hasCommitted = !!localRoute && Object.prototype.hasOwnProperty.call(localRoute, viewportMode)
-    const committedStore = hasCommitted ? (localRoute?.[viewportMode] ?? null) : null
+    const sizes = SIZE_ORDER.slice(0, SIZE_ORDER.indexOf(viewportMode) + 1)
+    const hasCommitted = !!localRoute && sizes.some((size) => Object.prototype.hasOwnProperty.call(localRoute, size))
+    const committedStore = hasCommitted && localRoute ? layeredDrafts(localRoute, viewportMode) : null
 
     if (hasCommitted && prefer === 'repo') {
       setPublishedStore(committedStore)
@@ -529,9 +537,12 @@ export default function FroamRuntime({
 
     async function loadPublished() {
       try {
-        const response = await apiGetFresh<FroamPublishedResponse>(endpoint)
+        const responses = await Promise.all(endpoints.map(async ({ size, url }) => ({ size, response: await apiGetFresh<FroamPublishedResponse>(url) })))
         if (cancelled) return
-        const published = response.design?.store ?? null
+        const bySize = Object.fromEntries(responses.filter(({ response }) => response.design?.store).map(({ size, response }) => [size, response.design!.store]))
+        const published = Object.keys(bySize).length ? layeredDrafts(bySize, viewportMode) : null
+        // The newest of the layers is when this screen size's design last changed.
+        const response = { design: { publishedAt: responses.map(({ response: r }) => r.design?.publishedAt ?? r.design?.updatedAt ?? '').sort().pop() } } as FroamPublishedResponse
 
         if (!hasCommitted) {
           setPublishedStore(published)
@@ -556,7 +567,9 @@ export default function FroamRuntime({
 
     const receiveLivePublish = (event: Event) => {
       const detail = (event as CustomEvent<{ routeKey?: string; viewport?: ViewportMode }>).detail
-      if (detail?.routeKey === routeKey && detail.viewport === viewportMode && !document.hidden) void loadPublished()
+      // A publish to this size or any wider one changes what this screen shows.
+      const wider = detail?.viewport ? SIZE_ORDER.indexOf(detail.viewport) <= SIZE_ORDER.indexOf(viewportMode) : false
+      if (detail?.routeKey === routeKey && wider && !document.hidden) void loadPublished()
     }
     window.addEventListener('froam:design-published', receiveLivePublish)
 
@@ -584,7 +597,7 @@ export default function FroamRuntime({
       if (poll) window.clearInterval(poll)
       window.removeEventListener('froam:design-published', receiveLivePublish)
     }
-  }, [design, endpoint, inSession, isRuntimeRoute, prefer, routeKey, viewportMode])
+  }, [design, endpoints, inSession, isRuntimeRoute, prefer, routeKey, viewportMode])
 
   /* Fonts the design references must actually load with it. */
   useEffect(() => {

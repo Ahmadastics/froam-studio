@@ -62,8 +62,8 @@ var BODY_SCOPE = "@body";
 var SECTION_STRUCTURE_KEY = "__froam_structure__:sections";
 var VIEWPORTS = ["desktop", "tablet", "mobile"];
 var MEDIA = {
-  desktop: "@media (min-width: 1025px)",
-  tablet: "@media (min-width: 641px) and (max-width: 1024px)",
+  desktop: null,
+  tablet: "@media (max-width: 1024px)",
   mobile: "@media (max-width: 640px)"
 };
 function normalizeRouteKey(value) {
@@ -530,10 +530,14 @@ ${pseudoDecls.join("\n")}
         }
       }
       if (!rules.length) continue;
-      out.push(`/* \u2500\u2500 ${routeKey} \xB7 ${viewport} \u2500\u2500 */`);
-      out.push(`${MEDIA[viewport]} {`);
-      out.push(rules.join("\n\n"));
-      out.push("}");
+      out.push(`/* \u2500\u2500 ${routeKey} \xB7 ${viewport}${MEDIA[viewport] ? "" : " (every width \u2014 tablet and mobile override below)"} \u2500\u2500 */`);
+      if (MEDIA[viewport]) {
+        out.push(`${MEDIA[viewport]} {`);
+        out.push(rules.join("\n\n"));
+        out.push("}");
+      } else {
+        out.push(rules.join("\n\n"));
+      }
       out.push("");
     }
   }
@@ -721,6 +725,37 @@ function generateRuntimeJs(design) {
     return 'desktop'
   }
 
+  // Desktop flows down: tablet lays over it, mobile over both (layeredStore in codegen.mjs).
+  var SIZES = ['desktop', 'tablet', 'mobile']
+  function layered(route, viewport) {
+    var merged = null
+    for (var i = 0; i <= SIZES.indexOf(viewport); i += 1) {
+      var size = route[SIZES[i]]
+      if (!size) continue
+      merged = merged || {}
+      for (var key in size) {
+        var draft = size[key]
+        var below = merged[key]
+        if (below && draft && typeof draft === 'object') {
+          var next = {}
+          var field
+          for (field in below) next[field] = below[field]
+          for (field in draft) next[field] = draft[field]
+          if (below.styles || draft.styles) {
+            var styles = {}
+            for (field in (below.styles || {})) styles[field] = below.styles[field]
+            for (field in (draft.styles || {})) styles[field] = draft.styles[field]
+            next.styles = styles
+          }
+          merged[key] = next
+        } else {
+          merged[key] = draft
+        }
+      }
+    }
+    return merged
+  }
+
   // "@body/\u2026" paths are content beside the root (a React app's portals),
   // counted from <body>. Froam's own nodes there never count.
   var BODY_PREFIX = '${BODY_SCOPE}/'
@@ -899,7 +934,7 @@ function generateRuntimeJs(design) {
 
     clearInjected(root)
     var route = DESIGN.routes[routeKey]
-    var store = route && route[viewportMode()]
+    var store = route && layered(route, viewportMode())
     if (!store) { applyCustomCss(''); return }
 
     applySectionStructure(root, store)
@@ -955,6 +990,10 @@ function generateRuntimeJs(design) {
         for (var i = 0; i < mutations.length; i += 1) {
           var node = mutations[i].target
           if (node && node.closest && node.closest('[data-froam-runtime-injected="true"], [data-chef-editor-root]')) continue
+          // Injected blocks coming and going are Froam's own doing, whoever did it. Another Froam
+          // painter on the page (the editor's, under froam dev) swaps them too; answering that
+          // with a repaint made the two take turns forever, rebuilding a background video each time.
+          if (onlyFroamNodes(mutations[i].addedNodes) && onlyFroamNodes(mutations[i].removedNodes)) continue
           scheduleApply()
           return
         }
@@ -962,6 +1001,15 @@ function generateRuntimeJs(design) {
       // A portal's modal mounts on <body>, long after load: watch it too.
       observer.observe(hasBodyPaths() && root !== document.body ? document.body : root, { childList: true, subtree: true })
     }
+  }
+
+  function onlyFroamNodes(nodes) {
+    for (var n = 0; n < nodes.length; n += 1) {
+      var added = nodes[n]
+      if (added.nodeType !== 1) return false
+      if (added.getAttribute('data-froam-runtime-injected') !== 'true' && added.getAttribute('data-chef-editor-root') !== 'true') return false
+    }
+    return true
   }
 
   function hasBodyPaths() {

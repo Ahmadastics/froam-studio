@@ -30,19 +30,25 @@ function getHandlePositions(rect, handleSize) {
         w: { x: l - half, y: t + h / 2 - half },
     };
 }
-function getEdgeSegments(rect, handleSize, edgeSize) {
+/**
+ * Draggable strips along the border. With a mouse they straddle it. On touch
+ * they sit just outside: an 18px strip straddling the edge of a 24px line of
+ * text left only its middle 6px tappable, so tapping the words to write in
+ * them grabbed the edge and started a resize instead.
+ */
+function getEdgeSegments(rect, handleSize, edgeSize, outside = false) {
     const { left: l, top: t, width: w, height: h } = rect;
-    const edgeHalf = edgeSize / 2;
+    const reach = outside ? edgeSize : edgeSize / 2;
     const inset = handleSize + 4;
     return [
         // top edge
-        { dir: 'n', x: l + inset, y: t - edgeHalf, w: w - inset * 2, h: edgeSize, cursor: 'ns-resize' },
+        { dir: 'n', x: l + inset, y: t - reach, w: w - inset * 2, h: edgeSize, cursor: 'ns-resize' },
         // right edge
-        { dir: 'e', x: l + w - edgeHalf, y: t + inset, w: edgeSize, h: h - inset * 2, cursor: 'ew-resize' },
+        { dir: 'e', x: l + w + reach - edgeSize, y: t + inset, w: edgeSize, h: h - inset * 2, cursor: 'ew-resize' },
         // bottom edge
-        { dir: 's', x: l + inset, y: t + h - edgeHalf, w: w - inset * 2, h: edgeSize, cursor: 'ns-resize' },
+        { dir: 's', x: l + inset, y: t + h + reach - edgeSize, w: w - inset * 2, h: edgeSize, cursor: 'ns-resize' },
         // left edge
-        { dir: 'w', x: l - edgeHalf, y: t + inset, w: edgeSize, h: h - inset * 2, cursor: 'ew-resize' },
+        { dir: 'w', x: l - reach, y: t + inset, w: edgeSize, h: h - inset * 2, cursor: 'ew-resize' },
     ];
 }
 export default function FroamResizeHandles({ targetRect, onResizeStart, onResize, onResizeEnd, visible, lockKey = 0 }) {
@@ -139,7 +145,7 @@ export default function FroamResizeHandles({ targetRect, onResizeStart, onResize
     const handleSize = coarsePointer ? HANDLE_SIZE_TOUCH : HANDLE_SIZE;
     const edgeSize = coarsePointer ? EDGE_SIZE_TOUCH : EDGE_SIZE;
     const handles = getHandlePositions(targetRect, handleSize);
-    const edges = getEdgeSegments(targetRect, handleSize, edgeSize);
+    const edges = getEdgeSegments(targetRect, handleSize, edgeSize, coarsePointer);
     return (_jsxs(_Fragment, { children: [edges.map((edge) => (_jsx("div", { className: "froam-resize-edge", "data-chef-editor-root": "true", style: {
                     position: 'fixed',
                     left: edge.x,

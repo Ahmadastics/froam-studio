@@ -203,3 +203,9 @@
   .froam-floating-bar__pop--looks .froam-floating-bar__looks-scroll { scroll-behavior: auto; }
   .froam-look-adjust-toggle svg:last-child { transition: none; }
 }
+
+/* A phone sheet has no other side to move to, and no room for the subtitle. */
+@media (max-width: 720px) {
+  .froam-look-side,
+  .froam-floating-bar__pop--looks .froam-floating-bar__pop-head span small { display: none; }
+}

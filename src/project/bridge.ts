@@ -1,4 +1,4 @@
-import { bridgeUrl } from '../lib/bridge'
+import { bridgeHeaders, bridgeUrl } from '../lib/bridge'
 import { coerceFroamProjectFile, isFroamProjectFile, type FroamProjectFile } from './serialization'
 import type { FroamIntelligenceErrorResponse, FroamIntelligenceNotConfiguredResponse, FroamIntelligenceRequest, FroamIntelligenceResponse } from './intelligence-transport'
 
@@ -13,7 +13,7 @@ export async function saveProjectToBridge(project: FroamProjectFile, fetchImpl: 
   if (!isFroamProjectFile(project)) throw new Error('Cannot save an invalid Froam project')
   const response = await fetchImpl(bridgeUrl('/__froam/repo/project/save'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: bridgeHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(project),
   })
   const payload = await response.json() as { success?: boolean; error?: string }

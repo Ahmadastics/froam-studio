@@ -13,7 +13,7 @@
  * JavaScript. These do.
  */
 import assert from 'node:assert/strict'
-import { applyChangeRequest, designRootScope, generateCss, generateRuntimeJs, mergeSave, migrateDesign } from '../lib/codegen.mjs'
+import { applyChangeRequest, designRootScope, generateCss, generateRuntimeJs, layeredStore, mergeSave, migrateDesign } from '../lib/codegen.mjs'
 
 const tests = []
 const test = (name, fn) => tests.push([name, fn])
@@ -98,7 +98,43 @@ test('generated CSS carries the declarations and scopes them', () => {
   assert.ok(css.includes('font-size: 64px'), 'declaration missing')
   assert.ok(css.includes('font-weight: 600'), 'declaration missing')
   assert.ok(css.includes('data-froam-route="/"'), 'route scope missing')
-  assert.ok(css.includes('min-width'), 'viewport scope missing')
+  // Desktop is the base: its rules apply at every width.
+  assert.ok(!css.includes('min-width'), 'desktop rules are still confined to wide screens')
+})
+
+test('desktop flows down: tablet and mobile override it, narrowest last', () => {
+  const css = generateCss({
+    version: 3,
+    routes: { '/': {
+      mobile: { 'main:1/h1:1': { styles: { fontSize: '28px' } } },
+      desktop: { 'main:1/h1:1': { styles: { fontSize: '64px', color: 'red' } } },
+      tablet: { 'main:1/h1:1': { styles: { fontSize: '40px' } } },
+    } },
+  })
+  const at = (text) => css.indexOf(text)
+  assert.ok(at('font-size: 64px') >= 0 && at('color: red') >= 0, 'the desktop rule is missing')
+  assert.ok(at('font-size: 64px') < at('@media (max-width: 1024px)'), 'desktop must come before the tablet override')
+  assert.ok(at('@media (max-width: 1024px)') < at('font-size: 40px'), 'the tablet rule is not inside its query')
+  assert.ok(at('font-size: 40px') < at('@media (max-width: 640px)') && at('@media (max-width: 640px)') < at('font-size: 28px'), 'mobile must come last, inside its query')
+  assert.ok(!/@media[^{]*\{[^}]*font-size: 64px/.test(css), 'the desktop rule is wrapped in a media query')
+})
+
+test('the runtime layers sizes the same way: a phone gets desktop words under its own', () => {
+  const route = {
+    desktop: { a: { text: 'Desktop words', styles: { color: 'red', fontSize: '64px' } }, b: { text: 'Only desktop' } },
+    tablet: { a: { styles: { fontSize: '40px' } } },
+    mobile: { a: { text: 'Phone words' } },
+  }
+  assert.deepEqual(layeredStore(route, 'desktop'), route.desktop)
+  assert.deepEqual(layeredStore(route, 'tablet').a, { text: 'Desktop words', styles: { color: 'red', fontSize: '40px' } })
+  assert.deepEqual(layeredStore(route, 'mobile'), { a: { text: 'Phone words', styles: { color: 'red', fontSize: '40px' } }, b: { text: 'Only desktop' } })
+  // The vanilla runtime carries its own copy of the merge; run that copy and compare.
+  const js = generateRuntimeJs({ version: 3, routes: { '/': route } })
+  const start = js.indexOf('function layered(')
+  const body = js.slice(start, js.indexOf('\n  }\n', start) + 4)
+  const layered = new Function('SIZES', `${body}; return layered`)(['desktop', 'tablet', 'mobile'])
+  assert.deepEqual(JSON.parse(JSON.stringify(layered(route, 'mobile'))), layeredStore(route, 'mobile'), 'the runtime and codegen disagree on the cascade')
+  assert.deepEqual(JSON.parse(JSON.stringify(layered(route, 'tablet'))), layeredStore(route, 'tablet'), 'the runtime and codegen disagree on the cascade')
 })
 
 test('CSS and runtime agree on the route attribute', () => {

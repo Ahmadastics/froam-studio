@@ -79,14 +79,39 @@ Editing a live site you do not have the source for writes to `~/Froam/<site>/`
 instead, so Froam never drops files into whatever directory your terminal
 happened to open — including a read-only one such as `C:\Windows\System32`.
 
-### Other devices on your network
+### Editing from your phone
 
 ```bash
-npx @ahmadastic/froam example.com --host
+npx @ahmadastic/froam dev --host
 ```
 
 Keep the terminal running. `--host` exposes the development bridge to your local
-network for phone testing; do not expose it directly to the public internet.
+network; do not expose it directly to the public internet. It prints two kinds
+of address:
+
+- **network** — any device on your Wi-Fi can open the site with the editor.
+  What it saves goes to this computer (`froam/froam.published.json`), and the
+  editor here picks it up the next time you open it; **Save to Repo** on this
+  computer then writes it into your code. A device like this can't write your
+  project itself.
+- **your phone** — a pairing link, with a QR code to scan. A phone opened from
+  it is paired with this computer: it gets **Save to Repo** and writes your
+  project directly. The key in the link is new every time `froam dev` starts,
+  never reaches a server or a log (it's in the `#` part), and leaves the
+  address bar as soon as the editor reads it. Keep the link to yourself.
+
+Either way, an edit reaches your visitors when you commit and deploy, as with
+any change to your code.
+
+### Screen sizes
+
+Desktop is the base and flows down. An edit made in the editor's Desktop mode
+(the default, on a phone too) shows at every width. Switch to Tablet or Mobile
+to change something for narrower screens only: a Tablet edit applies at 1024px
+and below, a Mobile edit at 640px and below, each over the sizes above it. The
+Tablet and Mobile previews show exactly that — the desktop edits underneath,
+that size's own on top — and saving there keeps only what that size changes,
+so a later desktop edit still reaches phones.
 
 ## Publishing without a developer
 
@@ -328,7 +353,7 @@ Current evidence:
 | Local HTTP proxy injection and cache handling | Covered by automated integration tests |
 | React/Vite package imports | Package exports load; full application workflow not verified in this audit |
 | External HTTPS sites | Editor injects into the proxied page; this is a local mock-up, not a deploy path, and is not verified as general framework support |
-| Mobile browser editing | UI and `--host` path are implemented; physical-device workflow not verified in this audit |
+| Mobile browser editing | `--host`, pairing and Save to Repo from a phone verified end to end on an emulated iPhone (`scripts/test-e2e-phone.mjs`); not yet on a physical device |
 
 ## React and Vite integration
 

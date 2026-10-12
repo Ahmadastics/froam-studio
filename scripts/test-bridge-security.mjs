@@ -146,7 +146,7 @@ test('--allow-origin lets a custom dev domain in', async () => {
   assert.equal(res.headers['access-control-allow-origin'], 'http://app.test')
 })
 
-test('over the network (--host), the repo cannot be written directly — only through an approved request', async () => {
+test('over the network (--host), an unpaired device cannot write the repo — only through an approved request', async () => {
   const lan = Object.values(os.networkInterfaces()).flat().find((net) => net && net.family === 'IPv4' && !net.internal)?.address
   if (!lan) return // no network interface here (some CI sandboxes)
   const exposed = createBridgeServer({ froamDir, serveDir: site })
@@ -169,6 +169,48 @@ test('over the network (--host), the repo cannot be written directly — only th
   exposed.server.close()
   assert.deepEqual(statuses, [403, 403, 403])
   assert.equal(designText(), before)
+})
+
+test('a phone paired with this run’s key may save over the network; no key, a wrong key, an old key or a share link may not', async () => {
+  const lan = Object.values(os.networkInterfaces()).flat().find((net) => net && net.family === 'IPv4' && !net.internal)?.address
+  if (!lan) return
+  const exposed = createBridgeServer({ froamDir, serveDir: site })
+  const other = createBridgeServer({ froamDir, serveDir: site }) // another run: another key
+  await new Promise((resolve) => exposed.server.listen(0, '0.0.0.0', resolve))
+  const exposedPort = exposed.server.address().port
+  const call = (url, { method = 'POST', body, headers = {} } = {}) => new Promise((resolve) => {
+    const req = http.request({ host: lan, port: exposedPort, method, path: url, headers: { host: `${lan}:${exposedPort}`, 'content-type': 'application/json', ...headers } }, (res) => {
+      let text = ''
+      res.on('data', (chunk) => { text += chunk })
+      res.on('end', () => resolve({ status: res.statusCode, body: text }))
+    })
+    req.on('error', () => resolve({ status: 0, body: '' }))
+    req.end(body === undefined ? undefined : JSON.stringify(body))
+  })
+  const save = (headers) => call('/__froam/repo/save', { body: { routeKey: '/', viewportMode: 'desktop', store: { 'body:1/h1:1': { text: 'from my phone' } } }, headers })
+  const key = exposed.deviceKey
+  try {
+    assert.match(key, /^[A-Za-z0-9_-]{24}$/, 'the key is URL-safe and long enough not to guess')
+    assert.notEqual(other.deviceKey, key, 'every run makes a new key')
+    const refused = [
+      await save({}),
+      await save({ 'x-froam-device': 'x'.repeat(key.length) }),
+      await save({ 'x-froam-device': other.deviceKey }),
+      await save({ 'x-froam-device': key.slice(0, -1) }),
+      await save({ 'x-froam-device': key, 'x-froam-remote': '1' }), // through a share link
+    ]
+    assert.deepEqual(refused.map((r) => r.status), [403, 403, 403, 403, 403])
+    assert.equal(JSON.parse(refused[0].body).code, 'not-paired', 'the refusal says why, so the editor can say so')
+    assert.ok(!designText().includes('from my phone'), 'a refused save wrote the design')
+    const who = async (headers) => JSON.parse((await call('/__froam/whoami', { method: 'GET', headers })).body).device
+    assert.equal(await who({}), 'other')
+    assert.equal(await who({ 'x-froam-device': key }), 'paired')
+    const paired = await save({ 'x-froam-device': key })
+    assert.equal(paired.status, 200, `the paired phone was refused: ${paired.body}`)
+    assert.ok(designText().includes('from my phone'), 'the paired save did not reach the design')
+  } finally {
+    exposed.server.close()
+  }
 })
 
 test('--serve still serves the site', async () => {

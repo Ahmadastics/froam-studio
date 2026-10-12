@@ -75,7 +75,7 @@
     "audit:demo": "node scripts/demo-audit.mjs",
     "adoption": "node scripts/adoption.mjs",
     "verify:alpha": "node scripts/verify-alpha-gates.mjs",
-    "test:e2e": "node scripts/test-e2e-editor.mjs && node scripts/test-e2e-media.mjs && node scripts/test-realtime-browser.mjs && node scripts/test-share.mjs && node scripts/test-a11y-axe.mjs",
+    "test:e2e": "node scripts/test-e2e-editor.mjs && node scripts/test-e2e-media.mjs && node scripts/test-e2e-phone.mjs && node scripts/test-realtime-browser.mjs && node scripts/test-share.mjs && node scripts/test-a11y-axe.mjs",
     "check:release": "npm run build && npm test && npm run test:e2e",
     "prepack": "node scripts/check-package.mjs",
     "prepublishOnly": "npm run check:release",

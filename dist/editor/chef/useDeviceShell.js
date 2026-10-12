@@ -3,6 +3,7 @@ import { isFroamPersonaPath } from '../froamPersona.js';
 import { findElementByPath, isFroamOwnedNode, STAGE_ATTR } from '../../collab/paths.js';
 import { getRoot } from './dom.js';
 import { applyCanvasDraftStyles, applyDraft, clearCanvasDraftStyles, isInjectionPath, restorePageStyle } from './drafts.js';
+import { layeredDrafts, routeSizes } from './cascade.js';
 import { emulateScroll, emulateViewport, restoreScroll, restoreViewport } from './viewport-emulation.js';
 import { CANVAS_KEY, DEVICE_SHELL_ID, } from './types.js';
 const CANVAS_SELECTOR = '#froam-editor-portal .froam-figma-layout__canvas';
@@ -75,9 +76,8 @@ export function useDeviceShell({ routeKey, store, viewportMode, deviceSize, zoom
         const appRoot = getRoot();
         if (!appRoot)
             return;
-        // Strip previous viewport's drafted styles
-        const prevKey = `${routeKey}@@${prevViewportRef.current}`;
-        const prevDrafts = store[prevKey] ?? {};
+        // Strip what the previous size showed (desktop flowing down included)
+        const prevDrafts = layeredDrafts(routeSizes(store, routeKey), prevViewportRef.current);
         Object.keys(prevDrafts).forEach((path) => {
             if (path === CANVAS_KEY || isInjectionPath(path) || isFroamPersonaPath(path))
                 return;
@@ -93,7 +93,7 @@ export function useDeviceShell({ routeKey, store, viewportMode, deviceSize, zoom
         prevViewportRef.current = viewportMode;
         setPanelPosition(null);
         const paint = () => {
-            const drafts = store[`${routeKey}@@${viewportMode}`] ?? {};
+            const drafts = layeredDrafts(routeSizes(store, routeKey), viewportMode);
             Object.entries(drafts).forEach(([path, draft]) => {
                 if (path === CANVAS_KEY || isFroamPersonaPath(path))
                     return;

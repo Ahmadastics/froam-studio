@@ -17,3 +17,36 @@ export function getBridgeOrigin(): string {
 export function bridgeUrl(path: string): string {
   return `${getBridgeOrigin()}${path}`
 }
+
+/* ── pairing a phone ──
+   `froam dev --host` prints a link (and a QR code) for the owner's own phone:
+   http://<computer>:<port>/#froam-pair=<key>. A phone that opened it sends
+   the key back, and the bridge lets it Save to Repo like the computer itself.
+   The key lives in the #fragment so it never reaches a server log; it's kept
+   in this origin's storage and taken out of the address bar at once, so it
+   isn't bookmarked, shared or shown. Each `froam dev` run makes a new one. */
+
+const DEVICE_KEY = 'froam:device-key:v1'
+const PAIR_PARAM = /(?:^#|&)froam-pair=([A-Za-z0-9_-]{16,64})/
+
+/** This device's pairing key, picking it up from the address on first sight. */
+export function pairedDeviceKey(): string | null {
+  if (typeof window === 'undefined') return null
+  const match = PAIR_PARAM.exec(window.location.hash)
+  if (match) {
+    try { window.localStorage.setItem(DEVICE_KEY, match[1]) } catch { /* storage blocked: the key works for this visit */ }
+    const rest = window.location.hash.replace(PAIR_PARAM, '').replace(/^#&/, '#')
+    try { window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}${rest === '#' ? '' : rest}`) } catch { /* sandboxed */ }
+    ;(window as unknown as { __FROAM_DEVICE_KEY__?: string }).__FROAM_DEVICE_KEY__ = match[1]
+    return match[1]
+  }
+  const held = (window as unknown as { __FROAM_DEVICE_KEY__?: string }).__FROAM_DEVICE_KEY__
+  if (held) return held
+  try { return window.localStorage.getItem(DEVICE_KEY) } catch { return null }
+}
+
+/** Headers for a bridge request: the pairing key when this device has one. */
+export function bridgeHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const key = pairedDeviceKey()
+  return key ? { ...extra, 'X-Froam-Device': key } : extra
+}
