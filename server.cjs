@@ -54,6 +54,115 @@ module.exports = __toCommonJS(publish_store_exports);
 var import_node_fs3 = __toESM(require("node:fs"), 1);
 var import_node_path4 = __toESM(require("node:path"), 1);
 
+// lib/draft-merge.mjs
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value) ?? "null";
+}
+function hashValue(value) {
+  const text = stableJson(value);
+  let h1 = 3735928559;
+  let h2 = 1103547991;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ h1 >>> 16, 2246822507) ^ Math.imul(h2 ^ h2 >>> 13, 3266489909);
+  h2 = Math.imul(h2 ^ h2 >>> 16, 2246822507) ^ Math.imul(h1 ^ h1 >>> 13, 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+var BOOKKEEPING = /* @__PURE__ */ new Set(["fingerprint"]);
+function signDraft(draft) {
+  if (!draft || typeof draft !== "object") return void 0;
+  const signature = {};
+  for (const [field, value] of Object.entries(draft)) {
+    if (BOOKKEEPING.has(field) || value === void 0) continue;
+    if (field === "styles" && value && typeof value === "object") {
+      const styles = {};
+      for (const [prop, css] of Object.entries(value)) if (css !== void 0) styles[prop] = hashValue(css);
+      if (Object.keys(styles).length) signature.styles = styles;
+    } else {
+      signature[field] = hashValue(value);
+    }
+  }
+  return Object.keys(signature).length ? signature : void 0;
+}
+function signDrafts(drafts) {
+  const base = {};
+  for (const [path5, draft] of Object.entries(drafts ?? {})) {
+    const signature = signDraft(draft);
+    if (signature) base[path5] = signature;
+  }
+  return base;
+}
+function isSyncBase(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return Object.values(value).every((signature) => signature && typeof signature === "object" && !Array.isArray(signature) && Object.entries(signature).every(([field, hash]) => field === "styles" ? hash && typeof hash === "object" && !Array.isArray(hash) && Object.values(hash).every((h) => typeof h === "string") : typeof hash === "string"));
+}
+var sameSignature = (a, b) => stableJson(a ?? null) === stableJson(b ?? null);
+function pick(base, ours, theirs) {
+  const mine = ours === void 0 ? void 0 : hashValue(ours);
+  const other = theirs === void 0 ? void 0 : hashValue(theirs);
+  if (mine === base) return { value: theirs, conflict: false };
+  if (other === base || other === mine) return { value: ours, conflict: false };
+  return { value: ours, conflict: true };
+}
+function mergeDraft(base, ours, theirs) {
+  const merged = {};
+  let conflict = false;
+  const fields = /* @__PURE__ */ new Set([...Object.keys(ours), ...Object.keys(theirs), ...Object.keys(base ?? {})]);
+  for (const field of fields) {
+    if (BOOKKEEPING.has(field)) continue;
+    if (field === "styles") {
+      const baseStyles = base?.styles ?? {};
+      const props = /* @__PURE__ */ new Set([...Object.keys(ours.styles ?? {}), ...Object.keys(theirs.styles ?? {}), ...Object.keys(baseStyles)]);
+      const styles = {};
+      for (const prop of props) {
+        const result2 = pick(baseStyles[prop], ours.styles?.[prop], theirs.styles?.[prop]);
+        conflict ||= result2.conflict;
+        if (result2.value !== void 0) styles[prop] = result2.value;
+      }
+      if (Object.keys(styles).length) merged.styles = styles;
+      continue;
+    }
+    const result = pick(typeof base?.[field] === "string" ? base[field] : void 0, ours[field], theirs[field]);
+    conflict ||= result.conflict;
+    if (result.value !== void 0) merged[field] = result.value;
+  }
+  if (!Object.keys(merged).length) return { draft: void 0, conflict };
+  const fingerprint = ours.fingerprint ?? theirs.fingerprint;
+  if (fingerprint !== void 0) merged.fingerprint = fingerprint;
+  return { draft: merged, conflict };
+}
+function mergeDrafts({ base, ours, theirs }) {
+  const drafts = {};
+  const conflicts = [];
+  const paths = /* @__PURE__ */ new Set([...Object.keys(ours), ...Object.keys(theirs), ...Object.keys(base)]);
+  for (const path5 of paths) {
+    const was = base[path5];
+    const mine = ours[path5];
+    const other = theirs[path5];
+    const mineSig = signDraft(mine);
+    const otherSig = signDraft(other);
+    let next;
+    if (sameSignature(mineSig, was)) next = other;
+    else if (sameSignature(otherSig, was) || sameSignature(mineSig, otherSig)) next = mine;
+    else if (!mine || !other) {
+      next = mine;
+      conflicts.push(path5);
+    } else {
+      const result = mergeDraft(was, mine, other);
+      next = result.draft;
+      if (result.conflict) conflicts.push(path5);
+    }
+    if (next) drafts[path5] = next;
+  }
+  const changed = stableJson(signDrafts(drafts)) !== stableJson(signDrafts(theirs));
+  return { drafts, conflicts, changed };
+}
+
 // lib/codegen.mjs
 var DESIGN_VERSION = 3;
 var CANVAS_KEY = "__froam_canvas__";
@@ -1153,19 +1262,30 @@ function sanitizeBrandFonts(value) {
   }
   return clean;
 }
-function mergeSave(design, { routeKey, viewportMode, store, brandFonts, rootScope }) {
+function mergeSave(design, input) {
+  return mergeSaveWithReport(design, input).design;
+}
+function mergeSaveWithReport(design, { routeKey, viewportMode, store, brandFonts, brandFontsBase, rootScope, base }) {
   const next = migrateDesign(design);
   if (rootScope === "page" && !designHasDrafts(next)) next.rootScope = "page";
   const key = normalizeRouteKey(routeKey);
   next.routes[key] = next.routes[key] ?? {};
-  next.routes[key][viewportMode] = store;
-  if (brandFonts !== void 0) {
+  let conflicts = [];
+  if (isSyncBase(base)) {
+    const merged = mergeDrafts({ base, ours: store, theirs: next.routes[key][viewportMode] ?? {} });
+    next.routes[key][viewportMode] = merged.drafts;
+    conflicts = merged.conflicts;
+  } else {
+    next.routes[key][viewportMode] = store;
+  }
+  const fontsUntouched = typeof brandFontsBase === "string" && hashValue(brandFonts ?? []) === brandFontsBase;
+  if (brandFonts !== void 0 && !fontsUntouched) {
     const clean = sanitizeBrandFonts(brandFonts);
     if (clean.length) next.brandFonts = clean;
     else delete next.brandFonts;
   }
   next.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-  return next;
+  return { design: next, store: next.routes[key][viewportMode], conflicts };
 }
 
 // lib/github-committer.mjs
@@ -2468,6 +2588,10 @@ function isInComment(source, index) {
   const slashes = line.search(/(^|[^:"'`/])\/\//);
   return slashes !== -1;
 }
+function isInTitle(source, index) {
+  const before = source.slice(0, index).toLowerCase();
+  return before.lastIndexOf("<title") > before.lastIndexOf("</title");
+}
 function findTextOccurrences(source, text) {
   const pattern = sourcePattern(text);
   if (!pattern) return [];
@@ -2520,10 +2644,15 @@ function applyTextEdits(files, edits, { read: readFile, name = (file) => file } 
       continue;
     }
     const hits = [];
+    const titles = [];
     for (const file of files) {
       const source2 = read(file);
       if (!source2) continue;
-      for (const occurrence of findTextOccurrences(source2, from)) hits.push({ file, ...occurrence });
+      const markup = MARKUP_EXTENSIONS.has(import_node_path2.default.extname(file).toLowerCase());
+      for (const occurrence of findTextOccurrences(source2, from)) {
+        ;
+        (markup && isInTitle(source2, occurrence.start) ? titles : hits).push({ file, ...occurrence });
+      }
       if (hits.length > 1) break;
     }
     if (hits.length === 0) {
@@ -2536,8 +2665,12 @@ function applyTextEdits(files, edits, { read: readFile, name = (file) => file } 
     }
     const [hit] = hits;
     const source = read(hit.file);
-    const replacement = encodeForContext(to.trim(), hit.context, import_node_path2.default.extname(hit.file).toLowerCase());
-    contents.set(hit.file, source.slice(0, hit.start) + replacement + source.slice(hit.end));
+    const extension = import_node_path2.default.extname(hit.file).toLowerCase();
+    let next = source;
+    for (const spot of [hit, ...titles.filter((title) => title.file === hit.file)].sort((a, b) => b.start - a.start)) {
+      next = next.slice(0, spot.start) + encodeForContext(to.trim(), spot.context, extension) + next.slice(spot.end);
+    }
+    contents.set(hit.file, next);
     changed.add(hit.file);
     results.push({ status: "written", file: name(hit.file), line: lineOf(source, hit.start) });
   }
@@ -4114,7 +4247,9 @@ function createFroamPublishApi({ file, authorize = null, log = () => {
       const published = loadPublished(file);
       const publishedAt = (/* @__PURE__ */ new Date()).toISOString();
       published.routes[routeKey] = published.routes[routeKey] ?? {};
-      published.routes[routeKey][viewportMode] = { store, publishedAt };
+      const current = published.routes[routeKey][viewportMode]?.store ?? {};
+      const merged = isSyncBase(body?.base) ? mergeDrafts({ base: body.base, ours: store, theirs: current }) : { drafts: store, conflicts: [] };
+      published.routes[routeKey][viewportMode] = { store: merged.drafts, publishedAt };
       published.updatedAt = publishedAt;
       savePublished(file, published);
       log(`published ${routeKey} (${viewportMode}) \u2192 ${import_node_path4.default.basename(file)}`);
@@ -4131,7 +4266,7 @@ function createFroamPublishApi({ file, authorize = null, log = () => {
           log(`commit failed: ${committed.error}`);
         }
       }
-      sendJson4(res, 200, { success: true, design: { routeKey, viewportMode, publishedAt }, committed });
+      sendJson4(res, 200, { success: true, design: { routeKey, viewportMode, publishedAt, store: merged.drafts }, conflicts: merged.conflicts, committed });
       return true;
     }
     sendJson4(res, 405, { success: false, error: "Method not allowed" });

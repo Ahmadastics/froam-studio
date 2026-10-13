@@ -56,9 +56,16 @@ export function pairedDeviceKey() {
         return null;
     }
 }
-/** Headers for a bridge request: the pairing key when this device has one. */
+/* This open editor, so the bridge's change events can say which one saved:
+   an editor never re-reads its own save, and another tab or device does. */
+const CLIENT_ID = `c${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`;
+export function bridgeClientId() {
+    return CLIENT_ID;
+}
+/** Headers for a bridge request: this editor, and the pairing key when this device has one. */
 export function bridgeHeaders(extra = {}) {
     const key = pairedDeviceKey();
-    return key ? { ...extra, 'X-Froam-Device': key } : extra;
+    const headers = { ...extra, 'X-Froam-Client': CLIENT_ID };
+    return key ? { ...headers, 'X-Froam-Device': key } : headers;
 }
 //# sourceMappingURL=bridge.js.map

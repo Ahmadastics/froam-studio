@@ -152,12 +152,20 @@ function media(label = 'Media') {
   return `<div data-froam-media-slot="true" style="min-height:260px;display:grid;place-items:center;border-radius:var(--fx-radius);background:linear-gradient(135deg, var(--fx-tint), color-mix(in srgb, var(--fx-accent) 22%, var(--fx-surface)));color:var(--fx-muted);font-size:.74rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">${label}</div>`
 }
 
+const CARD_COPY: Array<[string, string]> = [
+  ['Quick to start', 'Say what someone gets on day one, in a sentence.'],
+  ['Built to last', 'Describe the quality or care that sets you apart.'],
+  ['Easy to change', 'Explain how you adapt when plans change.'],
+  ['There when it counts', 'Tell people how and when they can reach you.'],
+]
+
 function card(index: number, dark = false) {
-  return `<article style="min-height:180px;padding:28px;border:1px solid ${dark ? 'rgba(255,255,255,.14)' : 'var(--fx-line)'};border-radius:var(--fx-radius);background:${dark ? 'rgba(255,255,255,.05)' : 'var(--fx-surface)'};"><span style="display:inline-grid;place-items:center;width:36px;height:36px;border-radius:calc(var(--fx-radius) * .6);background:${dark ? 'rgba(255,255,255,.08)' : 'var(--fx-tint)'};color:var(--fx-accent);font-size:.8rem;font-weight:800;">0${index}</span><h3 style="margin:28px 0 8px;font-size:1.2rem;">A clear benefit</h3><p style="margin:0;opacity:.72;line-height:1.65;">One sentence on why this matters to the people you serve.</p></article>`
+  const [title, line] = CARD_COPY[(index - 1) % CARD_COPY.length]
+  return `<article style="min-height:180px;padding:28px;border:1px solid ${dark ? 'rgba(255,255,255,.14)' : 'var(--fx-line)'};border-radius:var(--fx-radius);background:${dark ? 'rgba(255,255,255,.05)' : 'var(--fx-surface)'};"><span style="display:inline-grid;place-items:center;width:36px;height:36px;border-radius:calc(var(--fx-radius) * .6);background:${dark ? 'rgba(255,255,255,.08)' : 'var(--fx-tint)'};color:var(--fx-accent);font-size:.8rem;font-weight:800;">0${index}</span><h3 style="margin:28px 0 8px;font-size:1.2rem;">${title}</h3><p style="margin:0;opacity:.72;line-height:1.65;">${line}</p></article>`
 }
 
-function sectionHeading(label: string, centered = false) {
-  return `<div style="max-width:760px;${centered ? 'margin:0 auto;text-align:center;' : ''}"><span style="display:inline-block;font-size:.75rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--fx-accent);">${label}</span><h2 style="margin:14px 0 0;font-size:clamp(2rem,4.5vw,3.5rem);line-height:1.04;letter-spacing:-.02em;">Build the message around what matters.</h2></div>`
+function sectionHeading(label: string, heading: string, centered = false) {
+  return `<div style="max-width:760px;${centered ? 'margin:0 auto;text-align:center;' : ''}"><span style="display:inline-block;font-size:.75rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--fx-accent);">${label}</span><h2 style="margin:14px 0 0;font-size:clamp(2rem,4.5vw,3.5rem);line-height:1.04;letter-spacing:-.02em;">${heading}</h2></div>`
 }
 
 /**
@@ -216,7 +224,7 @@ export function createFroamLibraryComponent(componentId: string, theme: SiteThem
         root.style.display = 'grid'
         root.style.placeItems = 'center'
         root.style.textAlign = 'center'
-        root.innerHTML = `<div style="max-width:900px;"><span ${editable} style="font-weight:900;color:#10b981;">A focused promise</span><h1 ${editable} style="margin:18px 0;font-size:clamp(3.5rem,8vw,7rem);line-height:.9;">Design the page people remember.</h1><p ${editable} style="max-width:660px;margin:0 auto;color:#475569;line-height:1.7;">Shape a useful message, then turn the wireframe into a real editable page.</p><div style="display:flex;justify-content:center;gap:10px;margin-top:28px;">${action('Primary action')}${action('Secondary', false)}</div></div>`
+        root.innerHTML = `<div style="max-width:900px;"><span ${editable} style="font-weight:900;color:#10b981;">A focused promise</span><h1 ${editable} style="margin:18px 0;font-size:clamp(3.5rem,8vw,7rem);line-height:.9;">Design the page people remember.</h1><p ${editable} style="max-width:660px;margin:0 auto;color:#475569;line-height:1.7;">Say what you offer and who it is for, in a sentence anyone can follow.</p><div style="display:flex;justify-content:center;gap:10px;margin-top:28px;">${action('Get started')}${action('Learn more', false)}</div></div>`
       }
       break
 
@@ -224,20 +232,20 @@ export function createFroamLibraryComponent(componentId: string, theme: SiteThem
       root.style.display = 'grid'
       root.style.gap = '32px'
       root.innerHTML = variant === 2
-        ? `${sectionHeading('Capabilities')}<div style="display:grid;grid-template-columns:1.4fr .8fr;grid-template-rows:repeat(2,minmax(150px,1fr));gap:12px;">${card(1)}${card(2)}${card(3)}</div>`
+        ? `${sectionHeading('Capabilities', 'What you can count on')}<div style="display:grid;grid-template-columns:1.4fr .8fr;grid-template-rows:repeat(2,minmax(150px,1fr));gap:12px;">${card(1)}${card(2)}${card(3)}</div>`
         : variant === 3
-          ? `${sectionHeading('Why it works')}<div style="display:grid;gap:0;">${[1, 2, 3].map((item) => `<article style="display:grid;grid-template-columns:64px 1fr auto;gap:18px;align-items:center;padding:20px 0;border-top:1px solid rgba(255,255,255,.14);"><strong>0${item}</strong><h3 ${editable}>A clear product benefit</h3><span>+</span></article>`).join('')}</div>`
-          : `${sectionHeading('Everything you need', true)}<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;">${card(1)}${card(2)}${card(3)}</div>`
+          ? `${sectionHeading('Why it works', 'Three reasons people stay')}<div style="display:grid;gap:0;">${[1, 2, 3].map((item) => `<article style="display:grid;grid-template-columns:64px 1fr auto;gap:18px;align-items:center;padding:20px 0;border-top:1px solid rgba(255,255,255,.14);"><strong>0${item}</strong><h3 ${editable}>${CARD_COPY[item - 1][0]}</h3><span>+</span></article>`).join('')}</div>`
+          : `${sectionHeading('Everything you need', 'All in one place', true)}<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;">${card(1)}${card(2)}${card(3)}</div>`
       break
 
     case 'Content':
       root.style.display = 'grid'
       root.style.gap = '32px'
       root.innerHTML = variant === 1
-        ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:36px;align-items:center;">${media('Story image')}<div>${sectionHeading('Our story')}<p ${editable} style="margin:22px 0;color:#475569;line-height:1.8;">Use a longer passage here to explain the idea with enough room to breathe.</p>${action('Read the story', false)}</div></div>`
+        ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:36px;align-items:center;">${media('Story image')}<div>${sectionHeading('Our story', 'How it started')}<p ${editable} style="margin:22px 0;color:#475569;line-height:1.8;">Use a longer passage here to explain the idea with enough room to breathe.</p>${action('Read the story', false)}</div></div>`
         : variant === 2
           ? `<blockquote ${editable} style="max-width:1050px;margin:0;font-size:clamp(3rem,7vw,6rem);line-height:.95;">We make complicated work feel direct, calm, and useful.</blockquote><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:24px;max-width:760px;margin-left:auto;"><p ${editable} style="opacity:.72;line-height:1.7;">Supporting detail for the first part of the story.</p><p ${editable} style="opacity:.72;line-height:1.7;">Supporting detail for the second part of the story.</p></div>`
-          : `${sectionHeading('How it works')}<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">${[1, 2, 3, 4].map((item) => card(item, dark)).join('')}</div>`
+          : `${sectionHeading('How it works', 'Four simple steps')}<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">${[1, 2, 3, 4].map((item) => card(item, dark)).join('')}</div>`
       break
 
     case 'Social proof':
@@ -245,20 +253,20 @@ export function createFroamLibraryComponent(componentId: string, theme: SiteThem
       root.style.alignContent = 'center'
       root.style.gap = '28px'
       root.innerHTML = variant === 1
-        ? `${sectionHeading('Trusted by practical teams', true)}<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;">${['North', 'Aster', 'Union', 'Form', 'Motive'].map((name) => `<div ${editable} style="padding:24px 10px;border:1px solid rgba(15,23,42,.1);text-align:center;font-weight:900;">${name}</div>`).join('')}</div>`
+        ? `${sectionHeading('Trusted by', 'People who rely on us', true)}<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;">${['North', 'Aster', 'Union', 'Form', 'Motive'].map((name) => `<div ${editable} style="padding:24px 10px;border:1px solid rgba(15,23,42,.1);text-align:center;font-weight:900;">${name}</div>`).join('')}</div>`
         : variant === 2
           ? `<blockquote ${editable} style="max-width:950px;margin:0 auto;text-align:center;font-size:clamp(2.4rem,5vw,4.6rem);line-height:1.05;">"The page finally says what the product actually does."</blockquote><div style="display:grid;place-items:center;gap:6px;"><div style="width:46px;height:46px;border-radius:50%;background:#10b981;"></div><strong ${editable}>Customer name</strong><span ${editable} style="opacity:.62;">Role, Company</span></div>`
-          : `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">${['24k', '98%', '4.9'].map((metric) => `<article style="padding:28px;border:1px solid rgba(255,255,255,.14);"><strong ${editable} style="font-size:3rem;">${metric}</strong><p ${editable} style="opacity:.64;">Useful proof point</p></article>`).join('')}</div><p ${editable} style="max-width:720px;font-size:1.3rem;line-height:1.6;">Pair the numbers with one sentence that explains why they matter.</p>`
+          : `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">${[['24k', 'Customers served'], ['98%', 'Would recommend us'], ['4.9', 'Average review score']].map(([metric, label]) => `<article style="padding:28px;border:1px solid rgba(255,255,255,.14);"><strong ${editable} style="font-size:3rem;">${metric}</strong><p ${editable} style="opacity:.64;">${label}</p></article>`).join('')}</div><p ${editable} style="max-width:720px;font-size:1.3rem;line-height:1.6;">Pair the numbers with one sentence that explains why they matter.</p>`
       break
 
     case 'Pricing':
       root.style.display = 'grid'
       root.style.gap = '28px'
       root.innerHTML = variant === 1
-        ? `${sectionHeading('Simple pricing', true)}<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">${['Starter', 'Pro', 'Scale'].map((name, index) => `<article style="padding:24px;border:${index === 1 ? '2px solid #10b981' : '1px solid rgba(15,23,42,.12)'};border-radius:8px;background:#fff;color:#0f172a;"><span ${editable}>${name}</span><strong ${editable} style="display:block;margin:18px 0;font-size:2.8rem;">$${index === 0 ? '0' : index === 1 ? '29' : '79'}</strong><p ${editable} style="color:#64748b;line-height:1.7;">Feature one<br/>Feature two<br/>Feature three</p>${action('Choose plan', index === 1)}</article>`).join('')}</div>`
+        ? `${sectionHeading('Simple pricing', 'Pick the plan that fits', true)}<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">${['Starter', 'Pro', 'Scale'].map((name, index) => `<article style="padding:24px;border:${index === 1 ? '2px solid #10b981' : '1px solid rgba(15,23,42,.12)'};border-radius:8px;background:#fff;color:#0f172a;"><span ${editable}>${name}</span><strong ${editable} style="display:block;margin:18px 0;font-size:2.8rem;">$${index === 0 ? '0' : index === 1 ? '29' : '79'}</strong><p ${editable} style="color:#64748b;line-height:1.7;">${[['The essentials', 'Email support', 'One project'], ['Everything in Starter', 'Priority support', 'Unlimited projects'], ['Everything in Pro', 'A dedicated contact', 'Custom terms']][index].join('<br/>')}</p>${action('Choose plan', index === 1)}</article>`).join('')}</div>`
         : variant === 2
-          ? `<article style="max-width:620px;margin:auto;padding:36px;border:1px solid rgba(15,23,42,.12);border-radius:8px;background:#fff;color:#0f172a;"><span ${editable} style="font-weight:900;color:#10b981;">One clear offer</span><h2 ${editable} style="margin:12px 0;font-size:3.5rem;">$49 <small style="font-size:1rem;color:#64748b;">/ month</small></h2><p ${editable} style="line-height:1.8;color:#475569;">Everything needed to move from plan to editable page.</p>${action('Start building')}</article>`
-          : `${sectionHeading('Compare plans')}<div style="display:grid;gap:0;border:1px solid rgba(255,255,255,.14);">${['Core features', 'Collaboration', 'Exports', 'Support'].map((label) => `<div style="display:grid;grid-template-columns:1.5fr repeat(3,1fr);padding:16px;border-bottom:1px solid rgba(255,255,255,.12);"><strong ${editable}>${label}</strong><span>Yes</span><span>Yes</span><span>Yes</span></div>`).join('')}</div>`
+          ? `<article style="max-width:620px;margin:auto;padding:36px;border:1px solid rgba(15,23,42,.12);border-radius:8px;background:#fff;color:#0f172a;"><span ${editable} style="font-weight:900;color:#10b981;">One clear offer</span><h2 ${editable} style="margin:12px 0;font-size:3.5rem;">$49 <small style="font-size:1rem;color:#64748b;">/ month</small></h2><p ${editable} style="line-height:1.8;color:#475569;">Everything you need to get going, in one simple plan.</p>${action('Get started today')}</article>`
+          : `${sectionHeading('Compare plans', 'What each plan includes')}<div style="display:grid;gap:0;border:1px solid rgba(255,255,255,.14);">${['Core features', 'Collaboration', 'Exports', 'Support'].map((label) => `<div style="display:grid;grid-template-columns:1.5fr repeat(3,1fr);padding:16px;border-bottom:1px solid rgba(255,255,255,.12);"><strong ${editable}>${label}</strong><span>Yes</span><span>Yes</span><span>Yes</span></div>`).join('')}</div>`
       break
 
     case 'CTA':
@@ -266,23 +274,32 @@ export function createFroamLibraryComponent(componentId: string, theme: SiteThem
       root.style.alignItems = 'center'
       root.style.gap = '24px'
       root.innerHTML = variant === 1
-        ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;">${sectionHeading('Ready to make it real?')}<div style="display:flex;gap:10px;">${action('Start now')}${action('Talk to us', false)}</div></div>`
+        ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;">${sectionHeading('Next step', 'Ready to get started?')}<div style="display:flex;gap:10px;">${action('Start now')}${action('Talk to us', false)}</div></div>`
         : variant === 2
-          ? `<div style="display:grid;grid-template-columns:1.2fr .8fr;gap:28px;align-items:center;"><div>${sectionHeading('Turn the plan into a page')}<div style="margin-top:22px;">${action('Build this page')}</div></div><aside style="padding:28px;border:1px solid rgba(15,23,42,.12);background:#fff;color:#0f172a;"><strong ${editable}>A useful proof point</strong><p ${editable} style="color:#64748b;line-height:1.7;">Use this panel for reassurance near the decision.</p></aside></div>`
-          : `<div style="max-width:780px;margin:auto;text-align:center;">${sectionHeading('Useful ideas, occasionally', true)}<form style="display:flex;gap:8px;margin-top:26px;"><input aria-label="Email address" placeholder="you@example.com" style="flex:1;min-height:48px;padding:0 14px;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:rgba(255,255,255,.08);color:inherit;"/>${action('Subscribe')}</form></div>`
+          ? `<div style="display:grid;grid-template-columns:1.2fr .8fr;gap:28px;align-items:center;"><div>${sectionHeading('Let us help', 'Tell us what you need')}<div style="margin-top:22px;">${action('Get in touch')}</div></div><aside style="padding:28px;border:1px solid rgba(15,23,42,.12);background:#fff;color:#0f172a;"><strong ${editable}>A useful proof point</strong><p ${editable} style="color:#64748b;line-height:1.7;">Add a reassurance here: a guarantee, a review or a quick reply time.</p></aside></div>`
+          : `<div style="max-width:780px;margin:auto;text-align:center;">${sectionHeading('Newsletter', 'Useful ideas, now and then', true)}<form style="display:flex;gap:8px;margin-top:26px;"><input aria-label="Email address" placeholder="you@example.com" style="flex:1;min-height:48px;padding:0 14px;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:rgba(255,255,255,.08);color:inherit;"/>${action('Subscribe')}</form></div>`
       break
 
     case 'FAQ':
       root.style.display = 'grid'
       root.style.gap = '28px'
       {
-        const questions = ['What happens after I build the wireframe?', 'Can I edit every component?', 'Are mobile layouts separate?']
-        const list = questions.map((question) => `<details style="padding:18px 0;border-top:1px solid ${dark ? 'rgba(255,255,255,.14)' : 'rgba(15,23,42,.12)'};"><summary ${editable} style="font-weight:800;cursor:pointer;">${question}</summary><p ${editable} style="opacity:.66;line-height:1.7;">Add a short, direct answer here.</p></details>`).join('')
+        const toList = (pairs: Array<[string, string]>) => pairs.map(([question, answer]) => `<details style="padding:18px 0;border-top:1px solid ${dark ? 'rgba(255,255,255,.14)' : 'rgba(15,23,42,.12)'};"><summary ${editable} style="font-weight:800;cursor:pointer;">${question}</summary><p ${editable} style="opacity:.66;line-height:1.7;">${answer}</p></details>`).join('')
+        const list = toList([
+          ['How long does it take?', 'Give an honest time frame, and what it depends on.'],
+          ['What does it cost?', 'Share a price, or a range and what changes it.'],
+          ['Can I change my mind later?', 'Explain cancellations, changes and refunds plainly.'],
+        ])
+        const more = toList([
+          ['Who do you work with?', 'Describe the people you help most.'],
+          ['Where are you based?', 'Say where you are and where you can serve.'],
+          ['How do I get started?', 'Spell out the first step, and how soon you reply.'],
+        ])
         root.innerHTML = variant === 1
-          ? `${sectionHeading('Frequently asked questions')}<div>${list}</div>`
+          ? `${sectionHeading('FAQ', 'Frequently asked questions')}<div>${list}</div>`
           : variant === 2
-            ? `${sectionHeading('Questions, answered', true)}<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0 28px;">${list}${list}</div>`
-            : `<div style="display:grid;grid-template-columns:1.3fr .7fr;gap:32px;"><div>${sectionHeading('Need to know')} ${list}</div><aside style="padding:26px;border:1px solid rgba(255,255,255,.14);align-self:start;"><strong ${editable}>Still unsure?</strong><p ${editable} style="opacity:.68;line-height:1.7;">Give people a direct path to a human.</p>${action('Contact us')}</aside></div>`
+            ? `${sectionHeading('FAQ', 'Questions, answered', true)}<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0 28px;"><div>${list}</div><div>${more}</div></div>`
+            : `<div style="display:grid;grid-template-columns:1.3fr .7fr;gap:32px;"><div>${sectionHeading('FAQ', 'Good to know')} ${list}</div><aside style="padding:26px;border:1px solid rgba(255,255,255,.14);align-self:start;"><strong ${editable}>Still unsure?</strong><p ${editable} style="opacity:.68;line-height:1.7;">Give people a direct path to a human.</p>${action('Contact us')}</aside></div>`
       }
       break
 
@@ -293,38 +310,38 @@ export function createFroamLibraryComponent(componentId: string, theme: SiteThem
       root.innerHTML = variant === 1
         ? `<div style="display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;"><strong ${editable} style="font-size:1.4rem;">Your brand</strong><nav style="display:flex;gap:18px;"><a ${editable}>About</a><a ${editable}>Work</a><a ${editable}>Contact</a></nav></div><small ${editable} style="opacity:.56;">2026 Your brand. All rights reserved.</small>`
         : variant === 2
-          ? `<div style="display:grid;grid-template-columns:1.5fr repeat(3,1fr);gap:28px;"><strong ${editable} style="font-size:1.4rem;">Your brand</strong>${['Product', 'Company', 'Resources'].map((group) => `<div><strong ${editable}>${group}</strong><p ${editable} style="opacity:.62;line-height:2;">Overview<br/>Page link<br/>Page link</p></div>`).join('')}</div><small ${editable} style="opacity:.56;">Privacy  Terms  Copyright</small>`
-          : `<div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:end;"><div>${sectionHeading('Stay in the loop')}</div><form style="display:flex;gap:8px;"><input placeholder="Email address" style="flex:1;min-height:46px;padding:0 14px;border:1px solid rgba(255,255,255,.18);background:transparent;color:inherit;"/>${action('Join')}</form></div><small ${editable} style="opacity:.56;">Your brand  Privacy  Terms</small>`
+          ? `<div style="display:grid;grid-template-columns:1.5fr repeat(3,1fr);gap:28px;"><strong ${editable} style="font-size:1.4rem;">Your brand</strong>${[['Product', 'Features<br/>Pricing<br/>Updates'], ['Company', 'About<br/>Careers<br/>Press'], ['Resources', 'Help centre<br/>Guides<br/>Contact']].map(([group, links]) => `<div><strong ${editable}>${group}</strong><p ${editable} style="opacity:.62;line-height:2;">${links}</p></div>`).join('')}</div><small ${editable} style="opacity:.56;">Privacy  Terms  Copyright</small>`
+          : `<div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:end;"><div>${sectionHeading('Newsletter', 'Stay in the loop')}</div><form style="display:flex;gap:8px;"><input placeholder="Email address" style="flex:1;min-height:46px;padding:0 14px;border:1px solid rgba(255,255,255,.18);background:transparent;color:inherit;"/>${action('Join')}</form></div><small ${editable} style="opacity:.56;">Your brand  Privacy  Terms</small>`
       break
 
     case 'Contact':
       root.style.display = 'grid'
       root.style.gap = '28px'
       root.innerHTML = variant === 1
-        ? `<div style="display:grid;grid-template-columns:.8fr 1.2fr;gap:34px;"><div>${sectionHeading('Let us talk')}<p ${editable} style="opacity:.68;line-height:1.8;">hello@example.com<br/>+1 555 0100</p></div><form style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><input placeholder="Name" style="min-height:46px;padding:0 12px;"/><input placeholder="Email" style="min-height:46px;padding:0 12px;"/><textarea placeholder="Message" style="grid-column:1/-1;min-height:130px;padding:12px;"></textarea><div>${action('Send message')}</div></form></div>`
+        ? `<div style="display:grid;grid-template-columns:.8fr 1.2fr;gap:34px;"><div>${sectionHeading('Contact', 'Let us talk')}<p ${editable} style="opacity:.68;line-height:1.8;">hello@example.com<br/>+1 555 0100</p></div><form style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><input placeholder="Name" style="min-height:46px;padding:0 12px;"/><input placeholder="Email" style="min-height:46px;padding:0 12px;"/><textarea placeholder="Message" style="grid-column:1/-1;min-height:130px;padding:12px;"></textarea><div>${action('Send message')}</div></form></div>`
         : variant === 2
-          ? `${sectionHeading('Choose the right route', true)}<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">${['Sales', 'Support', 'Partnerships'].map((label, index) => `<article style="min-height:160px;padding:22px;border:1px solid rgba(15,23,42,.1);border-radius:8px;background:#fff;color:#0f172a;"><span style="font-size:.72rem;font-weight:900;color:#10b981;">0${index + 1}</span><h3 ${editable} style="margin:32px 0 8px;font-size:1.2rem;">${label}</h3><p ${editable} style="margin:0;color:#64748b;line-height:1.6;">Give people a direct next step.</p></article>`).join('')}</div>`
-          : `<div style="display:grid;grid-template-columns:.7fr 1.3fr;gap:28px;"><div>${sectionHeading('Visit us')}<p ${editable} style="opacity:.68;line-height:1.8;">123 Example Street<br/>Monday-Friday, 9-5</p></div>${media('Map')}</div>`
+          ? `${sectionHeading('Contact', 'Who would you like to reach?', true)}<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">${['Sales', 'Support', 'Partnerships'].map((label, index) => `<article style="min-height:160px;padding:22px;border:1px solid rgba(15,23,42,.1);border-radius:8px;background:#fff;color:#0f172a;"><span style="font-size:.72rem;font-weight:900;color:#10b981;">0${index + 1}</span><h3 ${editable} style="margin:32px 0 8px;font-size:1.2rem;">${label}</h3><p ${editable} style="margin:0;color:#64748b;line-height:1.6;">${['Questions about buying, plans or prices.', 'Help with something you already have.', 'Ideas for working together.'][index]}</p></article>`).join('')}</div>`
+          : `<div style="display:grid;grid-template-columns:.7fr 1.3fr;gap:28px;"><div>${sectionHeading('Find us', 'Visit us')}<p ${editable} style="opacity:.68;line-height:1.8;">123 Example Street<br/>Monday-Friday, 9-5</p></div>${media('Map')}</div>`
       break
 
     case 'Team':
       root.style.display = 'grid'
       root.style.gap = '28px'
       root.innerHTML = variant === 1
-        ? `${sectionHeading('People behind the work')}<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">${['Founder', 'Design lead', 'Engineering lead'].map((role) => `<article>${media('Portrait')}<strong ${editable} style="display:block;margin-top:12px;">Person name</strong><span ${editable} style="opacity:.6;">${role}</span></article>`).join('')}</div>`
+        ? `${sectionHeading('Team', 'The people behind the work')}<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">${[['First person', 'Founder'], ['Second person', 'Design lead'], ['Third person', 'Operations lead']].map(([person, role]) => `<article>${media('Portrait')}<strong ${editable} style="display:block;margin-top:12px;">${person}</strong><span ${editable} style="opacity:.6;">${role}</span></article>`).join('')}</div>`
         : variant === 2
-          ? `<div style="display:grid;grid-template-columns:.9fr 1.1fr;gap:34px;align-items:center;">${media('Founder portrait')}<div>${sectionHeading('A note from the founder')}<p ${editable} style="opacity:.68;line-height:1.8;">Explain the conviction behind the company in a human voice.</p></div></div>`
-          : `<div style="display:grid;grid-template-columns:1.2fr .8fr;gap:34px;align-items:center;"><div>${media('Team collage')}</div><div>${sectionHeading('Join the team')}<p ${editable} style="opacity:.68;line-height:1.8;">Pair the team story with one clear hiring action.</p>${action('See open roles')}</div></div>`
+          ? `<div style="display:grid;grid-template-columns:.9fr 1.1fr;gap:34px;align-items:center;">${media('Founder portrait')}<div>${sectionHeading('Founder', 'A note from the founder')}<p ${editable} style="opacity:.68;line-height:1.8;">Explain the conviction behind the company in a human voice.</p></div></div>`
+          : `<div style="display:grid;grid-template-columns:1.2fr .8fr;gap:34px;align-items:center;"><div>${media('Team collage')}</div><div>${sectionHeading('Careers', 'Join the team')}<p ${editable} style="opacity:.68;line-height:1.8;">Pair the team story with one clear hiring action.</p>${action('See open roles')}</div></div>`
       break
 
     case 'Blog':
       root.style.display = 'grid'
       root.style.gap = '28px'
       root.innerHTML = variant === 1
-        ? `${sectionHeading('Latest thinking')}<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">${[1, 2, 3].map((item) => `<article>${media(`Article ${item}`)}<span ${editable} style="display:block;margin-top:12px;font-size:.72rem;font-weight:900;color:#10b981;">Category</span><h3 ${editable}>A useful article title</h3></article>`).join('')}</div>`
+        ? `${sectionHeading('Blog', 'Latest posts')}<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">${[['News', 'What we have been working on'], ['Guide', 'A beginner’s guide to getting started'], ['Story', 'Behind the scenes of a recent project']].map(([category, title], index) => `<article>${media(`Article ${index + 1}`)}<span ${editable} style="display:block;margin-top:12px;font-size:.72rem;font-weight:900;color:#10b981;">${category}</span><h3 ${editable}>${title}</h3></article>`).join('')}</div>`
         : variant === 2
           ? `<div style="display:grid;grid-template-columns:1.4fr .6fr;gap:16px;"><article>${media('Featured story')}<h2 ${editable} style="font-size:2.3rem;">The lead story deserves more room.</h2></article><div style="display:grid;gap:16px;">${card(1)}${card(2)}</div></div>`
-          : `${sectionHeading('Resources')}<div style="display:grid;gap:0;">${['Guide', 'Report', 'Update'].map((label) => `<article style="display:grid;grid-template-columns:100px 1fr auto;gap:18px;align-items:center;padding:18px 0;border-top:1px solid rgba(255,255,255,.14);"><span ${editable}>${label}</span><strong ${editable}>Resource title</strong><span>Open</span></article>`).join('')}</div>`
+          : `${sectionHeading('Resources', 'Guides and updates')}<div style="display:grid;gap:0;">${['Guide', 'Report', 'Update'].map((label) => `<article style="display:grid;grid-template-columns:100px 1fr auto;gap:18px;align-items:center;padding:18px 0;border-top:1px solid rgba(255,255,255,.14);"><span ${editable}>${label}</span><strong ${editable}>${({ Guide: 'How to choose the right plan', Report: 'What our customers told us this year', Update: 'New this month' } as Record<string, string>)[label]}</strong><span>Open</span></article>`).join('')}</div>`
       break
   }
 

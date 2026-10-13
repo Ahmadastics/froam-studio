@@ -4,9 +4,10 @@ import { createPortal } from 'react-dom';
 import { AlignCenter, AlignHorizontalDistributeCenter, AlignHorizontalJustifyCenter, AlignLeft, AlignRight, AlignVerticalDistributeCenter, AlignVerticalJustifyCenter, Bold, Box, ClipboardCheck, Clock, Code, Copy, Crop, Download, Eraser, Eye, EyeOff, FileImage, FileText, GitCommit, Grip, ImagePlus, Italic, Layers, LayoutGrid, Link, Minus, MousePointer, Share2, MousePointer2, MessageSquare, Move, Paintbrush, Palette, PencilLine, Plus, Redo2, RotateCw, Save, DraftingCompass, ScanLine, Search, SlidersHorizontal, Sparkles, Square, SquareDashedBottom, Strikethrough, Type, Underline, Undo2, Unlink, Variable, Maximize2, X, Zap, Coins, AlignCenterHorizontal, AlignCenterVertical, Timer, } from 'lucide-react';
 import FroamSectionBoundary from './FroamSectionBoundary.js';
 import { apiGetFresh, apiPost } from '../lib/api.js';
-import { bridgeHeaders, bridgeUrl, pairedDeviceKey } from '../lib/bridge.js';
+import { bridgeClientId, bridgeHeaders, bridgeUrl, pairedDeviceKey } from '../lib/bridge.js';
 import FroamResizeHandles from './FroamResizeHandles.js';
 import { inheritedDrafts, layeredDrafts, routeSizes, withoutInherited } from './chef/cascade.js';
+import { hashValue, mergeDrafts, signDrafts } from './chef/draft-merge.js';
 import FroamSpacingHandles from './FroamSpacingHandles.js';
 import FroamRedlines from './FroamRedlines.js';
 import FroamFloatingBar from './FroamFloatingBar.js';
@@ -15,6 +16,7 @@ import FroamBottomSheet from './FroamBottomSheet.js';
 import FroamBlueprint from './FroamBlueprint.js';
 import { COARSE_POINTER_QUERY, MOBILE_UI_QUERY, useMediaQuery } from './froamMedia.js';
 import FroamShortcutOverlay from './FroamShortcutOverlay.js';
+import FroamGoLive from './FroamGoLive.js';
 import FroamImageFit, { recallImageFit, rememberImageFit } from './FroamImageFit.js';
 import { aspectRatioCss, DEFAULT_IMAGE_FIT, imageFitStyles, liveFitStyles, outputSize, resolveAspectRatio, shapeStyles, slotSize, sourceRect, srcsetWidths } from './image-fit.js';
 import { DEFAULT_PLAYBACK, writeMediaDraft } from './media/media-draft.js';
@@ -95,7 +97,7 @@ import FroamDeviceBar from './FroamDeviceBar.js';
 import { DEFAULT_FROAM_PERSONA, readFroamPersonaDraft, sanitizeFroamPersona, isFroamPersonaPath, } from './froamPersona.js';
 import { intelligenceTabs, labTabs, CHEF_BUTTON_START, CANVAS_KEY, INJECTION_KEY, ROOT_PARENT_KEY, INJECTED_BLOCK_SELECTOR, VIEWPORT_MODES, DEVICE_SHELL_ID, } from './chef/types.js';
 import { cursorOptions, displayOptions, flexDirectionOptions, justifyOptions, alignOptions, positionOptions, overflowOptions, borderStyleOptions, blendModeOptions, textTransformOptions, persistedStyleKeys, } from './chef/style-options.js';
-import { MAX_PERSONA_IMAGE_BYTES, SAVE_META_KEY, BRAND_FONT_MAX_BYTES, loadBrandFonts, saveBrandFontsForProject, loadStore, saveStoreForProject, loadNodeRegistry, saveNodeRegistryForProject, loadPersonaPreference, savePersonaPreference, personasEqual, stripPersonaDrafts, withPersonaDraft, countRenderableDrafts, } from './chef/storage.js';
+import { MAX_PERSONA_IMAGE_BYTES, SAVE_META_KEY, BRAND_FONT_MAX_BYTES, loadBrandFonts, saveBrandFontsForProject, loadStore, saveStoreForProject, loadNodeRegistry, saveNodeRegistryForProject, loadPersonaPreference, savePersonaPreference, personasEqual, stripPersonaDrafts, withPersonaDraft, countRenderableDrafts, loadSyncRecord, saveSyncRecordForProject, } from './chef/storage.js';
 import { getRoot, getCanvasHost, applyGlobalCSS, isSvgInternal, shouldSkipElement, readNumber, camelToKebab, readImageUrl, buildSelection, } from './chef/dom.js';
 import { describeChange, relativeTime, changeByline, buildFroamChangeReport, smallHash } from './chef/change-report.js';
 import { SINGLE_LINE_TAGS, isWritableElement, placeCaret, isEditableField, isTextVisualLayer, } from './chef/writing.js';
@@ -135,6 +137,8 @@ function pageFingerprint(drafts) {
     return smallHash(stableJson(design));
 }
 const EMPTY_PAGE = smallHash(stableJson({}));
+/** Set just before a reload that another device's save asked for (see reloadWhenIdle). */
+const RELOAD_NOTE_KEY = 'froam:reloaded-for-sync';
 /**
  * What the room sees of your studio profile. The colour is sent only once you
  * have picked one, so everyone keeping the default still gets a distinct one.
@@ -1399,6 +1403,301 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+    // `froam new` opens a brand-new site at #froam-start: the editor comes up
+    // with the Library showing, so a first-timer starts building instead of
+    // hunting for the button. Read once and taken out of the address, so a
+    // reload or a bookmark is an ordinary visit.
+    const [welcomeNewSite] = useState(() => typeof window !== 'undefined' && /(?:^#|&)froam-start\b/.test(window.location.hash));
+    useEffect(() => {
+        if (!welcomeNewSite)
+            return;
+        const rest = window.location.hash.replace(/(?:^#|&)froam-start\b/, '').replace(/^&/, '');
+        try {
+            window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}${rest ? `#${rest}` : ''}`);
+        }
+        catch { /* sandboxed */ }
+        keepStudioPinned();
+        const frame = window.requestAnimationFrame(() => {
+            openWorkspaceSection('library', 'create');
+            showToast('Your new site. Click any text to change it, or add a section from the Library');
+        });
+        return () => window.cancelAnimationFrame(frame);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [welcomeNewSite]);
+    /* ─── Live sync with the owner's other devices ───
+       A laptop, a paired phone and a second tab can all have the editor open on
+       one project. The bridge announces every save (/__froam/events) and the
+       others merge it in at once (chef/draft-merge.ts): whatever this device
+       hasn't touched takes the saved value, and its own unsaved edits stay. An
+       open editor used to learn of another device's save only on a reload —
+       and its next save erased it. */
+    const syncRecordRef = useRef(loadSyncRecord(projectKey));
+    const brandFontsRef = useRef(brandFonts);
+    brandFontsRef.current = brandFonts;
+    const bridgeDeviceRef = useRef(bridgeInfo.device);
+    bridgeDeviceRef.current = bridgeInfo.device;
+    // Bumped when another device presses Save (not Save to Repo), so this one reads that design again.
+    const [publishedEpoch, setPublishedEpoch] = useState(0);
+    // Go Live (FroamGoLive.tsx): the sheet, and the bridge's job as last announced.
+    const [goLiveOpen, setGoLiveOpen] = useState(false);
+    const [liveJob, setLiveJob] = useState(null);
+    const goLiveOpenRef = useRef(false);
+    goLiveOpenRef.current = goLiveOpen;
+    function deviceName(device) {
+        if (device === 'paired')
+            return bridgeDeviceRef.current === 'paired' ? 'your other phone' : 'your phone';
+        if (device === 'computer')
+            return bridgeDeviceRef.current === 'computer' ? 'another window' : 'your computer';
+        return 'a device on your network';
+    }
+    /**
+     * Take the design the bridge holds into this editor. `sent` is what this
+     * editor itself just saved, when the design is the answer to that save.
+     * Returns how many elements changed here.
+     */
+    function adoptSyncedDesign(design, sent) {
+        const current = storeRef.current;
+        const record = syncRecordRef.current;
+        const next = { ...current };
+        const scopes = { ...record.scopes };
+        const keys = new Set(sent ? [sent.key] : Object.keys(record.scopes));
+        if (!sent)
+            for (const [route, sizes] of Object.entries(design.routes ?? {}))
+                for (const size of Object.keys(sizes ?? {}))
+                    keys.add(`${route}@@${size}`);
+        let changed = 0;
+        for (const key of keys) {
+            const [route, size] = key.split('@@');
+            const theirs = design.routes?.[route]?.[size] ?? {};
+            const ours = current[key] ?? {};
+            // After our own save, what we sent is the base: anything typed since stays ours.
+            const base = sent ? signDrafts(sent.drafts) : record.scopes[key] ?? {};
+            const merged = mergeDrafts({ base, ours, theirs });
+            const before = signDrafts(ours);
+            const after = signDrafts(merged.drafts);
+            const moved = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((path) => hashValue(before[path] ?? null) !== hashValue(after[path] ?? null));
+            if (moved.length) {
+                next[key] = merged.drafts;
+                changed += moved.length;
+            }
+            scopes[key] = signDrafts(theirs);
+        }
+        // Brand fonts: the saved list, unless this device changed its own since it last synced.
+        let fonts = null;
+        let fontsBase = record.brandFonts;
+        if (design.brandFonts !== undefined || sent) {
+            const saved = design.brandFonts ?? [];
+            const mine = brandFontsRef.current;
+            const untouched = sent?.brandFonts
+                ? hashValue(mine) === hashValue(sent.brandFonts)
+                : record.brandFonts === undefined ? mine.length === 0 : hashValue(mine) === record.brandFonts;
+            if (untouched && hashValue(mine) !== hashValue(saved))
+                fonts = saved;
+            fontsBase = hashValue(saved);
+        }
+        syncRecordRef.current = { ...syncRecordRef.current, scopes, brandFonts: fontsBase };
+        saveSyncRecordForProject(syncRecordRef.current, projectKey);
+        if (fonts)
+            setBrandFonts(fonts);
+        if (changed)
+            adoptArrivedStore(next, current);
+        return changed;
+    }
+    /** Arriving design is not this person's work: it lands as the log's baseline, outside undo. */
+    function adoptArrivedStore(next, previous) {
+        opLoadingDesignRef.current = true;
+        storeRef.current = next;
+        setStore(next);
+        saveStore(next);
+        applyStoreToDOM(next, { clearCurrent: true, previousStore: previous });
+    }
+    /* Save (the plain one): froam.published.json under froam dev, or a hosted
+       publish API. The same merge as Save to Repo, with its own record of what
+       this device last synced there. */
+    function rememberPublished(key, drafts) {
+        syncRecordRef.current = { ...syncRecordRef.current, published: { ...syncRecordRef.current.published, [key]: signDrafts(stripPersonaDrafts(drafts)) } };
+        saveSyncRecordForProject(syncRecordRef.current, projectKey);
+    }
+    /** Merge `theirs` (Save's copy of `key`) into this device's drafts; `base` is what this device last had of it. Returns elements changed here. */
+    function mergePublishedIn(key, base, theirs) {
+        const current = storeRef.current;
+        const ours = current[key] ?? {};
+        const merged = mergeDrafts({ base, ours, theirs: stripPersonaDrafts(theirs) });
+        const before = signDrafts(ours);
+        const after = signDrafts(merged.drafts);
+        const moved = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((path) => hashValue(before[path] ?? null) !== hashValue(after[path] ?? null)).length;
+        rememberPublished(key, theirs);
+        if (moved)
+            adoptArrivedStore({ ...current, [key]: merged.drafts }, current);
+        return moved;
+    }
+    /** POST a Save with this device's base; the merged page comes back and is taken in. */
+    async function postPublished(drafts) {
+        const key = viewportStoreKeyRef.current;
+        const [savedRoute, savedSize] = key.split('@@');
+        // No record yet means "keep both sides": nothing this device never saw is cleared.
+        const base = syncRecordRef.current.published?.[key] ?? {};
+        const response = await apiPost('/api/froam/published', { routeKey: savedRoute, viewportMode: savedSize, store: drafts, base });
+        // A hosted API that doesn't merge yet answers without the page: what was sent is what it holds.
+        const saved = response?.design?.store ?? stripPersonaDrafts(drafts);
+        mergePublishedIn(key, signDrafts(stripPersonaDrafts(drafts)), saved);
+        return response;
+    }
+    const pullingRef = useRef(null);
+    function pullFromBridge(change) {
+        // One read at a time; a burst of saves is one catch-up.
+        if (pullingRef.current)
+            return pullingRef.current;
+        pullingRef.current = (async () => {
+            try {
+                const response = await window.fetch(bridgeUrl('/__froam/repo/load'), { cache: 'no-store', headers: bridgeHeaders() });
+                const data = await response.json().catch(() => null);
+                if (!data?.success || !data.design)
+                    return;
+                const changed = adoptSyncedDesign(data.design);
+                if (change && changed)
+                    showToast(`Updated from ${deviceName(change.device)}`);
+            }
+            catch {
+                /* Bridge restarting: the next event, or the next open, catches up. */
+            }
+            finally {
+                pullingRef.current = null;
+            }
+        })();
+        return pullingRef.current;
+    }
+    /*
+     * Text or sections written into a plain HTML file elsewhere: only the page
+     * itself has them, so it reloads — when this person isn't mid-edit, and with
+     * the editor, the scroll position and a word about why put back after.
+     */
+    const reloadTimerRef = useRef(0);
+    const lastInputRef = useRef(0);
+    const pendingReloadRef = useRef(null);
+    function reloadIfIdle(returning = false) {
+        const change = pendingReloadRef.current;
+        if (!change)
+            return;
+        window.clearTimeout(reloadTimerRef.current);
+        const active = document.activeElement;
+        const busy = document.visibilityState !== 'visible'
+            || Boolean(active && (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)))
+            || (!returning && Date.now() - lastInputRef.current < 1500);
+        if (busy) {
+            // Hidden (a phone in a pocket) waits for the screen to come back, below.
+            if (document.visibilityState === 'visible')
+                reloadTimerRef.current = window.setTimeout(() => reloadIfIdle(), 600);
+            return;
+        }
+        saveStore(storeRef.current);
+        try {
+            window.sessionStorage.setItem(RELOAD_NOTE_KEY, JSON.stringify({ at: Date.now(), scrollY: window.scrollY, from: deviceName(change.device) }));
+        }
+        catch { /* private mode: reload anyway */ }
+        window.location.reload();
+    }
+    function reloadWhenIdle(change) {
+        pendingReloadRef.current = change;
+        window.clearTimeout(reloadTimerRef.current);
+        reloadTimerRef.current = window.setTimeout(() => reloadIfIdle(), 400);
+    }
+    useEffect(() => {
+        const touch = () => { lastInputRef.current = Date.now(); };
+        // Coming back to the tab is the moment: before the first tap, not under it.
+        const back = () => { if (document.visibilityState === 'visible')
+            reloadIfIdle(true); };
+        window.addEventListener('pointerdown', touch, true);
+        window.addEventListener('keydown', touch, true);
+        document.addEventListener('visibilitychange', back);
+        return () => {
+            window.removeEventListener('pointerdown', touch, true);
+            window.removeEventListener('keydown', touch, true);
+            document.removeEventListener('visibilitychange', back);
+            window.clearTimeout(reloadTimerRef.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    useEffect(() => {
+        let note = null;
+        try {
+            note = JSON.parse(window.sessionStorage.getItem(RELOAD_NOTE_KEY) ?? 'null');
+            window.sessionStorage.removeItem(RELOAD_NOTE_KEY);
+        }
+        catch { /* nothing to put back */ }
+        if (!note?.at || Date.now() - note.at > 30_000)
+            return;
+        keepStudioPinned();
+        const frame = window.requestAnimationFrame(() => {
+            if (typeof note?.scrollY === 'number')
+                window.scrollTo({ top: note.scrollY, behavior: 'instant' });
+            showToast(`Updated from ${note?.from ?? 'another device'}`);
+        });
+        return () => window.cancelAnimationFrame(frame);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    const canSyncRepo = bridgeInfo.device === 'computer' || bridgeInfo.device === 'paired';
+    useEffect(() => {
+        if (!bridgeInfo.device || typeof EventSource === 'undefined')
+            return;
+        // The owner's devices catch up on whatever was saved while this one was closed.
+        if (canSyncRepo)
+            void pullFromBridge();
+        let lastRevision = null;
+        let timer = 0;
+        const source = new EventSource(bridgeUrl('/__froam/events'));
+        source.addEventListener('ready', (event) => {
+            // froam dev restarted, or the line dropped, while we were away: read what we may have missed.
+            let revision = 0;
+            try {
+                revision = Number(JSON.parse(event.data).revision) || 0;
+            }
+            catch { /* keep 0 */ }
+            if (lastRevision !== null && revision !== lastRevision && canSyncRepo)
+                void pullFromBridge();
+            lastRevision = revision;
+        });
+        source.addEventListener('change', (event) => {
+            let change;
+            try {
+                change = JSON.parse(event.data);
+            }
+            catch {
+                return;
+            }
+            lastRevision = change.revision ?? lastRevision;
+            // Going live is everyone's news, whichever device pressed it.
+            if (change.kind === 'live') {
+                const job = change.job;
+                if (!job)
+                    return;
+                setLiveJob(job);
+                if (job.done && !goLiveOpenRef.current)
+                    showToast(job.ok ? (job.outcome === 'live' ? `Live — ${job.url?.replace(/^https?:\/\//, '') ?? 'your site has it'}` : job.message) : `Didn’t go live: ${job.message}`);
+                return;
+            }
+            if (change.from === bridgeClientId())
+                return;
+            if (change.kind === 'published') {
+                loadedPublishedKeysRef.current.clear();
+                setPublishedEpoch((n) => n + 1);
+                return;
+            }
+            if (!canSyncRepo)
+                return;
+            if (change.kind === 'source' && change.reload) {
+                reloadWhenIdle(change);
+                return;
+            }
+            window.clearTimeout(timer);
+            timer = window.setTimeout(() => { void pullFromBridge(change); }, 120);
+        });
+        return () => {
+            window.clearTimeout(timer);
+            source.close();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [bridgeInfo.device]);
     const stopReachRef = useRef(() => { });
     const shareAccessRef = useRef(async () => { });
     /** The owner is done: every link stops working and Share starts fresh. */
@@ -2165,13 +2464,28 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 const response = await apiGetFresh(`/api/froam/published?${params.toString()}`);
                 const publishedStore = response.design?.store;
                 settled = true;
-                if (cancelled || !publishedStore || Object.keys(publishedStore).length === 0)
+                if (cancelled)
                     return;
-                const publishedPersona = readFroamPersonaDraft(publishedStore);
+                const publishedPersona = publishedStore ? readFroamPersonaDraft(publishedStore) : null;
                 if (publishedPersona && !personasEqual(publishedPersona, persona)) {
                     setPersona(sanitizeFroamPersona(publishedPersona));
                 }
-                // Merge rather than refuse. This device having *any* local draft used
+                // Once this device has a record of what it last had, another device's Save
+                // merges in exactly as a Save to Repo does (chef/draft-merge.ts): what this
+                // device hasn't touched takes theirs, its own unsaved edits stay.
+                const base = syncRecordRef.current.published?.[viewportStoreKey];
+                if (base) {
+                    const moved = mergePublishedIn(viewportStoreKey, base, publishedStore ?? {});
+                    if (moved) {
+                        bumpLog();
+                        showToast(canSaveRepoHere ? 'Edits from your other device are here — Save to Repo to put them in your code' : 'Edits from your other device are here');
+                    }
+                    return;
+                }
+                rememberPublished(viewportStoreKey, publishedStore ?? {});
+                if (!publishedStore || Object.keys(publishedStore).length === 0)
+                    return;
+                // The first time, with no record: merge rather than refuse. This device having *any* local draft used
                 // to block the whole route, which is why a design saved on a laptop
                 // never reached a phone that had been opened in the editor once.
                 const publishedAt = Date.parse(response.design?.publishedAt ?? response.design?.updatedAt ?? '') || 0;
@@ -2214,7 +2528,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         // Intentionally exclude `store` — including it causes an infinite loop when
         // setStore fires and re-triggers this effect. We gate on the ref instead.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [routeKey, viewportMode, viewportStoreKey]);
+    }, [routeKey, viewportMode, viewportStoreKey, publishedEpoch]);
     /* ─── Read canvas on route change ─── */
     useEffect(() => {
         const frame = window.requestAnimationFrame(() => setCanvas(readCanvasState()));
@@ -3654,11 +3968,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             return;
         try {
             const routeSnapshot = collectVersionRouteDrafts();
-            await apiPost('/api/froam/published', {
-                routeKey,
-                viewportMode,
-                store: stripPersonaDrafts(routeSnapshot),
-            });
+            await postPublished(stripPersonaDrafts(routeSnapshot));
             await room.client?.signalDesign(routeKey, viewportMode);
         }
         catch {
@@ -3693,12 +4003,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             return;
         }
         try {
-            await apiPost('/api/froam/published', {
-                routeKey,
-                viewportMode,
-                store: routeSnapshot,
-            });
-            if (!quiet) {
+            // Only what changed here is taken, so another device's Save survives this one.
+            const answer = await postPublished(routeSnapshot);
+            const clashes = answer?.conflicts?.length ?? 0;
+            if (clashes && !quiet)
+                showToast(`Saved · ${clashes} spot${clashes === 1 ? ' was' : 's were'} also changed on another device; yours kept`);
+            else if (!quiet) {
                 showToast(bridgeInfo.device === null
                     ? 'Published'
                     : canSaveRepoHere
@@ -3831,7 +4141,71 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             return { drafts, note: '' };
         }
     }
-    async function saveToRepo() {
+    /**
+     * Sections added on a plain static site go into its .html file, where they
+     * would have been written by hand (lib/block-writeback.mjs). Desktop only:
+     * desktop flows down to every size, a phone-only section must not. A
+     * written section becomes ordinary page content: it leaves the drafts and
+     * loses the marks that made it an injection, so it isn't saved twice.
+     */
+    async function writeBlocksToSource(drafts) {
+        const none = { drafts, note: '', written: [] };
+        if (viewportMode !== 'desktop')
+            return none;
+        const blocks = Object.entries(drafts)
+            .filter(([path]) => isInjectionPath(path))
+            .map(([key, draft]) => ({ key, injection: readInjectionDraft(draft) }))
+            .filter((entry) => entry.injection !== null)
+            .map(({ key, injection }) => ({ key, parentPath: injection.parentPath, order: injection.order, html: injection.html }));
+        if (!blocks.length)
+            return none;
+        try {
+            const response = await window.fetch(bridgeUrl('/__froam/source/blocks'), {
+                method: 'POST',
+                headers: bridgeHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ routeKey, rootScope: getFroamStudioConfig().rootScope, blocks }),
+            });
+            const data = await response.json().catch(() => null);
+            if (!response.ok || !data?.success || !Array.isArray(data.results))
+                return none;
+            const next = { ...drafts };
+            const files = new Set();
+            const written = [];
+            for (const result of data.results) {
+                if (result?.status !== 'written' || !next[result.key])
+                    continue;
+                delete next[result.key];
+                written.push(result.key);
+                if (result.file)
+                    files.add(result.file);
+                const id = result.key.slice(result.key.indexOf(':') + 1);
+                const element = getRoot()?.querySelector(`[data-froam-id="${CSS.escape(id)}"]`);
+                element?.removeAttribute('data-froam-injected');
+                element?.removeAttribute('data-froam-block');
+                element?.removeAttribute('data-froam-runtime-injected');
+            }
+            const kept = blocks.length - written.length;
+            const note = written.length
+                ? ` · ${written.length} section${written.length === 1 ? '' : 's'} written into ${[...files].join(', ')}${kept ? ` · ${kept} kept as Froam edit${kept === 1 ? '' : 's'}` : ''}`
+                : '';
+            return { drafts: next, note, written };
+        }
+        catch {
+            return none;
+        }
+    }
+    /**
+     * Go Live sends what's in the project, so whatever this device hasn't saved
+     * there yet is saved first — quietly: the sheet is what's talking now.
+     */
+    const saveBeforeGoingLive = useCallback(async () => {
+        const key = viewportStoreKeyRef.current;
+        const here = signDrafts(stripPersonaDrafts(storeRef.current[key] ?? {}));
+        const synced = syncRecordRef.current.scopes[key] ?? {};
+        if (hashValue(here) !== hashValue(synced))
+            await actionsRef.current.saveToRepo({ quiet: true });
+    }, []);
+    async function saveToRepo(options = {}) {
         if (room.role === 'contributor') {
             showToast('Your changes go live when the owner approves them — use Submit');
             return;
@@ -3840,16 +4214,41 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         const routeSnapshot = collectVersionRouteDrafts();
         const copied = await writeCopyToSource(stripPersonaDrafts(routeSnapshot));
         const styled = await writeStylesToSource(copied.drafts);
-        const cleanDrafts = styled.drafts;
-        const sourceNote = `${copied.note}${styled.note}`;
+        const blocks = await writeBlocksToSource(styled.drafts);
+        const cleanDrafts = blocks.drafts;
+        const sourceNote = `${copied.note}${styled.note}${blocks.note}`;
         const nextStore = { ...store, [viewportStoreKey]: cleanDrafts };
+        // A section in the HTML now must not also come back from a smaller size's copy.
+        if (blocks.written.length) {
+            for (const size of VIEWPORT_MODES) {
+                const key = `${routeKey}@@${size}`;
+                if (key === viewportStoreKey || !nextStore[key])
+                    continue;
+                const sized = { ...nextStore[key] };
+                for (const written of blocks.written)
+                    delete sized[written];
+                nextStore[key] = sized;
+            }
+        }
         setStore(nextStore);
         saveStore(nextStore);
         try {
+            // `base` and `brandFontsBase`: what this device last synced, so the bridge
+            // takes only what changed here (chef/draft-merge.ts) and keeps what any
+            // other device saved meanwhile.
+            const sentFonts = brandFonts;
             const response = await window.fetch(bridgeUrl('/__froam/repo/save'), {
                 method: 'POST',
                 headers: bridgeHeaders({ 'Content-Type': 'application/json' }),
-                body: JSON.stringify({ routeKey, viewportMode, store: cleanDrafts, brandFonts, rootScope: getFroamStudioConfig().rootScope }),
+                body: JSON.stringify({
+                    routeKey,
+                    viewportMode,
+                    store: cleanDrafts,
+                    base: syncRecordRef.current.scopes[viewportStoreKey] ?? {},
+                    brandFonts: sentFonts,
+                    ...(syncRecordRef.current.brandFonts !== undefined ? { brandFontsBase: syncRecordRef.current.brandFonts } : {}),
+                    rootScope: getFroamStudioConfig().rootScope,
+                }),
             });
             const data = await response.json().catch(() => null);
             if (response.status === 403 && data?.code === 'not-paired') {
@@ -3861,7 +4260,16 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             }
             if (!response.ok || !data?.success)
                 throw new Error(data?.error || 'Repo bridge unavailable');
-            showToast(`Saved to your code${sourceNote} — commit and push to put it live`);
+            // The page as saved, with any other device's edits in it: this editor is current at once.
+            if (data.store) {
+                const [savedRoute, savedSize] = viewportStoreKey.split('@@');
+                adoptSyncedDesign({ routes: { [savedRoute]: { [savedSize]: data.store } }, brandFonts: data.brandFonts }, { key: viewportStoreKey, drafts: cleanDrafts, brandFonts: sentFonts });
+            }
+            const clashes = data.conflicts?.length ?? 0;
+            const clashNote = clashes ? ` · ${clashes} spot${clashes === 1 ? ' was' : 's were'} also changed on another device; yours kept` : '';
+            const next = canSaveRepoHere ? 'Go live puts it on your site' : data.nextStep === 'publish' ? 'run froam publish to put it live' : 'commit and push to put it live';
+            if (!options.quiet)
+                showToast(`Saved to your code${sourceNote}${clashNote} — ${next}`);
         }
         catch {
             showToast('Repo bridge offline — run `froam dev` or add froamStudio() to vite.config');
@@ -6401,7 +6809,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 }
                                 setActiveTool(tool);
                                 setMoveMode(tool === 'move');
-                            }, canUndo: canUndo, canRedo: canRedo, onSave: actionsRef.current.saveToRunam, onSaveRepo: isContributor ? undefined : () => { void actionsRef.current.saveToRepo(); }, collaborate: (_jsx(FroamCollaborate, { role: room.role, isOwner: room.role === 'owner', inRoom: room.inRoom, joined: roomJoined, myName: room.identity?.name ?? persona.name ?? 'You', me: roomMe, people: room.others, links: inviteLinks, opening: sharing, shareUnavailable: shareUnavailable, onOpenRoom: (fresh) => { void startSharing(fresh); }, onCopyLink: (link) => { void copyInviteLink(link); }, requests: requests, pendingChanges: contributorRequest?.changes ?? [], onSubmit: submitChangeRequest, onWithdraw: (request) => { void withdrawChangeRequest(request); }, previewingId: previewingRequestId, onPreview: previewChangeRequest, onDecide: decideChangeRequest, messaging: roomMessaging, onEditProfile: openPersonaEditor, needsName: room.needsName && invitedByLink, knownProfile: persona.name && persona.name !== DEFAULT_FROAM_PERSONA.name
+                            }, canUndo: canUndo, canRedo: canRedo, onSave: actionsRef.current.saveToRunam, onSaveRepo: isContributor ? undefined : () => { void actionsRef.current.saveToRepo(); }, onGoLive: isContributor || !canSaveRepoHere ? undefined : () => setGoLiveOpen(true), liveState: !liveJob ? 'idle' : !liveJob.done ? 'going' : liveJob.ok && liveJob.outcome === 'live' ? 'live' : liveJob.ok ? 'idle' : 'failed', collaborate: (_jsx(FroamCollaborate, { role: room.role, isOwner: room.role === 'owner', inRoom: room.inRoom, joined: roomJoined, myName: room.identity?.name ?? persona.name ?? 'You', me: roomMe, people: room.others, links: inviteLinks, opening: sharing, shareUnavailable: shareUnavailable, onOpenRoom: (fresh) => { void startSharing(fresh); }, onCopyLink: (link) => { void copyInviteLink(link); }, requests: requests, pendingChanges: contributorRequest?.changes ?? [], onSubmit: submitChangeRequest, onWithdraw: (request) => { void withdrawChangeRequest(request); }, previewingId: previewingRequestId, onPreview: previewChangeRequest, onDecide: decideChangeRequest, messaging: roomMessaging, onEditProfile: openPersonaEditor, needsName: room.needsName && invitedByLink, knownProfile: persona.name && persona.name !== DEFAULT_FROAM_PERSONA.name
                                     ? { name: persona.name, avatarUrl: persona.imageUrl || null, title: persona.role }
                                     : null, onJoin: joinRoomAs, onRevert: room.role === 'owner' ? revertApprovedRequest : undefined, checks: requestChecks, expiresAt: room.room?.expiresAt ?? null, openTarget: openTarget, onOpenedTarget: () => setOpenTarget(null), pinTarget: pinTarget, onShowAnchor: showMessageAnchor, onTyping: setComposingMessage, onEndRoom: room.role === 'owner' ? endCollaboration : undefined, reach: pageIsLocal && reachChecked ? {
                                     local: true,
@@ -7077,6 +7485,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                             archiveCurrentSelection('interface-pattern');
                             break;
                     }
-                }, onClose: () => setContextMenuPos(null) }), _jsx(FroamUICustomizer, { open: uiCustomizerOpen, value: uiPreference, onChange: setUIPreference, onClose: () => setUICustomizerOpen(false) }), _jsx(FroamSmartGuides, { guides: smartGuides, visible: smartGuides.length > 0 }), _jsx(FroamImageFit, { request: imageFitRequest, onApply: placeMediaFit, onCancel: closeMediaFit }), _jsx(FroamShortcutOverlay, { visible: showShortcutOverlay, onClose: () => setShowShortcutOverlay(false) })] }), portalContainer);
+                }, onClose: () => setContextMenuPos(null) }), _jsx(FroamUICustomizer, { open: uiCustomizerOpen, value: uiPreference, onChange: setUIPreference, onClose: () => setUICustomizerOpen(false) }), _jsx(FroamSmartGuides, { guides: smartGuides, visible: smartGuides.length > 0 }), _jsx(FroamImageFit, { request: imageFitRequest, onApply: placeMediaFit, onCancel: closeMediaFit }), _jsx(FroamShortcutOverlay, { visible: showShortcutOverlay, onClose: () => setShowShortcutOverlay(false) }), _jsx(FroamGoLive, { open: goLiveOpen, onClose: () => setGoLiveOpen(false), saveFirst: saveBeforeGoingLive, job: liveJob, onJob: setLiveJob })] }), portalContainer);
 }
 //# sourceMappingURL=GlobalChefEditor.js.map

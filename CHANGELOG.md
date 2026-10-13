@@ -1,5 +1,117 @@
 # Changelog
 
+## Unreleased
+
+- **Go live from the editor.** Saving put an edit in the project; getting it
+  to visitors still meant a terminal. **Go live** in the toolbar (on a
+  paired phone too) saves what's left, shows where it goes and what goes,
+  and on "Put it live" commits and pushes only the files Froam wrote (your
+  unfinished work stays uncommitted), or uploads a plain HTML site to the
+  host `froam publish` set up. It names unpushed commits that would ride
+  along, refuses when the remote is ahead instead of overwriting, refuses a
+  confirm that went stale, and never forces anything. Then it reads the live
+  site until the change is served, and only then says Live. Progress shows in
+  every open editor.
+- **`froam publish` names the lasting address when publishing again.** With
+  the Cloudflare project already made, the only address printed is the
+  deployment's preview, and that is what Froam reported as your site: a page
+  that never changes again. It now reads the site's address off it.
+- **Saving on one device no longer erases another's edits.** A save used to
+  replace the page's saved design wholesale, so with the editor open on a
+  laptop and a phone (or in two tabs) the second save silently wiped what
+  the first had saved, and a phone opened fresh could clear everything the
+  laptop had saved for that page. Each device now remembers what it last
+  synced (as hashes, a few bytes an edit) and a save takes only what that
+  device changed, property by property: a colour changed on the laptop and
+  a weight changed on the phone on the same heading both stay. The one real
+  conflict, the same property changed on both, keeps the newer save and
+  says so. Brand fonts get the same rule. Older editors, without the
+  information, save as before.
+- **Save (the plain one) merges too.** Save and the automatic save wrote
+  the page's drafts wholesale to froam.published.json (or a hosted publish
+  API), so a phone that hadn't heard about the laptop's Save erased it.
+  They now send what the device last synced and take only what it changed,
+  like Save to Repo; another device's Save merges in property by property
+  instead of by timestamp. Older editors save as before.
+- **The Vite plugin gets Go Live and knows the computer from a phone.** It
+  answers /__froam/whoami and /__froam/live (this computer only), so Vite
+  projects get the Go live button. Their design is built into the app's
+  bundle, so Go Live says when it's sent rather than claiming "live".
+- **Go Live follows the host.** After a push it reads what Vercel, Netlify or
+  Cloudflare Pages report to GitHub for that commit: "Vercel is building it",
+  "Live — Vercel finished deploying it", or "Netlify couldn't build it" with
+  the build log. Before anything goes it knows, from those reports, which
+  remote a host deploys from and which branch is the live one; when a repo
+  has several remotes and nothing says which, the sheet asks and remembers.
+  Private repos use the sign-in the person already has (GITHUB_TOKEN, the
+  GitHub CLI, or git's own login for github.com), sent only to
+  api.github.com.
+- **Go Live finds the site's address itself.** GitHub's website field for
+  the repo, or what the project already says (a CNAME file, `homepage`,
+  Astro/Jekyll/Docusaurus/Hugo configs, the page's canonical link or og:url,
+  robots.txt, wrangler.toml), before ever asking; "Not right?" corrects it.
+- **`froam dev` saves where the site reads.** In a project that already
+  loads a Froam folder (a Vite app's src/froam in a monorepo, a page linking
+  froam.generated.css), that's the folder it uses, instead of making or
+  reusing a stray froam/ at the root whose edits the site never shows.
+- **Go Live warns before it's too late.** It says when the folder being sent
+  isn't one the site loads (and which one is), when a file is over 5 MB, and
+  refuses a file over GitHub's 100 MB limit instead of failing mid-push.
+- **Go Live says what's true about the repo.** Tried on a real project
+  (Run'Am): a branch the remote has never had is called new, not
+  "couldn't reach"; the full count of unpushed commits is given (it stopped
+  at 20); with more than one remote it names which one gets the push; it
+  says the project deploys with a host rather than that the push goes there;
+  and the editor's own bookkeeping files no longer count as "your other
+  changed files".
+- **Your devices stay in step while they're open.** `froam dev` (and the Vite
+  plugin) announces every save, and each open editor merges it in about a
+  second, with no reload, keeping its own unsaved work: "Updated from your
+  phone". When the other device wrote copy or sections into a plain HTML
+  page itself, the page reloads to show them, waiting until you're not
+  mid-edit (on a phone, until you come back to it), and the editor, scroll
+  position and a note are put back. An editor also catches up on whatever
+  was saved while it was closed, or while `froam dev` was restarting.
+- **Start a website from nothing: `froam new`.** Froam could only edit a site
+  that already existed: an empty folder opened on a bare 404 with no editor,
+  and the first prompt only took an address. Now `npx @ahmadastic/froam new`
+  (or `n` at the first prompt, or `froam <empty folder>`) asks for a name
+  and a kind of site, writes a real, responsive `index.html` (business,
+  portfolio, product, event or blank) with Froam's two tags already in its
+  head, and opens it with the editor and the Library showing. Every piece of
+  starter text is unique, so copy edits are written straight into
+  `index.html`; Library sections pick up the starter's fonts and colours.
+  There are no forms that need a backend, only mailto: and tel: links, so
+  the folder works on any static host. A README in the new folder explains
+  how to edit and publish it.
+- **Put it online: `froam publish`.** Builds a clean copy of a plain HTML site
+  in `.froam/publish/` (the pages, the two files visitors load and placed
+  media; never the design history, rooms, backups or README) and hands it
+  to a host through the host's own tool, in the person's own account:
+  Cloudflare Pages (the default: free, and allowed for business sites),
+  Vercel, or Netlify (drag and drop), or just the folder. The first time it
+  asks where; froam.config.json remembers, so after that publishing is the
+  one command. It prints the lasting address (production, not a preview)
+  and opens it. Saving a plain HTML site now says "run froam publish" rather
+  than "commit and push".
+- **Library sections are written into the page.** On a plain HTML site,
+  Save to Repo now writes sections added from the Library (and other placed
+  blocks) into the `.html` file, exactly where the runtime used to insert
+  them, instead of keeping them in froam.design.json for `froam.runtime.js`
+  to add after load. Search engines and visitors without JavaScript get
+  them, and the source is the site. Editor bookkeeping is stripped, placed
+  media points at `froam/media/`, and a block with a script or an event
+  handler is never written. Desktop only (desktop flows down to every size);
+  build outputs next to a `package.json` are left alone.
+- **Library copy reads like a website.** Placeholder text no longer talks
+  about wireframes and components, every section has its own heading, and
+  text no longer repeats inside a section, so edits to it can be written
+  back too. Sections now take the site's real text colour: they used to
+  sample the first paragraph, often a muted intro, and came out washed out.
+- **Renaming the brand renames the tab.** A copy edit whose text also fills
+  the page's `<title>` now updates both, instead of being kept as a Froam
+  edit because the words appeared twice.
+
 ## 9.6.0 - 2026-10-12
 
 **Desktop edits reach phones, you can edit and save from your own phone,

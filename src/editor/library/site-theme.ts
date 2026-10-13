@@ -183,7 +183,12 @@ export function sampleSiteTheme(scope: HTMLElement = document.body): SiteTheme {
     const heading = Array.from(scope.querySelectorAll<HTMLElement>('h1, h2')).find(isVisible)
     const paragraph = Array.from(scope.querySelectorAll<HTMLElement>('p')).find(isVisible)
     const paper = effectiveBackground(document.body)
-    const ink = parseColor(paragraph ? getComputedStyle(paragraph).color : bodyStyle.color) ?? parseColor(DEFAULT_SITE_THEME.ink)!
+    // The body's colour is the site's ink when it sets one (browsers default to
+    // pure black). The first paragraph is often an intro in a softer, muted
+    // grey, which made every Library section look washed out.
+    const bodyInk = parseColor(bodyStyle.color)
+    const textInk = parseColor(heading ? getComputedStyle(heading).color : paragraph ? getComputedStyle(paragraph).color : bodyStyle.color)
+    const ink = (bodyInk && toHex(bodyInk) !== '#000000' ? bodyInk : textInk) ?? parseColor(DEFAULT_SITE_THEME.ink)!
     const lightPage = luminance(paper) > 0.45
     const accent = sampleAccent(scope) ?? parseColor(DEFAULT_SITE_THEME.accent)!
     const white = { r: 255, g: 255, b: 255, a: 1 }

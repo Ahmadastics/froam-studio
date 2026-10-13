@@ -1,6 +1,7 @@
 import { type FroamNodeRegistry } from '../../project/node-registry';
 import { type BrandFont } from '../fontSources';
 import { type FroamPersona } from '../froamPersona';
+import { type SyncBase } from './draft-merge';
 import { type ElementDraft, type EditorStore } from './types';
 export declare const STORAGE_KEY = "froam-editor-store-v1";
 export declare const NODE_REGISTRY_KEY = "froam-node-registry-v1";
@@ -14,6 +15,20 @@ export declare const BRAND_FONTS_KEY = "froam-brand-fonts-v1";
 export declare const BRAND_FONT_MAX_BYTES = 1000000;
 export declare function loadBrandFonts(projectKey: string): BrandFont[];
 export declare function saveBrandFontsForProject(fonts: BrandFont[], projectKey: string): void;
+/**
+ * What this device last synced with the project, per route and size, as
+ * signatures (chef/draft-merge.ts) — so a save sends only what changed here,
+ * and a save from another device merges in without wiping unsaved work.
+ */
+export declare const SYNC_BASE_KEY = "froam-sync-base-v1";
+/** `scopes`: Save to Repo (froam.design.json). `published`: Save (froam.published.json, or a hosted publish API). */
+export type SyncRecord = {
+    scopes: Record<string, SyncBase>;
+    brandFonts?: string;
+    published?: Record<string, SyncBase>;
+};
+export declare function loadSyncRecord(projectKey: string): SyncRecord;
+export declare function saveSyncRecordForProject(record: SyncRecord, projectKey: string): void;
 export declare function loadStore(projectKey: string): EditorStore;
 export declare function saveStoreForProject(store: EditorStore, projectKey: string): void;
 export declare function loadNodeRegistry(projectKey: string): FroamNodeRegistry;

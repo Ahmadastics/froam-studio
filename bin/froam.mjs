@@ -5,6 +5,8 @@
  * if it serves a page, Froam can edit it and write the design into
  * your repo as committable files.
  *
+ *   froam new [folder]     start a website from scratch and open it in the editor
+ *   froam publish          put a plain HTML site online
  *   froam init             detect the project, scaffold froam files, wire it up
  *   froam dev              universal editor bridge (proxy / static / script-tag)
  *   froam build            recompile design.json → generated.css + runtime.js
@@ -42,11 +44,15 @@ import {
   findProjectDirForPort,
   isFatalTargetFailure,
   isLocalhost,
+  isNewSiteAnswer,
+  isWritableDirectory,
   looksLikeProjectDir,
   normalizeTargetUrl,
   probeTarget,
   resolveSafeWorkspaceDir,
 } from '../lib/launcher.mjs'
+import { HOSTS, PUBLISH_TARGETS, buildPublishFolder, isPublishTarget } from '../lib/publish.mjs'
+import { STARTER_KINDS, isStarterKind, renderStarter, slugify, starterReadme, titleFromFolder } from '../lib/starters.mjs'
 
 const PACKAGE_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const CLI_ENTRY = fileURLToPath(import.meta.url)
@@ -557,6 +563,169 @@ function init(flags) {
   printNextSteps({ framework, froamDir, froamDirRel, typescript, install, ship })
 }
 
+/* ── new ─────────────────────────────────────────────────────── */
+
+/** A page in `dir` or one folder down — leaving out Froam's own folder and dependencies. */
+function hasHtmlPage(dir) {
+  const look = (folder, depth) => {
+    let entries = []
+    try { entries = fs.readdirSync(folder, { withFileTypes: true }) } catch { return false }
+    return entries.some((entry) => (entry.isFile()
+      ? /\.html?$/i.test(entry.name)
+      : entry.isDirectory() && depth > 0 && !entry.name.startsWith('.') && !['froam', 'node_modules'].includes(entry.name) && look(path.join(folder, entry.name), depth - 1)))
+  }
+  return look(dir, 1)
+}
+
+const isEmptyDir = (dir) => { try { return fs.readdirSync(dir).length === 0 } catch { return false } }
+
+/**
+ * Where a new site goes when no folder was named: next to where the terminal
+ * is, unless that's the home folder (a terminal's default, not a choice),
+ * somewhere Froam can't write, like System32, or inside a project or site
+ * of its own (a new website is not a subfolder of someone's code). Then it
+ * joins the Froam folder.
+ */
+function newSiteBase() {
+  const here = path.resolve(cwd)
+  if (here !== path.resolve(os.homedir()) && isWritableDirectory(here) && !looksLikeProjectDir(here)) return here
+  return path.join(os.homedir(), 'Froam')
+}
+
+/** `base/slug`, or `base/slug-2`… when a folder with something in it already has that name. */
+function freeFolder(base, slug) {
+  for (let n = 1; ; n += 1) {
+    const candidate = path.join(base, n === 1 ? slug : `${slug}-${n}`)
+    if (!fs.existsSync(candidate) || isEmptyDir(candidate)) return candidate
+  }
+}
+
+/**
+ * Settle what `froam new` makes: a name, a kind of site and a folder. Asks
+ * only what the command line didn't say, and only when someone can answer;
+ * otherwise a business site in a folder named after it.
+ *
+ * @param {Record<string, string | boolean>} flags --name, --kind, --yes
+ * @param {string | null} folderArg the folder named on the command line
+ * @param {ReturnType<typeof createPrompter> | null} prompter one already asking questions, to reuse
+ */
+async function planNewSite(flags, folderArg, prompter = null) {
+  const own = !prompter && process.stdin.isTTY && !flags.yes ? createPrompter() : null
+  const ask = prompter ?? own
+  try {
+    let name = typeof flags.name === 'string' ? flags.name.trim() : ''
+    if (!name && folderArg) name = titleFromFolder(path.basename(path.resolve(cwd, folderArg)))
+    if (!name && ask) {
+      name = (await ask.askLine(`\n  ${bold('What is your website called?')} ${dim('(you can change it later)')}\n  Name: `)).trim()
+    }
+    name = name || 'My website'
+
+    let kind = typeof flags.kind === 'string' ? flags.kind.toLowerCase() : null
+    if (kind && !isStarterKind(kind)) fail(`there is no "${flags.kind}" starter — use one of: ${STARTER_KINDS.map((entry) => entry.id).join(', ')}`)
+    if (!kind && ask) {
+      log(`\n  ${bold('What kind of site is it?')}`)
+      STARTER_KINDS.forEach((entry, index) => log(`    ${teal(String(index + 1))}  ${entry.label.padEnd(21)}${dim(entry.hint)}`))
+      for (let attempt = 0; attempt < 3 && !kind; attempt += 1) {
+        const answer = (await ask.askLine(`\n  Number ${dim('(Enter for 1)')}: `)).trim().toLowerCase()
+        if (!answer) kind = STARTER_KINDS[0].id
+        else kind = STARTER_KINDS[Number(answer) - 1]?.id ?? STARTER_KINDS.find((entry) => entry.id === answer)?.id ?? null
+        if (!kind) log(dim(`  Type a number from 1 to ${STARTER_KINDS.length}.`))
+      }
+    }
+    kind = kind || STARTER_KINDS[0].id
+
+    const folder = folderArg ? path.resolve(cwd, folderArg) : freeFolder(newSiteBase(), slugify(name))
+    return { name, kind, folder }
+  } finally {
+    own?.close()
+  }
+}
+
+/**
+ * Write the new site: index.html with Froam's two tags already in its <head>,
+ * a README that says how to edit and publish it, froam.config.json and the
+ * froam/ workspace. Never writes over a page that is already there.
+ */
+function createNewSite({ name, kind, folder }) {
+  const shown = displayDir(folder)
+  if (fs.existsSync(folder) && !fs.statSync(folder).isDirectory()) fail(`${shown} is a file, not a folder — pick another name`)
+  if (fs.existsSync(path.join(folder, 'index.html'))) {
+    fail(`${shown} already has an index.html — open it in the editor with: npx @ahmadastic/froam "${folder}"`)
+  }
+  // The folder, and maybe its parent (~/Froam on a first run), may not exist yet:
+  // ask the nearest folder that does.
+  let existing = path.resolve(folder)
+  while (!fs.existsSync(existing) && path.dirname(existing) !== existing) existing = path.dirname(existing)
+  if (!isWritableDirectory(existing)) {
+    fail(`Froam can't write to ${shown} — run it from a folder of your own, or name one: froam new <folder>`)
+  }
+
+  try {
+    fs.mkdirSync(folder, { recursive: true })
+    fs.writeFileSync(path.join(folder, 'index.html'), renderStarter({ name, kind }))
+    const readme = path.join(folder, 'README.md')
+    if (!fs.existsSync(readme)) fs.writeFileSync(readme, starterReadme({ name, folder: path.basename(folder) }))
+    // froam publish builds its upload in .froam/; it's made again each time, never committed.
+    const gitignore = path.join(folder, '.gitignore')
+    if (!fs.existsSync(gitignore)) fs.writeFileSync(gitignore, '.froam/\n')
+    const configPath = path.join(folder, CONFIG_FILE)
+    let config = {}
+    try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')) } catch { /* new */ }
+    fs.writeFileSync(configPath, JSON.stringify({ ...config, dir: 'froam', framework: 'static' }, null, 2) + '\n')
+    ensureScaffold(path.join(folder, 'froam'), { glue: false })
+  } catch (error) {
+    fail(`could not create the site in ${shown}: ${error instanceof Error ? error.message : error}`)
+  }
+
+  const label = STARTER_KINDS.find((entry) => entry.id === kind)?.label ?? kind
+  log()
+  log(`${teal('◆')} ${bold('Froam Studio')} ${dim(`v${packageVersion()} · new`)}`)
+  log(`${OK} made ${bold(name)} ${dim(`(${label.toLowerCase()})`)} in ${teal(shown)}`)
+  log(`    index.html   ${dim('your page: real HTML, yours to keep')}`)
+  log(`    froam/       ${dim('where Froam saves your edits')}`)
+  log(`    README.md    ${dim('how to edit it and put it online')}`)
+}
+
+/** Open the new site in the editor: `froam dev` in its folder, with the welcome. */
+function startNewSite({ folder }, flags) {
+  const again = `npx @ahmadastic/froam "${folder}"`
+  if (flags['no-open']) {
+    log()
+    log(`  Open it in the editor: ${teal(again)}`)
+    return
+  }
+  log()
+  log(`  Opening it in your browser. Click any text to change it, add sections from`)
+  log(`  the Library, and press ${teal('Save to Repo')} (Ctrl+Shift+S) to keep your changes.`)
+  log(dim(`  Next time, open it with: ${again}`))
+  log()
+  const passOn = []
+  for (const name of ['port', 'host']) {
+    if (flags[name] === true) passOn.push(`--${name}`)
+    else if (typeof flags[name] === 'string') passOn.push(`--${name}`, flags[name])
+  }
+  if (flags.share) passOn.push('--share')
+  // A child in the site's own folder reads that folder's froam.config.json,
+  // not whatever project the terminal happened to be in.
+  const result = spawnSync(process.execPath, [CLI_ENTRY, 'dev', '--serve', '.', '--open', '--welcome', ...passOn], { cwd: folder, stdio: 'inherit' })
+  if (result.error) fail(`could not start the editor: ${result.error.message}`)
+  process.exit(result.status ?? 0)
+}
+
+/** `froam new [folder]`: a website from nothing, open in the editor. */
+async function newSite(flags, positional, prompter = null) {
+  // `--yes my-site` reads to parseFlags as yes="my-site": it's the folder.
+  for (const name of ['yes', 'no-open']) {
+    if (typeof flags[name] === 'string') { positional = [flags[name], ...positional]; flags[name] = true }
+  }
+  const plan = await planNewSite(flags, positional[0] ?? null, prompter)
+  // Before the editor starts: a prompt left open keeps the terminal in raw
+  // mode, and Ctrl+C would no longer stop it.
+  prompter?.close()
+  createNewSite(plan)
+  startNewSite(plan, flags)
+}
+
 /**
  * Re-run this CLI with Windows' certificate store trusted.
  *
@@ -603,6 +772,9 @@ async function askForTarget(maxAttempts = 3) {
         log('\nNothing to edit — run `froam --help` to see the other commands.')
         process.exit(0)
       }
+      // The same prompter asks the new-site questions: a second one over the
+      // same stdin would lose anything already typed or piped.
+      if (isNewSiteAnswer(answer)) return { newSite: await planNewSite({}, null, prompter) }
 
       // "1" means the first project we listed, not port 1 — nothing serves a page there.
       const picked = /^\d+$/.test(answer) ? projects[Number(answer) - 1] : null
@@ -720,6 +892,105 @@ async function checkTargetReachable(url, argvOverride = null) {
   return { fatal: isFatalTargetFailure(probe), message: describeTargetFailure(probe, url) }
 }
 
+/* ── publish ─────────────────────────────────────────────────── */
+
+/** Show a folder in Explorer / Finder / the file manager. Best-effort. */
+function revealFolder(dir) {
+  try {
+    if (process.platform === 'win32') spawnSync('explorer', [dir], { stdio: 'ignore' })
+    else execFileSync(process.platform === 'darwin' ? 'open' : 'xdg-open', [dir], { stdio: 'ignore' })
+  } catch { /* the path is printed anyway */ }
+}
+
+/**
+ * `froam publish [folder]`: a plain HTML site, online. Builds the clean copy
+ * (lib/publish.mjs), asks where the first time, and remembers the answer in
+ * froam.config.json, so publishing again is the one command.
+ */
+async function publish(flags, positional) {
+  // `--no-open my-site` reads to parseFlags as no-open="my-site": it's the folder.
+  if (typeof flags['no-open'] === 'string') { positional = [flags['no-open'], ...positional]; flags['no-open'] = true }
+  const siteDir = path.resolve(cwd, positional[0] ?? '.')
+  const configPath = path.join(siteDir, CONFIG_FILE)
+  let config = {}
+  try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')) } catch { /* none yet */ }
+
+  const framework = config.framework ?? detectFramework(siteDir)
+  if (framework !== 'static') {
+    fail(`froam publish puts plain HTML sites online, and this is a ${frameworkLabel(framework, siteDir) ?? framework}.\n`
+      + "  Deploy it the way you usually do: Froam's two files ship with it.")
+  }
+
+  const prior = config.publish && typeof config.publish === 'object' ? config.publish : {}
+  const project = slugify(typeof flags.name === 'string' ? flags.name : prior.project ?? path.basename(siteDir))
+  const outDir = path.join(siteDir, '.froam', 'publish', project)
+
+  log(`${teal('◆')} ${bold('Froam Studio')} ${dim(`v${packageVersion()} · publish`)}`)
+  let built
+  try {
+    built = buildPublishFolder(siteDir, outDir, { froamDir: typeof config.dir === 'string' ? config.dir : 'froam' })
+  } catch (error) {
+    fail(`${error instanceof Error ? error.message : error} — run froam publish in your site's folder`)
+  }
+  log(`${OK} ready: ${built.files.length} file${built.files.length === 1 ? '' : 's'}, ${(built.bytes / 1024).toFixed(0)} KB ${dim('(what you last saved in Froam)')}`)
+  for (const warning of built.warnings) log(`${WARN} ${warning}`)
+
+  let target = typeof flags.to === 'string' ? flags.to.toLowerCase() : prior.to ?? null
+  if (target && !isPublishTarget(target)) fail(`there is no "${flags.to}" host — use one of: ${PUBLISH_TARGETS.map((entry) => entry.id).join(', ')}`)
+  if (!target && process.stdin.isTTY) {
+    const prompter = createPrompter()
+    log(`\n  ${bold('Where should it go?')} ${dim('(Froam remembers your answer)')}`)
+    PUBLISH_TARGETS.forEach((entry, index) => log(`    ${teal(String(index + 1))}  ${entry.label.padEnd(17)}${dim(entry.hint)}`))
+    for (let attempt = 0; attempt < 3 && !target; attempt += 1) {
+      const answer = (await prompter.askLine(`\n  Number ${dim('(Enter for 1)')}: `)).trim().toLowerCase()
+      target = !answer ? PUBLISH_TARGETS[0].id : PUBLISH_TARGETS[Number(answer) - 1]?.id ?? (isPublishTarget(answer) ? answer : null)
+      if (!target) log(dim(`  Type a number from 1 to ${PUBLISH_TARGETS.length}.`))
+    }
+    prompter.close()
+  }
+  target = target ?? 'folder'
+
+  const remember = (extra = {}) => {
+    const publishConfig = { ...prior, to: target, project, ...extra }
+    fs.writeFileSync(configPath, JSON.stringify({ ...config, publish: publishConfig }, null, 2) + '\n')
+  }
+
+  if (target === 'folder' || target === 'netlify') {
+    remember()
+    log()
+    log(`  Your site is in: ${teal(outDir)}`)
+    if (target === 'netlify') {
+      log(`  Drag that folder onto ${teal('https://app.netlify.com/drop')} — it opens now. It's free, and`)
+      log('  Netlify shows your address when the upload ends. Next time, drag it onto your site\'s Deploys page.')
+      if (!flags['no-open']) { openBrowser('https://app.netlify.com/drop'); revealFolder(outDir) }
+    } else {
+      log('  Upload everything in it to any static host. Nothing in it needs Froam to run.')
+      if (!flags['no-open']) revealFolder(outDir)
+    }
+    return
+  }
+
+  const host = PUBLISH_TARGETS.find((entry) => entry.id === target)
+  log()
+  log(`  Publishing to ${bold(host.label)} as ${teal(project)} ${dim("— the first time also installs their tool, which takes a minute")}`)
+  log()
+  try {
+    const { url } = await HOSTS[target]({ dir: outDir, project, cwd: siteDir, log })
+    remember(url ? { url } : {})
+    log()
+    if (url) {
+      log(`${OK} ${bold('Your site is live:')} ${teal(url)}`)
+      if (!flags['no-open']) openBrowser(url)
+    } else {
+      log(`${OK} ${bold('Published.')} Your site's address is in ${host.label}'s message above.`)
+    }
+    log(dim('  Change it in Froam, save, then run froam publish again to update it.'))
+  } catch (error) {
+    log()
+    fail(error instanceof Error ? error.message : String(error))
+  }
+}
+
 /* ── dev ─────────────────────────────────────────────────────── */
 async function dev(flags) {
   let app = flags.app ?? flags.a ?? null
@@ -739,6 +1010,21 @@ async function dev(flags) {
     serveDir = '.'
   }
   if (serveDir) serveDir = path.resolve(cwd, String(serveDir))
+
+  // A folder with no page in it opened on a bare 404 with no editor. Someone
+  // who points Froam at an empty folder most likely wants a site in it.
+  if (serveDir && !hasHtmlPage(serveDir)) {
+    if (!fs.existsSync(serveDir)) fail(`there is no folder at ${serveDir}`)
+    const leftovers = fs.readdirSync(serveDir).filter((name) => !name.startsWith('.') && name !== 'froam' && name !== CONFIG_FILE)
+    if (process.stdin.isTTY && !leftovers.length) {
+      const prompter = createPrompter()
+      const answer = (await prompter.askLine(`\n  ${bold(`There's no web page in ${displayDir(serveDir)} yet.`)}\n  Start a new website here? [Y/n] `)).trim()
+      if (/^(n|no)$/i.test(answer)) { prompter.close(); process.exit(0) }
+      await newSite({ ...flags, serve: undefined }, [serveDir], prompter)
+      return
+    }
+    fail(`there's no web page in ${displayDir(serveDir)} yet.\n  Starting from nothing? Run: npx @ahmadastic/froam new "${serveDir}"`)
+  }
 
   if (!fs.existsSync(EDITOR_BUNDLE)) {
     fail('editor bundle missing (dist/standalone/froam-editor.js) — reinstall @ahmadastic/froam or run `npm run build` inside it')
@@ -776,12 +1062,18 @@ async function dev(flags) {
   const sourceRoot = !writeSource ? null
     : serveDir ?? (!remoteApp && path.resolve(cwd) !== os.homedir() && looksLikeProjectDir(cwd) ? cwd : null)
 
+  // Sections go into the .html files only for a plain static site: a folder
+  // a build produced (dist/ next to a package.json) is replaced by the next build.
+  const plainStaticSite = Boolean(serveDir && sourceRoot === serveDir
+    && ![serveDir, path.dirname(serveDir)].some((dir) => fs.existsSync(path.join(dir, 'package.json'))))
+
   const { server, appTarget, startShare, deviceKey } = createBridgeServer({
     port,
     froamDir,
     app,
     serveDir,
     sourceRoot,
+    writeBlocksToSource: plainStaticSite,
     notify: config.notify ?? null,
     allowOrigins: typeof flags['allow-origin'] === 'string' ? flags['allow-origin'] : undefined,
     log: (line) => log(`${dim(new Date().toLocaleTimeString())} ${OK} ${line}`),
@@ -831,7 +1123,8 @@ async function dev(flags) {
     log(`  ${bold('repo')}     ${displayDir(froamDir)} ${dim('← Save to Repo (Ctrl+Shift+S) writes here')}`)
     log()
     log(dim('  Ctrl+C to stop'))
-    if (flags.open && (appTarget || serveDir)) openBrowser(`http://localhost:${port}`)
+    // --welcome (from froam new) opens the editor and its Library on the first visit.
+    if (flags.open && (appTarget || serveDir)) openBrowser(`http://localhost:${port}/${flags.welcome ? '#froam-start' : ''}`)
     // --share: reachable from anywhere, through the Froam share service.
     if (flags.share && (appTarget || serveDir)) {
       startShare().then((share) => {
@@ -1199,8 +1492,17 @@ function help() {
   log(`  ${teal('froam')}              ask which site to edit, then open it`)
   log(`  ${teal('froam <url>')}        edit a running site   ${dim('froam example.com · froam localhost:3000')}`)
   log(`  ${teal('froam <dir>')}        edit a static folder  ${dim('froam ./public')}`)
+  log(`  ${teal('froam new')}          no website yet? start one from scratch`)
+  log(`  ${teal('froam publish')}      put your site online`)
   log()
   log(bold('Commands'))
+  log(`  ${teal('new [folder]')}       make a website from scratch and open it in the editor`)
+  log(`      ${dim('--kind <kind>')}      ${STARTER_KINDS.map((entry) => entry.id).join(' | ')}`)
+  log(`      ${dim('--name <name>')}      the site's name ${dim('(asked when not given)')}`)
+  log(`      ${dim('--no-open')}          make it, but don't start the editor`)
+  log(`  ${teal('publish [folder]')}   put a plain HTML site online ${dim('(asks where the first time, then remembers)')}`)
+  log(`      ${dim('--to <host>')}        ${PUBLISH_TARGETS.map((entry) => entry.id).join(' | ')}`)
+  log(`      ${dim('--name <name>')}      the site's name at the host`)
   log(`  ${teal('init')}               detect a supported project, scaffold Froam files, wire supported entry points`)
   log(`      ${dim('--no-install')}       don't add @ahmadastic/froam to a Vite project — you will`)
   log(`  ${teal('dev')}                universal editor bridge`)
@@ -1275,7 +1577,7 @@ async function aiCheck() {
   log(dim('  Turn on AI in Quick Edit to use it.'))
 }
 const KNOWN_COMMANDS = new Set([
-  'init', 'dev', 'build', 'status', 'check', 'doctor', 'migrate', 'ai-check',
+  'new', 'publish', 'init', 'dev', 'build', 'status', 'check', 'doctor', 'migrate', 'ai-check',
   'version', '--version', '-v', 'help', '--help', '-h',
 ])
 
@@ -1315,7 +1617,7 @@ function resolveShorthand(command, args) {
 
 /* ── dispatch ────────────────────────────────────────────────── */
 const { command: resolvedCommand, args: resolvedArgs } = resolveShorthand(cmd, rest)
-const { flags } = parseFlags(resolvedArgs)
+const { flags, positional } = parseFlags(resolvedArgs)
 
 function useWindowsSystemCertificates(command, commandFlags) {
   const app = commandFlags.app ?? commandFlags.a
@@ -1326,6 +1628,8 @@ function useWindowsSystemCertificates(command, commandFlags) {
 useWindowsSystemCertificates(resolvedCommand, flags)
 
 switch (resolvedCommand) {
+  case 'new': await newSite(flags, positional); break
+  case 'publish': await publish(flags, positional); break
   case 'init': init(flags); break
   case 'dev': await dev(flags); break
   case 'build': build(flags); break
@@ -1341,7 +1645,12 @@ switch (resolvedCommand) {
   case '--help':
   case '-h': help(); break
   case undefined: {
-    const { url, project } = await askForTarget()
+    const { url, project, newSite: plan } = await askForTarget()
+    if (plan) {
+      createNewSite(plan)
+      startNewSite(plan, flags)
+      break
+    }
     await dev({ app: url.href, open: true, probed: true, project })
     break
   }
@@ -1357,7 +1666,7 @@ switch (resolvedCommand) {
 
 /** The command a typo most likely meant (`biuld` → `build`), if one is close. */
 function closestCommand(input) {
-  const commands = ['init', 'dev', 'build', 'status', 'check', 'doctor', 'migrate', 'version', 'help']
+  const commands = ['new', 'publish', 'init', 'dev', 'build', 'status', 'check', 'doctor', 'migrate', 'version', 'help']
   const distance = (a, b) => {
     const row = Array.from({ length: b.length + 1 }, (_, i) => i)
     for (let i = 1; i <= a.length; i += 1) {

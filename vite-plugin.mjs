@@ -18,13 +18,17 @@
  *   GET  /__froam/repo/project/load and POST /project/save manage the
  *        additive froam.project.json sidecar without changing generated output.
  *   GET  /__froam/repo/status  -> { success, exists, dirty, files }
+ *   GET  /__froam/whoami       -> { success, device } (this computer, or another device)
+ *   GET  /__froam/events       live sync between open editors (server-sent events)
+ *   /__froam/live              Go Live (lib/go-live.mjs) — this computer only
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
-import { ensureScaffold, loadDesign, mergeSave, writeArtifacts, VIEWPORTS } from './lib/codegen.mjs'
+import { ensureScaffold, loadDesign, mergeSaveWithReport, writeArtifacts, VIEWPORTS } from './lib/codegen.mjs'
 import { loadProjectFile, writeProjectFile } from './lib/project-store.mjs'
 import { createFroamMediaApi } from './lib/media-store.mjs'
+import { createGoLive } from './lib/go-live.mjs'
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -42,6 +46,12 @@ function readJsonBody(req) {
     })
     req.on('error', reject)
   })
+}
+
+/** This computer. A Vite server started with --host also answers phones on the Wi-Fi; they don't get Go Live. */
+function isLoopback(req) {
+  const address = String(req.socket?.remoteAddress ?? '')
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1' || address.startsWith('127.')
 }
 
 function send(res, status, payload) {
@@ -67,6 +77,7 @@ function gitStatus(dir) {
 export default function froamStudio(options = {}) {
   const relDir = options.dir ?? 'src/froam'
   let froamDir = ''
+  let root = ''
 
   function designPath() {
     return path.join(froamDir, 'froam.design.json')
@@ -82,6 +93,7 @@ export default function froamStudio(options = {}) {
 
     configResolved(config) {
       froamDir = path.resolve(config.root, relDir)
+      root = config.root
     },
 
     configureServer(server) {
@@ -90,14 +102,60 @@ export default function froamStudio(options = {}) {
       // Placed media lives in <dir>/media and is served from here while editing.
       const mediaApi = createFroamMediaApi({ getFroamDir: () => froamDir, send })
 
+      // Live sync between open editors, as under froam dev (lib/dev-server.mjs).
+      const listeners = new Set()
+      let revision = 0
+      const broadcast = (change) => {
+        revision += 1
+        const frame = `event: change\ndata: ${JSON.stringify({ revision, from: null, device: 'computer', at: Date.now(), ...change })}\n\n`
+        for (const listener of listeners) {
+          try { listener.write(frame) } catch { listeners.delete(listener) }
+        }
+      }
+      const announce = (req, change) => {
+        const id = String(req.headers['x-froam-client'] ?? '')
+        broadcast({ from: /^[A-Za-z0-9_-]{6,64}$/.test(id) ? id : null, device: isLoopback(req) ? 'computer' : 'other', ...change })
+      }
+      // Go Live: the design goes into the app's own bundle, so a push is what ships it.
+      const goLive = createGoLive({ froamDir, sourceRoot: root, log: (line) => server.config.logger.info(`[froam] ${line}`), progress: (job) => broadcast({ kind: 'live', job }) })
+
       server.middlewares.use(async (req, res, next) => {
         const url = (req.url || '').split('?')[0]
         if (!url.startsWith('/__froam/')) return next()
 
         try {
           if ((url === '/__froam/media' || url.startsWith('/__froam/media/')) && await mediaApi(req, res, url)) return
+          if (url === '/__froam/whoami' && req.method === 'GET') {
+            return send(res, 200, { success: true, name: null, device: isLoopback(req) ? 'computer' : 'other' })
+          }
+          if (url === '/__froam/live' || url.startsWith('/__froam/live/')) {
+            res.setHeader('Cache-Control', 'no-store')
+            if (!isLoopback(req)) return send(res, 403, { success: false, error: 'Only the computer running the dev server can put the site live.' })
+            if (url === '/__froam/live' && req.method === 'GET') return send(res, 200, { success: true, plan: await goLive.plan({ remote: new URL(req.url ?? '/', 'http://froam.local').searchParams.get('remote') || undefined }), job: goLive.job() })
+            if (url === '/__froam/live' && req.method === 'POST') {
+              const { token, remote } = await readJsonBody(req).catch(() => ({}))
+              const started = await goLive.start(typeof token === 'string' ? token : '', { remote: typeof remote === 'string' ? remote : undefined })
+              if (!started.ok) return send(res, started.status, { success: false, error: started.error, plan: started.plan ?? null, job: started.job ?? null })
+              return send(res, 202, { success: true, job: started.job })
+            }
+            if (url === '/__froam/live/job' && req.method === 'GET') return send(res, 200, { success: true, job: goLive.job() })
+            if (url === '/__froam/live/site' && req.method === 'POST') {
+              const { url: address } = await readJsonBody(req).catch(() => ({}))
+              try { return send(res, 200, { success: true, url: goLive.setSiteUrl(address) }) } catch (error) { return send(res, 400, { success: false, error: error.message }) }
+            }
+            return send(res, 404, { success: false, error: 'Unknown froam endpoint' })
+          }
           if (url === '/__froam/repo/load' && req.method === 'GET') {
             return send(res, 200, { success: true, design: loadDesign(designPath()) })
+          }
+          // Open editors (two tabs, two windows) hear about each other's saves.
+          if (url === '/__froam/events' && req.method === 'GET') {
+            res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' })
+            res.write(`retry: 2000\nevent: ready\ndata: ${JSON.stringify({ revision })}\n\n`)
+            listeners.add(res)
+            const beat = setInterval(() => { try { res.write(': beat\n\n') } catch { /* closed */ } }, 25_000)
+            req.on('close', () => { clearInterval(beat); listeners.delete(res) })
+            return
           }
           if (url === '/__froam/repo/project/load' && req.method === 'GET') {
             return send(res, 200, { success: true, project: loadProjectFile(projectPath()) })
@@ -123,19 +181,25 @@ export default function froamStudio(options = {}) {
           }
 
           if (url === '/__froam/repo/save' && req.method === 'POST') {
-            const { routeKey, viewportMode, store } = await readJsonBody(req)
+            const { routeKey, viewportMode, store, base } = await readJsonBody(req)
             if (typeof routeKey !== 'string' || !VIEWPORTS.includes(viewportMode) || typeof store !== 'object' || store === null) {
               return send(res, 400, { success: false, error: 'Expected { routeKey, viewportMode, store }' })
             }
 
-            const design = mergeSave(loadDesign(designPath()), { routeKey, viewportMode, store })
-            const files = writeArtifacts(froamDir, design)
+            // With `base`, only what this editor changed is taken (lib/draft-merge.mjs).
+            const saved = mergeSaveWithReport(loadDesign(designPath()), { routeKey, viewportMode, store, base })
+            const files = writeArtifacts(froamDir, saved.design)
+            goLive.recordSave(routeKey)
+            announce(req, { kind: 'design', routeKey, viewport: viewportMode })
 
             const status = await gitStatus(froamDir)
             return send(res, 200, {
               success: true,
               ...status,
               files: files.map((f) => path.join(relDir, f)),
+              revision,
+              store: saved.store,
+              conflicts: saved.conflicts,
             })
           }
 

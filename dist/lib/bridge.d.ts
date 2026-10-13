@@ -11,6 +11,7 @@ export declare function getBridgeOrigin(): string;
 export declare function bridgeUrl(path: string): string;
 /** This device's pairing key, picking it up from the address on first sight. */
 export declare function pairedDeviceKey(): string | null;
-/** Headers for a bridge request: the pairing key when this device has one. */
+export declare function bridgeClientId(): string;
+/** Headers for a bridge request: this editor, and the pairing key when this device has one. */
 export declare function bridgeHeaders(extra?: Record<string, string>): Record<string, string>;
 //# sourceMappingURL=bridge.d.ts.map

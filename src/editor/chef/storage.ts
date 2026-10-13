@@ -11,6 +11,7 @@ import {
   type FroamPersona,
   isFroamPersonaPath,
 } from '../froamPersona'
+import { type SyncBase } from './draft-merge'
 import { type ElementDraft, type EditorStore, CANVAS_KEY } from './types'
 
 export const STORAGE_KEY = 'froam-editor-store-v1'
@@ -76,6 +77,34 @@ export function saveBrandFontsForProject(fonts: BrandFont[], projectKey: string)
     // matters more than the convenience copy, so fail quietly — the font
     // still lives in the design once it has been saved to the repo.
   }
+}
+
+/**
+ * What this device last synced with the project, per route and size, as
+ * signatures (chef/draft-merge.ts) — so a save sends only what changed here,
+ * and a save from another device merges in without wiping unsaved work.
+ */
+export const SYNC_BASE_KEY = 'froam-sync-base-v1'
+
+/** `scopes`: Save to Repo (froam.design.json). `published`: Save (froam.published.json, or a hosted publish API). */
+export type SyncRecord = { scopes: Record<string, SyncBase>; brandFonts?: string; published?: Record<string, SyncBase> }
+
+export function loadSyncRecord(projectKey: string): SyncRecord {
+  if (typeof window === 'undefined') return { scopes: {} }
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(froamStorageKey(SYNC_BASE_KEY, projectKey)) ?? 'null') as SyncRecord | null
+    if (!parsed || typeof parsed !== 'object' || !parsed.scopes || typeof parsed.scopes !== 'object') return { scopes: {} }
+    const published = parsed.published && typeof parsed.published === 'object' ? parsed.published : undefined
+    return { scopes: parsed.scopes, brandFonts: typeof parsed.brandFonts === 'string' ? parsed.brandFonts : undefined, ...(published ? { published } : {}) }
+  } catch {
+    return { scopes: {} }
+  }
+}
+
+export function saveSyncRecordForProject(record: SyncRecord, projectKey: string) {
+  if (typeof window === 'undefined') return
+  // Hashes only, a few bytes an edit. Losing it costs a merge that keeps both sides, never an edit.
+  try { window.localStorage.setItem(froamStorageKey(SYNC_BASE_KEY, projectKey), JSON.stringify(record)) } catch { /* storage full */ }
 }
 
 export function loadStore(projectKey: string): EditorStore {

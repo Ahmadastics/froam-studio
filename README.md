@@ -34,6 +34,8 @@ npx @ahmadastic/froam
     1  localhost:3000  My Portfolio
     2  localhost:5173  Vite + React
 
+  No website yet? Type n to start one from scratch.
+
   Website URL, or a number:
 ```
 
@@ -55,6 +57,30 @@ npx @ahmadastic/froam example.com          # a live site
 npx @ahmadastic/froam localhost:3000       # your dev server
 npx @ahmadastic/froam ./public             # a static HTML folder
 ```
+
+### No website yet?
+
+```bash
+npx @ahmadastic/froam new
+```
+
+Froam asks what your site is called and what kind it is (business, portfolio,
+product, event, or a blank page), writes a real `index.html` with your
+name in it, and opens it in the editor with the section Library showing.
+Click any text to change it, add sections, save: text and new sections are
+written straight into `index.html`. Typing `n` at the first prompt does the
+same, and so does pointing Froam at an empty folder.
+
+Then put it online:
+
+```bash
+npx @ahmadastic/froam publish
+```
+
+The first time, Froam asks where (Cloudflare Pages, free and fine for a
+business; Netlify; Vercel; or just the folder) and logs you in through the
+host's own tool. It remembers, so updating the live site later is the same
+one command.
 
 ### Where your edits are saved
 
@@ -100,8 +126,34 @@ of address:
   never reaches a server or a log (it's in the `#` part), and leaves the
   address bar as soon as the editor reads it. Keep the link to yourself.
 
-Either way, an edit reaches your visitors when you commit and deploy, as with
-any change to your code.
+Either way, an edit reaches your visitors once it goes live (below).
+
+Keep the editor open on both if you like. A save on one shows on the other in
+about a second, without a reload, and neither device's save can wipe the
+other's edits: each save takes only what that device changed, down to the
+single property, and unsaved work on the other device is kept. If both change
+the same property of the same element, the later save wins and says so.
+
+### Going live
+
+**Go live** in the toolbar puts what you saved on your real site, from the
+computer or a paired phone. It saves anything not saved yet, then shows where
+it's going and exactly what goes before anything happens:
+
+- **A site in git** (GitHub and the like): it commits only the files Froam
+  wrote (the design, the two files visitors load, placed media, and the
+  source files Froam put copy, classes or sections into) and pushes them, so
+  your host deploys as it always does. Anything else you're in the middle of
+  stays uncommitted. If unpushed commits of yours would go along, it says so;
+  if the remote has newer commits, it asks you to pull first and pushes
+  nothing. It never forces a push or skips a hook.
+- **A plain HTML site** set up with `froam publish`: it uploads to the same
+  host (Cloudflare Pages or Vercel), as you. Sign in to the host once with
+  `froam publish` on your computer; after that it works from your phone too.
+
+Then it reads your live site until it serves the change, and only then says
+**Live**. Give it your site's address once (it asks) for that check; without
+one it says it was sent. Every open editor sees the progress.
 
 ### Screen sizes
 

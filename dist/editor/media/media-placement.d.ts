@@ -23,7 +23,7 @@ export declare function mediaHostOf(element: HTMLElement | null): HTMLElement | 
 /** Where an upload of `kind` lands on `target`, or a sentence saying why it can't. */
 export declare function roleFor(target: HTMLElement | null, kind: 'image' | 'video'): MediaRole | string;
 /** Roles where a live (CSS) fit can also zoom: a background, or media inside a box Froam owns that clips it. */
-export declare function canZoomLive(role: MediaRole): role is "frame" | "background" | "frame-video" | "bg-video" | "new";
+export declare function canZoomLive(role: MediaRole): role is "frame" | "background" | "new" | "frame-video" | "bg-video";
 /** The box the picture fills, in CSS pixels: an <img>/<video>'s content box, a background's padding box. */
 export declare function measureSlot(target: HTMLElement | null): FitSize | null;
 /** What media an element shows now, as a design would store it — for Adjust. */

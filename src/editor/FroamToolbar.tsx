@@ -10,6 +10,7 @@ import {
   History,
   Keyboard,
   LogOut,
+  Rocket,
   Minimize2,
   Monitor,
   MousePointer2,
@@ -49,6 +50,9 @@ type Props = {
   onRedo: () => void
   onSave: () => void
   onSaveRepo?: () => void
+  /** Go Live (FroamGoLive): saved work onto the real site. Only where this device may write the project. */
+  onGoLive?: () => void
+  liveState?: 'idle' | 'going' | 'live' | 'failed'
   repoStatus?: 'clean' | 'dirty' | 'offline' | null
   repoDirtyCount?: number
   onAskFroam: () => void
@@ -199,6 +203,8 @@ export default function FroamToolbar({
   onRedo,
   onSave,
   onSaveRepo,
+  onGoLive,
+  liveState = 'idle',
   repoStatus,
   repoDirtyCount,
   onAskFroam,
@@ -592,6 +598,20 @@ export default function FroamToolbar({
             </button>
           )}
         </div>
+        {onGoLive && (
+          <button
+            type="button"
+            className="froam-tb__live-btn"
+            data-state={liveState}
+            onClick={onGoLive}
+            aria-label={liveState === 'going' ? 'Going live — show progress' : 'Go live: put what you saved on your site'}
+            title={liveState === 'going' ? 'Going live…' : liveState === 'live' ? 'Live — put newer changes live' : 'Put what you saved on your real site'}
+            data-chef-editor-root="true"
+          >
+            <Rocket size={15} />
+            <span>{liveState === 'going' ? 'Going live…' : 'Go live'}</span>
+          </button>
+        )}
 
         <div className="froam-tb__sep" />
 

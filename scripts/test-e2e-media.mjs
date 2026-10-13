@@ -298,7 +298,11 @@ test('Save to Repo: the design holds references, not pictures; the CSS points at
   await new Promise((r) => setTimeout(r, 300))
   const design = fs.readFileSync(designPath, 'utf8')
   assert(!/data:(?:image|video)\//.test(design), 'a picture is still inline in the design')
-  assert(/froam-media:[a-f0-9]{32}\.webm/.test(design), 'the video is not referenced')
+  // A video block added on a plain HTML site is written into the page itself
+  // (block-writeback.mjs), pointing at the file in froam/media/.
+  const html = fs.readFileSync(path.join(siteDir, 'index.html'), 'utf8')
+  assert(/froam-media:[a-f0-9]{32}\.webm/.test(design) || /froam\/media\/[a-f0-9]{32}\.webm/.test(html), 'the video is not referenced')
+  assert(!/data:(?:image|video)\//.test(html), 'a picture was written into the page inline')
   const media = fs.readdirSync(path.join(siteDir, 'froam', 'media'))
   assert(media.some((name) => name.endsWith('.webp')), `no WebP was made: ${media.join(', ')}`)
   assert(design.length < 40_000, `design is ${design.length} bytes`)
