@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 9.7.0 - 2026-10-13
 
 - **Go live from the editor.** Saving put an edit in the project; getting it
   to visitors still meant a terminal. **Go live** in the toolbar (on a
