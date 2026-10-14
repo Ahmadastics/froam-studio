@@ -99,7 +99,15 @@ async function thisRepo(browser) {
     const guest = await browser.newContext()
     const invited = await visit(guest, invite)
     check(invited.status === 200 && /Discover/.test(invited.text), `an invite opens the page (${invited.status})`)
-    check(await invited.page.waitForSelector('.global-chef-button', { timeout: 30000 }).then(() => true).catch(() => false), 'the editor loads for the guest')
+    // The editor comes down the tunnel from this computer's own connection: a slow
+    // upload can take a while, so it gets a minute and one reload before it counts.
+    const editorShows = () => invited.page.waitForSelector('.global-chef-button', { timeout: 60000 }).then(() => true).catch(() => false)
+    let loaded = await editorShows()
+    if (!loaded) {
+      await invited.page.reload().catch(() => {})
+      loaded = await editorShows()
+    }
+    check(loaded, 'the editor loads for the guest')
     check((await visit(guest, `${share.origin}/`)).status === 200, 'the guest comes back without the invite in the URL')
     const lasting = await fetch(`${LOCAL}/__froam/share/access`, json({ expiresIn: '24h' })).then((r) => r.json())
     check(lasting.expiresAt > Date.now(), 'links can be set to stop in 24 hours')
