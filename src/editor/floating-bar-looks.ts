@@ -4,10 +4,11 @@
  * download it with the editor.
  */
 import type { CSSProperties } from 'react'
+import { FX_CATALOG, FX_PREFIX, type FxFamily } from '../fx/engine'
 
 type SelectionPatch = Record<string, string | number>
 
-export const LOOK_GROUPS = ['Alive', 'Signature', 'Photo', 'World', 'Now', 'Accent', 'Surface', 'Depth', 'Shape', 'Line', 'Type', 'Pattern', 'Vibe', 'Reset'] as const
+export const LOOK_GROUPS = ['Cursor', 'Scroll', 'Kinetic', 'Craft', 'Ambient', 'Alive', 'Signature', 'Photo', 'World', 'Now', 'Accent', 'Surface', 'Depth', 'Shape', 'Line', 'Type', 'Pattern', 'Vibe', 'Reset'] as const
 export type LookGroup = (typeof LOOK_GROUPS)[number]
 
 /**
@@ -15,6 +16,11 @@ export type LookGroup = (typeof LOOK_GROUPS)[number]
  * tests and saved styles, so they stay; these are the words people navigate by.
  */
 export const LOOK_GROUP_LABELS: Record<LookGroup, string> = {
+  Cursor: 'Follow the cursor',
+  Scroll: 'On scroll',
+  Kinetic: 'Moving text',
+  Craft: 'Hover craft',
+  Ambient: 'Always alive',
   Alive: 'Interactive',
   Signature: 'Signature',
   Photo: 'Images',
@@ -33,6 +39,11 @@ export const LOOK_GROUP_LABELS: Record<LookGroup, string> = {
 
 /** One line under each section heading: what you'd come to it for. */
 export const LOOK_GROUP_HINTS: Record<LookGroup, string> = {
+  Cursor: 'Tilt, pull and light that follow the pointer',
+  Scroll: 'Reveals, parallax and numbers as the page moves',
+  Kinetic: 'Words that arrive, decode, type and flow',
+  Craft: 'Small delights when the pointer arrives',
+  Ambient: 'Gentle motion that never stops',
   Alive: 'Answer hover, press and focus',
   Signature: 'Showpiece materials',
   Photo: 'Treatments for pictures',
@@ -51,6 +62,7 @@ export const LOOK_GROUP_HINTS: Record<LookGroup, string> = {
 
 /** The rail in Styles: groups gathered by the question you're asking. */
 export const LOOK_SHELVES: readonly { title: string; groups: readonly LookGroup[] }[] = [
+  { title: 'Bring it to life', groups: ['Cursor', 'Scroll', 'Kinetic', 'Craft', 'Ambient'] },
   { title: 'Make it special', groups: ['Alive', 'Signature', 'Now'] },
   { title: 'Find a character', groups: ['World', 'Vibe', 'Pattern'] },
   { title: 'Build it up', groups: ['Accent', 'Surface', 'Depth', 'Shape', 'Line'] },
@@ -69,6 +81,8 @@ export type Look = {
    */
   text?: ((accent: string) => Record<string, string>) | null
   patch?: SelectionPatch
+  /** An effect (src/fx/engine.ts): its tile toggles it on and off, and others stay. */
+  effect?: string
 }
 
 export type LookOverrides = {
@@ -3201,4 +3215,33 @@ export const LOOK_NOTES: Record<string, string> = {
 
   /* Reset */
   'Reset look': 'Strips every look back to nothing.',
+}
+
+/* ─── Effects: the looks that move (src/fx/engine.ts) ───
+   Each is one style, --froam-fx-<id>, so it saves, syncs, undoes and
+   cascades by screen size like any colour. Its tile wears the effect itself:
+   hover the 3D tilt tile and it tilts. */
+const FX_GROUPS: Record<FxFamily, LookGroup> = { pointer: 'Cursor', scroll: 'Scroll', text: 'Kinetic', craft: 'Craft', ambient: 'Ambient' }
+const FX_SWATCHES: Record<FxFamily, CSSProperties> = {
+  pointer: { background: 'linear-gradient(135deg, #312e81, #7c3aed)', borderRadius: 8 },
+  scroll: { background: 'linear-gradient(160deg, #0f766e, #22d3ee)', borderRadius: 8 },
+  text: { background: '#0f172a', color: '#f8fafc', borderRadius: 8 },
+  craft: { background: 'linear-gradient(135deg, #be185d, #f97316)', borderRadius: 8 },
+  ambient: { background: 'radial-gradient(circle at 30% 30%, #fde68a, #f59e0b 60%, #b45309)', borderRadius: 999 },
+}
+const PAGE_SCROLL_FX = new Set(['parallax', 'scrub', 'progress', 'stack'])
+/** Words shown on a tile whose effect works on words. */
+export const FX_SWATCH_TEXT: Record<string, string> = { count: '1,280', words: 'Hello there', letters: 'Hello', scramble: 'DECODE', typewriter: 'Typed', highlight: 'Marked', gradient: 'Flowing', marquee: 'Ticker ✦ news ✦' }
+for (const spec of FX_CATALOG) {
+  const property = `${FX_PREFIX}${spec.id}`
+  LOOKS.push({
+    name: spec.label,
+    group: FX_GROUPS[spec.family],
+    effect: spec.id,
+    // Effects driven by the page's own scroll mean nothing inside a tile: those tiles stay still.
+    swatch: (PAGE_SCROLL_FX.has(spec.id) ? FX_SWATCHES[spec.family] : { ...FX_SWATCHES[spec.family], [property]: 'on' }) as CSSProperties,
+    styles: () => ({ [property]: 'on' }),
+    text: () => ({ [property]: 'on' }),
+  })
+  LOOK_NOTES[spec.label] = spec.description
 }

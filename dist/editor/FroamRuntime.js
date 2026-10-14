@@ -14,6 +14,7 @@ import { applyDraftText, writeElementText } from './draft-text.js';
 import { applyMediaSource, restorePageMedia } from './media/apply-media.js';
 import { hasMediaRef, resolveMediaRefs } from './media/media-refs.js';
 import { SIZE_ORDER, layeredDrafts } from './chef/cascade.js';
+import { FX_PREFIX, installFroamFx } from '../fx/engine.js';
 const CANVAS_KEY = '__froam_canvas__';
 const INJECTION_KEY = '__froam_injection__';
 const ROOT_PARENT_KEY = '__froam_root__';
@@ -109,6 +110,9 @@ function applyDraft(element, draft) {
         else
             element.style.removeProperty(cssKey);
     }
+    // Effects (src/fx/engine.ts) come to life from these same inline styles.
+    if (typeof window !== 'undefined' && Object.keys(draft.styles).some((key) => key.startsWith(FX_PREFIX)))
+        installFroamFx(window).refresh();
 }
 function restoreRuntimeSnapshots(snapshots) {
     for (const snapshot of snapshots.slice().reverse()) {

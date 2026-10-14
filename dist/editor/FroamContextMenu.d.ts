@@ -1,4 +1,4 @@
-type ContextAction = 'edit-with-ai' | 'copy-styles' | 'paste-styles' | 'duplicate' | 'clear' | 'delete-element' | 'bring-to-front' | 'send-to-back' | 'toggle-visibility' | 'wrap-container' | 'upload-image' | 'adjust-image' | 'group-elements' | 'ungroup-elements' | 'customize-ui' | 'archive-component' | 'archive-style' | 'archive-motion' | 'archive-pattern';
+type ContextAction = 'edit-with-ai' | 'copy-styles' | 'paste-styles' | 'duplicate' | 'cut-element' | 'copy-element' | 'paste-element' | 'clear' | 'delete-element' | 'bring-to-front' | 'send-to-back' | 'toggle-visibility' | 'wrap-container' | 'upload-image' | 'adjust-image' | 'group-elements' | 'ungroup-elements' | 'customize-ui' | 'archive-component' | 'archive-style' | 'archive-motion' | 'archive-pattern';
 type Props = {
     position: {
         x: number;

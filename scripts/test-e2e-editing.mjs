@@ -14,6 +14,7 @@
  */
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import http from 'node:http'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
@@ -173,6 +174,144 @@ test('on a site whose smooth scrolling pauses while Froam edits, the page and th
     assert(!handedBack.prevent && !handedBack.stopped, `after closing the editor: ${JSON.stringify(handedBack)}`)
   } finally { await context.close() }
 })
+
+test('cut, copy and paste elements: each is one step, Undo takes it back, and a moved element stays moved after a reload', async () => {
+  const { page, context } = await openEditor()
+  try {
+    const after = (id) => page.evaluate((id) => document.getElementById(id)?.nextElementSibling?.textContent?.trim() ?? null, id)
+    const exists = (id) => page.evaluate((id) => Boolean(document.getElementById(id)), id)
+    // Copy a card's words and paste them after the subtitle.
+    await select(page, '.features li:first-child p')
+    const words = await page.evaluate(() => document.querySelector('.features li:first-child p').textContent.trim())
+    await page.keyboard.press('Control+c')
+    await select(page, '#subtitle')
+    await page.keyboard.press('Control+v')
+    await page.waitForTimeout(700)
+    assert(await after('subtitle') === words, `the paste isn't after the subtitle (found "${await after('subtitle')}")`)
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(700)
+    assert(await after('subtitle') !== words, 'Ctrl+Z left the pasted copy on the page')
+
+    // Cut the badge and paste it after the subtitle: it moves.
+    await select(page, '#badge')
+    await page.keyboard.press('Control+x')
+    await page.waitForTimeout(700)
+    assert(!(await exists('badge')), 'the cut badge is still on the page')
+    await select(page, '#subtitle')
+    await page.keyboard.press('Control+v')
+    await page.waitForTimeout(700)
+    const moved = await page.evaluate(() => document.getElementById('subtitle').nextElementSibling)
+    assert(await page.evaluate(() => document.getElementById('subtitle').nextElementSibling?.id === 'badge'), `the badge was not pasted after the subtitle: ${await page.evaluate(() => document.getElementById('subtitle').nextElementSibling?.outerHTML.slice(0, 200))}`)
+    // Undo the paste, then the cut: the badge is back where it was.
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(700)
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(900)
+    assert(await page.evaluate(() => Boolean(document.querySelector('.features #badge'))), 'two Ctrl+Z did not put the badge back in its card')
+    // Redo both, and reload: it stays moved.
+    await page.keyboard.press('Control+y')
+    await page.waitForTimeout(700)
+    await page.keyboard.press('Control+y')
+    await page.waitForTimeout(1500)
+    await page.reload()
+    await page.waitForSelector('.global-chef-button')
+    await page.waitForTimeout(1500)
+    const placed = await page.evaluate(() => ({ afterSubtitle: document.getElementById('subtitle').nextElementSibling?.id ?? null, inCard: Boolean(document.querySelector('.features #badge')) }))
+    assert(placed.afterSubtitle === 'badge' && !placed.inCard, `after redo and a reload the badge is ${JSON.stringify(placed)}`)
+    void moved
+  } finally { await context.close() }
+})
+
+
+/** The page as a visitor gets it: only the two Froam files, no editor. */
+async function servedAsVisitor() {
+  const html = fs.readFileSync(path.join(siteDir, 'index.html'), 'utf8')
+    .replace('</head>', '<link rel="stylesheet" href="/froam/froam.generated.css"></head>')
+    .replace('</body>', '<script src="/froam/froam.runtime.js" defer></script></body>')
+  const server = http.createServer((req, res) => {
+    const rel = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '') || 'index.html'
+    if (rel === 'index.html') { res.writeHead(200, { 'Content-Type': 'text/html' }); res.end(html); return }
+    const file = path.join(siteDir, rel)
+    if (!file.startsWith(siteDir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return }
+    res.writeHead(200, { 'Content-Type': file.endsWith('.css') ? 'text/css' : file.endsWith('.js') ? 'text/javascript' : 'application/octet-stream' })
+    fs.createReadStream(file).pipe(res)
+  })
+  await new Promise((r) => server.listen(0, '127.0.0.1', r))
+  return { url: `http://127.0.0.1:${server.address().port}/`, close: () => server.close() }
+}
+
+/** Select an element, open Effects, and press an effect's tile. */
+async function addEffect(page, selector, label) {
+  await select(page, selector)
+  await page.locator('.froam-floating-bar [aria-label="Effects"]').click()
+  await page.waitForSelector('.froam-floating-bar__pop--looks')
+  await page.waitForTimeout(400)
+  await page.getByRole('button', { name: label, exact: true }).click()
+  await page.waitForTimeout(400)
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(200)
+}
+
+test('effects reach visitors: chosen in Styles, saved, and alive on the live page — and still for reduce-motion', async () => {
+  const { page, context } = await openEditor()
+  try {
+    await addEffect(page, '#stage', '3D tilt')
+    await addEffect(page, '#plan-cell', 'Reveal')
+    const inline = await page.evaluate(() => ({ tilt: document.getElementById('stage').style.getPropertyValue('--froam-fx-tilt'), reveal: document.getElementById('plan-cell').style.getPropertyValue('--froam-fx-reveal') }))
+    assert(inline.tilt === 'on' && inline.reveal === 'on', `the effects weren't applied in the editor: ${JSON.stringify(inline)}`)
+    const design = path.join(siteDir, 'froam', 'froam.design.json')
+    const before = fs.statSync(design).mtimeMs
+    await page.keyboard.press('Control+Shift+S')
+    for (let i = 0; i < 60 && fs.statSync(design).mtimeMs === before; i += 1) await sleep(150)
+    await sleep(500)
+    assert(fs.readFileSync(path.join(siteDir, 'froam', 'froam.generated.css'), 'utf8').includes('--froam-fx-tilt: on'), 'the stylesheet does not carry the tilt')
+    assert(fs.readFileSync(path.join(siteDir, 'froam', 'froam.runtime.js'), 'utf8').includes('__froamFx'), 'the runtime does not carry the effects engine')
+  } finally { await context.close() }
+
+  const site = await servedAsVisitor()
+  try {
+    const visitor = await browser.newContext({ viewport: { width: 1360, height: 860 } })
+    const page = await visitor.newPage()
+    const errors = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    await page.goto(site.url)
+    await page.waitForTimeout(1200)
+    // Below the fold, the table waits hidden for its moment...
+    const hidden = await page.evaluate(() => Number(getComputedStyle(document.getElementById('plan-cell')).opacity))
+    const why = await page.evaluate(() => { const el = document.getElementById('plan-cell'); return { top: Math.round(el.getBoundingClientRect().top), innerHeight, marked: el.hasAttribute('data-froam-fx'), engine: Boolean(window.__froamFx), value: getComputedStyle(el).getPropertyValue('--froam-fx-reveal'), anims: el.getAnimations().length } })
+    assert(hidden < 0.2, `the table was showing before it was scrolled to (opacity ${hidden}; ${JSON.stringify(why)})`)
+    // ...and arrives when it's scrolled into view.
+    await page.evaluate(() => document.getElementById('plan-cell').scrollIntoView({ block: 'center' }))
+    await page.waitForTimeout(1400)
+    const shown = await page.evaluate(() => Number(getComputedStyle(document.getElementById('plan-cell')).opacity))
+    assert(shown > 0.95, `the table didn't reveal once scrolled to (opacity ${shown})`)
+    // The stage leans toward the cursor.
+    await page.evaluate(() => window.scrollTo(0, 0))
+    await page.waitForTimeout(300)
+    const stage = await page.locator('#stage').boundingBox()
+    await page.mouse.move(stage.x + stage.width * 0.9, stage.y + stage.height * 0.15, { steps: 6 })
+    await page.waitForTimeout(700)
+    const leaning = await page.evaluate(() => document.getElementById('stage').style.transform)
+    assert(/rotateX\((?!0\.00deg)/.test(leaning), `the stage didn't tilt for a visitor: "${leaning}"`)
+    assert(!errors.length, `the live page threw: ${errors.join(' | ')}`)
+    await visitor.close()
+
+    // Reduce motion: everything shown as it is, nothing moves.
+    const still = await browser.newContext({ viewport: { width: 1360, height: 860 }, reducedMotion: 'reduce' })
+    const calm = await still.newPage()
+    await calm.goto(site.url)
+    await calm.waitForTimeout(1200)
+    const visible = await calm.evaluate(() => Number(getComputedStyle(document.getElementById('plan-cell')).opacity))
+    assert(visible > 0.95, `with reduce motion the table was hidden (opacity ${visible})`)
+    const calmStage = await calm.locator('#stage').boundingBox()
+    await calm.mouse.move(calmStage.x + calmStage.width * 0.9, calmStage.y + calmStage.height * 0.15, { steps: 6 })
+    await calm.waitForTimeout(500)
+    const unmoved = await calm.evaluate(() => document.getElementById('stage').style.transform)
+    assert(!/rotate/.test(unmoved), `with reduce motion the stage still tilted: "${unmoved}"`)
+    await still.close()
+  } finally { site.close() }
+})
+
 
 /* ─── run ─── */
 

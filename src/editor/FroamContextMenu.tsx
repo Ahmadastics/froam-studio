@@ -19,6 +19,7 @@ import {
   Clapperboard,
   Boxes,
   Sparkles,
+  Scissors,
 } from 'lucide-react'
 
 type ContextAction =
@@ -26,6 +27,9 @@ type ContextAction =
   | 'copy-styles'
   | 'paste-styles'
   | 'duplicate'
+  | 'cut-element'
+  | 'copy-element'
+  | 'paste-element'
   | 'clear'
   | 'delete-element'
   | 'bring-to-front'
@@ -200,6 +204,21 @@ export default function FroamContextMenu({
               <Copy size={14} />
               <span>Duplicate</span>
               <kbd>Ctrl+D</kbd>
+            </button>
+            <button type="button" className="froam-context-menu__item" onClick={() => handleAction('cut-element')}>
+              <Scissors size={14} />
+              <span>Cut</span>
+              <kbd>Ctrl+X</kbd>
+            </button>
+            <button type="button" className="froam-context-menu__item" onClick={() => handleAction('copy-element')}>
+              <ClipboardCopy size={14} />
+              <span>Copy</span>
+              <kbd>Ctrl+C</kbd>
+            </button>
+            <button type="button" className="froam-context-menu__item" onClick={() => handleAction('paste-element')}>
+              <ClipboardPaste size={14} />
+              <span>Paste after</span>
+              <kbd>Ctrl+V</kbd>
             </button>
             <button type="button" className="froam-context-menu__item" onClick={() => handleAction('wrap-container')}>
               <Box size={14} />

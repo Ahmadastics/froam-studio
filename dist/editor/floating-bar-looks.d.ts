@@ -5,7 +5,7 @@
  */
 import type { CSSProperties } from 'react';
 type SelectionPatch = Record<string, string | number>;
-export declare const LOOK_GROUPS: readonly ["Alive", "Signature", "Photo", "World", "Now", "Accent", "Surface", "Depth", "Shape", "Line", "Type", "Pattern", "Vibe", "Reset"];
+export declare const LOOK_GROUPS: readonly ["Cursor", "Scroll", "Kinetic", "Craft", "Ambient", "Alive", "Signature", "Photo", "World", "Now", "Accent", "Surface", "Depth", "Shape", "Line", "Type", "Pattern", "Vibe", "Reset"];
 export type LookGroup = (typeof LOOK_GROUPS)[number];
 /**
  * What Styles calls each group. The ids above are stored nowhere but read by
@@ -31,6 +31,8 @@ export type Look = {
      */
     text?: ((accent: string) => Record<string, string>) | null;
     patch?: SelectionPatch;
+    /** An effect (src/fx/engine.ts): its tile toggles it on and off, and others stay. */
+    effect?: string;
 };
 export type LookOverrides = {
     accent?: string;
@@ -43,5 +45,7 @@ export type LookOverrides = {
 };
 export declare const LOOKS: Look[];
 export declare const LOOK_NOTES: Record<string, string>;
+/** Words shown on a tile whose effect works on words. */
+export declare const FX_SWATCH_TEXT: Record<string, string>;
 export {};
 //# sourceMappingURL=floating-bar-looks.d.ts.map

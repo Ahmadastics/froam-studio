@@ -57,6 +57,9 @@ const SHORTCUT_GROUPS = [
         title: 'Copy and group',
         shortcuts: [
             { keys: 'Ctrl + D', label: 'Duplicate' },
+            { keys: 'Ctrl + X', label: 'Cut the element' },
+            { keys: 'Ctrl + C', label: 'Copy the element' },
+            { keys: 'Ctrl + V', label: 'Paste it after what’s selected' },
             { keys: 'Ctrl + Alt + C', label: 'Copy styles' },
             { keys: 'Ctrl + Alt + V', label: 'Paste styles' },
             { keys: 'Ctrl + G', label: 'Group' },

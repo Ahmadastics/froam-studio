@@ -8,6 +8,7 @@ import { bridgeClientId, bridgeHeaders, bridgeUrl, pairedDeviceKey } from '../li
 import FroamResizeHandles from './FroamResizeHandles.js';
 import { inheritedDrafts, layeredDrafts, routeSizes, withoutInherited } from './chef/cascade.js';
 import { hashValue, mergeDrafts, signDrafts } from './chef/draft-merge.js';
+import { FX_PREFIX, installFroamFx } from '../fx/engine.js';
 import FroamSpacingHandles from './FroamSpacingHandles.js';
 import FroamRedlines from './FroamRedlines.js';
 import FroamFloatingBar from './FroamFloatingBar.js';
@@ -2387,6 +2388,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         });
         return () => window.cancelAnimationFrame(frame);
     }, [routeKey]);
+    /* ─── Effects (src/fx/engine.ts) ───
+       Running while you edit, so a tilt tilts and a reveal plays the moment it's
+       chosen. In preview mode, effects that rewrite text or structure play once
+       and put the page back, so nothing selected or saved is ever the split-up copy. */
+    useEffect(() => {
+        const fx = installFroamFx(window);
+        fx.setPreview(showPanel);
+        fx.refresh();
+    }, [store, showPanel, viewportMode]);
     /* ─── Editing attribute ─── */
     useEffect(() => {
         document.documentElement.toggleAttribute('data-chef-editing', showPanel);
@@ -5514,6 +5524,108 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         finishSectionMutation('Duplicated', remapped, clone);
         showToast('Duplicated — Ctrl+Z takes it back');
     }
+    /*
+     * Cut, copy and paste whole elements (Ctrl+X, Ctrl+C, Ctrl+V; the right-click menu).
+     * A copy is the element as it looks now, its edits included, kept for this
+     * project so it can be pasted on another of its pages. A paste is an element
+     * Froam added (an injected block), like a duplicate: one step for Undo, Redo,
+     * Save and a reload. Text being written or selected keeps the browser's own
+     * copy and paste.
+     */
+    const ELEMENT_CLIPBOARD_KEY = froamStorageKey('froam-element-clipboard-v1', projectKey);
+    function readElementClipboard() {
+        try {
+            const held = JSON.parse(window.localStorage.getItem(ELEMENT_CLIPBOARD_KEY) ?? 'null');
+            return held && typeof held.html === 'string' && held.html ? { html: held.html, label: typeof held.label === 'string' ? held.label : 'element' } : null;
+        }
+        catch {
+            return null;
+        }
+    }
+    /** Take an element off the page as one step: a block Froam added goes; one of the page's own is recorded as deleted. */
+    function deleteElement(target, label) {
+        const root = getRoot();
+        if (!root || !target.parentElement)
+            return false;
+        const remapped = remapLiveDraftPaths(storeRef.current[viewportStoreKeyRef.current] ?? {}, root);
+        const fallback = (target.nextElementSibling ?? target.previousElementSibling ?? target.parentElement);
+        if (target.dataset.froamInjected !== 'true' && !target.parentElement.closest(INJECTED_BLOCK_SELECTOR)) {
+            writeHostSectionEntry(remapped.next, target, { deleted: true });
+        }
+        target.remove();
+        finishSectionMutation(label, remapped, fallback && root.contains(fallback) && fallback !== root ? fallback : null);
+        return true;
+    }
+    function copySelected(quiet = false) {
+        const root = getRoot();
+        if (!root || !selection)
+            return false;
+        const target = findElementByPath(root, selection.path);
+        if (!target)
+            return false;
+        const html = serializableElementHtml(target);
+        try {
+            window.localStorage.setItem(ELEMENT_CLIPBOARD_KEY, JSON.stringify({ html, label: selection.label }));
+        }
+        catch {
+            showToast('This element is too big to copy here');
+            return false;
+        }
+        if (!quiet)
+            showToast(`Copied ${selection.label} — Ctrl+V pastes it after what's selected`);
+        return true;
+    }
+    function cutSelected() {
+        const root = getRoot();
+        if (!root || !selection)
+            return;
+        const target = findElementByPath(root, selection.path);
+        if (!target || target === root)
+            return;
+        if (!copySelected(true))
+            return;
+        if (deleteElement(target, `Cut ${selection.label}`))
+            showToast(`Cut ${selection.label} — Ctrl+V puts it back wherever you like`);
+    }
+    function pasteElement() {
+        const root = getRoot();
+        const held = readElementClipboard();
+        if (!root || !held) {
+            showToast('Nothing copied yet — select something and press Ctrl+C');
+            return;
+        }
+        const template = document.createElement('template');
+        template.innerHTML = held.html.trim();
+        const node = template.content.firstElementChild;
+        if (!(node instanceof HTMLElement))
+            return;
+        // After what's selected; with nothing selected, at the end of the page.
+        const anchor = selection ? findElementByPath(root, selection.path) : null;
+        const parent = anchor && anchor !== root && anchor.parentElement ? anchor.parentElement : root;
+        const remapped = remapLiveDraftPaths(storeRef.current[viewportStoreKeyRef.current] ?? {}, root);
+        node.removeAttribute('data-chef-selected');
+        node.removeAttribute('data-chef-hovered');
+        node.removeAttribute('data-froam-structure-source');
+        node.removeAttribute('data-froam-structure-deleted');
+        if (!parent.closest(INJECTED_BLOCK_SELECTOR)) {
+            node.dataset.froamInjected = 'true';
+            node.dataset.froamBlock = 'true';
+        }
+        else {
+            node.removeAttribute('data-froam-injected');
+            node.removeAttribute('data-froam-block');
+        }
+        // A cut and paste is a move: an id nothing else on the page has any more is the
+        // element's own and comes back as it was — the site's CSS and scripts may use it.
+        const ownIds = [node, ...Array.from(node.querySelectorAll('[id]'))].map((element) => [element, element.id]).filter(([, id]) => id);
+        assignFreshFroamNodeIds(node);
+        for (const [element, id] of ownIds)
+            if (!document.getElementById(id))
+                element.id = id;
+        parent.insertBefore(node, anchor && anchor !== root && anchor.parentElement === parent ? anchor.nextSibling : null);
+        finishSectionMutation(`Pasted ${held.label}`, remapped, node);
+        showToast(`Pasted ${held.label} — Ctrl+Z takes it back`);
+    }
     function duplicateSection(node) {
         const target = selectedSectionElement(node);
         const root = getRoot();
@@ -6658,6 +6770,26 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 });
                 return;
             }
+            // Ctrl+C / Ctrl+X / Ctrl+V on elements — never while text is being written or is selected.
+            const textSelected = Boolean(window.getSelection()?.toString());
+            if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && !inlineEditing && !inField && !textSelected) {
+                const key = e.key.toLowerCase();
+                if (key === 'c' && selection) {
+                    e.preventDefault();
+                    copySelected();
+                    return;
+                }
+                if (key === 'x' && selection) {
+                    e.preventDefault();
+                    cutSelected();
+                    return;
+                }
+                if (key === 'v' && readElementClipboard()) {
+                    e.preventDefault();
+                    pasteElement();
+                    return;
+                }
+            }
             // Ctrl+D to duplicate (copy styles to new sibling)
             if ((e.ctrlKey || e.metaKey) && e.key === 'd' && selection && !inlineEditing) {
                 e.preventDefault();
@@ -7275,7 +7407,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         applyStyle(finalStyles, nextSelection, 'Resized element');
                     }
                     setSelectionRect(target.getBoundingClientRect());
-                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, inRoom: roomJoined, roomRole: room.role, onImageFile: (file) => { void applyPersonaImage(file); }, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && !quickChatOpen && froamIntent.state.phase !== 'previewing' && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: canUndo, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, opacity: selection.opacity, isHidden: selection.display === 'none', mixBlendMode: selection.mixBlendMode, zIndex: selection.zIndex, fontOptions: fontOptions, selectionCount: selections.length, isTextLayer: currentSelectionRef.current ? isTextVisualLayer(currentSelectionRef.current) : false, hasText: currentSelectionRef.current ? hasOwnWords(currentSelectionRef.current) : true, isImage: currentSelectionRef.current?.tagName === 'IMG' || currentSelectionRef.current?.tagName === 'PICTURE' || currentSelectionRef.current?.tagName === 'VIDEO', canAdjustImage: hasAdjustableMedia(currentSelectionRef.current), onSaveLook: ({ name, states }) => {
+                } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, inRoom: roomJoined, roomRole: room.role, onImageFile: (file) => { void applyPersonaImage(file); }, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && !quickChatOpen && froamIntent.state.phase !== 'previewing' && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { viewportMode: viewportMode, effects: Object.fromEntries(Object.entries(paintedDrafts[selection.path]?.styles ?? {}).filter(([key]) => key.startsWith(FX_PREFIX)).map(([key, value]) => [key.slice(FX_PREFIX.length), value])), targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: canUndo, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, opacity: selection.opacity, isHidden: selection.display === 'none', mixBlendMode: selection.mixBlendMode, zIndex: selection.zIndex, fontOptions: fontOptions, selectionCount: selections.length, isTextLayer: currentSelectionRef.current ? isTextVisualLayer(currentSelectionRef.current) : false, hasText: currentSelectionRef.current ? hasOwnWords(currentSelectionRef.current) : true, isImage: currentSelectionRef.current?.tagName === 'IMG' || currentSelectionRef.current?.tagName === 'PICTURE' || currentSelectionRef.current?.tagName === 'VIDEO', canAdjustImage: hasAdjustableMedia(currentSelectionRef.current), onSaveLook: ({ name, states }) => {
                     const style = createReusableStyle({ id: `style:look:${Date.now().toString(36)}`, name: `${name} custom`, states });
                     replaceDesignSystem(saveReusableStyle(activeProjectState.designSystem, style), `Saved reusable style: ${style.name}`);
                     showToast(`${style.name} saved to Design System`);
@@ -7412,6 +7544,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                             duplicateSelected();
                             break;
                         }
+                        case 'cut-element':
+                            cutSelected();
+                            break;
+                        case 'copy-element':
+                            copySelected();
+                            break;
+                        case 'paste-element':
+                            pasteElement();
+                            break;
                         case 'clear':
                             clearSelectionDraft();
                             break;
@@ -7426,17 +7567,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 deleteSection(buildLayerNode(target, root));
                                 break;
                             }
-                            if (target?.dataset.froamInjected === 'true' && target.parentElement) {
-                                target.remove();
-                                currentSelectionRef.current = null;
-                                setSelection(null);
-                                setSelectionRect(null);
-                                persistLiveRouteSnapshot();
-                                showToast('Element removed');
-                            }
-                            else {
-                                showToast('Only injected elements can be removed');
-                            }
+                            if (target && target !== root && deleteElement(target, `Deleted ${selection.label}`))
+                                showToast('Element removed — Ctrl+Z puts it back');
                             break;
                         }
                         case 'bring-to-front': {

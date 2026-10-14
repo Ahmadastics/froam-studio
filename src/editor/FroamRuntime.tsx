@@ -19,6 +19,7 @@ import type { FroamAnchorFingerprint } from '../collab/types'
 import { applyMediaSource, restorePageMedia } from './media/apply-media'
 import { hasMediaRef, resolveMediaRefs } from './media/media-refs'
 import { SIZE_ORDER, layeredDrafts } from './chef/cascade'
+import { FX_PREFIX, installFroamFx } from '../fx/engine'
 
 type ElementDraft = {
   text?: string
@@ -192,6 +193,8 @@ function applyDraft(element: HTMLElement, draft: ElementDraft) {
     if (value) element.style.setProperty(cssKey, value)
     else element.style.removeProperty(cssKey)
   }
+  // Effects (src/fx/engine.ts) come to life from these same inline styles.
+  if (typeof window !== 'undefined' && Object.keys(draft.styles).some((key) => key.startsWith(FX_PREFIX))) installFroamFx(window).refresh()
 }
 
 function restoreRuntimeSnapshots(snapshots: RuntimeSnapshot[]) {

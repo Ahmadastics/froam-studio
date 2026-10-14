@@ -53,12 +53,16 @@ type Props = {
     }) => void;
     /** Which element is selected: a new one starts a fresh round of trying looks. */
     selectionKey?: string;
+    /** The selected element's effects as painted at this size: effect id → stored value (src/fx/engine.ts). */
+    effects?: Record<string, string>;
+    /** The size being edited: off at Tablet or Mobile is stored as `none`, so Desktop's effect doesn't flow down. */
+    viewportMode?: string;
     onSaveLook?: (look: {
         name: string;
         states: Partial<Record<FroamStyleState, Record<string, string>>>;
     }) => void;
 };
 export declare function collectPagePalette(): string[];
-export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, radius, opacity, isHidden, fontOptions, selectionCount, isTextLayer, hasText, isImage, canAdjustImage, docked, canUndo, onWalk, onAction, onStyle, selectionKey, onSaveLook, }: Props): import("react").JSX.Element | null;
+export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, radius, opacity, isHidden, fontOptions, selectionCount, isTextLayer, hasText, isImage, canAdjustImage, docked, canUndo, onWalk, onAction, onStyle, selectionKey, effects, viewportMode, onSaveLook, }: Props): import("react").JSX.Element | null;
 export {};
 //# sourceMappingURL=FroamFloatingBar.d.ts.map

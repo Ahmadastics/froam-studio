@@ -264,9 +264,39 @@ test('codegen is deterministic', () => {
   assert.equal(generateCss(design()), generateCss(design()))
 })
 
+test('effects: the runtime carries the engine only when the design uses one, and it runs', async () => {
+  const plain = generateRuntimeJs(design())
+  assert.ok(!plain.includes('__froamFx='), 'a design with no effects still ships the engine')
+  const withFx = generateRuntimeJs({ version: 3, routes: { '/': { desktop: { 'main:1/p:1': { styles: { '--froam-fx-tilt': 'max:14' } } } } } })
+  assert.ok(withFx.includes('"fx":1'), 'the element with an effect is not marked')
+  // The runtime ends `})()` and the engine starts `(()=>`: without a semicolon between them the
+  // engine is called as the runtime's result and every live page with an effect throws.
+  assert.match(withFx, /\}\)\(\)\s*\/\*[\s\S]*?\*\/\s*;\(\(\)=>/, 'nothing separates the runtime from the engine')
+  // And it runs: with no window the runtime returns early and the engine must not throw on load either way.
+  const window = { matchMedia: () => ({ matches: false, addEventListener() {} }), addEventListener() {}, requestAnimationFrame: () => 0, document: { readyState: 'complete', documentElement: {}, querySelectorAll: () => [], addEventListener() {} } }
+  window.MutationObserver = class { observe() {} disconnect() {} }
+  new Function('window', 'document', withFx)(window, undefined)
+  assert.ok(window.__froamFx && typeof window.__froamFx.refresh === 'function', 'the engine did not start')
+})
+
+test('effects: settings are stored short and read back with defaults, clamped and checked', async () => {
+  const { formatFx, parseFx } = await import('../dist/fx/engine.js')
+  assert.equal(formatFx('tilt', { max: 10, glare: 0.35, lift: 1.02 }), 'on')
+  assert.equal(formatFx('tilt', { max: 14, glare: 0.35 }), 'max:14')
+  assert.deepEqual(parseFx('tilt', 'max:14'), { max: 14, glare: 0.35, lift: 1.02 })
+  assert.equal(parseFx('tilt', 'max:999').max, 30, 'a number outside its range is clamped')
+  assert.equal(parseFx('tilt', 'none'), null)
+  assert.equal(parseFx('tilt', ''), null)
+  assert.equal(parseFx('reveal', 'from:sideways').from, 'up', 'an unknown choice falls back to the default')
+  assert.equal(parseFx('spotlight', 'color:red;background:url(x)').color, '#ffffff', 'a colour that is not a colour is refused')
+  const round = parseFx('marquee', formatFx('marquee', { hover: 'keep going' }))
+  assert.equal(round.hover, 'keep going', 'a choice with a space survives storing')
+})
+
+
 let failed = 0
 for (const [name, fn] of tests) {
-  try { fn(); console.log(`  ok  ${name}`) } catch (error) {
+  try { await fn(); console.log(`  ok  ${name}`) } catch (error) {
     failed += 1; console.error(`FAIL  ${name}`); console.error(`      ${error.message}`)
   }
 }

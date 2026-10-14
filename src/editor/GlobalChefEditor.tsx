@@ -84,6 +84,7 @@ import { bridgeClientId, bridgeHeaders, bridgeUrl, pairedDeviceKey } from '../li
 import FroamResizeHandles from './FroamResizeHandles'
 import { inheritedDrafts, layeredDrafts, routeSizes, withoutInherited } from './chef/cascade'
 import { hashValue, mergeDrafts, signDrafts, type SyncBase } from './chef/draft-merge'
+import { FX_PREFIX, installFroamFx } from '../fx/engine'
 import FroamSpacingHandles from './FroamSpacingHandles'
 import FroamRedlines from './FroamRedlines'
 import FroamFloatingBar from './FroamFloatingBar'
@@ -2435,6 +2436,16 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     })
     return () => window.cancelAnimationFrame(frame)
   }, [routeKey])
+
+  /* ─── Effects (src/fx/engine.ts) ───
+     Running while you edit, so a tilt tilts and a reveal plays the moment it's
+     chosen. In preview mode, effects that rewrite text or structure play once
+     and put the page back, so nothing selected or saved is ever the split-up copy. */
+  useEffect(() => {
+    const fx = installFroamFx(window)
+    fx.setPreview(showPanel)
+    fx.refresh()
+  }, [store, showPanel, viewportMode])
 
   /* ─── Editing attribute ─── */
   useEffect(() => {
@@ -5575,6 +5586,94 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     showToast('Duplicated — Ctrl+Z takes it back')
   }
 
+  /*
+   * Cut, copy and paste whole elements (Ctrl+X, Ctrl+C, Ctrl+V; the right-click menu).
+   * A copy is the element as it looks now, its edits included, kept for this
+   * project so it can be pasted on another of its pages. A paste is an element
+   * Froam added (an injected block), like a duplicate: one step for Undo, Redo,
+   * Save and a reload. Text being written or selected keeps the browser's own
+   * copy and paste.
+   */
+  const ELEMENT_CLIPBOARD_KEY = froamStorageKey('froam-element-clipboard-v1', projectKey)
+  function readElementClipboard(): { html: string; label: string } | null {
+    try {
+      const held = JSON.parse(window.localStorage.getItem(ELEMENT_CLIPBOARD_KEY) ?? 'null') as { html?: unknown; label?: unknown } | null
+      return held && typeof held.html === 'string' && held.html ? { html: held.html, label: typeof held.label === 'string' ? held.label : 'element' } : null
+    } catch { return null }
+  }
+
+  /** Take an element off the page as one step: a block Froam added goes; one of the page's own is recorded as deleted. */
+  function deleteElement(target: HTMLElement, label: string) {
+    const root = getRoot()
+    if (!root || !target.parentElement) return false
+    const remapped = remapLiveDraftPaths(storeRef.current[viewportStoreKeyRef.current] ?? {}, root)
+    const fallback = (target.nextElementSibling ?? target.previousElementSibling ?? target.parentElement) as HTMLElement | null
+    if (target.dataset.froamInjected !== 'true' && !target.parentElement.closest(INJECTED_BLOCK_SELECTOR)) {
+      writeHostSectionEntry(remapped.next, target, { deleted: true })
+    }
+    target.remove()
+    finishSectionMutation(label, remapped, fallback && root.contains(fallback) && fallback !== root ? fallback : null)
+    return true
+  }
+
+  function copySelected(quiet = false) {
+    const root = getRoot()
+    if (!root || !selection) return false
+    const target = findElementByPath(root, selection.path)
+    if (!target) return false
+    const html = serializableElementHtml(target)
+    try {
+      window.localStorage.setItem(ELEMENT_CLIPBOARD_KEY, JSON.stringify({ html, label: selection.label }))
+    } catch {
+      showToast('This element is too big to copy here')
+      return false
+    }
+    if (!quiet) showToast(`Copied ${selection.label} — Ctrl+V pastes it after what's selected`)
+    return true
+  }
+
+  function cutSelected() {
+    const root = getRoot()
+    if (!root || !selection) return
+    const target = findElementByPath(root, selection.path)
+    if (!target || target === root) return
+    if (!copySelected(true)) return
+    if (deleteElement(target, `Cut ${selection.label}`)) showToast(`Cut ${selection.label} — Ctrl+V puts it back wherever you like`)
+  }
+
+  function pasteElement() {
+    const root = getRoot()
+    const held = readElementClipboard()
+    if (!root || !held) { showToast('Nothing copied yet — select something and press Ctrl+C'); return }
+    const template = document.createElement('template')
+    template.innerHTML = held.html.trim()
+    const node = template.content.firstElementChild
+    if (!(node instanceof HTMLElement)) return
+    // After what's selected; with nothing selected, at the end of the page.
+    const anchor = selection ? findElementByPath(root, selection.path) : null
+    const parent = anchor && anchor !== root && anchor.parentElement ? anchor.parentElement : root
+    const remapped = remapLiveDraftPaths(storeRef.current[viewportStoreKeyRef.current] ?? {}, root)
+    node.removeAttribute('data-chef-selected')
+    node.removeAttribute('data-chef-hovered')
+    node.removeAttribute('data-froam-structure-source')
+    node.removeAttribute('data-froam-structure-deleted')
+    if (!parent.closest(INJECTED_BLOCK_SELECTOR)) {
+      node.dataset.froamInjected = 'true'
+      node.dataset.froamBlock = 'true'
+    } else {
+      node.removeAttribute('data-froam-injected')
+      node.removeAttribute('data-froam-block')
+    }
+    // A cut and paste is a move: an id nothing else on the page has any more is the
+    // element's own and comes back as it was — the site's CSS and scripts may use it.
+    const ownIds = [node, ...Array.from(node.querySelectorAll<HTMLElement>('[id]'))].map((element) => [element, element.id] as const).filter(([, id]) => id)
+    assignFreshFroamNodeIds(node)
+    for (const [element, id] of ownIds) if (!document.getElementById(id)) element.id = id
+    parent.insertBefore(node, anchor && anchor !== root && anchor.parentElement === parent ? anchor.nextSibling : null)
+    finishSectionMutation(`Pasted ${held.label}`, remapped, node)
+    showToast(`Pasted ${held.label} — Ctrl+Z takes it back`)
+  }
+
   function duplicateSection(node: LayerNode) {
     const target = selectedSectionElement(node)
     const root = getRoot()
@@ -6596,6 +6695,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           return !v
         })
         return
+      }
+      // Ctrl+C / Ctrl+X / Ctrl+V on elements — never while text is being written or is selected.
+      const textSelected = Boolean(window.getSelection()?.toString())
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && !inlineEditing && !inField && !textSelected) {
+        const key = e.key.toLowerCase()
+        if (key === 'c' && selection) { e.preventDefault(); copySelected(); return }
+        if (key === 'x' && selection) { e.preventDefault(); cutSelected(); return }
+        if (key === 'v' && readElementClipboard()) { e.preventDefault(); pasteElement(); return }
       }
       // Ctrl+D to duplicate (copy styles to new sibling)
       if ((e.ctrlKey || e.metaKey) && e.key === 'd' && selection && !inlineEditing) {
@@ -9001,6 +9108,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       {/* v4: Floating toolbar — docked above the bottom sheet on mobile */}
       {showPanel && selection && !inlineEditing && !isResizing && !quickChatOpen && froamIntent.state.phase !== 'previewing' && (!isMobileUI || sheetDetent === 'peek') && (
         <FroamFloatingBar
+          viewportMode={viewportMode}
+          effects={Object.fromEntries(Object.entries(paintedDrafts[selection.path]?.styles ?? {}).filter(([key]) => key.startsWith(FX_PREFIX)).map(([key, value]) => [key.slice(FX_PREFIX.length), value]))}
           targetRect={selectionRect}
           visible={!!selectionRect}
           docked={isMobileUI}
@@ -9143,6 +9252,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               duplicateSelected()
               break
             }
+            case 'cut-element': cutSelected(); break
+            case 'copy-element': copySelected(); break
+            case 'paste-element': pasteElement(); break
             case 'clear': clearSelectionDraft(); break
             case 'delete-element': {
               if (!selection) break
@@ -9153,16 +9265,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 deleteSection(buildLayerNode(target, root))
                 break
               }
-              if (target?.dataset.froamInjected === 'true' && target.parentElement) {
-                target.remove()
-                currentSelectionRef.current = null
-                setSelection(null)
-                setSelectionRect(null)
-                persistLiveRouteSnapshot()
-                showToast('Element removed')
-              } else {
-                showToast('Only injected elements can be removed')
-              }
+              if (target && target !== root && deleteElement(target, `Deleted ${selection.label}`)) showToast('Element removed — Ctrl+Z puts it back')
               break
             }
             case 'bring-to-front': {

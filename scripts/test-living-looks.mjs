@@ -29,14 +29,16 @@ const parts = (recipe) => {
   return out
 }
 
-test('three new tabs lead Styles: Alive, Signature, Photo', () => {
-  assert.deepEqual(LOOK_GROUPS.slice(0, 3), ['Alive', 'Signature', 'Photo'])
+test('effects lead Styles, then Alive, Signature, Photo', () => {
+  assert.deepEqual(LOOK_GROUPS.slice(0, 8), ['Cursor', 'Scroll', 'Kinetic', 'Craft', 'Ambient', 'Alive', 'Signature', 'Photo'])
   const count = (group) => LOOKS.filter((look) => look.group === group).length
   assert.equal(count('Alive'), 15)
   assert.equal(count('Signature'), 13)
   assert.equal(count('Photo'), 10)
   assert.equal(fresh.length, 48)
-  assert.equal(LOOKS.length, 289)
+  // 289 looks, then the 29 effects (src/fx/engine.ts) added after them.
+  assert.equal(LOOKS.length, 318)
+  assert.equal(LOOKS.filter((look) => look.effect).length, 29)
   assert.deepEqual(LOOKS.slice(0, 3).map((look) => look.name), ['Shine sweep', 'Levitate', 'Clicky'], 'the new looks come first in All')
 })
 

@@ -4,6 +4,7 @@ import type { FroamStyleState } from '../project/types'
 import type { FontOption } from './fontSources'
 import FroamFontPicker from './FroamFontPicker'
 import { describeSelection } from './selection-name'
+import { FX_CATALOG, FX_PREFIX, formatFx, fxSpec, parseFx, type FxParams } from '../fx/engine'
 import type { Look, LookGroup, LookOverrides, LOOK_SHELVES as LookShelves } from './floating-bar-looks'
 import { contrast, luminance, parseColor, sampleAccent, toHex as brandHex } from './library/site-theme'
 import {
@@ -41,6 +42,7 @@ import {
   Underline,
   Undo2,
   X,
+  Zap,
   Ungroup,
   WandSparkles,
 } from 'lucide-react'
@@ -123,6 +125,10 @@ type Props = {
   onStyle: (styles: Record<string, string>, selectionPatch?: SelectionPatch, label?: string, options?: { asWritten?: boolean }) => void
   /** Which element is selected: a new one starts a fresh round of trying looks. */
   selectionKey?: string
+  /** The selected element's effects as painted at this size: effect id → stored value (src/fx/engine.ts). */
+  effects?: Record<string, string>
+  /** The size being edited: off at Tablet or Mobile is stored as `none`, so Desktop's effect doesn't flow down. */
+  viewportMode?: string
   onSaveLook?: (look: { name: string; states: Partial<Record<FroamStyleState, Record<string, string>>> }) => void
 }
 
@@ -319,6 +325,8 @@ export default function FroamFloatingBar({
   onAction,
   onStyle,
   selectionKey,
+  effects = {},
+  viewportMode = 'desktop',
   onSaveLook,
 }: Props) {
   const barRef = useRef<HTMLDivElement>(null)
@@ -343,12 +351,13 @@ export default function FroamFloatingBar({
     LOOK_GROUP_LABELS: Record<LookGroup, string>
     LOOK_GROUP_HINTS: Record<LookGroup, string>
     LOOK_SHELVES: typeof LookShelves
+    FX_SWATCH_TEXT: Record<string, string>
   }>(null)
   useEffect(() => {
     if (openPop !== 'looks' || recipes) return
     let alive = true
     void import('./floating-bar-looks').then((m) => {
-      if (alive) setRecipes({ LOOKS: m.LOOKS, LOOK_NOTES: m.LOOK_NOTES, LOOK_GROUPS: m.LOOK_GROUPS, LOOK_GROUP_LABELS: m.LOOK_GROUP_LABELS, LOOK_GROUP_HINTS: m.LOOK_GROUP_HINTS, LOOK_SHELVES: m.LOOK_SHELVES })
+      if (alive) setRecipes({ LOOKS: m.LOOKS, LOOK_NOTES: m.LOOK_NOTES, LOOK_GROUPS: m.LOOK_GROUPS, LOOK_GROUP_LABELS: m.LOOK_GROUP_LABELS, LOOK_GROUP_HINTS: m.LOOK_GROUP_HINTS, LOOK_SHELVES: m.LOOK_SHELVES, FX_SWATCH_TEXT: m.FX_SWATCH_TEXT })
     })
     return () => { alive = false }
   }, [openPop, recipes])
@@ -565,7 +574,38 @@ export default function FroamFloatingBar({
     return { styles, patch, asWritten }
   }
 
+  /** An effect's tile adds it, or takes it off when it's on; the element's other effects stay. */
+  function toggleEffect(id: string) {
+    const spec = fxSpec(id)
+    if (!spec) return
+    const on = Boolean(parseFx(id, effects[id]))
+    onStyle({ [`${FX_PREFIX}${id}`]: on ? (viewportMode === 'desktop' ? '' : 'none') : 'on' }, undefined, on ? `Effect off${viewportMode === 'desktop' ? '' : ` on ${viewportMode}`}: ${spec.label}` : `Effect: ${spec.label}`)
+    if (!on) {
+      setLookRecents((current) => {
+        const next = [spec.label, ...current.filter((name) => name !== spec.label)].slice(0, 12)
+        writeValue(LOOK_RECENTS_KEY, next)
+        return next
+      })
+      // One-shot effects play as they're added, so you see what you chose.
+      window.setTimeout(() => replaySelected(), 80)
+    }
+    if ('vibrate' in navigator) navigator.vibrate?.(6)
+  }
+  function setEffectParam(id: string, key: string, value: string | number) {
+    const spec = fxSpec(id)
+    if (!spec) return
+    const params: FxParams = { ...(parseFx(id, effects[id]) ?? {}), [key]: value }
+    onStyle({ [`${FX_PREFIX}${id}`]: formatFx(id, params) }, undefined, `Effect: ${spec.label}`)
+  }
+  function replaySelected() {
+    const element = document.querySelector('[data-chef-selected="true"]')
+    const fx = (window as unknown as { __froamFx?: { replay: (element: Element) => void } }).__froamFx
+    if (element && fx) fx.replay(element)
+  }
+  const activeEffects = FX_CATALOG.filter((spec) => parseFx(spec.id, effects[spec.id]))
+
   function applyLook(look: Look, overrides: LookOverrides = {}) {
+    if (look.effect) { toggleEffect(look.effect); return }
     const { styles, patch, asWritten } = customizedLook(look, overrides)
     // Trying looks one after another: whatever the last one set and this one
     // doesn't comes off — its hover, its ::after arrow — so each is seen as itself.
@@ -626,6 +666,14 @@ export default function FroamFloatingBar({
       return !open
     })
   }
+  // The Effects button opens Styles at the effects, once the recipes have loaded.
+  const [jumpAfterOpen, setJumpAfterOpen] = useState<LookGroup | null>(null)
+  useEffect(() => {
+    if (!jumpAfterOpen || openPop !== 'looks' || !recipes) return
+    jumpToSection(jumpAfterOpen)
+    setJumpAfterOpen(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpAfterOpen, openPop, recipes])
   /** Rail: a group jumps to its section in All (leaving Favourites, Recent or a search first). */
   function jumpToSection(group: LookGroup) {
     setLookSearch('')
@@ -798,6 +846,15 @@ export default function FroamFloatingBar({
           onClick={() => togglePop('looks')}
         >
           <Sparkles size={14} /><span>Styles</span>
+        </button>
+        <button
+          type="button"
+          className={`froam-floating-bar__btn froam-floating-bar__fx-btn ${Object.keys(effects).some((id) => parseFx(id, effects[id])) ? 'is-on' : ''}`}
+          title="Effects — tilt, reveal on scroll, moving text and more"
+          aria-label="Effects"
+          onClick={() => { if (openPop !== 'looks') togglePop('looks'); setJumpAfterOpen('Cursor') }}
+        >
+          <Zap size={15} />
         </button>
 
         {docked && (
@@ -972,6 +1029,45 @@ export default function FroamFloatingBar({
               })}
             </nav>
             <div className="froam-floating-bar__looks-scroll" ref={lookScrollRef} onScroll={trackSection}>
+              {activeEffects.length > 0 && (
+                <section className="froam-fx-panel" aria-label="Effects on this element">
+                  <h4 className="froam-looks-section__head">
+                    <span>On this element</span>
+                    <small>{activeEffects.length} effect{activeEffects.length === 1 ? '' : 's'} · Mobile and Tablet can turn each off</small>
+                  </h4>
+                  {activeEffects.map((spec) => {
+                    const params = parseFx(spec.id, effects[spec.id]) ?? {}
+                    return (
+                      <div key={spec.id} className="froam-fx-panel__effect">
+                        <div className="froam-fx-panel__top">
+                          <strong>{spec.label}</strong>
+                          {spec.oneShot && <button type="button" onClick={replaySelected} title="Play it again">Replay</button>}
+                          <button type="button" className="froam-fx-panel__remove" onClick={() => toggleEffect(spec.id)} aria-label={`Remove ${spec.label}`} title="Remove this effect"><X size={12} /></button>
+                        </div>
+                        {spec.params.map((param) => (
+                          <label key={param.key} className="froam-fx-panel__param">
+                            <span>{param.label}</span>
+                            {param.kind === 'number' && (
+                              <>
+                                <input type="range" min={param.min} max={param.max} step={param.step} value={Number(params[param.key])} onChange={(event) => setEffectParam(spec.id, param.key, Number(event.target.value))} />
+                                <output>{Number(params[param.key])}{param.unit ?? ''}</output>
+                              </>
+                            )}
+                            {param.kind === 'choice' && (
+                              <select value={String(params[param.key])} onChange={(event) => setEffectParam(spec.id, param.key, event.target.value)}>
+                                {param.options?.map((option) => <option key={option} value={option}>{option}</option>)}
+                              </select>
+                            )}
+                            {param.kind === 'color' && (
+                              <input type="color" value={/^#[0-9a-f]{6}$/i.test(String(params[param.key])) ? String(params[param.key]) : '#ffffff'} onChange={(event) => setEffectParam(spec.id, param.key, event.target.value)} />
+                            )}
+                          </label>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </section>
+              )}
               {lookSections.map((section) => (
                 <section key={section.id} className="froam-looks-section" data-look-section={section.group ?? undefined}>
                   <h4 className="froam-looks-section__head">
@@ -983,8 +1079,8 @@ export default function FroamFloatingBar({
                       const favorite = lookFavorites.includes(look.name)
                       return (
                         <div key={look.name} className="froam-look-tile">
-                          <button type="button" className={`${selectedLookName === look.name ? 'is-active' : ''}${aliveLooks.has(look.name) ? ' is-alive' : ''}`} onClick={() => applyLook(look)} title={LOOK_NOTES[look.name] ?? look.name}>
-                            <i style={look.swatch} />
+                          <button type="button" className={`${(look.effect ? Boolean(parseFx(look.effect, effects[look.effect])) : selectedLookName === look.name) ? 'is-active' : ''}${aliveLooks.has(look.name) || look.effect ? ' is-alive' : ''}`} onClick={() => applyLook(look)} title={LOOK_NOTES[look.name] ?? look.name} aria-pressed={look.effect ? Boolean(parseFx(look.effect, effects[look.effect])) : undefined}>
+                            <i style={look.swatch}>{look.effect && recipes ? recipes.FX_SWATCH_TEXT[look.effect] ?? null : null}</i>
                             <span>{look.name}</span>
                             {(lookQuery || lookView !== 'all') && <small>{LOOK_GROUP_LABELS[look.group]}</small>}
                           </button>

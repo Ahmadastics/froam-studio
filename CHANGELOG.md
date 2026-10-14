@@ -1,5 +1,32 @@
 # Changelog
 
+## 9.8.0 - 2026-10-14
+
+- **Effects: interactive styles that move.** A new shelf in Styles, "Bring
+  it to life", with 29 effects in five families, each tile showing its
+  effect live. Follow the cursor: 3D tilt with a glint, magnetic pull,
+  cursor spotlight, springy press, ripple, a cursor label. On scroll:
+  reveal (up, down, left, right, scale, blur, fade, mask, children one by
+  one), parallax, scroll scrub, count up, scroll progress, sticky stack.
+  Moving text: word by word, letter by letter, decode, typewriter, marker
+  highlight, flowing gradient, marquee. Hover craft: zoom inside, drawn
+  underline, flowing border, shine, spring lift, 3D flip. Always alive:
+  float, breathe, glow pulse, confetti. A tile adds or removes its effect;
+  "On this element" tunes each one (sliders, choices, colours) and replays
+  it. An effect is a style (`--froam-fx-<name>`), so it saves, syncs between
+  devices, undoes, goes live, and can be turned off at Tablet or Mobile
+  alone. One small engine runs it in the editor and on the live site (in
+  froam.runtime.js, only when a design uses an effect, about 9.5 KB
+  gzipped); it respects reduce-motion, keeps cursor effects off touch
+  screens, never hides content from anything but itself, and in the editor
+  plays text-rewriting effects once and puts the page back.
+- **Cut, copy and paste elements.** Ctrl+X, Ctrl+C and Ctrl+V (and the
+  right-click menu) work on whole elements, edits included, across the
+  pages of a project. Each is one step for Undo, Redo, Save and a reload; a
+  cut and pasted element keeps its own id. Delete now removes any element,
+  not only ones Froam added. Text being written or selected keeps the
+  browser's own copy and paste.
+
 ## 9.7.0 - 2026-10-13
 
 - **Typing a font size works.** Clearing the size box snapped it to 6 at

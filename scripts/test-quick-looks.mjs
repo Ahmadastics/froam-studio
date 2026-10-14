@@ -25,6 +25,12 @@ const notesBlock = sliceBetween('export const LOOK_NOTES: Record<string, string>
 
 const lookNames = [...looksBlock.matchAll(/name:\s*'([^']+)'/g)].map((match) => match[1])
 const lookGroups = [...looksBlock.matchAll(/group:\s*'([^']+)'/g)].map((match) => match[1])
+// Effects (src/fx/engine.ts) join the list in a loop at the end of the file: one look per catalog entry, in its family's group.
+const engine = fs.readFileSync(path.join(ROOT, 'src/fx/engine.ts'), 'utf8')
+const familyGroups = Object.fromEntries([...sliceBetween('const FX_GROUPS: Record<FxFamily, LookGroup> = {', '}').matchAll(/(\w+): '(\w+)'/g)].map((match) => [match[1], match[2]]))
+const effects = [...engine.matchAll(/\{ id: '([^']+)', family: '([^']+)', label: '([^']+)'/g)].map((match) => ({ id: match[1], group: familyGroups[match[2]], label: match[3] }))
+const effectNames = effects.map((effect) => effect.label)
+const effectGroups = effects.map((effect) => effect.group)
 const declaredGroups = [...sliceBetween('export const LOOK_GROUPS = [', '] as const')
   .matchAll(/'([^']+)'/g)].map((match) => match[1])
 const noteKeys = [...notesBlock.matchAll(/^\s{2}(?:'([^']+)'|([A-Za-z][A-Za-z0-9]*)):\s/gm)]
@@ -33,7 +39,10 @@ const noteKeys = [...notesBlock.matchAll(/^\s{2}(?:'([^']+)'|([A-Za-z][A-Za-z0-9
 test('the recipe list is intact', () => {
   assert.equal(lookNames.length, 289, `expected 289 recipes, found ${lookNames.length}`)
   assert.equal(lookGroups.length, lookNames.length, 'a recipe is missing its group')
-  assert.equal(new Set(lookNames).size, lookNames.length, 'two recipes share a name')
+  assert.equal(effects.length, 29, `expected 29 effects, found ${effects.length}`)
+  assert.ok(effectGroups.every(Boolean), 'an effect family has no group in FX_GROUPS')
+  const all = [...lookNames, ...effectNames]
+  assert.equal(new Set(all).size, all.length, `two recipes share a name: ${all.filter((name, index) => all.indexOf(name) !== index).join(', ')}`)
 })
 
 test('every recipe has a description', () => {
@@ -66,7 +75,7 @@ test('every recipe sits in a declared group', () => {
 
 test('no declared group is empty', () => {
   for (const group of declaredGroups) {
-    assert.ok(lookGroups.includes(group), `"${group}" is a tab with no recipes behind it`)
+    assert.ok(lookGroups.includes(group) || effectGroups.includes(group), `"${group}" is a tab with no recipes behind it`)
   }
 })
 
