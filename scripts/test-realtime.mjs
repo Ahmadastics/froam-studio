@@ -27,7 +27,8 @@ test('a forged, altered or expired ticket is refused', async () => {
   const other = Buffer.from(JSON.stringify({ r: 'room-1', a: 'a_owner', exp: Date.now() + 1e6 })).toString('base64url')
   assert.equal(await verifyTicket(SECRET, `${other}.${signature}`), null)
   assert.equal(await verifyTicket('another-secret', ticket), null)
-  assert.equal(await verifyTicket(SECRET, `${payload}.x${signature.slice(1)}`), null)
+  // A character that is never the one already there: replacing it with a fixed 'x' changed nothing 1 time in 64.
+  assert.equal(await verifyTicket(SECRET, `${payload}.${signature[0] === 'x' ? 'y' : 'x'}${signature.slice(1)}`), null)
   const old = signRealtimeTicket(SECRET, { roomId: 'room-1', actor: 'a_maya', ttlMs: 1000, now: Date.now() - 5000 })
   assert.equal(await verifyTicket(SECRET, old), null)
   assert.equal(verifyRealtimeTicket(SECRET, old), null)
