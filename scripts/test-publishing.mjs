@@ -401,4 +401,6 @@ for (const [name, fn] of tests) {
   }
 }
 console.log(`\npublishing: ${tests.length - failed}/${tests.length} passed`)
-process.exit(failed ? 1 : 0)
+// An exit code, not process.exit(): exiting while a closed server's handles are still closing
+// trips a libuv assertion on Windows (UV_HANDLE_CLOSING) and crashes Node after every test passed.
+process.exitCode = failed ? 1 : 0
