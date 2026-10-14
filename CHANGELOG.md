@@ -2,6 +2,17 @@
 
 ## 9.7.0 - 2026-10-13
 
+- **Typing a font size works.** Clearing the size box snapped it to 6 at
+  once, so typing 24 gave 624px. The box now holds what's typed, shows a
+  size as soon as it's one, and keeps it between 6 and 400 when it's left.
+- **Ctrl+Z undoes a duplicate.** A duplicated element went into the page
+  unmarked: Undo took it out of the design but left it on screen, and redo
+  and a reload lost it. It's now added the way a duplicated section is, as
+  one step that Undo, Redo and Save all understand.
+- **Scrolling while editing on sites with smooth scrolling.** Sites using
+  Lenis (and pausing it while Froam edits, as Run'Am does) stopped every
+  scroll: the page, the font list, any panel. While the editor is open the
+  browser scrolls natively; the site's own scrolling comes back on close.
 - **Go live from the editor.** Saving put an edit in the project; getting it
   to visitors still meant a terminal. **Go live** in the toolbar (on a
   paired phone too) saves what's left, shows where it goes and what goes,

@@ -373,6 +373,19 @@ export default function FroamFloatingBar({
   const [lookDockSide, setLookDockSide] = useState<'left' | 'right'>('right')
   const [lookDockStyle, setLookDockStyle] = useState<CSSProperties>({})
 
+  // The size field while someone is typing in it; null shows the element's real size.
+  const [sizeDraft, setSizeDraft] = useState<string | null>(null)
+  useEffect(() => { setSizeDraft(null) }, [selectionKey])
+  function commitSizeDraft() {
+    if (sizeDraft === null) return
+    const typed = Number(sizeDraft)
+    setSizeDraft(null)
+    // Empty or nonsense puts the real size back; a number is kept within what's allowed.
+    if (sizeDraft.trim() === '' || !Number.isFinite(typed)) return
+    const next = Math.min(400, Math.max(6, Math.round(typed)))
+    if (next !== Math.round(fontSize)) onStyle({ fontSize: `${next}px` }, { fontSize: next }, 'Changed font size')
+  }
+
   const fontScrub = useScrub((steps) => {
     const next = Math.min(400, Math.max(6, Math.round(fontSize) + steps))
     onStyle({ fontSize: `${next}px` }, { fontSize: next }, 'Changed font size')
@@ -699,13 +712,23 @@ export default function FroamFloatingBar({
             <div className="froam-floating-bar__stepper froam-floating-bar__stepper--scrub" title="Size — drag the number to scrub" {...fontScrub} style={{ touchAction: 'none' }}>
               <input
                 type="number"
-                value={Math.round(fontSize)}
+                // What's being typed is the field's until it's done: clamping each keystroke
+                // turned a cleared field into "6" and typing "24" into "624".
+                value={sizeDraft ?? Math.round(fontSize)}
                 min={6}
                 max={400}
                 aria-label="Font size"
                 onChange={(event) => {
-                  const next = Math.max(6, Number(event.target.value))
-                  onStyle({ fontSize: `${next}px` }, { fontSize: next }, 'Changed font size')
+                  const raw = event.target.value
+                  setSizeDraft(raw)
+                  const next = Number(raw)
+                  // Shown live once it's a size; "2" on the way to "24" waits.
+                  if (raw !== '' && Number.isFinite(next) && next >= 6 && next <= 400) onStyle({ fontSize: `${next}px` }, { fontSize: next }, 'Changed font size')
+                }}
+                onBlur={commitSizeDraft}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') { event.preventDefault(); commitSizeDraft() }
+                  if (event.key === 'Escape') setSizeDraft(null)
                 }}
               />
             </div>

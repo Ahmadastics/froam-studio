@@ -217,3 +217,11 @@ html[data-chef-editing] [data-froam-artboard='true']::before {
 .fs-hidden-input {
   display: none;
 }
+
+/* A smooth-scroll library that the site pauses while Froam edits (Lenis adds
+   .lenis-stopped and clips the page) must not freeze the page under the
+   editor: while editing, the browser scrolls. See the editing attribute in
+   GlobalChefEditor.tsx, which also sets data-lenis-prevent on <body>. */
+html[data-chef-editing].lenis.lenis-stopped {
+  overflow: visible !important;
+}

@@ -2390,7 +2390,19 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     /* ─── Editing attribute ─── */
     useEffect(() => {
         document.documentElement.toggleAttribute('data-chef-editing', showPanel);
-        return () => { document.documentElement.removeAttribute('data-chef-editing'); };
+        // Smooth-scroll libraries (Lenis, on many modern sites) take over the wheel and the
+        // trackpad, and a site that pauses its scroller while Froam edits leaves nothing
+        // scrolling at all: not the page, not the font list. While editing, the browser
+        // scrolls natively; the site's own scroller comes back when the editor closes.
+        // `data-lenis-prevent` on <body> is Lenis's own "leave this to the browser".
+        const releasedScroll = showPanel && !document.body.hasAttribute('data-lenis-prevent');
+        if (releasedScroll)
+            document.body.setAttribute('data-lenis-prevent', '');
+        return () => {
+            document.documentElement.removeAttribute('data-chef-editing');
+            if (releasedScroll)
+                document.body.removeAttribute('data-lenis-prevent');
+        };
     }, [showPanel]);
     // Keep the page's own header out from under Froam's toolbar while editing.
     // (In a phone or tablet preview the page is on its own screen: no gap needed.)
@@ -3431,8 +3443,15 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             if (!(node instanceof HTMLElement))
                 return;
             const nodeId = node.dataset.froamId;
-            if (nodeId && Array.from(root.querySelectorAll('[data-froam-id]')).some((element) => element.dataset.froamId === nodeId)) {
-                return;
+            if (nodeId) {
+                const holders = Array.from(root.querySelectorAll('[data-froam-id]')).filter((element) => element.dataset.froamId === nodeId);
+                // Already restored: a block Froam put there carries this id.
+                if (holders.some((element) => element.closest(INJECTED_BLOCK_SELECTOR)))
+                    return;
+                // A page element wearing it got it second-hand: the copy of it that Undo took
+                // away sat at the same path with the same text, so the original was handed the
+                // copy's id. That isn't the block; it loses the id and the block goes back in.
+                holders.forEach((element) => element.removeAttribute('data-froam-id'));
             }
             node.removeAttribute('data-chef-selected');
             node.removeAttribute('data-chef-hovered');
@@ -5461,6 +5480,40 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         finishSectionMutation(placement === 'before' ? 'Added section above' : 'Added section below', remapped, block);
         showToast(placement === 'before' ? 'Section added above' : 'Section added below');
     }
+    /**
+     * Duplicate the selected element, the way a section is duplicated: the copy is
+     * marked as Froam's own (an injected block), the edits on the elements around it
+     * are carried to their new paths, and the whole thing is one step in the log.
+     * The copy used to go straight into the page unmarked: Undo took the change out
+     * of the store but left the copy on screen, and a reload lost it.
+     */
+    function duplicateSelected() {
+        const root = getRoot();
+        if (!root || !selection)
+            return;
+        const target = findElementByPath(root, selection.path);
+        if (!target || !target.parentElement)
+            return;
+        if (isStructuralLayerElement(target)) {
+            duplicateSection(buildLayerNode(target, root));
+            return;
+        }
+        const remapped = remapLiveDraftPaths(storeRef.current[viewportStoreKeyRef.current] ?? {}, root);
+        const clone = target.cloneNode(true);
+        clone.removeAttribute('data-chef-selected');
+        clone.removeAttribute('data-chef-hovered');
+        clone.removeAttribute('data-froam-structure-source');
+        clone.removeAttribute('data-froam-structure-deleted');
+        // Inside a block Froam added, the block's own HTML carries the copy; elsewhere it is its own block.
+        if (!target.parentElement.closest(INJECTED_BLOCK_SELECTOR)) {
+            clone.dataset.froamInjected = 'true';
+            clone.dataset.froamBlock = 'true';
+        }
+        assignFreshFroamNodeIds(clone);
+        target.parentElement.insertBefore(clone, target.nextSibling);
+        finishSectionMutation('Duplicated', remapped, clone);
+        showToast('Duplicated — Ctrl+Z takes it back');
+    }
     function duplicateSection(node) {
         const target = selectedSectionElement(node);
         const root = getRoot();
@@ -6608,24 +6661,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             // Ctrl+D to duplicate (copy styles to new sibling)
             if ((e.ctrlKey || e.metaKey) && e.key === 'd' && selection && !inlineEditing) {
                 e.preventDefault();
-                const root = getRoot();
-                if (!root)
-                    return;
-                const target = findElementByPath(root, selection.path);
-                if (!target || !target.parentElement)
-                    return;
-                if (isStructuralLayerElement(target)) {
-                    duplicateSection(buildLayerNode(target, root));
-                    return;
-                }
-                const clone = target.cloneNode(true);
-                clone.removeAttribute('data-chef-selected');
-                clone.removeAttribute('data-chef-hovered');
-                assignFreshFroamNodeIds(clone);
-                target.parentElement.insertBefore(clone, target.nextSibling);
-                selectInsertedElement(clone);
-                persistLiveRouteSnapshot();
-                showToast('Duplicated');
+                duplicateSelected();
                 return;
             }
             // Ctrl+Alt+C to copy styles
@@ -7318,24 +7354,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                             ungroupSelected();
                             break;
                         case 'duplicate': {
-                            const root = getRoot();
-                            if (!root)
-                                break;
-                            const target = findElementByPath(root, selection.path);
-                            if (!target || !target.parentElement)
-                                break;
-                            if (isStructuralLayerElement(target)) {
-                                duplicateSection(buildLayerNode(target, root));
-                                break;
-                            }
-                            const clone = target.cloneNode(true);
-                            clone.removeAttribute('data-chef-selected');
-                            clone.removeAttribute('data-chef-hovered');
-                            assignFreshFroamNodeIds(clone);
-                            target.parentElement.insertBefore(clone, target.nextSibling);
-                            selectInsertedElement(clone);
-                            persistLiveRouteSnapshot();
-                            showToast('Duplicated');
+                            duplicateSelected();
                             break;
                         }
                         case 'delete':
@@ -7390,24 +7409,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                         case 'duplicate': {
                             if (!selection)
                                 break;
-                            const root = getRoot();
-                            if (!root)
-                                break;
-                            const target = findElementByPath(root, selection.path);
-                            if (!target || !target.parentElement)
-                                break;
-                            if (isStructuralLayerElement(target)) {
-                                duplicateSection(buildLayerNode(target, root));
-                                break;
-                            }
-                            const clone = target.cloneNode(true);
-                            clone.removeAttribute('data-chef-selected');
-                            clone.removeAttribute('data-chef-hovered');
-                            assignFreshFroamNodeIds(clone);
-                            target.parentElement.insertBefore(clone, target.nextSibling);
-                            selectInsertedElement(clone);
-                            persistLiveRouteSnapshot();
-                            showToast('Duplicated');
+                            duplicateSelected();
                             break;
                         }
                         case 'clear':
