@@ -47,12 +47,24 @@ function siteCopy(label) {
   return site
 }
 
+/**
+ * fetch, given a second try. These checks cross the internet twice (to the
+ * share service and back down the tunnel), and one dropped connection on a
+ * home network was failing whole releases with "fetch failed".
+ */
+async function fetchAgain(url, init) {
+  try { return await fetch(url, init) } catch {
+    await new Promise((r) => setTimeout(r, 2000))
+    return fetch(url, init)
+  }
+}
+
 /** A visitor with no browser: follows redirects and keeps cookies, like a person on the link would. */
 async function openLink(url, jar = new Map()) {
   let target = url
   for (let hop = 0; hop < 4; hop += 1) {
     const headers = jar.size ? { cookie: [...jar].map(([name, value]) => `${name}=${value}`).join('; ') } : {}
-    const response = await fetch(target, { redirect: 'manual', headers })
+    const response = await fetchAgain(target, { redirect: 'manual', headers })
     for (const cookie of response.headers.getSetCookie()) {
       const [pair] = cookie.split(';')
       const at = pair.indexOf('=')
@@ -154,7 +166,7 @@ if (!executablePath) { console.error('No Chrome/Chromium found — set FROAM_E2E
 const browser = await chromium.launch({ executablePath })
 try {
   await thisRepo(browser)
-  const meta = await fetch(`https://registry.npmjs.org/${OWN.name.replace('/', '%2f')}`).then((r) => r.json())
+  const meta = await fetchAgain(`https://registry.npmjs.org/${OWN.name.replace('/', '%2f')}`).then((r) => r.json())
   for (const version of new Set([meta['dist-tags']?.latest, '8.9.0'].filter(Boolean))) await publishedVersion(version)
 } catch (error) {
   console.error(`  FAIL ${error.message}`)
