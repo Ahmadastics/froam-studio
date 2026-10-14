@@ -16,3 +16,4 @@
 .froam-room-chat__composer { display: flex; gap: 6px; }
 .froam-room-chat__composer input { min-width: 0; flex: 1; }
 .froam-proposal { border-left: 2px solid var(--fs-warning); padding-left: 8px; }
+.froam-presence__rail{align-items:center}.froam-presence__rail>.is-elsewhere{opacity:.5}.froam-presence__count{margin-left:8px;padding-right:4px;color:#e5e7eb;font:600 11px/1 Inter,system-ui,sans-serif;white-space:nowrap}

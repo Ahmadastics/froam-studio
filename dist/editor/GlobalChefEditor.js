@@ -663,6 +663,35 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     });
     const roomPresence = room.present;
     const roomJoined = Boolean(room.client?.joined && room.identity);
+    // An editor or contributor link asks for a name inside the editor, and until
+    // they give one nobody else can see them. So the editor opens on arrival
+    // rather than waiting for them to find the button — on a phone they never did.
+    const openedForInviteRef = useRef(false);
+    const inviteRole = room.client?.inviteRole ?? null;
+    useEffect(() => {
+        if (openedForInviteRef.current || !invitedByLink || !room.needsName)
+            return;
+        if (inviteRole !== 'owner' && inviteRole !== 'editor' && inviteRole !== 'contributor')
+            return;
+        openedForInviteRef.current = true;
+        setPanelOpen(true);
+        setActive(true);
+    }, [invitedByLink, room.needsName, inviteRole, room.room]);
+    // Say so when someone arrives, so a phone that joined is noticed even with
+    // the editor closed. The first reading is who was already here: no toast.
+    const seenHereRef = useRef(null);
+    useEffect(() => {
+        if (!roomJoined)
+            return;
+        const now = new Set(roomPresence.map((member) => member.actor));
+        const before = seenHereRef.current;
+        seenHereRef.current = now;
+        if (!before)
+            return;
+        const arrived = roomPresence.filter((member) => !before.has(member.actor));
+        if (arrived.length)
+            showToast(arrived.length === 1 ? `${arrived[0].name} joined` : `${arrived.length} people joined`);
+    }, [roomJoined, roomPresence]);
     // You, as the room lists you — or, in the moment before the room has been
     // read back after joining, as your own profile says you are.
     const roomMe = useMemo(() => {

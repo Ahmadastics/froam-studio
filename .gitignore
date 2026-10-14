@@ -35,3 +35,5 @@ adoption.json
 # Generated model data
 corpus.json
 priors.json
+
+.vercel

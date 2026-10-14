@@ -1,5 +1,16 @@
 # Changelog
 
+## 9.8.1 - 2026-10-14
+
+- **Invite links work on a phone.** Opening an editor or contributor link
+  now opens the editor and asks for your name straight away. Before, you
+  only joined the room after finding Froam's button and naming yourself,
+  so on a phone nobody saw anyone.
+- **Who's here, at a glance.** The bar at the top says who is in the room
+  ("Sam is here", "3 here"). Someone on another page or screen size stays
+  in it, faded, instead of disappearing. The owner gets a "Sam joined"
+  message when someone arrives.
+
 ## 9.8.0 - 2026-10-14
 
 - **Effects: interactive styles that move.** A new shelf in Styles, "Bring

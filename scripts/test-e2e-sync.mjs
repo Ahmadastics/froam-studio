@@ -330,6 +330,33 @@ test('plain Save: a laptop and an unpaired phone each pressing Save keep each ot
 })
 
 
+test('an invite link opened on a phone asks for a name at once, and the computer sees them arrive', async () => {
+  const computer = await openOnComputer()
+  const context = await browser.newContext({ ...PHONE })
+  try {
+    const opened = await computer.page.evaluate(async () => (await fetch('/api/froam/rooms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Owner' }) })).json())
+    await computer.page.evaluate((o) => {
+      localStorage.setItem('froam-room-owner:v1', JSON.stringify({ roomId: o.room.id, invites: o.invites, createdAt: Date.now() }))
+      localStorage.setItem(`froam-room:${o.room.id}`, JSON.stringify(o.you))
+    }, opened)
+    await computer.page.reload()
+    await computer.page.waitForSelector('.global-chef-button', { timeout: 20000 })
+    // The phone opens the link and does nothing else: the name box must find them.
+    const phone = await context.newPage()
+    await phone.goto(`${computerLink}?froam-room=${opened.room.id}&froam-token=${opened.invites.editor}`)
+    const name = await phone.waitForSelector('input[aria-label="Your name"]', { timeout: 20000 }).catch(() => null)
+    assert(name, 'an editor invite opened on a phone showed no name box, so they never joined')
+    await name.fill('Phone friend')
+    await phone.keyboard.press('Enter')
+    // The computer, editor closed, sees them in the room.
+    const seen = await computer.page.waitForFunction(() => /Phone friend is here/.test(document.querySelector('.froam-presence__rail')?.textContent ?? ''), null, { timeout: 15000 }).then(() => true, () => false)
+    assert(seen, 'the computer never showed the phone in the room')
+    // And the phone sees the owner.
+    const back = await phone.waitForFunction(() => /Owner is here/.test(document.querySelector('.froam-presence__rail')?.textContent ?? ''), null, { timeout: 15000 }).then(() => true, () => false)
+    assert(back, 'the phone never showed the owner in the room')
+  } finally { await context.close(); await computer.context.close() }
+})
+
 test('Go Live from the phone: one confirm, only Froam\'s files are committed and pushed, and it says Live once the site has it', async () => {
   // The site in git, with a bare repo for GitHub and a host that serves what main holds.
   const remote = path.join(path.dirname(siteDir), `${path.basename(siteDir)}-remote.git`)

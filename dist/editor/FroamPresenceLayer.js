@@ -21,7 +21,11 @@ function MemberAvatar({ member }) {
 /** Ephemeral multiplayer chrome. Nothing rendered here is persisted. */
 export default function FroamPresenceLayer({ members, routeKey, viewport, root }) {
     const [, redraw] = useState(0);
-    const visible = useMemo(() => members.filter((member) => member.here && member.routeKey === routeKey && member.viewport === viewport), [members, routeKey, viewport]);
+    // Everyone here is in the rail, wherever they are: someone on a phone, or on
+    // another page, used to vanish from it. Their selection and cursor only mean
+    // something on the same page at the same size, so only those are filtered.
+    const here = useMemo(() => members.filter((member) => member.here), [members]);
+    const visible = useMemo(() => here.filter((member) => member.routeKey === routeKey && member.viewport === viewport), [here, routeKey, viewport]);
     useEffect(() => {
         let frame = 0;
         const update = () => {
@@ -59,7 +63,10 @@ export default function FroamPresenceLayer({ members, routeKey, viewport, root }
             }
         };
     }, [root, visible]);
-    return (_jsxs("div", { className: "froam-presence", "data-chef-editor-root": "true", "aria-hidden": "true", children: [_jsx("div", { className: "froam-presence__rail", children: visible.map((member) => _jsx("div", { title: `${member.name}${member.action ? ` · ${member.action}` : ''}`, children: _jsx(MemberAvatar, { member: member }) }, member.actor)) }), visible.map((member) => {
+    return (_jsxs("div", { className: "froam-presence", "data-chef-editor-root": "true", "aria-hidden": "true", children: [here.length > 0 && (_jsxs("div", { className: "froam-presence__rail", children: [here.map((member) => {
+                        const elsewhere = member.routeKey && member.routeKey !== routeKey ? `on ${member.routeKey}` : member.viewport && member.viewport !== viewport ? `on ${member.viewport}` : null;
+                        return _jsx("div", { className: elsewhere ? 'is-elsewhere' : undefined, title: [member.name, elsewhere, member.action].filter(Boolean).join(' · '), children: _jsx(MemberAvatar, { member: member }) }, member.actor);
+                    }), _jsx("span", { className: "froam-presence__count", children: here.length === 1 ? `${here[0].name} is here` : `${here.length + 1} here` })] })), visible.map((member) => {
                 const selected = root ? findMemberElement(root, member.selectedNodeId, member.selectedPath) : null;
                 const rect = selected?.getBoundingClientRect();
                 return (_jsxs("div", { children: [rect && (_jsx("div", { className: `froam-presence__selection${(member.lockedNodeId && member.lockedNodeId === member.selectedNodeId) || member.lockedPath === member.selectedPath ? ' is-locked' : ''}`, style: {

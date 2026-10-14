@@ -33,9 +33,13 @@ function MemberAvatar({ member }: { member: RoomMemberView }) {
 /** Ephemeral multiplayer chrome. Nothing rendered here is persisted. */
 export default function FroamPresenceLayer({ members, routeKey, viewport, root }: Props) {
   const [, redraw] = useState(0)
+  // Everyone here is in the rail, wherever they are: someone on a phone, or on
+  // another page, used to vanish from it. Their selection and cursor only mean
+  // something on the same page at the same size, so only those are filtered.
+  const here = useMemo(() => members.filter((member) => member.here), [members])
   const visible = useMemo(
-    () => members.filter((member) => member.here && member.routeKey === routeKey && member.viewport === viewport),
-    [members, routeKey, viewport],
+    () => here.filter((member) => member.routeKey === routeKey && member.viewport === viewport),
+    [here, routeKey, viewport],
   )
 
   useEffect(() => {
@@ -76,9 +80,15 @@ export default function FroamPresenceLayer({ members, routeKey, viewport, root }
 
   return (
     <div className="froam-presence" data-chef-editor-root="true" aria-hidden="true">
-      <div className="froam-presence__rail">
-        {visible.map((member) => <div key={member.actor} title={`${member.name}${member.action ? ` · ${member.action}` : ''}`}><MemberAvatar member={member} /></div>)}
-      </div>
+      {here.length > 0 && (
+        <div className="froam-presence__rail">
+          {here.map((member) => {
+            const elsewhere = member.routeKey && member.routeKey !== routeKey ? `on ${member.routeKey}` : member.viewport && member.viewport !== viewport ? `on ${member.viewport}` : null
+            return <div key={member.actor} className={elsewhere ? 'is-elsewhere' : undefined} title={[member.name, elsewhere, member.action].filter(Boolean).join(' · ')}><MemberAvatar member={member} /></div>
+          })}
+          <span className="froam-presence__count">{here.length === 1 ? `${here[0].name} is here` : `${here.length + 1} here`}</span>
+        </div>
+      )}
       {visible.map((member) => {
         const selected = root ? findMemberElement(root, member.selectedNodeId, member.selectedPath) : null
         const rect = selected?.getBoundingClientRect()
