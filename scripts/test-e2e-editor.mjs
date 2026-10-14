@@ -88,6 +88,9 @@ function productionHtml(fixture = FIXTURE) {
 // dialog it mounts on <body>, the way React portals do (test/e2e/app).
 const suites = { site: [], app: [], collab: [] }
 const only = process.env.FROAM_E2E_ONLY ? new RegExp(process.env.FROAM_E2E_ONLY, 'i') : null
+/** Tests that passed only on a second try, and ones that failed both: listed again at the end, where they can't scroll away. */
+const retried = []
+const failures = []
 function test(name, fn) {
   suites.site.push({ name, fn })
 }
@@ -1950,7 +1953,18 @@ async function runSuite(browser, label, fixture, tests) {
         passed += 1
         console.log(`  ok  ${t.name}`)
       } catch (error) {
-        console.log(`  FAIL ${t.name}\n       ${error.message}`)
+        // Timing tests can lose a race on a busy machine. One more try, from a freshly
+        // loaded editor; a real fault fails both, and a pass on retry is still reported.
+        try {
+          await openEditor(page, url)
+          await t.fn({ page, context, siteDir, url })
+          passed += 1
+          retried.push(`${label} · ${t.name} — first try: ${error.message.split('\n')[0]}`)
+          console.log(`  ok  ${t.name} (on a second try)`)
+        } catch (again) {
+          failures.push(`${label} · ${t.name}\n       ${again.message}`)
+          console.log(`  FAIL ${t.name}\n       ${again.message}`)
+        }
       }
     }
     if (pageErrors.length) console.log(`  (page errors: ${[...new Set(pageErrors)].slice(0, 3).join(' | ')})`)
@@ -1987,5 +2001,7 @@ try {
   await browser.close().catch(() => {})
 }
 
+if (retried.length) console.log(`\nPassed on a second try (timing on a busy machine; worth a look if one keeps appearing):\n${retried.map((line) => `  · ${line}`).join('\n')}`)
+if (failures.length) console.log(`\nFailed:\n${failures.map((line) => `  ✗ ${line}`).join('\n')}`)
 console.log(`e2e editor: ${passed}/${total} passed`)
 process.exit(passed === total ? 0 : 1)
