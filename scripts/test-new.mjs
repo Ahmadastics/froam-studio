@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { Readable, Writable } from 'node:stream'
 
-import { STARTER_KINDS, renderStarter, slugify, titleFromFolder } from '../lib/starters.mjs'
+import { STARTER_KINDS, STARTER_STYLES, renderStarter, slugify, titleFromFolder } from '../lib/starters.mjs'
 import { NEW_SITE_HINT, isNewSiteAnswer, promptWebsiteUrl } from '../lib/launcher.mjs'
 import { writeTextEdits } from '../lib/source-writeback.mjs'
 
@@ -61,6 +61,42 @@ test('every starter: no piece of text appears twice, so each edit can be written
   }
 })
 
+test('every style on every starter: only <head> changes, so element paths and saved edits survive a switch', () => {
+  const body = (html) => html.slice(html.indexOf('<body'))
+  for (const { id: kind } of STARTER_KINDS) {
+    const original = renderStarter({ name: 'Northwind', kind, year: 2026 })
+    for (const { id: style, theme } of STARTER_STYLES) {
+      const html = renderStarter({ name: 'Northwind', kind, style, year: 2026 })
+      assert.equal(body(html), body(original), `${kind} in ${style}: the markup changed`)
+      if (!theme) continue
+      assert.ok(html.includes(`--accent: ${theme.accent};`), `${kind} in ${style}: accent not applied`)
+      assert.ok(html.includes(`family=${theme.heading.replace(/ /g, '+')}:wght@`), `${kind} in ${style}: heading font not loaded`)
+    }
+  }
+  assert.equal(
+    renderStarter({ name: 'Northwind', kind: 'event', style: 'no-such-style', year: 2026 }),
+    renderStarter({ name: 'Northwind', kind: 'event', year: 2026 }),
+    'an unknown style falls back to the kind’s own look',
+  )
+})
+
+test('every style keeps its words readable: 4.5:1 for body, muted and accent text and button labels', () => {
+  const luminance = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+  const ratio = (a, b) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+    return (hi + 0.05) / (lo + 0.05)
+  }
+  for (const { id, theme } of STARTER_STYLES) {
+    if (!theme) continue
+    for (const [what, fg, bg] of [['body text', theme.ink, theme.paper], ['muted text', theme.muted, theme.paper], ['accent text', theme.accent, theme.paper], ['button label', theme.accentInk, theme.accent]]) {
+      assert.ok(ratio(fg, bg) >= 4.5, `${id}: ${what} is ${ratio(fg, bg).toFixed(2)}:1`)
+    }
+  }
+})
+
 test('names and folders', () => {
   assert.equal(slugify("Ade's Bakery"), 'ades-bakery')
   assert.equal(slugify('Café  Noir!'), 'cafe-noir')
@@ -79,6 +115,17 @@ test('froam new <folder>: writes the site and the workspace, then says how to op
   assert.match(fs.readFileSync(path.join(dir, 'index.html'), 'utf8'), /Introducing Northwind/)
   assert.match(out, /made Northwind \(product or startup\)/)
   assert.match(out, /Open it in the editor: npx @ahmadastic\/froam/)
+})
+
+test('froam new --style: the site wears it; a style that does not exist is refused, nothing written', () => {
+  const made = froam(['new', 'northwind-noir', '--kind', 'event', '--style', 'noir', '--no-open'])
+  assert.equal(made.code, 0, made.out)
+  const html = fs.readFileSync(path.join(base, 'northwind-noir', 'index.html'), 'utf8')
+  assert.ok(html.includes('--accent: #f97316;') && html.includes('family=Syne:wght@'), 'noir not applied')
+  const refused = froam(['new', 'northwind-plaid', '--style', 'plaid', '--no-open'])
+  assert.notEqual(refused.code, 0)
+  assert.match(refused.out, /there is no "plaid" style — use one of: original, monochrome/)
+  assert.ok(!fs.existsSync(path.join(base, 'northwind-plaid')), 'a refused style still made a folder')
 })
 
 test('froam new: an edit to starter text is written into index.html', () => {

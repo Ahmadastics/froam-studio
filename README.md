@@ -71,6 +71,17 @@ Click any text to change it, add sections, save: text and new sections are
 written straight into `index.html`. Typing `n` at the first prompt does the
 same, and so does pointing Froam at an empty folder.
 
+Pick a look with `--style`: `monochrome`, `ocean`, `mint`, `terracotta`,
+`bakery`, `sunset`, `electric`, `citrus`, `lavender`, `sage`, `midnight` or
+`noir` (the default is the kind's own). A style only changes colours, corners
+and the heading font, so your text and edits carry over if you switch later.
+No terminal? [froam.vercel.app/try](https://froam.vercel.app/try) makes the
+same sites in your browser and hands you the folder.
+
+```bash
+npx @ahmadastic/froam new --kind business --style terracotta
+```
+
 Then put it online:
 
 ```bash

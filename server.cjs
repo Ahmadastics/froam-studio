@@ -1037,9 +1037,22 @@ function generateRuntimeJs(design) {
     return p || '/'
   }
 
+  // Opened straight from disk (a double-clicked index.html), the path is the
+  // whole folder path: /C:/Users/me/my-site. The page is the route its path
+  // ends with, longest first; the site's own folder is the home page.
+  function currentRoute() {
+    var path = normRoute(window.location.pathname)
+    if (window.location.protocol !== 'file:' || DESIGN.routes[path]) return path
+    var best = ''
+    for (var key in DESIGN.routes) {
+      if (key !== '/' && key.length > best.length && path.slice(-key.length) === key) best = key
+    }
+    return best || (DESIGN.routes['/'] ? '/' : path)
+  }
+
   function apply() {
     if (document.documentElement.hasAttribute('data-chef-editing')) return
-    var routeKey = normRoute(window.location.pathname)
+    var routeKey = currentRoute()
     document.documentElement.setAttribute('data-froam-route', routeKey)
 
     var root = getRoot()

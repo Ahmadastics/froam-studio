@@ -52,7 +52,7 @@ import {
   resolveSafeWorkspaceDir,
 } from '../lib/launcher.mjs'
 import { HOSTS, PUBLISH_TARGETS, buildPublishFolder, isPublishTarget } from '../lib/publish.mjs'
-import { STARTER_KINDS, isStarterKind, renderStarter, slugify, starterReadme, titleFromFolder } from '../lib/starters.mjs'
+import { STARTER_KINDS, STARTER_STYLES, isStarterKind, isStarterStyle, renderStarter, slugify, starterReadme, titleFromFolder } from '../lib/starters.mjs'
 
 const PACKAGE_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const CLI_ENTRY = fileURLToPath(import.meta.url)
@@ -634,8 +634,12 @@ async function planNewSite(flags, folderArg, prompter = null) {
     }
     kind = kind || STARTER_KINDS[0].id
 
+    // Never asked: the kind's own look, unless the command line names another.
+    const style = typeof flags.style === 'string' ? flags.style.toLowerCase() : 'original'
+    if (!isStarterStyle(style)) fail(`there is no "${flags.style}" style — use one of: ${STARTER_STYLES.map((entry) => entry.id).join(', ')}`)
+
     const folder = folderArg ? path.resolve(cwd, folderArg) : freeFolder(newSiteBase(), slugify(name))
-    return { name, kind, folder }
+    return { name, kind, style, folder }
   } finally {
     own?.close()
   }
@@ -646,7 +650,7 @@ async function planNewSite(flags, folderArg, prompter = null) {
  * a README that says how to edit and publish it, froam.config.json and the
  * froam/ workspace. Never writes over a page that is already there.
  */
-function createNewSite({ name, kind, folder }) {
+function createNewSite({ name, kind, style = 'original', folder }) {
   const shown = displayDir(folder)
   if (fs.existsSync(folder) && !fs.statSync(folder).isDirectory()) fail(`${shown} is a file, not a folder — pick another name`)
   if (fs.existsSync(path.join(folder, 'index.html'))) {
@@ -662,7 +666,7 @@ function createNewSite({ name, kind, folder }) {
 
   try {
     fs.mkdirSync(folder, { recursive: true })
-    fs.writeFileSync(path.join(folder, 'index.html'), renderStarter({ name, kind }))
+    fs.writeFileSync(path.join(folder, 'index.html'), renderStarter({ name, kind, style }))
     const readme = path.join(folder, 'README.md')
     if (!fs.existsSync(readme)) fs.writeFileSync(readme, starterReadme({ name, folder: path.basename(folder) }))
     // froam publish builds its upload in .froam/; it's made again each time, never committed.
@@ -1498,6 +1502,7 @@ function help() {
   log(bold('Commands'))
   log(`  ${teal('new [folder]')}       make a website from scratch and open it in the editor`)
   log(`      ${dim('--kind <kind>')}      ${STARTER_KINDS.map((entry) => entry.id).join(' | ')}`)
+  log(`      ${dim('--style <style>')}    ${STARTER_STYLES.map((entry) => entry.id).join(' | ')}`)
   log(`      ${dim('--name <name>')}      the site's name ${dim('(asked when not given)')}`)
   log(`      ${dim('--no-open')}          make it, but don't start the editor`)
   log(`  ${teal('publish [folder]')}   put a plain HTML site online ${dim('(asks where the first time, then remembers)')}`)

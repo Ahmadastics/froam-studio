@@ -1,5 +1,22 @@
 # Changelog
 
+## 9.9.0 - 2026-10-16
+
+- **Styles for new sites.** `froam new --style <style>` puts a starter in
+  one of twelve looks, grouped by mood: Clean (Monochrome, Ocean, Mint),
+  Warm (Terracotta, Bakery, Sunset), Bold (Electric, Citrus), Soft
+  (Lavender, Sage) and Dark (Midnight, Noir). `original` is the kind's own
+  look and stays the default. A style changes only the page's `<head>`
+  (colours, corners, heading font, icon), so the same page can switch style
+  at any time and every saved edit stays put. Every style keeps body, muted
+  and accent text and button labels at 4.5:1 contrast or better. The
+  starters and styles are also what froam.vercel.app/try makes sites from.
+- **A double-clicked site shows its edits.** Opening a site's `index.html`
+  straight from disk (no server) gave the runtime the whole folder path as
+  the page's route, so none of the edits applied. It now finds the page by
+  the end of the path, so a site made with `froam new` (or downloaded from
+  the Try page) looks right by double-click too.
+
 ## 9.8.1 - 2026-10-14
 
 - **Invite links work on a phone.** Opening an editor or contributor link

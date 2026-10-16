@@ -148,6 +148,23 @@ test('CSS and runtime agree on the route attribute', () => {
     'the CSS selects on an attribute the runtime does not set')
 })
 
+test('a site opened from disk finds its page by the end of the file path', () => {
+  // A double-clicked index.html has the whole folder in its path; served, the same page is "/".
+  const routes = { '/': { desktop: { 'h1:1': { text: 'Home' } } }, '/about': { desktop: { 'h1:1': { text: 'About' } } }, '/team/about': { desktop: { 'h1:1': { text: 'Team' } } } }
+  const js = generateRuntimeJs({ version: 3, routes })
+  const slice = (name) => {
+    const start = js.indexOf(`function ${name}(`)
+    return js.slice(start, js.indexOf('\n  }\n', start) + 4)
+  }
+  const routeAt = (protocol, pathname) => new Function('window', 'DESIGN', `${slice('normRoute')}\n${slice('currentRoute')}; return currentRoute()`)({ location: { protocol, pathname } }, { routes })
+  assert.equal(routeAt('file:', '/C:/Users/me/ades-bakery/index.html'), '/')
+  assert.equal(routeAt('file:', '/home/me/ades-bakery/'), '/')
+  assert.equal(routeAt('file:', '/C:/Users/me/ades-bakery/about/index.html'), '/about')
+  assert.equal(routeAt('file:', '/C:/Users/me/ades-bakery/team/about/index.html'), '/team/about', 'the longest matching route wins')
+  assert.equal(routeAt('https:', '/about'), '/about')
+  assert.equal(routeAt('https:', '/somewhere/else'), '/somewhere/else', 'a served page never borrows another route')
+})
+
 /* Root scope — which element paths are relative to (see designRootScope). */
 
 const runtimeDesign = (js) => {
