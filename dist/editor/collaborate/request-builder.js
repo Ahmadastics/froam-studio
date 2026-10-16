@@ -18,6 +18,8 @@ function fieldLabel(field) {
         return 'Image';
     if (field === 'media')
         return 'Image or video';
+    if (field === 'href')
+        return 'Link';
     const name = field.replace(/^style:/, '').replace(/^__froamState:([^:]+):/, '$1 ').replace(/([A-Z])/g, ' $1').trim().toLowerCase();
     return name.charAt(0).toUpperCase() + name.slice(1);
 }
@@ -41,6 +43,8 @@ function currentValue(draft, field) {
         return draft.imageUrl;
     if (field === 'media')
         return draft.media;
+    if (field === 'href')
+        return draft.href;
     return draft.styles?.[field.replace(/^style:/, '')];
 }
 const scopeId = (routeKey, viewport) => `${routeKey}@@${viewport}`;

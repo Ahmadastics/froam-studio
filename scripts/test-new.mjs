@@ -13,9 +13,10 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { Readable, Writable } from 'node:stream'
 
-import { STARTER_KINDS, STARTER_PAGES, STARTER_STYLES, phoneDigits, renderStarter, renderStarterPage, slugify, starterTheme, titleFromFolder } from '../lib/starters.mjs'
+import { STARTER_KINDS, STARTER_PAGES, STARTER_STYLES, newSiteId, phoneDigits, renderStarter, renderStarterPage, slugify, starterTheme, titleFromFolder } from '../lib/starters.mjs'
 import { NEW_SITE_HINT, isNewSiteAnswer, promptWebsiteUrl } from '../lib/launcher.mjs'
 import { writeTextEdits } from '../lib/source-writeback.mjs'
+import { artStylesheet, sceneFor, sceneNames } from '../lib/starter-art.mjs'
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const CLI = path.join(ROOT, 'bin', 'froam.mjs')
@@ -147,6 +148,66 @@ test('contact details replace the placeholders; WhatsApp is a button at the very
   assert.doesNotMatch(renderStarter({ name: 'X', kind: 'shop', contact: { whatsapp: 'not a number' } }), /wa\.me/, 'a bad number made a button')
   assert.equal(phoneDigits('+234 906 585 7458'), '2349065857458')
   assert.equal(phoneDigits('12'), '')
+})
+
+test('made with Froam: every page carries the generator tag, its site id and a faint credit under the footer', () => {
+  const siteId = newSiteId()
+  assert.match(siteId, /^[0-9a-f]{12}$/)
+  assert.notEqual(newSiteId(), siteId, 'two sites got the same id')
+  for (const { id: kind } of STARTER_KINDS) {
+    const pages = [renderStarter({ name: 'Mark Test', kind, siteId }), ...STARTER_PAGES.map((page) => renderStarterPage({ name: 'Mark Test', kind, page: page.id, siteId }))]
+    for (const html of pages) {
+      assert.ok(html.includes('<meta name="generator" content="Froam">'), `${kind}: no generator tag`)
+      assert.ok(html.includes(`<!-- Made with Froam · https://froam.vercel.app · site ${siteId} -->`), `${kind}: no site mark`)
+      // The credit is the footer's last element, after the row that was always there: no path in the page moves.
+      const footer = html.slice(html.indexOf('<footer'), html.indexOf('</footer>') + 9)
+      assert.match(footer, /<\/div>\s*<p class="made-with"><a href="https:\/\/froam\.vercel\.app" rel="noopener">Made with Froam<\/a><\/p>\s*<\/footer>$/, `${kind}: the credit is not last in the footer`)
+    }
+  }
+  // An id that could close the comment is left out, not written.
+  const hostile = renderStarter({ name: 'Mark Test', siteId: 'x --><script>alert(1)</script>' })
+  assert.ok(!hostile.includes('<script>alert(1)'), 'an id broke out of the comment')
+  assert.ok(hostile.includes('<!-- Made with Froam · https://froam.vercel.app -->'))
+})
+
+test('made with Froam: froam new gives one site one id, the same on every page', () => {
+  const made = froam(['new', 'marked-site', '--pages', 'about,gallery', '--no-open'])
+  assert.equal(made.code, 0, made.out)
+  const ids = ['index.html', 'about.html', 'gallery.html'].map((name) => fs.readFileSync(path.join(base, 'marked-site', name), 'utf8').match(/<!-- Made with Froam · https:\/\/froam\.vercel\.app · site ([0-9a-f]{12}) -->/)?.[1])
+  assert.ok(ids[0], 'index.html has no site id')
+  assert.deepEqual(ids, [ids[0], ids[0], ids[0]], 'the pages of one site have different ids')
+})
+
+test('starter pictures: every frame shows a drawing in the site\'s colours, which marks itself as not a photo', () => {
+  for (const { id: kind } of STARTER_KINDS) {
+    for (const { id: style } of STARTER_STYLES) {
+      const pages = [renderStarter({ name: 'Art', kind, style }), ...STARTER_PAGES.map((page) => renderStarterPage({ name: 'Art', kind, style, page: page.id }))]
+      for (const html of pages) {
+        const body = html.slice(html.indexOf('<body'))
+        const frames = [...body.matchAll(/<div class="photo[^"]*" data-froam-image-frame="true"( data-scene="([a-z0-9-]+)")?/g)]
+        for (const frame of frames) {
+          assert.ok(frame[2], `${kind}/${style}: a picture frame has no scene`)
+          const rule = html.match(new RegExp(`\\.photo\\[data-scene="${frame[2]}"\\] \\{ background-image: url\\("data:image/svg\\+xml,([^"]+)"\\); \\}`))
+          assert.ok(rule, `${kind}/${style}: no drawing for ${frame[2]}`)
+          assert.ok(rule[1].includes("data-froam-art='"), 'a drawing does not mark itself as a drawing')
+          assert.ok(!/[<>#"]/.test(rule[1]), 'a drawing is not escaped for a data URI')
+        }
+      }
+    }
+  }
+})
+
+test('starter pictures: every scene draws, numbered things take turns, and the colours follow the style', () => {
+  const theme = starterTheme('restaurant', 'original')
+  for (const scene of sceneNames()) assert.ok(artStylesheet(theme, [scene]).includes(`data-froam-art='${scene}'`), `${scene} draws nothing`)
+  assert.equal(artStylesheet(theme, ['nonsense']), '', 'an unknown scene is skipped')
+  assert.deepEqual(['first', 'second', 'third', 'fourth'].map((n) => sceneFor(`A photo of the ${n} product`)), ['product-1', 'product-2', 'product-3', 'product-1'])
+  assert.equal(sceneFor('A photo of your best dish'), 'dish')
+  assert.equal(sceneFor('A photo of your school grounds'), 'building')
+  const light = artStylesheet(starterTheme('restaurant', 'original'), ['dish'])
+  const dark = artStylesheet(starterTheme('event', 'original'), ['dish'])
+  assert.notEqual(light, dark, 'the drawing ignores the style')
+  assert.ok(light.includes(starterTheme('restaurant', 'original').accent.replace('#', '%23')), 'the drawing does not use the accent')
 })
 
 test('names and folders', () => {

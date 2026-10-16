@@ -5,6 +5,7 @@ type Draft = {
     text?: string;
     imageUrl?: string;
     media?: string;
+    href?: string;
     styles?: Record<string, string>;
     fingerprint?: {
         text?: string;

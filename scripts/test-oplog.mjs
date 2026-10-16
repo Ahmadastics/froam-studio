@@ -408,6 +408,20 @@ test('compaction leaves recent undo history usable', () => {
   assert.equal(deriveStore(undone)[SCOPE].p.text, 'v298')
 })
 
+test('a link edit is its own field: diffed, undone and kept through compaction', () => {
+  let log = []
+  log = edit(log, 'ahmad', 1, 'a:1', 'text', 'Chat on WhatsApp')
+  log = edit(log, 'ahmad', 2, 'a:1', 'href', 'https://wa.me/2349065857458')
+  assert.deepEqual(diffDrafts({ text: 'x' }, { text: 'x', href: 'tel:+1' }), [{ field: 'href', value: 'tel:+1' }])
+  assert.equal(deriveStore(log)[SCOPE]['a:1'].href, 'https://wa.me/2349065857458')
+  for (let i = 0; i < 120; i += 1) log = edit(log, 'ahmad', i + 3, 'p', 'text', `v${i}`)
+  assert.equal(deriveStore(compactLog(log, 20))[SCOPE]['a:1'].href, 'https://wa.me/2349065857458', 'compaction dropped the link')
+  let short = []
+  short = edit(short, 'ahmad', 1, 'a:1', 'href', 'mailto:hi@example.com')
+  short = [...short, ...buildUndo(short, 'ahmad', 2)]
+  assert.deepEqual(deriveStore(short), {}, 'undo should take the link edit away')
+})
+
 /* ─── applyOp ─── */
 
 test('applyOp does not mutate the input store', () => {

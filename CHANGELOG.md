@@ -1,5 +1,30 @@
 # Changelog
 
+## 9.11.0 - 2026-10-16
+
+- **Change where a link goes.** Select a link or button and press the new
+  link button on the floating bar: point it at a website, a WhatsApp chat
+  (with your number's country code), a phone call, an email, or another
+  page or section of the site (the places the site already links to are
+  offered). "Try it" opens the link to check it; "Original" puts the
+  page's own address back. A link change is an edit like any other: it
+  undoes, saves, syncs to a room and is applied for visitors by
+  `froam.runtime.js`. Only web, email, phone, text and relative addresses
+  are ever written into a page; `javascript:` and `data:` are refused in the
+  editor, in the generated runtime and again in the browser.
+- **Pictures in the starters.** A new site's picture frames show flat
+  drawings in the site's own colours (a dish, a room, a product, a person,
+  a group, a parcel, a school, a landscape, a screen) instead of empty
+  boxes. A photo put in a frame replaces its drawing, the frame still reads
+  as waiting for a picture until then, and switching style recolours them.
+- **Made with Froam.** Pages made by `froam new` (and the Try page) carry
+  `<meta name="generator" content="Froam">`, a comment naming Froam with the
+  site's id, and a small, faint "Made with Froam" line under the footer.
+  The id is random, made once per site and shared by its pages; nothing is
+  sent anywhere. The line is placed after everything else in the footer, so
+  no element moves and saved edits stay put; it can be deleted like
+  anything else.
+
 ## 9.10.0 - 2026-10-16
 
 - **Starters for local businesses.** Five new kinds for `froam new --kind`:

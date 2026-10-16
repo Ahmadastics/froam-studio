@@ -64,9 +64,9 @@ npx @ahmadastic/froam ./public             # a static HTML folder
 npx @ahmadastic/froam new
 ```
 
-Froam asks what your site is called and what kind it is (business, portfolio,
-product, event, or a blank page), writes a real `index.html` with your
-name in it, and opens it in the editor with the section Library showing.
+Froam asks what your site is called and what kind it is (business,
+restaurant, salon, shop, school, community, portfolio, product, event, or a
+blank page), writes a real `index.html` with your name in it, and opens it in the editor with the section Library showing.
 Click any text to change it, add sections, save: text and new sections are
 written straight into `index.html`. Typing `n` at the first prompt does the
 same, and so does pointing Froam at an empty folder.
@@ -77,6 +77,13 @@ Pick a look with `--style`: `monochrome`, `ocean`, `mint`, `terracotta`,
 and the heading font, so your text and edits carry over if you switch later.
 No terminal? [froam.vercel.app/try](https://froam.vercel.app/try) makes the
 same sites in your browser and hands you the folder.
+
+The picture frames start with simple drawings in the site's colours (a dish,
+a room, a product, a person) until you select one and put your own photo in.
+To point a button somewhere else, select it and press the link button on the
+bar: a website, a WhatsApp chat, a phone number, an email, or another page.
+Each page ends with a small "Made with Froam" line and a comment with the
+site's id; nothing is tracked, and the line is yours to keep or delete.
 
 ```bash
 npx @ahmadastic/froam new --kind business --style terracotta

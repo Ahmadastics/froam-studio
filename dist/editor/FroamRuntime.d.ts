@@ -6,6 +6,8 @@ type ElementDraft = {
     imageUrl?: string;
     /** See MediaDraft in ./media/media-draft.ts. */
     media?: string;
+    /** Where a link goes — see ./chef/links.ts. */
+    href?: string;
     styles?: Record<string, string>;
     /** See `ElementDraft` in src/collab/types.ts — how this edit re-finds its element. */
     fingerprint?: FroamAnchorFingerprint;

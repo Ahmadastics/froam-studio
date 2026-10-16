@@ -124,6 +124,7 @@ function storeField(state: FroamProjectState, op: FroamOp) {
   if (op.field === 'text') return draft?.text
   if (op.field === 'imageUrl') return draft?.imageUrl
   if (op.field === 'media') return draft?.media
+  if (op.field === 'href') return draft?.href
   return draft?.styles?.[op.field.slice(6)]
 }
 export function compareMutationBranches(document: FroamProjectDocument, sourceBranchId: string, mutationBranchId: string): FroamMutationComparison {

@@ -43,6 +43,18 @@ type Props = {
     isImage?: boolean;
     /** The selection shows a picture that can be cropped and re-fitted. */
     canAdjustImage?: boolean;
+    /** The selection is a link: where it goes now, and whether that's Froam's change or the page's own. */
+    link?: {
+        href: string;
+        changed: boolean;
+    } | null;
+    /** Point the link somewhere else, or (null) back where the page had it. */
+    onLink?: (href: string | null) => void;
+    /** The pages and sections this site already links to, offered as places to go. */
+    linkDestinations?: () => Array<{
+        href: string;
+        label: string;
+    }>;
     docked?: boolean;
     canUndo?: boolean;
     onWalk?: (direction: WalkDirection) => void;
@@ -63,6 +75,6 @@ type Props = {
     }) => void;
 };
 export declare function collectPagePalette(): string[];
-export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, radius, opacity, isHidden, fontOptions, selectionCount, isTextLayer, hasText, isImage, canAdjustImage, docked, canUndo, onWalk, onAction, onStyle, selectionKey, effects, viewportMode, onSaveLook, }: Props): import("react").JSX.Element | null;
+export default function FroamFloatingBar({ targetRect, visible, label, fontFamily, fontSize, fontWeight, isBold, isItalic, isUnderline, isStrike, textAlign, color, background, radius, opacity, isHidden, fontOptions, selectionCount, isTextLayer, hasText, isImage, canAdjustImage, link, onLink, linkDestinations, docked, canUndo, onWalk, onAction, onStyle, selectionKey, effects, viewportMode, onSaveLook, }: Props): import("react").JSX.Element | null;
 export {};
 //# sourceMappingURL=FroamFloatingBar.d.ts.map

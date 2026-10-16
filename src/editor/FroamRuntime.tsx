@@ -20,12 +20,15 @@ import { applyMediaSource, restorePageMedia } from './media/apply-media'
 import { hasMediaRef, resolveMediaRefs } from './media/media-refs'
 import { SIZE_ORDER, layeredDrafts } from './chef/cascade'
 import { FX_PREFIX, installFroamFx } from '../fx/engine'
+import { safeHref } from './chef/links'
 
 type ElementDraft = {
   text?: string
   imageUrl?: string
   /** See MediaDraft in ./media/media-draft.ts. */
   media?: string
+  /** Where a link goes — see ./chef/links.ts. */
+  href?: string
   styles?: Record<string, string>
   /** See `ElementDraft` in src/collab/types.ts — how this edit re-finds its element. */
   fingerprint?: FroamAnchorFingerprint
@@ -38,6 +41,8 @@ type RuntimeSnapshot = {
   text?: string
   /** The element's picture or video was changed: restorePageMedia() puts the page's back. */
   media?: boolean
+  /** The link's own address (null: it had none), when a draft pointed it elsewhere. */
+  href?: string | null
   styles: Record<string, string>
 }
 
@@ -183,6 +188,9 @@ function applyDraft(element: HTMLElement, draft: ElementDraft) {
 
   if (draft.imageUrl !== undefined || draft.media !== undefined) applyMediaSource(element, draft.imageUrl, draft.media, 'runtime')
 
+  const href = element.tagName === 'A' && draft.href !== undefined ? safeHref(draft.href) : null
+  if (href && element.getAttribute('href') !== href) element.setAttribute('href', href)
+
   if (!draft.styles) return
 
   for (const [key, raw] of Object.entries(draft.styles)) {
@@ -207,6 +215,11 @@ function restoreRuntimeSnapshots(snapshots: RuntimeSnapshot[]) {
 
     if (snapshot.media) restorePageMedia(element)
 
+    if (snapshot.href !== undefined) {
+      if (snapshot.href === null) element.removeAttribute('href')
+      else element.setAttribute('href', snapshot.href)
+    }
+
     for (const [cssKey, value] of Object.entries(snapshot.styles)) {
       if (value) element.style.setProperty(cssKey, value)
       else element.style.removeProperty(cssKey)
@@ -225,13 +238,17 @@ function snapshotDraftTarget(element: HTMLElement, draft: ElementDraft, snapshot
     snapshot.media = true
   }
 
+  if (element.tagName === 'A' && draft.href !== undefined) {
+    snapshot.href = element.getAttribute('href')
+  }
+
   for (const key of Object.keys(draft.styles ?? {})) {
     if (key.startsWith('__froamState:')) continue
     const cssKey = camelToKebab(key)
     snapshot.styles[cssKey] = element.style.getPropertyValue(cssKey)
   }
 
-  if (snapshot.text !== undefined || snapshot.media || Object.keys(snapshot.styles).length > 0) {
+  if (snapshot.text !== undefined || snapshot.media || snapshot.href !== undefined || Object.keys(snapshot.styles).length > 0) {
     snapshots.push(snapshot)
   }
 

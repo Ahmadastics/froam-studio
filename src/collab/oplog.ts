@@ -70,12 +70,13 @@ function readField(draft: ElementDraft | undefined, field: FroamOpField): string
   if (field === 'text') return draft.text
   if (field === 'imageUrl') return draft.imageUrl
   if (field === 'media') return draft.media
+  if (field === 'href') return draft.href
   return draft.styles?.[field.slice(6)]
 }
 
 function writeField(draft: ElementDraft, field: FroamOpField, value: string | undefined): ElementDraft {
   const next: ElementDraft = { ...draft }
-  if (field === 'text' || field === 'imageUrl' || field === 'media') {
+  if (field === 'text' || field === 'imageUrl' || field === 'media' || field === 'href') {
     if (value === undefined) delete next[field]
     else next[field] = value
     return next
@@ -90,7 +91,7 @@ function writeField(draft: ElementDraft, field: FroamOpField, value: string | un
 }
 
 function isEmptyDraft(draft: ElementDraft) {
-  return draft.text === undefined && draft.imageUrl === undefined && draft.media === undefined && !draft.styles
+  return draft.text === undefined && draft.imageUrl === undefined && draft.media === undefined && draft.href === undefined && !draft.styles
 }
 
 /** Apply one op to a store, returning a new store. Last write wins. */
@@ -198,6 +199,7 @@ export function diffDrafts(prev: ElementDraft | undefined, next: ElementDraft | 
   if (before.text !== after.text) changes.push({ field: 'text', value: after.text })
   if (before.imageUrl !== after.imageUrl) changes.push({ field: 'imageUrl', value: after.imageUrl })
   if (before.media !== after.media) changes.push({ field: 'media', value: after.media })
+  if (before.href !== after.href) changes.push({ field: 'href', value: after.href })
 
   const props = new Set([...Object.keys(before.styles ?? {}), ...Object.keys(after.styles ?? {})])
   for (const prop of props) {
@@ -569,6 +571,7 @@ export function compactLog(ops: readonly FroamOp[], keepRecent = 200): FroamOp[]
         ['text', draft.text],
         ['imageUrl', draft.imageUrl],
         ['media', draft.media],
+        ['href', draft.href],
         ...Object.entries(draft.styles ?? {}).map(
           ([prop, value]) => [`style:${prop}`, value] as [FroamOpField, string],
         ),

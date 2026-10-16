@@ -31,6 +31,8 @@ export type ElementDraft = {
    * poster, the original a crop was cut from. One string, so it is one op.
    */
   media?: string
+  /** Where a link goes, when it was pointed somewhere new. Only safe schemes are ever written to a page. */
+  href?: string
   styles?: Record<string, string>
   /**
    * Enough of what the element was to recognise it again after the page is
@@ -90,7 +92,7 @@ export const BASELINE_ACTOR: FroamActorId = 'baseline'
  * two people restyling the same element don't clobber each other unless they
  * touch the same property.
  */
-export type FroamOpField = 'text' | 'imageUrl' | 'media' | `style:${string}`
+export type FroamOpField = 'text' | 'imageUrl' | 'media' | 'href' | `style:${string}`
 
 export type FroamOpKind = 'edit' | 'undo' | 'redo'
 

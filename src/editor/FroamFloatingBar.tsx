@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type { FroamStyleState } from '../project/types'
 import type { FontOption } from './fontSources'
 import FroamFontPicker from './FroamFontPicker'
+import FroamLinkEditor from './FroamLinkEditor'
 import { describeSelection } from './selection-name'
 import { FX_CATALOG, FX_PREFIX, formatFx, fxSpec, parseFx, type FxParams } from '../fx/engine'
 import type { Look, LookGroup, LookOverrides, LOOK_SHELVES as LookShelves } from './floating-bar-looks'
@@ -29,6 +30,7 @@ import {
   EyeOff,
   ImagePlus,
   Italic,
+  Link2,
   MoreHorizontal,
   SendToBack,
   Search,
@@ -117,6 +119,12 @@ type Props = {
   isImage?: boolean
   /** The selection shows a picture that can be cropped and re-fitted. */
   canAdjustImage?: boolean
+  /** The selection is a link: where it goes now, and whether that's Froam's change or the page's own. */
+  link?: { href: string; changed: boolean } | null
+  /** Point the link somewhere else, or (null) back where the page had it. */
+  onLink?: (href: string | null) => void
+  /** The pages and sections this site already links to, offered as places to go. */
+  linkDestinations?: () => Array<{ href: string; label: string }>
   docked?: boolean
   canUndo?: boolean
   onWalk?: (direction: WalkDirection) => void
@@ -294,7 +302,7 @@ function writeValue(key: string, value: unknown) {
 // Uniform corner-radius patch so the editor's own radius controls stay in sync.
 const corners = (n: number): SelectionPatch => ({ borderRadiusTL: n, borderRadiusTR: n, borderRadiusBR: n, borderRadiusBL: n })
 
-type Pop = 'palette' | 'looks' | 'align' | 'more' | null
+type Pop = 'palette' | 'looks' | 'align' | 'more' | 'link' | null
 
 export default function FroamFloatingBar({
   targetRect,
@@ -319,6 +327,9 @@ export default function FroamFloatingBar({
   hasText = true,
   isImage = false,
   canAdjustImage = false,
+  link = null,
+  onLink,
+  linkDestinations,
   docked = false,
   canUndo = false,
   onWalk,
@@ -838,6 +849,18 @@ export default function FroamFloatingBar({
         {canAdjustImage && (
           <button type="button" className="froam-floating-bar__btn" title="Adjust — crop, zoom and fit it to its spot" aria-label="Adjust image or video" onClick={() => onAction('adjust-image')}><Crop size={15} /></button>
         )}
+        {link && onLink && (
+          <button
+            type="button"
+            className={`froam-floating-bar__btn ${openPop === 'link' ? 'is-open' : ''} ${link.changed ? 'is-on' : ''}`}
+            title="Link — where it goes: a website, WhatsApp, a call, an email or a page"
+            aria-label="Edit link"
+            aria-expanded={openPop === 'link'}
+            onClick={(event) => { anchorAt(event.currentTarget); togglePop('link') }}
+          >
+            <Link2 size={15} />
+          </button>
+        )}
 
         <button
           type="button"
@@ -929,6 +952,18 @@ export default function FroamFloatingBar({
           <button type="button" role="menuitem" onClick={() => act('unmerge')}><Ungroup size={14} /><span>Ungroup</span></button>
           <div className="froam-floating-bar__menu-divider" />
           <button type="button" role="menuitem" className="is-danger" onClick={() => act('delete')}><Trash2 size={14} /><span>Reset styles</span></button>
+        </div>
+      )}
+
+      {openPop === 'link' && link && onLink && (
+        <div className={`froam-floating-bar__pop is-anchored${menuUp ? ' is-up' : ''}`} style={docked ? undefined : { left: Math.max(4, menuLeft - 136) }} data-chef-editor-root="true">
+          <FroamLinkEditor
+            href={link.href}
+            changed={link.changed}
+            destinations={linkDestinations?.() ?? []}
+            onSave={(href) => { setOpenPop(null); onLink(href) }}
+            onReset={() => { setOpenPop(null); onLink(null) }}
+          />
         </div>
       )}
 

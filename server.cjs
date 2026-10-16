@@ -673,6 +673,13 @@ function runtimeMedia(value) {
   for (const key of ["kind", "src", "srcset", "sizes", "poster", "playback"]) if (media[key] !== void 0) kept[key] = media[key];
   return Object.keys(kept).length ? JSON.stringify(kept) : null;
 }
+function runtimeHref(value) {
+  if (typeof value !== "string") return null;
+  const href = value.trim();
+  if (!href || href.length > 2048 || /[\u0000-\u001f\u007f]/.test(href)) return null;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href) && !/^(https?|mailto|tel|sms):/i.test(href)) return null;
+  return href;
+}
 function generateRuntimeJs(design) {
   const routes = {};
   for (const [routeKey, viewports] of Object.entries(design.routes ?? {})) {
@@ -691,6 +698,8 @@ function generateRuntimeJs(design) {
         } else {
           if (draft.text !== void 0) entry.text = draft.text;
           if (draft.imageUrl !== void 0) entry.imageUrl = draft.imageUrl;
+          const href = runtimeHref(draft.href);
+          if (href) entry.href = href;
           const media = runtimeMedia(draft.media);
           if (media) entry.media = media;
           if (hasEffects(draft.styles)) entry.fx = 1;
@@ -897,6 +906,9 @@ function generateRuntimeJs(design) {
     return current
   }
 
+  // A link may go to the web, email, a call, a text, or a relative address \u2014 nothing that runs.
+  var SAFE_HREF = /^(?:(?:https?|mailto|tel|sms):|[^:]*$|[^:]*[/?#])/i
+
   function canApplyText(element) {
     var tag = element.tagName.toLowerCase()
     if (tag === 'input' || tag === 'textarea') return false
@@ -1078,6 +1090,7 @@ function generateRuntimeJs(design) {
       var tag = target.tagName.toLowerCase()
       if (tag === 'img' && (draft.imageUrl !== undefined || (media && media.srcset))) applyImage(target, draft, media)
       if (tag === 'video' && media && media.kind === 'video') applyVideo(target, media)
+      if (tag === 'a' && typeof draft.href === 'string' && SAFE_HREF.test(draft.href) && target.getAttribute('href') !== draft.href) target.setAttribute('href', draft.href)
       if (draft.fx && !target.hasAttribute('data-froam-fx')) target.setAttribute('data-froam-fx', '')
     }
     if (window.__froamFx) window.__froamFx.refresh()
@@ -1570,7 +1583,7 @@ function isSafeOp(value, actor) {
   if (!["edit", "undo", "redo"].includes(value.kind)) return false;
   if (typeof value.routeKey !== "string" || typeof value.path !== "string" || !value.path || value.path.length > 2e3) return false;
   if (!VIEWPORTS.includes(value.viewport)) return false;
-  if (typeof value.field !== "string" || !/^(text|imageUrl|media|style:[A-Za-z0-9_-]{1,100})$/.test(value.field)) return false;
+  if (typeof value.field !== "string" || !/^(text|imageUrl|media|href|style:[A-Za-z0-9_-]{1,100})$/.test(value.field)) return false;
   if (value.before !== void 0 && typeof value.before !== "string") return false;
   if (value.after !== void 0 && typeof value.after !== "string") return false;
   if ((value.before?.length ?? 0) > 2e6 || (value.after?.length ?? 0) > 2e6) return false;

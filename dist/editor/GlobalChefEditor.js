@@ -102,7 +102,8 @@ import { MAX_PERSONA_IMAGE_BYTES, SAVE_META_KEY, BRAND_FONT_MAX_BYTES, loadBrand
 import { getRoot, getCanvasHost, applyGlobalCSS, isSvgInternal, shouldSkipElement, readNumber, camelToKebab, readImageUrl, buildSelection, } from './chef/dom.js';
 import { describeChange, relativeTime, changeByline, buildFroamChangeReport, smallHash } from './chef/change-report.js';
 import { SINGLE_LINE_TAGS, isWritableElement, placeCaret, isEditableField, isTextVisualLayer, } from './chef/writing.js';
-import { sanitizeDraftForElement, applyDraft, rememberPageStyle, restorePageStyle, isInjectionPath, isSectionStructurePath, readInjectionDraft, readLiveElementDraft, applyCanvasDraftStyles, clearCanvasDraftStyles, } from './chef/drafts.js';
+import { sanitizeDraftForElement, applyDraft, rememberPageStyle, restorePageStyle, restorePageLink, isInjectionPath, isSectionStructurePath, readInjectionDraft, readLiveElementDraft, applyCanvasDraftStyles, clearCanvasDraftStyles, } from './chef/drafts.js';
+import { linkDestinations } from './chef/links.js';
 import { ensureFroamNodeId, isStructuralLayerElement, syncStructureBoundaryLabel, buildLayerNode, collectLayers, } from './chef/layers.js';
 import { collectCSSVars, readCanvasState, capturePageThumb, syncFroamArtboardMetadata, buildGradientCSS, } from './chef/canvas.js';
 import { AccordionSection, Toast, FroamWelcomeTips, SCAN_DONE_KEY, BLUEPRINT_SEEN_KEY, FroamScan, MeasurementOverlay, ClickPulseOverlay, SelectionHandoffOverlay, } from './chef/overlays.js';
@@ -1309,6 +1310,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                             continue;
                         const kept = next[key]?.[path];
                         if (kept) {
+                            if (kept.href === undefined)
+                                restorePageLink(target);
                             applyDraft(target, kept);
                             continue;
                         }
@@ -7439,7 +7442,20 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                 } })), _jsx(FroamPersonaEditor, { open: personaEditorOpen, persona: personaDraft, inRoom: roomJoined, roomRole: room.role, onImageFile: (file) => { void applyPersonaImage(file); }, onChange: setPersonaDraft, onClose: closePersonaEditor, onSave: savePersonaProfile, onImageUpload: handlePersonaImageUpload, onClearImage: clearPersonaImage }), showPanel && selection && !inlineEditing && !isResizing && !quickChatOpen && froamIntent.state.phase !== 'previewing' && (!isMobileUI || sheetDetent === 'peek') && (_jsx(FroamFloatingBar, { viewportMode: viewportMode, effects: Object.fromEntries(Object.entries(paintedDrafts[selection.path]?.styles ?? {}).filter(([key]) => key.startsWith(FX_PREFIX)).map(([key, value]) => [key.slice(FX_PREFIX.length), value])), targetRect: selectionRect, visible: !!selectionRect, docked: isMobileUI, canUndo: canUndo, onWalk: walkSelection, label: selection.label, fontFamily: selection.fontFamily, fontSize: selection.fontSize, fontWeight: selection.fontWeight, lineHeight: selection.lineHeight, letterSpacing: selection.letterSpacing, wordSpacing: selection.wordSpacing, textTransform: selection.textTransform, isBold: Number(selection.fontWeight) >= 700, isItalic: selection.fontStyle === 'italic', isUnderline: selection.textDecoration.includes('underline'), isStrike: selection.textDecoration.includes('line-through'), textAlign: selection.textAlign, color: selection.color, background: selection.background, width: selection.width, height: selection.height, display: selection.display, flexDirection: selection.flexDirection, justifyContent: selection.justifyContent, alignItems: selection.alignItems, gap: selection.gap, padding: selection.paddingTop, radius: selection.borderRadiusTL, overflow: selection.overflow, opacity: selection.opacity, isHidden: selection.display === 'none', mixBlendMode: selection.mixBlendMode, zIndex: selection.zIndex, fontOptions: fontOptions, selectionCount: selections.length, isTextLayer: currentSelectionRef.current ? isTextVisualLayer(currentSelectionRef.current) : false, hasText: currentSelectionRef.current ? hasOwnWords(currentSelectionRef.current) : true, 
                 // A picture frame (a starter's, the Library's, one drawn with F) is a picture's place,
                 // empty or not: its button is on the bar, not in the overflow menu.
-                isImage: currentSelectionRef.current?.tagName === 'IMG' || currentSelectionRef.current?.tagName === 'PICTURE' || currentSelectionRef.current?.tagName === 'VIDEO' || isImageFrame(currentSelectionRef.current), canAdjustImage: hasAdjustableMedia(currentSelectionRef.current), onSaveLook: ({ name, states }) => {
+                isImage: currentSelectionRef.current?.tagName === 'IMG' || currentSelectionRef.current?.tagName === 'PICTURE' || currentSelectionRef.current?.tagName === 'VIDEO' || isImageFrame(currentSelectionRef.current), canAdjustImage: hasAdjustableMedia(currentSelectionRef.current), link: currentSelectionRef.current?.tagName === 'A' ? { href: currentSelectionRef.current.getAttribute('href') ?? '', changed: paintedDrafts[selection.path]?.href !== undefined } : null, linkDestinations: () => linkDestinations(getRoot()), onLink: (href) => {
+                    updateDraft((draft, target) => {
+                        const next = { ...draft };
+                        if (href === null) {
+                            delete next.href;
+                            restorePageLink(target);
+                        }
+                        else {
+                            next.href = href;
+                        }
+                        return next;
+                    }, undefined, href === null ? 'Link back to the original' : 'Changed link');
+                    showToast(href === null ? 'Link goes where it did before' : 'Link saved — try it from Preview');
+                }, onSaveLook: ({ name, states }) => {
                     const style = createReusableStyle({ id: `style:look:${Date.now().toString(36)}`, name: `${name} custom`, states });
                     replaceDesignSystem(saveReusableStyle(activeProjectState.designSystem, style), `Saved reusable style: ${style.name}`);
                     showToast(`${style.name} saved to Design System`);

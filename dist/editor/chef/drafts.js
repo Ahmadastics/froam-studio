@@ -6,6 +6,7 @@ import { getCanvasHost, applyGlobalCSS, camelToKebab, readImageUrl } from './dom
 import { canApplyTextDraft } from './writing.js';
 import { applyMediaSource, readImageSource } from '../media/apply-media.js';
 import { hasMediaRef, mediaRefsFromUrls, resolveMediaRefs } from '../media/media-refs.js';
+import { safeHref } from './links.js';
 export function sanitizeDraftForElement(element, draft) {
     if (draft.text === undefined || canApplyTextDraft(element))
         return draft;
@@ -34,6 +35,7 @@ export function rememberPageStyle(element) {
  * it since), only the properties in `styles` — Froam's — are removed.
  */
 export function restorePageStyle(element, styles) {
+    restorePageLink(element);
     if (pageStyles.has(element)) {
         const own = pageStyles.get(element);
         if (own === null || own === undefined)
@@ -48,6 +50,31 @@ export function restorePageStyle(element, styles) {
     if (!element.getAttribute('style')?.trim())
         element.removeAttribute('style');
 }
+/* A link's own address, from before Froam first pointed it somewhere else. */
+const pageLinks = new WeakMap();
+/** Point a link where the draft says; anything unsafe is ignored. */
+function applyLink(element, href) {
+    if (element.tagName !== 'A')
+        return;
+    const safe = safeHref(href);
+    if (!safe)
+        return;
+    if (!pageLinks.has(element))
+        pageLinks.set(element, element.getAttribute('href'));
+    if (element.getAttribute('href') !== safe)
+        element.setAttribute('href', safe);
+}
+/** Put a link's own address back. Called wherever Froam's styles are taken off, so Undo, Cancel and Clear cover links too. */
+export function restorePageLink(element) {
+    if (!pageLinks.has(element))
+        return;
+    const own = pageLinks.get(element);
+    pageLinks.delete(element);
+    if (own === null || own === undefined)
+        element.removeAttribute('href');
+    else
+        element.setAttribute('href', own);
+}
 export function applyDraft(element, draft) {
     try {
         const safeDraft = sanitizeDraftForElement(element, draft);
@@ -59,6 +86,8 @@ export function applyDraft(element, draft) {
         if (safeDraft.imageUrl !== undefined || safeDraft.media !== undefined) {
             applyMediaSource(element, safeDraft.imageUrl, safeDraft.media, 'editor');
         }
+        if (safeDraft.href !== undefined)
+            applyLink(element, safeDraft.href);
         if (safeDraft.styles) {
             for (const [key, raw] of Object.entries(safeDraft.styles)) {
                 if (key.startsWith('__froamState:'))

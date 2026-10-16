@@ -15,6 +15,7 @@ import { applyMediaSource, restorePageMedia } from './media/apply-media.js';
 import { hasMediaRef, resolveMediaRefs } from './media/media-refs.js';
 import { SIZE_ORDER, layeredDrafts } from './chef/cascade.js';
 import { FX_PREFIX, installFroamFx } from '../fx/engine.js';
+import { safeHref } from './chef/links.js';
 const CANVAS_KEY = '__froam_canvas__';
 const INJECTION_KEY = '__froam_injection__';
 const ROOT_PARENT_KEY = '__froam_root__';
@@ -96,6 +97,9 @@ function applyDraft(element, draft) {
         applyDraftText(element, draft.text);
     if (draft.imageUrl !== undefined || draft.media !== undefined)
         applyMediaSource(element, draft.imageUrl, draft.media, 'runtime');
+    const href = element.tagName === 'A' && draft.href !== undefined ? safeHref(draft.href) : null;
+    if (href && element.getAttribute('href') !== href)
+        element.setAttribute('href', href);
     if (!draft.styles)
         return;
     for (const [key, raw] of Object.entries(draft.styles)) {
@@ -122,6 +126,12 @@ function restoreRuntimeSnapshots(snapshots) {
         }
         if (snapshot.media)
             restorePageMedia(element);
+        if (snapshot.href !== undefined) {
+            if (snapshot.href === null)
+                element.removeAttribute('href');
+            else
+                element.setAttribute('href', snapshot.href);
+        }
         for (const [cssKey, value] of Object.entries(snapshot.styles)) {
             if (value)
                 element.style.setProperty(cssKey, value);
@@ -138,13 +148,16 @@ function snapshotDraftTarget(element, draft, snapshots) {
     if ((element instanceof HTMLImageElement || element instanceof HTMLVideoElement) && (draft.imageUrl !== undefined || draft.media !== undefined)) {
         snapshot.media = true;
     }
+    if (element.tagName === 'A' && draft.href !== undefined) {
+        snapshot.href = element.getAttribute('href');
+    }
     for (const key of Object.keys(draft.styles ?? {})) {
         if (key.startsWith('__froamState:'))
             continue;
         const cssKey = camelToKebab(key);
         snapshot.styles[cssKey] = element.style.getPropertyValue(cssKey);
     }
-    if (snapshot.text !== undefined || snapshot.media || Object.keys(snapshot.styles).length > 0) {
+    if (snapshot.text !== undefined || snapshot.media || snapshot.href !== undefined || Object.keys(snapshot.styles).length > 0) {
         snapshots.push(snapshot);
     }
     applyDraft(element, draft);

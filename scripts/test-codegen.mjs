@@ -13,7 +13,7 @@
  * JavaScript. These do.
  */
 import assert from 'node:assert/strict'
-import { applyChangeRequest, designRootScope, generateCss, generateRuntimeJs, layeredStore, mergeSave, migrateDesign } from '../lib/codegen.mjs'
+import { applyChangeRequest, designRootScope, generateCss, generateRuntimeJs, layeredStore, mergeSave, migrateDesign, runtimeHref } from '../lib/codegen.mjs'
 
 const tests = []
 const test = (name, fn) => tests.push([name, fn])
@@ -163,6 +163,29 @@ test('a site opened from disk finds its page by the end of the file path', () =>
   assert.equal(routeAt('file:', '/C:/Users/me/ades-bakery/team/about/index.html'), '/team/about', 'the longest matching route wins')
   assert.equal(routeAt('https:', '/about'), '/about')
   assert.equal(routeAt('https:', '/somewhere/else'), '/somewhere/else', 'a served page never borrows another route')
+})
+
+test('links: only the web, email, calls, texts and relative addresses are kept', () => {
+  for (const ok of ['https://wa.me/2349065857458?text=Hi', 'http://example.com', 'mailto:hi@example.com', 'tel:+2349065857458', 'sms:+15550100', 'about.html', '#contact', '/menu', '../index.html'])
+    assert.equal(runtimeHref(ok), ok, ok)
+  for (const bad of ['javascript:alert(1)', ' JaVaScRiPt:alert(1)', 'java\tscript:alert(1)', 'data:text/html,<b>x</b>', 'vbscript:x', 'file:///etc/passwd', '', 42, null])
+    assert.equal(runtimeHref(bad), null, String(bad))
+})
+
+test('links: the runtime carries a safe link edit, never an unsafe one, and checks again itself', () => {
+  const routes = { '/': { desktop: { 'a:1': { href: 'https://wa.me/2349065857458' }, 'a:2': { href: 'javascript:alert(1)', text: 'Hi' } } } }
+  const js = generateRuntimeJs({ version: 3, routes })
+  parses(js, 'runtime with links')
+  const shipped = runtimeDesign(js).routes['/'].desktop
+  assert.equal(shipped['a:1'].href, 'https://wa.me/2349065857458')
+  assert.equal(shipped['a:2'].href, undefined, 'an unsafe link reached the page')
+  assert.equal(shipped['a:2'].text, 'Hi')
+  const line = js.match(/var SAFE_HREF = (.*)\n/)
+  assert.ok(line, 'the runtime has no link check')
+  const SAFE = new Function(`return ${line[1]}`)()
+  for (const ok of ['https://x.com', 'mailto:a@b.co', 'tel:+1', 'about.html', '#top', 'page.html?at=10:30']) assert.ok(SAFE.test(ok), ok)
+  for (const bad of ['javascript:alert(1)', 'data:text/html,x', 'vbscript:x']) assert.ok(!SAFE.test(bad), bad)
+  assert.ok(js.includes("tag === 'a' && typeof draft.href === 'string' && SAFE_HREF.test(draft.href)"), 'the runtime does not apply links')
 })
 
 /* Root scope — which element paths are relative to (see designRootScope). */

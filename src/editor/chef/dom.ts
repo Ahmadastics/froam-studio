@@ -102,6 +102,9 @@ export function rgbToHex(value: string) {
 
 export function readImageUrl(value: string) {
   const match = value.match(/url\((['"]?)(.*?)\1\)/i)
+  // A new site's starter drawing (lib/starter-art.mjs) holds a frame's place;
+  // it is not a picture, so the frame still reads as waiting for one.
+  if (match?.[2]?.includes('data-froam-art')) return ''
   return match?.[2] ?? ''
 }
 

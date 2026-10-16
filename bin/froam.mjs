@@ -52,7 +52,7 @@ import {
   resolveSafeWorkspaceDir,
 } from '../lib/launcher.mjs'
 import { HOSTS, PUBLISH_TARGETS, buildPublishFolder, isPublishTarget } from '../lib/publish.mjs'
-import { STARTER_KINDS, STARTER_PAGES, STARTER_STYLES, isStarterKind, isStarterPage, isStarterStyle, phoneDigits, renderStarter, renderStarterPage, slugify, starterReadme, titleFromFolder } from '../lib/starters.mjs'
+import { STARTER_KINDS, STARTER_PAGES, STARTER_STYLES, isStarterKind, isStarterPage, isStarterStyle, newSiteId, phoneDigits, renderStarter, renderStarterPage, slugify, starterReadme, titleFromFolder } from '../lib/starters.mjs'
 
 const PACKAGE_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const CLI_ENTRY = fileURLToPath(import.meta.url)
@@ -676,10 +676,11 @@ function createNewSite({ name, kind, style = 'original', pages = [], contact = {
 
   try {
     fs.mkdirSync(folder, { recursive: true })
-    fs.writeFileSync(path.join(folder, 'index.html'), renderStarter({ name, kind, style, pages, contact }))
+    const siteId = newSiteId()
+    fs.writeFileSync(path.join(folder, 'index.html'), renderStarter({ name, kind, style, pages, contact, siteId }))
     for (const page of pages) {
       const file = STARTER_PAGES.find((entry) => entry.id === page).file
-      fs.writeFileSync(path.join(folder, file), renderStarterPage({ name, kind, style, page, pages, contact }))
+      fs.writeFileSync(path.join(folder, file), renderStarterPage({ name, kind, style, page, pages, contact, siteId }))
     }
     const readme = path.join(folder, 'README.md')
     if (!fs.existsSync(readme)) fs.writeFileSync(readme, starterReadme({ name, folder: path.basename(folder) }))

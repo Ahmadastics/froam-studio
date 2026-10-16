@@ -13,6 +13,8 @@ export declare function rememberPageStyle(element: HTMLElement): void;
  * it since), only the properties in `styles` — Froam's — are removed.
  */
 export declare function restorePageStyle(element: HTMLElement, styles?: Record<string, string>): void;
+/** Put a link's own address back. Called wherever Froam's styles are taken off, so Undo, Cancel and Clear cover links too. */
+export declare function restorePageLink(element: HTMLElement): void;
 export declare function applyDraft(element: HTMLElement, draft: ElementDraft): void;
 export declare function isInjectionPath(path: string): boolean;
 export declare function isSectionStructurePath(path: string): path is "__froam_structure__:sections";

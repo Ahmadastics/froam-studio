@@ -3,7 +3,7 @@ import type { FroamOp, FroamViewport } from '../../collab/types'
 import type { RoomRequestScope, RoomStyleEdit } from '../../collab/room'
 import type { PendingChange } from './FroamCollaborate'
 
-type Draft = { text?: string; imageUrl?: string; media?: string; styles?: Record<string, string>; fingerprint?: { text?: string; className?: string }; [key: string]: unknown }
+type Draft = { text?: string; imageUrl?: string; media?: string; href?: string; styles?: Record<string, string>; fingerprint?: { text?: string; className?: string }; [key: string]: unknown }
 
 export type BuiltRequest = {
   /** The ops this request is made of — so a sent-back request's edits count again. */
@@ -36,6 +36,7 @@ function fieldLabel(field: string) {
   if (field === 'text') return 'Text'
   if (field === 'imageUrl') return 'Image'
   if (field === 'media') return 'Image or video'
+  if (field === 'href') return 'Link'
   const name = field.replace(/^style:/, '').replace(/^__froamState:([^:]+):/, '$1 ').replace(/([A-Z])/g, ' $1').trim().toLowerCase()
   return name.charAt(0).toUpperCase() + name.slice(1)
 }
@@ -57,6 +58,7 @@ function currentValue(draft: Draft | undefined, field: string) {
   if (field === 'text') return draft.text
   if (field === 'imageUrl') return draft.imageUrl
   if (field === 'media') return draft.media
+  if (field === 'href') return draft.href
   return draft.styles?.[field.replace(/^style:/, '')]
 }
 

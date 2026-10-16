@@ -60,11 +60,13 @@ function readField(draft, field) {
         return draft.imageUrl;
     if (field === 'media')
         return draft.media;
+    if (field === 'href')
+        return draft.href;
     return draft.styles?.[field.slice(6)];
 }
 function writeField(draft, field, value) {
     const next = { ...draft };
-    if (field === 'text' || field === 'imageUrl' || field === 'media') {
+    if (field === 'text' || field === 'imageUrl' || field === 'media' || field === 'href') {
         if (value === undefined)
             delete next[field];
         else
@@ -84,7 +86,7 @@ function writeField(draft, field, value) {
     return next;
 }
 function isEmptyDraft(draft) {
-    return draft.text === undefined && draft.imageUrl === undefined && draft.media === undefined && !draft.styles;
+    return draft.text === undefined && draft.imageUrl === undefined && draft.media === undefined && draft.href === undefined && !draft.styles;
 }
 /** Apply one op to a store, returning a new store. Last write wins. */
 export function applyOp(store, op) {
@@ -173,6 +175,8 @@ export function diffDrafts(prev, next) {
         changes.push({ field: 'imageUrl', value: after.imageUrl });
     if (before.media !== after.media)
         changes.push({ field: 'media', value: after.media });
+    if (before.href !== after.href)
+        changes.push({ field: 'href', value: after.href });
     const props = new Set([...Object.keys(before.styles ?? {}), ...Object.keys(after.styles ?? {})]);
     for (const prop of props) {
         const from = before.styles?.[prop];
@@ -490,6 +494,7 @@ export function compactLog(ops, keepRecent = 200) {
                 ['text', draft.text],
                 ['imageUrl', draft.imageUrl],
                 ['media', draft.media],
+                ['href', draft.href],
                 ...Object.entries(draft.styles ?? {}).map(([prop, value]) => [`style:${prop}`, value]),
             ];
             for (const [field, value] of fields) {

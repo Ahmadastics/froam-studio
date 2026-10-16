@@ -10,6 +10,8 @@ export type ElementDraft = {
     imageUrl?: string;
     /** A picture's or video's extras, as JSON — see MediaDraft in ../media/media-draft.ts. */
     media?: string;
+    /** Where a link goes, when it was changed in Froam — see ./links.ts. */
+    href?: string;
     styles?: Record<string, string>;
     /** See `ElementDraft` in src/collab/types.ts — how this edit re-finds its element. */
     fingerprint?: FroamAnchorFingerprint;

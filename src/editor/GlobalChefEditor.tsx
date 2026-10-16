@@ -303,6 +303,7 @@ import {
   applyDraft,
   rememberPageStyle,
   restorePageStyle,
+  restorePageLink,
   isInjectionPath,
   isSectionStructurePath,
   readInjectionDraft,
@@ -310,6 +311,7 @@ import {
   applyCanvasDraftStyles,
   clearCanvasDraftStyles,
 } from './chef/drafts'
+import { linkDestinations } from './chef/links'
 import {
   ensureFroamNodeId,
   isStructuralLayerElement,
@@ -1473,7 +1475,11 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
             const target = findElementByPath(root, path)
             if (!target) continue
             const kept = next[key]?.[path]
-            if (kept) { applyDraft(target, kept); continue }
+            if (kept) {
+              if (kept.href === undefined) restorePageLink(target)
+              applyDraft(target, kept)
+              continue
+            }
             // Back to the page's own words. What the painter saw before it first
             // wrote wins over the editor's snapshot, which a reload can take
             // after the approved text was already on screen.
@@ -9176,6 +9182,21 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           // empty or not: its button is on the bar, not in the overflow menu.
           isImage={currentSelectionRef.current?.tagName === 'IMG' || currentSelectionRef.current?.tagName === 'PICTURE' || currentSelectionRef.current?.tagName === 'VIDEO' || isImageFrame(currentSelectionRef.current)}
           canAdjustImage={hasAdjustableMedia(currentSelectionRef.current)}
+          link={currentSelectionRef.current?.tagName === 'A' ? { href: currentSelectionRef.current.getAttribute('href') ?? '', changed: paintedDrafts[selection.path]?.href !== undefined } : null}
+          linkDestinations={() => linkDestinations(getRoot())}
+          onLink={(href) => {
+            updateDraft((draft, target) => {
+              const next = { ...draft }
+              if (href === null) {
+                delete next.href
+                restorePageLink(target)
+              } else {
+                next.href = href
+              }
+              return next
+            }, undefined, href === null ? 'Link back to the original' : 'Changed link')
+            showToast(href === null ? 'Link goes where it did before' : 'Link saved — try it from Preview')
+          }}
           onSaveLook={({ name, states }) => {
             const style = createReusableStyle({ id: `style:look:${Date.now().toString(36)}`, name: `${name} custom`, states })
             replaceDesignSystem(saveReusableStyle(activeProjectState.designSystem, style), `Saved reusable style: ${style.name}`)
