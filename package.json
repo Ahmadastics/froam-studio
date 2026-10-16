@@ -1,6 +1,6 @@
 {
   "name": "@ahmadastic/froam",
-  "version": "9.9.0",
+  "version": "9.10.0",
   "description": "A visual editor for a running site or static HTML folder. Save supported revisions as a versioned design, generated override CSS, and a small content runtime.",
   "author": "Ahmad Modibbo <ahmadnuhu14@gmail.com>",
   "license": "FSL-1.1-MIT",
@@ -110,6 +110,6 @@
     "typescript": "~5.9.3"
   },
   "bin": {
-    "froam": "./bin/froam.mjs"
+    "froam": "bin/froam.mjs"
   }
 }

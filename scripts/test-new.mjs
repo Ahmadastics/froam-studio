@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { Readable, Writable } from 'node:stream'
 
-import { STARTER_KINDS, STARTER_STYLES, renderStarter, slugify, titleFromFolder } from '../lib/starters.mjs'
+import { STARTER_KINDS, STARTER_PAGES, STARTER_STYLES, phoneDigits, renderStarter, renderStarterPage, slugify, starterTheme, titleFromFolder } from '../lib/starters.mjs'
 import { NEW_SITE_HINT, isNewSiteAnswer, promptWebsiteUrl } from '../lib/launcher.mjs'
 import { writeTextEdits } from '../lib/source-writeback.mjs'
 
@@ -80,21 +80,73 @@ test('every style on every starter: only <head> changes, so element paths and sa
   )
 })
 
-test('every style keeps its words readable: 4.5:1 for body, muted and accent text and button labels', () => {
+/** WCAG contrast between two #rrggbb colours. */
+function contrast(a, b) {
   const luminance = (hex) => {
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
-  const ratio = (a, b) => {
-    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
-    return (hi + 0.05) / (lo + 0.05)
-  }
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+test('every style keeps its words readable: 4.5:1 for body, muted and accent text and button labels', () => {
   for (const { id, theme } of STARTER_STYLES) {
     if (!theme) continue
     for (const [what, fg, bg] of [['body text', theme.ink, theme.paper], ['muted text', theme.muted, theme.paper], ['accent text', theme.accent, theme.paper], ['button label', theme.accentInk, theme.accent]]) {
-      assert.ok(ratio(fg, bg) >= 4.5, `${id}: ${what} is ${ratio(fg, bg).toFixed(2)}:1`)
+      assert.ok(contrast(fg, bg) >= 4.5, `${id}: ${what} is ${contrast(fg, bg).toFixed(2)}:1`)
     }
   }
+})
+
+test('every kind\'s own look keeps its words readable too', () => {
+  for (const { id } of STARTER_KINDS) {
+    const theme = starterTheme(id)
+    for (const [what, fg, bg] of [['body text', theme.ink, theme.paper], ['muted text', theme.muted, theme.paper], ['accent text', theme.accent, theme.paper], ['button label', theme.accentInk, theme.accent]]) {
+      assert.ok(contrast(fg, bg) >= 4.5, `${id}: ${what} is ${contrast(fg, bg).toFixed(2)}:1`)
+    }
+  }
+})
+
+test('more pages: every kind with every page, no text twice on a page, each page linking all the others', () => {
+  const all = STARTER_PAGES.map((entry) => entry.id)
+  for (const { id: kind } of STARTER_KINDS) {
+    const home = renderStarter({ name: 'Northwind Studio', kind, year: 2026, pages: all })
+    const files = [['index.html', home], ...all.map((page) => [STARTER_PAGES.find((entry) => entry.id === page).file, renderStarterPage({ name: 'Northwind Studio', kind, page, pages: all, year: 2026 })])]
+    for (const [file, html] of files) {
+      const seen = new Set()
+      for (const text of visibleTexts(html)) {
+        assert.ok(!seen.has(text), `${kind} ${file}: "${text}" appears more than once`)
+        seen.add(text)
+      }
+      for (const entry of STARTER_PAGES) assert.ok(html.includes(`href="${entry.file}"`), `${kind} ${file} has no link to ${entry.file}`)
+      assert.match(html, /<link rel="stylesheet" href="froam\/froam.generated.css">/, `${kind} ${file}: shipping tags`)
+    }
+  }
+})
+
+test('more pages are links added at the end of the nav: nothing already on index.html moves', () => {
+  for (const { id: kind } of STARTER_KINDS) {
+    const plain = renderStarter({ name: 'Northwind', kind, year: 2026 })
+    const grown = renderStarter({ name: 'Northwind', kind, year: 2026, pages: ['about', 'contact'] })
+    const added = grown.replace(/\n {10}<a href="(about|contact)\.html">[^<]+<\/a>/g, '')
+    assert.equal(added, plain, `${kind}: adding pages changed more than the nav's end`)
+  }
+})
+
+test('contact details replace the placeholders; WhatsApp is a button at the very end of <body>', () => {
+  const contact = { email: 'ade@bakery.ng', phone: '+234 906 585 7458', whatsapp: '+234 906 585 7458' }
+  for (const { id: kind } of STARTER_KINDS) {
+    const html = renderStarter({ name: 'Ade’s Bakery', kind, year: 2026, contact })
+    assert.doesNotMatch(html, /example\.com|555 0100|5550100/, `${kind}: a placeholder survived`)
+    assert.match(html, /<a class="whatsapp" href="https:\/\/wa\.me\/2349065857458\?text=Hello%20Ade%E2%80%99s%20Bakery!"/, `${kind}: no WhatsApp button`)
+    assert.match(html, /<span>Chat with us<\/span>\n {4}<\/a>\n {2}<\/body>/, `${kind}: the button is not the last thing in <body>`)
+    const without = renderStarter({ name: 'Ade’s Bakery', kind, year: 2026, contact: { email: contact.email, phone: contact.phone } })
+    assert.equal(html.slice(0, html.indexOf('<a class="whatsapp"')).trimEnd(), without.slice(0, without.indexOf('</body>')).trimEnd(), `${kind}: WhatsApp moved something`)
+  }
+  assert.doesNotMatch(renderStarter({ name: 'X', kind: 'shop', contact: { whatsapp: 'not a number' } }), /wa\.me/, 'a bad number made a button')
+  assert.equal(phoneDigits('+234 906 585 7458'), '2349065857458')
+  assert.equal(phoneDigits('12'), '')
 })
 
 test('names and folders', () => {
@@ -126,6 +178,21 @@ test('froam new --style: the site wears it; a style that does not exist is refus
   assert.notEqual(refused.code, 0)
   assert.match(refused.out, /there is no "plaid" style — use one of: original, monochrome/)
   assert.ok(!fs.existsSync(path.join(base, 'northwind-plaid')), 'a refused style still made a folder')
+})
+
+test('froam new --pages --whatsapp --email: the pages are written, linked, and carry the real details', () => {
+  const made = froam(['new', 'northwind-salon', '--kind', 'salon', '--pages', 'about,contact', '--whatsapp', '+234 906 585 7458', '--email', 'book@northwind.ng', '--no-open'])
+  assert.equal(made.code, 0, made.out)
+  const dir = path.join(base, 'northwind-salon')
+  for (const file of ['index.html', 'about.html', 'contact.html']) {
+    const html = fs.readFileSync(path.join(dir, file), 'utf8')
+    assert.ok(html.includes('wa.me/2349065857458'), `${file}: no WhatsApp button`)
+    assert.ok(html.includes('href="contact.html"'), `${file}: no link to the contact page`)
+  }
+  assert.ok(fs.readFileSync(path.join(dir, 'contact.html'), 'utf8').includes('mailto:book@northwind.ng'), 'contact page kept the placeholder email')
+  const refused = froam(['new', 'northwind-blog', '--pages', 'blog', '--no-open'])
+  assert.notEqual(refused.code, 0)
+  assert.match(refused.out, /there is no "blog" page — use any of: about, services, gallery, contact/)
 })
 
 test('froam new: an edit to starter text is written into index.html', () => {
@@ -171,9 +238,9 @@ test('froam new inside a code project: the site goes to the Froam folder, not in
 })
 
 test('froam new: an unknown kind is refused with the list', () => {
-  const { code, out } = froam(['new', 'x', '--kind', 'shop', '--no-open'])
+  const { code, out } = froam(['new', 'x', '--kind', 'spaceship', '--no-open'])
   assert.equal(code, 1)
-  assert.match(out, /business, portfolio, product, event, blank/)
+  assert.match(out, /business, restaurant, salon, shop, school, community, portfolio, product, event, blank/)
   assert.ok(!fs.existsSync(path.join(base, 'x', 'index.html')))
 })
 

@@ -52,7 +52,7 @@ import {
   resolveSafeWorkspaceDir,
 } from '../lib/launcher.mjs'
 import { HOSTS, PUBLISH_TARGETS, buildPublishFolder, isPublishTarget } from '../lib/publish.mjs'
-import { STARTER_KINDS, STARTER_STYLES, isStarterKind, isStarterStyle, renderStarter, slugify, starterReadme, titleFromFolder } from '../lib/starters.mjs'
+import { STARTER_KINDS, STARTER_PAGES, STARTER_STYLES, isStarterKind, isStarterPage, isStarterStyle, phoneDigits, renderStarter, renderStarterPage, slugify, starterReadme, titleFromFolder } from '../lib/starters.mjs'
 
 const PACKAGE_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const CLI_ENTRY = fileURLToPath(import.meta.url)
@@ -605,7 +605,7 @@ function freeFolder(base, slug) {
  * only what the command line didn't say, and only when someone can answer;
  * otherwise a business site in a folder named after it.
  *
- * @param {Record<string, string | boolean>} flags --name, --kind, --yes
+ * @param {Record<string, string | boolean>} flags --name, --kind, --style, --pages, --email, --phone, --whatsapp, --yes
  * @param {string | null} folderArg the folder named on the command line
  * @param {ReturnType<typeof createPrompter> | null} prompter one already asking questions, to reuse
  */
@@ -638,8 +638,18 @@ async function planNewSite(flags, folderArg, prompter = null) {
     const style = typeof flags.style === 'string' ? flags.style.toLowerCase() : 'original'
     if (!isStarterStyle(style)) fail(`there is no "${flags.style}" style — use one of: ${STARTER_STYLES.map((entry) => entry.id).join(', ')}`)
 
+    // More pages beside index.html: --pages about,gallery,contact
+    const pages = typeof flags.pages === 'string' ? flags.pages.split(',').map((page) => page.trim().toLowerCase()).filter(Boolean) : []
+    const unknownPage = pages.find((page) => !isStarterPage(page))
+    if (unknownPage) fail(`there is no "${unknownPage}" page — use any of: ${STARTER_PAGES.map((entry) => entry.id).join(', ')}`)
+
+    // Real contact details in place of the starter's placeholders; WhatsApp adds a chat button.
+    const contact = {}
+    for (const key of ['email', 'phone', 'whatsapp']) if (typeof flags[key] === 'string') contact[key] = flags[key]
+    if (contact.whatsapp && !phoneDigits(contact.whatsapp)) fail(`"${contact.whatsapp}" is not a phone number — give it with the country code, like +234 801 234 5678`)
+
     const folder = folderArg ? path.resolve(cwd, folderArg) : freeFolder(newSiteBase(), slugify(name))
-    return { name, kind, style, folder }
+    return { name, kind, style, pages: [...new Set(pages)], contact, folder }
   } finally {
     own?.close()
   }
@@ -650,7 +660,7 @@ async function planNewSite(flags, folderArg, prompter = null) {
  * a README that says how to edit and publish it, froam.config.json and the
  * froam/ workspace. Never writes over a page that is already there.
  */
-function createNewSite({ name, kind, style = 'original', folder }) {
+function createNewSite({ name, kind, style = 'original', pages = [], contact = {}, folder }) {
   const shown = displayDir(folder)
   if (fs.existsSync(folder) && !fs.statSync(folder).isDirectory()) fail(`${shown} is a file, not a folder — pick another name`)
   if (fs.existsSync(path.join(folder, 'index.html'))) {
@@ -666,7 +676,11 @@ function createNewSite({ name, kind, style = 'original', folder }) {
 
   try {
     fs.mkdirSync(folder, { recursive: true })
-    fs.writeFileSync(path.join(folder, 'index.html'), renderStarter({ name, kind, style }))
+    fs.writeFileSync(path.join(folder, 'index.html'), renderStarter({ name, kind, style, pages, contact }))
+    for (const page of pages) {
+      const file = STARTER_PAGES.find((entry) => entry.id === page).file
+      fs.writeFileSync(path.join(folder, file), renderStarterPage({ name, kind, style, page, pages, contact }))
+    }
     const readme = path.join(folder, 'README.md')
     if (!fs.existsSync(readme)) fs.writeFileSync(readme, starterReadme({ name, folder: path.basename(folder) }))
     // froam publish builds its upload in .froam/; it's made again each time, never committed.
@@ -1503,6 +1517,9 @@ function help() {
   log(`  ${teal('new [folder]')}       make a website from scratch and open it in the editor`)
   log(`      ${dim('--kind <kind>')}      ${STARTER_KINDS.map((entry) => entry.id).join(' | ')}`)
   log(`      ${dim('--style <style>')}    ${STARTER_STYLES.map((entry) => entry.id).join(' | ')}`)
+  log(`      ${dim('--pages <list>')}     more pages, any of ${STARTER_PAGES.map((entry) => entry.id).join(',')}`)
+  log(`      ${dim('--whatsapp <no.>')}   a Chat on WhatsApp button ${dim('(number with country code)')}`)
+  log(`      ${dim('--email, --phone')}   your real contact details in the page`)
   log(`      ${dim('--name <name>')}      the site's name ${dim('(asked when not given)')}`)
   log(`      ${dim('--no-open')}          make it, but don't start the editor`)
   log(`  ${teal('publish [folder]')}   put a plain HTML site online ${dim('(asks where the first time, then remembers)')}`)

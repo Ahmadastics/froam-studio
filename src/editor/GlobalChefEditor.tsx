@@ -9172,7 +9172,9 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
           selectionCount={selections.length}
           isTextLayer={currentSelectionRef.current ? isTextVisualLayer(currentSelectionRef.current) : false}
           hasText={currentSelectionRef.current ? hasOwnWords(currentSelectionRef.current) : true}
-          isImage={currentSelectionRef.current?.tagName === 'IMG' || currentSelectionRef.current?.tagName === 'PICTURE' || currentSelectionRef.current?.tagName === 'VIDEO'}
+          // A picture frame (a starter's, the Library's, one drawn with F) is a picture's place,
+          // empty or not: its button is on the bar, not in the overflow menu.
+          isImage={currentSelectionRef.current?.tagName === 'IMG' || currentSelectionRef.current?.tagName === 'PICTURE' || currentSelectionRef.current?.tagName === 'VIDEO' || isImageFrame(currentSelectionRef.current)}
           canAdjustImage={hasAdjustableMedia(currentSelectionRef.current)}
           onSaveLook={({ name, states }) => {
             const style = createReusableStyle({ id: `style:look:${Date.now().toString(36)}`, name: `${name} custom`, states })

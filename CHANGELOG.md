@@ -1,5 +1,25 @@
 # Changelog
 
+## 9.10.0 - 2026-10-16
+
+- **Starters for local businesses.** Five new kinds for `froam new --kind`:
+  `restaurant` (a menu with prices, opening hours, ordering), `salon`
+  (treatments and prices, recent work, bookings), `shop` (products with
+  prices, how to order, delivery, questions), `school` (programmes, fees,
+  visits, admissions) and `community` (for a church, mosque or community
+  group: meeting times, who you are, how to join). Each has its own look,
+  and every style works on all of them.
+- **More pages.** `froam new --pages about,services,gallery,contact` adds an
+  About, Prices (a restaurant's Full menu), Gallery or Contact page beside
+  `index.html`, each with the same header linking every page. The links
+  are added at the end of the nav, so nothing already on the home page moves.
+- **Your real contact details.** `--email`, `--phone` and `--whatsapp` put
+  them in place of the starter's sample ones on every page. A WhatsApp
+  number adds a "Chat with us" button that opens a chat with you.
+- **Pictures go in from the bar.** Selecting a picture frame (a starter's,
+  the Library's, one you drew) now shows the add-a-picture button on the
+  floating bar, not only in the "…" menu.
+
 ## 9.9.0 - 2026-10-16
 
 - **Styles for new sites.** `froam new --style <style>` puts a starter in
