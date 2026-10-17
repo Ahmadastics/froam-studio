@@ -385,7 +385,9 @@ try {
   console.log('editing')
   for (const t of tests) {
     try {
-      await t.fn()
+      // Three minutes at most each: a test that hangs fails, and the rest still run.
+      let timer
+      await Promise.race([t.fn(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timed out after 3 minutes')), 180_000) })]).finally(() => clearTimeout(timer))
       passed += 1
       console.log(`  ok  ${t.name}`)
     } catch (error) {
@@ -401,4 +403,5 @@ try {
   try { fs.rmSync(siteDir, { recursive: true, force: true }) } catch { /* Windows may still hold a file */ }
 }
 console.log(`e2e editing: ${passed}/${tests.length} passed`)
-process.exitCode = passed === tests.length ? 0 : 1
+// Exit outright: a connection something left open must not keep the suite running (CI waits on it).
+process.exit(passed === tests.length ? 0 : 1)

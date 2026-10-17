@@ -8,7 +8,7 @@
  *
  *   node scripts/ci-run-all.mjs test
  */
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,12 +19,30 @@ const command = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf
 if (!command) throw new Error(`no npm script named ${scriptName}`)
 
 const system = process.env.RUNNER_OS ? `${process.env.RUNNER_OS}, Node ${process.versions.node.split('.')[0]}` : process.platform
+// A suite that hangs is stopped and named, rather than silently using up the whole job.
+const LIMIT_MINUTES = Number(process.env.FROAM_CI_SUITE_MINUTES) || 15
+
+/** Stop a suite and everything it started (its bridge, its browser). */
+function stopTree(child) {
+  if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' })
+  else try { process.kill(-child.pid, 'SIGKILL') } catch { child.kill('SIGKILL') }
+}
+
 const escape = (value) => value.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')
 
 function run(suite) {
   return new Promise((resolve) => {
     const started = Date.now()
-    const child = spawn(suite, { cwd: ROOT, shell: true, env: process.env })
+    // Its own process group (POSIX), so a hung suite can be stopped with everything it started.
+    const child = spawn(suite, { cwd: ROOT, shell: true, env: process.env, detached: process.platform !== 'win32' })
+    let timedOut = false
+    const limit = setTimeout(() => {
+      timedOut = true
+      keep(`
+  FAIL the suite was still running after ${LIMIT_MINUTES} minutes and was stopped
+`)
+      stopTree(child)
+    }, LIMIT_MINUTES * 60_000)
     let tail = ''
     const fails = []
     let pending = ''
@@ -42,7 +60,10 @@ function run(suite) {
     }
     child.stdout.on('data', keep)
     child.stderr.on('data', keep)
-    child.on('close', (code) => resolve({ code, tail, fails, seconds: Math.round((Date.now() - started) / 1000) }))
+    child.on('close', (code) => {
+      clearTimeout(limit)
+      resolve({ code: timedOut ? 'timeout' : code, tail, fails, seconds: Math.round((Date.now() - started) / 1000) })
+    })
   })
 }
 

@@ -266,4 +266,5 @@ try {
   try { fs.rmSync(siteDir, { recursive: true, force: true }) } catch { /* Windows may still hold a file */ }
 }
 console.log(`e2e phone: ${passed}/${tests.length} passed`)
-process.exitCode = passed === tests.length ? 0 : 1
+// Exit outright: a connection something left open must not keep the suite running (CI waits on it).
+process.exit(passed === tests.length ? 0 : 1)
