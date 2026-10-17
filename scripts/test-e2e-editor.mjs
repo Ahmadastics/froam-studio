@@ -283,8 +283,9 @@ test('every visible element selects what is under the pointer', async ({ page })
       el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' })
       await sleep(10)
       const r = el.getBoundingClientRect()
-      const x = r.left + r.width / 2
-      const y = r.top + r.height / 2
+      // Whole pixels: a click event carries its position truncated, so the check and the click use the same point.
+      const x = Math.floor(r.left + r.width / 2)
+      const y = Math.floor(r.top + r.height / 2)
       if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) continue
       const raw = document.elementFromPoint(x, y)
       if (!raw || isUi(raw)) continue

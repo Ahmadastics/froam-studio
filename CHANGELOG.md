@@ -1,5 +1,27 @@
 # Changelog
 
+## 9.11.1 - 2026-10-17
+
+- **A restyle no longer freezes the words.** Saving copied the words of
+  every edited element (and of whatever was selected) into the design, even
+  when only its colour or size changed. A later change to those words in
+  the code was then put back to the old ones for every visitor. Now a save
+  keeps words only when they were rewritten in Froam. The same goes for an
+  element's own inline styles and pictures: Froam keeps only what it
+  changed, so the code stays the place to change the rest. Merely having
+  something selected when you save no longer saves anything for it.
+  Designs saved before this release keep the words they saved. To let the
+  code's words show again, select the element in Froam, press Reset styles
+  (in the bar's "…" menu), then restyle it.
+- **Go Live, seen after a reload.** An editor that reloaded while Go Live
+  ran (a save from another device reloads open editors) lost track of it
+  and showed "Go live" instead of "Live". Every editor now learns where Go
+  Live stands as soon as it connects.
+- **Tests and CI.** The browser tests now pass on Linux and macOS as well
+  as Windows: a select-all that used Ctrl on a Mac, and a hit-test check
+  that compared a fractional point with the whole-pixel point a click
+  carries. CI uses current GitHub Actions (Node 24).
+
 ## 9.11.0 - 2026-10-16
 
 - **Change where a link goes.** Select a link or button and press the new

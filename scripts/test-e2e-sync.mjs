@@ -414,6 +414,12 @@ test('Go Live from the phone: one confirm, only Froam\'s files are committed and
     assert(/\?\? draft-notes\.txt/.test(run(siteDir, 'status', '--porcelain')), 'the unfinished work was touched')
     // The laptop, open the whole time, heard it went live.
     assert(await waitUntil(computer.page, () => document.querySelector('.froam-tb__live-btn')?.getAttribute('data-state') === 'live', null, 5000), 'the laptop wasn\'t told it went live')
+    // A laptop that reloads (a saved page reloads open editors) still knows: it may have been mid-reload when the news went out.
+    await computer.page.reload()
+    await computer.page.waitForSelector('.global-chef-button', { timeout: 20000 })
+    if (!(await computer.page.locator('#froam-editor-portal .froam-chrome').count())) await computer.page.keyboard.press('Control+.')
+    await computer.page.waitForSelector('#froam-editor-portal .froam-chrome', { timeout: 20000 })
+    assert(await waitUntil(computer.page, () => document.querySelector('.froam-tb__live-btn')?.getAttribute('data-state') === 'live', null, 10000), 'after a reload the laptop forgot it went live')
     if (process.env.FROAM_E2E_SHOTS) {
       // The laptop's own look at the sheet, for the record.
       await computer.page.locator('.froam-tb__live-btn').click()

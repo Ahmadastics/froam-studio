@@ -1821,7 +1821,14 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     source.addEventListener('ready', (event) => {
       // froam dev restarted, or the line dropped, while we were away: read what we may have missed.
       let revision = 0
-      try { revision = Number(JSON.parse((event as MessageEvent).data).revision) || 0 } catch { /* keep 0 */ }
+      let live: GoLiveJob | null = null
+      try {
+        const ready = JSON.parse((event as MessageEvent).data) as { revision?: number; live?: GoLiveJob }
+        revision = Number(ready.revision) || 0
+        live = ready.live && typeof ready.live.id === 'string' ? ready.live : null
+      } catch { /* keep 0 */ }
+      // Go Live may have run, or still be running, while this editor was reloading: show where it stands.
+      if (live) setLiveJob(live)
       if (lastRevision !== null && revision !== lastRevision && canSyncRepo) void pullFromBridge()
       lastRevision = revision
     })
@@ -3409,13 +3416,23 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         return
       }
       if (element) {
+        const live = readLiveElementDraft(element, draft)
+        // Words are an edit only once they were changed. A restyled heading
+        // that kept a copy of its words would put them back over any later
+        // change to them in the code.
+        const ownWords = pageTextOf(element) ?? originalRouteDrafts[path]?.text
+        if (draft.text === undefined && !element.isContentEditable && live.text !== undefined && ownWords !== undefined && live.text.trim() === ownWords.trim()) delete live.text
         nextRouteDrafts[path] = {
-          ...readLiveElementDraft(element, draft),
+          ...live,
           fingerprint: fingerprintForDraft(element, root, originalRouteDrafts[path]?.text),
         }
       }
     })
 
+    // The selected element as it is now: an edit that has just happened (words
+    // typed, a move, an alignment) may not have reached the store yet. Only
+    // what differs from the page's own goes in: merely having something
+    // selected when saving changes nothing.
     const activeElement = currentSelectionRef.current
     if (
       activeElement
@@ -3424,7 +3441,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     ) {
       const activePath = getElementPath(activeElement, root)
       if (activePath && !isInjectionPath(activePath)) {
-        nextRouteDrafts[activePath] = readLiveElementDraft(activeElement, nextRouteDrafts[activePath] ?? {})
+        const existing = nextRouteDrafts[activePath]
+        const live = readLiveElementDraft(activeElement, existing ?? {})
+        const ownWords = pageTextOf(activeElement) ?? originalRouteDrafts[activePath]?.text
+        if (existing?.text === undefined && !activeElement.isContentEditable && live.text !== undefined && (ownWords === undefined || live.text.trim() === ownWords.trim())) delete live.text
+        const changed = live.text !== undefined || live.imageUrl !== undefined || live.media !== undefined || Object.keys(live.styles ?? {}).length > 0
+        if (existing || changed) nextRouteDrafts[activePath] = live
       }
     }
 
@@ -4424,6 +4446,12 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
       setSelection(primary)
       const nextElement = primary && root ? findElementByPath(root, primary.path) : null
       currentSelectionRef.current = nextElement
+      // Note what the page itself says and how it styles the element before
+      // anything is done to it: a save keeps only what differs from these.
+      if (nextElement) {
+        rememberPageStyle(nextElement)
+        rememberPageText(nextElement)
+      }
       setSelectionRect(nextElement ? nextElement.getBoundingClientRect() : null)
       if (!nextElement) {
         markSelectionSwitch(null)

@@ -4,7 +4,7 @@ import { type ElementDraft, INJECTION_KEY } from './types'
 import { persistedStyleKeys } from './style-options'
 import { getCanvasHost, applyGlobalCSS, camelToKebab, readImageUrl } from './dom'
 import { canApplyTextDraft } from './writing'
-import { applyMediaSource, readImageSource } from '../media/apply-media'
+import { applyMediaSource, froamPlacedMedia, readImageSource } from '../media/apply-media'
 import { hasMediaRef, mediaRefsFromUrls, resolveMediaRefs } from '../media/media-refs'
 import { safeHref } from './links'
 
@@ -158,9 +158,20 @@ export function readLiveElementDraft(element: HTMLElement, existingDraft: Elemen
 
   const drafted = existingDraft.styles ?? {}
   const liveStyles: Record<string, string> = { ...drafted }
+  // The site's own style attribute, from before Froam painted on the element.
+  const own = pageStyles.get(element)
+  let ownStyle: CSSStyleDeclaration | null = null
+  if (own) {
+    const probe = element.ownerDocument.createElement('div')
+    probe.setAttribute('style', own)
+    ownStyle = probe.style
+  }
   persistedStyleKeys.forEach((key) => {
     const shown = element.style[key]
     if (!shown) return
+    // What the page itself set, unchanged, is not an edit: kept as one, a
+    // later change to it in the code would be undone by Froam.
+    if (!(key in drafted) && ownStyle && ownStyle[key] === shown) return
     // What the page shows from the bridge is stored as the reference it came from.
     const value = mediaRefsFromUrls(shown)
     // What the draft sets is refreshed; a new key is taken only when it is a
@@ -172,7 +183,12 @@ export function readLiveElementDraft(element: HTMLElement, existingDraft: Elemen
     ? readImageSource(element)
     : mediaRefsFromUrls(readImageUrl(element.style.backgroundImage))
 
-  if (imageUrl || existingDraft.imageUrl !== undefined) {
+  // A picture is an edit when Froam put it there: an image's own src, or the
+  // page's own inline background, stays the code's to change.
+  const pictureIsFroams = element instanceof HTMLImageElement
+    ? froamPlacedMedia(element)
+    : !pageStyles.has(element) || element.style.backgroundImage !== (ownStyle?.backgroundImage ?? '')
+  if (existingDraft.imageUrl !== undefined || (imageUrl && pictureIsFroams)) {
     nextDraft.imageUrl = imageUrl
   }
 

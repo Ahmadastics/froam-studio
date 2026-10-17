@@ -80,7 +80,7 @@ test('typing a new font size: a cleared field stays empty, and "24" is 24px', as
     await select(page, '#subtitle')
     const read = () => page.evaluate(() => ({ field: document.querySelector('[aria-label="Font size"]').value, applied: getComputedStyle(document.getElementById('subtitle')).fontSize }))
     await page.locator('[aria-label="Font size"]').click()
-    await page.keyboard.press('Control+A')
+    await page.keyboard.press('ControlOrMeta+A')
     await page.keyboard.press('Backspace')
     let now = await read()
     assert(now.field === '', `clearing the size field left "${now.field}"`)
@@ -90,7 +90,7 @@ test('typing a new font size: a cleared field stays empty, and "24" is 24px', as
     now = await read()
     assert(now.field === '24' && now.applied === '24px', `typing 24 gave the field "${now.field}" and the text ${now.applied}`)
     // Too small is kept to the smallest size once the field is left, not on every keystroke.
-    await page.keyboard.press('Control+A')
+    await page.keyboard.press('ControlOrMeta+A')
     await page.keyboard.type('3')
     await page.keyboard.press('Tab')
     await page.waitForTimeout(300)
@@ -312,6 +312,54 @@ test('effects reach visitors: chosen in Styles, saved, and alive on the live pag
   } finally { site.close() }
 })
 
+
+test('a restyle saves only the style: the words and the page’s own inline style stay the code’s to change', async () => {
+  // A heading with an inline style of its own, as plenty of sites have.
+  const index = path.join(siteDir, 'index.html')
+  const original = fs.readFileSync(index, 'utf8')
+  fs.writeFileSync(index, original.replace('<h3 id="feature-1-title">', '<h3 id="feature-1-title" style="letter-spacing: 1px">'))
+  let edited = ''
+  try {
+    const { page, context } = await openEditor()
+    try {
+      await select(page, '#feature-1-title')
+      await page.locator('button[aria-label="Bold"]').click()
+      await page.waitForTimeout(400)
+      edited = await page.evaluate(() => getComputedStyle(document.getElementById('feature-1-title')).fontWeight)
+      // Something else selected, untouched, when Save is pressed: that alone must save nothing.
+      await select(page, '.features li:nth-child(3) h3')
+      const design = path.join(siteDir, 'froam', 'froam.design.json')
+      // Earlier tests saved edits of their own here; this save may add only the heading's.
+      const saved = () => (fs.existsSync(design) ? Object.entries(JSON.parse(fs.readFileSync(design, 'utf8')).routes?.['/'] ?? {}).flatMap(([size, store]) => Object.entries(store ?? {}).map(([where, draft]) => ({ key: `${size} ${where}`, draft }))) : [])
+      const earlier = new Set(saved().map((entry) => entry.key))
+      const before = fs.existsSync(design) ? fs.statSync(design).mtimeMs : 0
+      await page.keyboard.press('Control+Shift+S')
+      for (let i = 0; i < 60 && (fs.existsSync(design) ? fs.statSync(design).mtimeMs : 0) === before; i += 1) await sleep(150)
+      await sleep(500)
+      const added = saved().filter((entry) => !earlier.has(entry.key))
+      assert(added.length === 1, `saving with an untouched element selected saved ${added.length} new edits: ${JSON.stringify(added.map((entry) => [entry.key, Object.keys(entry.draft)]))}`)
+      const heading = added[0].draft
+      assert(heading.styles?.fontWeight, `the bold wasn't saved: ${JSON.stringify(heading)}`)
+      assert(heading.text === undefined, `the heading's unchanged words were saved as an edit: "${heading.text}"`)
+      assert(!heading.styles.letterSpacing, `the page's own inline style was saved as an edit: ${heading.styles.letterSpacing}`)
+    } finally { await context.close() }
+
+    // The words and the inline style change in the code: a visitor sees the code's, and the bold.
+    fs.writeFileSync(index, fs.readFileSync(index, 'utf8').replace('>Live editing<', '>Live editing, from the code<').replace('letter-spacing: 1px', 'letter-spacing: 3px'))
+    const site = await servedAsVisitor()
+    try {
+      const visitor = await browser.newContext({ viewport: { width: 1360, height: 860 } })
+      const page = await visitor.newPage()
+      await page.goto(site.url)
+      await page.waitForTimeout(1200)
+      const shown = await page.evaluate(() => { const el = document.getElementById('feature-1-title'); const cs = getComputedStyle(el); return { text: el.textContent.trim(), spacing: cs.letterSpacing, weight: cs.fontWeight } })
+      assert(shown.text === 'Live editing, from the code', `Froam put the old words back over the code's: "${shown.text}"`)
+      assert(shown.spacing === '3px', `Froam put the old inline style back over the code's: ${shown.spacing}`)
+      assert(Number(shown.weight) >= 600 || Number(shown.weight) <= 400, `the restyle itself didn't reach the visitor: weight ${shown.weight}`)
+      await visitor.close()
+    } finally { site.close() }
+  } finally { fs.writeFileSync(index, original) }
+})
 
 /* ─── run ─── */
 

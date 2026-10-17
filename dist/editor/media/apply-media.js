@@ -28,6 +28,10 @@ function remember(element) {
         flags: Object.fromEntries(VIDEO_FLAGS.map((flag) => [flag, element.hasAttribute(flag)])),
     });
 }
+/** Froam has put a picture or video on this element (the page's own is remembered). */
+export function froamPlacedMedia(element) {
+    return pageMedia.has(element);
+}
 /** Put back what the page itself had. Returns false when Froam never touched it. */
 export function restorePageMedia(element) {
     const page = pageMedia.get(element);

@@ -1,4 +1,6 @@
 import { type MediaContext } from './media-refs';
+/** Froam has put a picture or video on this element (the page's own is remembered). */
+export declare function froamPlacedMedia(element: HTMLElement): boolean;
 /** Put back what the page itself had. Returns false when Froam never touched it. */
 export declare function restorePageMedia(element: HTMLElement): boolean;
 /** Whether `url` is what the page itself showed here before any edit. */

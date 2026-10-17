@@ -51,6 +51,11 @@ function remember(element: HTMLElement) {
   })
 }
 
+/** Froam has put a picture or video on this element (the page's own is remembered). */
+export function froamPlacedMedia(element: HTMLElement) {
+  return pageMedia.has(element)
+}
+
 /** Put back what the page itself had. Returns false when Froam never touched it. */
 export function restorePageMedia(element: HTMLElement) {
   const page = pageMedia.get(element)
