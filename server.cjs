@@ -1661,12 +1661,33 @@ function publicRoom(room, now, you) {
     you: you ?? null
   };
 }
-function createFroamRoomApi({ file, storage, authorize = null, onApproveRequest = null, onRevertRequest = null, notify = null, roomTtlMs = null, realtime = null, presenceWriteMs = 0, mintRoomId = () => (0, import_node_crypto.randomUUID)(), log = () => {
+function createFroamRoomApi({ file, storage, authorize = null, onApproveRequest = null, onRevertRequest = null, notify = null, record = null, roomTtlMs = null, realtime = null, presenceWriteMs = 0, mintRoomId = () => (0, import_node_crypto.randomUUID)(), log = () => {
 }, now = () => Date.now() }) {
   if (!storage && !file) throw new Error("[froam] createFroamRoomApi needs a file or a storage");
   const store = storage ?? fileStorage(file);
   const writeRoom = store.put.bind(store);
   const subscribers = /* @__PURE__ */ new Map();
+  async function keep(event) {
+    if (!record) return;
+    try {
+      await record(event);
+    } catch (error) {
+      log(`record failed: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+  const pagesOf = (request) => (request.scopes?.length ? request.scopes : [request]).map((scope) => scope.routeKey).filter(Boolean);
+  const personOf = (member) => ({ name: member.name, role: member.role, via: "review room" });
+  const requestEvent = (type, request, by, extra = {}, room = null) => ({
+    type,
+    by,
+    title: request.title,
+    ...type === "request.submitted" || type === "request.withdrawn" ? {} : { author: { name: request.createdBy, role: room?.members?.[request.actor]?.role ?? "contributor" } },
+    pages: pagesOf(request),
+    changes: request.changes,
+    count: request.changes?.length ?? 0,
+    refs: { request: request.id },
+    ...extra
+  });
   function tell(event) {
     if (!notify) return;
     Promise.resolve().then(() => notify({ ...event, room: { id: event.room.id }, actor: event.actor ? { actor: event.actor.actor, name: event.actor.name, role: event.actor.role, title: event.actor.title ?? null } : null })).catch((error) => log(`notify failed: ${error instanceof Error ? error.message : error}`));
@@ -1760,6 +1781,7 @@ data: ${JSON.stringify({ sequence })}
       };
       await persist(room2);
       log(`room ${id} opened`);
+      await keep({ type: "room.opened", by: { name: ownerName, role: "owner", via: "review room" }, ...Array.isArray(routes) ? { pages: routes } : {}, refs: { room: id } });
       sendJson(res, 200, {
         success: true,
         room: publicRoom(room2, stamp, { actor: ownerActor, role: "owner", name: ownerName }),
@@ -1864,6 +1886,7 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
       };
       await persist(room);
       log(`${name} joined room ${roomId} as ${room.members[actor].role}`);
+      if (!returning) await keep({ type: "room.joined", by: { name, role: room.members[actor].role, via: "invite link" }, refs: { room: roomId } });
       sendJson(res, 200, {
         success: true,
         you: { actor, role: room.members[actor].role, name, session: room.members[actor].session },
@@ -2352,6 +2375,7 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
         room.requests[request2.id] = request2;
         appendEvent(room, { type: "request", createdAt: request2.createdAt, actor: member.actor, requestId: request2.id });
         await persist(room);
+        await keep(requestEvent("request.submitted", request2, personOf(member), { note: request2.note, refs: { room: room.id, request: request2.id } }));
         tell({ type: "request.submitted", room, request: request2, actor: member });
         log(`${member.name} submitted "${request2.title}" on ${request2.routeKey} for approval`);
         sendJson(res, 200, { success: true, request: request2 });
@@ -2371,6 +2395,7 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
         request.decidedAt = now();
         appendEvent(room, { type: "request", createdAt: request.decidedAt, actor: member.actor, requestId: request.id });
         await persist(room);
+        await keep(requestEvent("request.withdrawn", request, personOf(member), { changes: void 0, count: void 0, refs: { room: room.id, request: request.id } }));
         sendJson(res, 200, { success: true, request });
         return true;
       }
@@ -2411,6 +2436,11 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
         appendEvent(room, { type: "request", createdAt: request.decidedAt, actor: member.actor, requestId: request.id });
         await persist(room);
         log(`${member.name} ${decision === "approved" ? "approved and published" : "sent back"} "${request.title}"`);
+        await keep(requestEvent(decision === "approved" ? "request.approved" : "request.sent-back", request, personOf(member), {
+          note: request.decisionNote,
+          ...decision === "approved" ? { result: request.published?.detail } : { changes: void 0, count: void 0 },
+          refs: { room: room.id, request: request.id, ...request.published?.link ? { link: request.published.link } : {} }
+        }, room));
         tell({ type: "request.decided", room, request, actor: member });
         sendJson(res, 200, { success: true, request });
         return true;
@@ -2447,6 +2477,7 @@ data: ${JSON.stringify({ sequence: Number(room.sequence) || 0 })}
         appendEvent(room, { type: "request", createdAt: request.reverted.at, actor: member.actor, requestId: request.id });
         await persist(room);
         log(`${member.name} reverted "${request.title}"`);
+        await keep(requestEvent("request.reverted", request, personOf(member), { note: request.reverted.note, result: request.reverted.detail, refs: { room: room.id, request: request.id } }, room));
         tell({ type: "request.reverted", room, request, actor: member });
         sendJson(res, 200, { success: true, request });
         return true;
@@ -4246,7 +4277,7 @@ function publishedToDesign(published) {
   };
 }
 function createFroamPublishApi({ file, authorize = null, log = () => {
-}, commit = null }) {
+}, commit = null, onPublished = null }) {
   return async function handlePublishRequest(req, res) {
     const url = new URL(req.url ?? "/", "http://froam.local");
     if (!url.pathname.endsWith("/published")) return false;
@@ -4292,6 +4323,13 @@ function createFroamPublishApi({ file, authorize = null, log = () => {
       published.updatedAt = publishedAt;
       savePublished(file, published);
       log(`published ${routeKey} (${viewportMode}) \u2192 ${import_node_path4.default.basename(file)}`);
+      if (onPublished) {
+        try {
+          await onPublished({ req, routeKey, viewportMode, before: current, after: merged.drafts });
+        } catch (error) {
+          log(`onPublished failed: ${error instanceof Error ? error.message : error}`);
+        }
+      }
       let committed = null;
       if (commit) {
         try {

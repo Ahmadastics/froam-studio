@@ -1,0 +1,111 @@
+/* ─── The record (FroamRecord.tsx): the Go Live card, wider, with a timeline ─── */
+
+.froam-record__card { width: min(600px, calc(100vw - 32px)); }
+
+.froam-record__check {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(var(--fs-success-rgb), 0.3);
+  border-radius: 10px;
+  background: rgba(var(--fs-success-rgb), 0.06);
+  color: var(--fs-text-primary);
+}
+.froam-record__check > svg { flex: none; margin-top: 2px; color: var(--fs-success); }
+.froam-record__check.is-broken { border-color: rgba(var(--fs-danger-rgb), 0.35); background: rgba(var(--fs-danger-rgb), 0.07); }
+.froam-record__check.is-broken > svg { color: var(--fs-danger); }
+.froam-record__hash { margin-top: 2px; color: var(--fs-text-tertiary); font: 500 11px/1.4 var(--fs-font-mono); overflow-wrap: anywhere; }
+
+.froam-record__you { color: var(--fs-text-secondary); }
+.froam-record__you strong { color: var(--fs-text-primary); font-weight: 600; }
+.froam-record__you .froam-golive__link { display: inline-flex; align-items: center; gap: 4px; }
+.froam-record__you form { display: grid; gap: 6px; }
+.froam-record__you form div { display: flex; gap: 6px; }
+.froam-record__you input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--fs-border-strong);
+  border-radius: 8px;
+  background: var(--fs-surface-control);
+  color: var(--fs-text-primary);
+  font: inherit;
+}
+.froam-record__you input:focus { outline: none; border-color: var(--fs-border-active); }
+.froam-record__you button[type="submit"] {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--fs-border-strong);
+  border-radius: 8px;
+  background: var(--fs-surface-control);
+  color: var(--fs-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.froam-record__you button[type="submit"]:disabled { opacity: 0.5; cursor: default; }
+
+.froam-record__kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.froam-record__kinds button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--fs-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fs-text-secondary);
+  font: 500 12px/1 var(--fs-font);
+  cursor: pointer;
+}
+.froam-record__kinds button:hover { background: var(--fs-surface-control-hover); color: var(--fs-text-primary); }
+.froam-record__kinds button[aria-pressed="true"] { border-color: var(--fs-border-active); background: var(--fs-surface-control); color: var(--fs-text-primary); }
+.froam-record__kinds button:focus-visible { outline: 2px solid var(--fs-border-active); outline-offset: 2px; }
+
+/* The site's own styles reach in here (a page may pad every section or list): every box says what it is. */
+.froam-record__day { margin: 0; padding: 0; }
+.froam-record__day h3 {
+  padding: 0;
+  margin: 4px 0 6px;
+  color: var(--fs-text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.froam-record__day ol { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.froam-record__day li { margin: 0; }
+
+.froam-record__entry {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--fs-border);
+  border-radius: 0 8px 8px 0;
+}
+.froam-record__entry:hover { background: var(--fs-surface-control-subtle); }
+.froam-record__entry[data-tone="good"] { border-left-color: var(--fs-success); }
+.froam-record__entry[data-tone="warn"] { border-left-color: var(--fs-warning); }
+.froam-record__entry[data-tone="ask"] { border-left-color: var(--fs-border-active); }
+.froam-record__entry time { padding-top: 1px; white-space: nowrap; color: var(--fs-text-tertiary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.froam-record__entry p { margin: 0; overflow-wrap: anywhere; }
+.froam-record__role {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--fs-surface-control);
+  color: var(--fs-text-secondary);
+  font-size: 11px;
+}
+.froam-record__meta { color: var(--fs-text-tertiary); font-size: 12px; }
+.froam-record__note { color: var(--fs-text-secondary); font-style: italic; }
+.froam-record__entry details { margin-top: 4px; }
+.froam-record__entry summary { color: var(--fs-text-secondary); font-size: 12px; cursor: pointer; }
+.froam-record__entry summary:hover { color: var(--fs-text-primary); }
+.froam-record__entry details ul { display: grid; gap: 4px; margin: 6px 0 0; padding-left: 16px; color: var(--fs-text-secondary); font-size: 12px; }
+.froam-record__diff { display: block; overflow-wrap: anywhere; }
+.froam-record__diff del { color: var(--fs-text-tertiary); }
+.froam-record__diff ins { color: var(--fs-text-primary); text-decoration: none; font-weight: 500; }
+.froam-record__older { justify-self: center; }
+
+/* The toolbar button. */
+.froam-tb__record-btn > svg { color: var(--fs-text-secondary); }

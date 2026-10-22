@@ -18,6 +18,7 @@ import FroamBlueprint from './FroamBlueprint.js';
 import { COARSE_POINTER_QUERY, MOBILE_UI_QUERY, useMediaQuery } from './froamMedia.js';
 import FroamShortcutOverlay from './FroamShortcutOverlay.js';
 import FroamGoLive from './FroamGoLive.js';
+import FroamRecord from './FroamRecord.js';
 import FroamImageFit, { recallImageFit, rememberImageFit } from './FroamImageFit.js';
 import { aspectRatioCss, DEFAULT_IMAGE_FIT, imageFitStyles, liveFitStyles, outputSize, resolveAspectRatio, shapeStyles, slotSize, sourceRect, srcsetWidths } from './image-fit.js';
 import { DEFAULT_PLAYBACK, writeMediaDraft } from './media/media-draft.js';
@@ -1473,6 +1474,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
     const [publishedEpoch, setPublishedEpoch] = useState(0);
     // Go Live (FroamGoLive.tsx): the sheet, and the bridge's job as last announced.
     const [goLiveOpen, setGoLiveOpen] = useState(false);
+    // The record (FroamRecord.tsx): who changed what, who approved it, when.
+    const [recordOpen, setRecordOpen] = useState(false);
     const [liveJob, setLiveJob] = useState(null);
     const goLiveOpenRef = useRef(false);
     goLiveOpenRef.current = goLiveOpen;
@@ -7039,7 +7042,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                                 }
                                 setActiveTool(tool);
                                 setMoveMode(tool === 'move');
-                            }, canUndo: canUndo, canRedo: canRedo, onSave: actionsRef.current.saveToRunam, onSaveRepo: isContributor ? undefined : () => { void actionsRef.current.saveToRepo(); }, onGoLive: isContributor || !canSaveRepoHere ? undefined : () => setGoLiveOpen(true), liveState: !liveJob ? 'idle' : !liveJob.done ? 'going' : liveJob.ok && liveJob.outcome === 'live' ? 'live' : liveJob.ok ? 'idle' : 'failed', collaborate: (_jsx(FroamCollaborate, { role: room.role, isOwner: room.role === 'owner', inRoom: room.inRoom, joined: roomJoined, myName: room.identity?.name ?? persona.name ?? 'You', me: roomMe, people: room.others, links: inviteLinks, opening: sharing, shareUnavailable: shareUnavailable, onOpenRoom: (fresh) => { void startSharing(fresh); }, onCopyLink: (link) => { void copyInviteLink(link); }, requests: requests, pendingChanges: contributorRequest?.changes ?? [], onSubmit: submitChangeRequest, onWithdraw: (request) => { void withdrawChangeRequest(request); }, previewingId: previewingRequestId, onPreview: previewChangeRequest, onDecide: decideChangeRequest, messaging: roomMessaging, onEditProfile: openPersonaEditor, needsName: room.needsName && invitedByLink, knownProfile: persona.name && persona.name !== DEFAULT_FROAM_PERSONA.name
+                            }, canUndo: canUndo, canRedo: canRedo, onSave: actionsRef.current.saveToRunam, onSaveRepo: isContributor ? undefined : () => { void actionsRef.current.saveToRepo(); }, onGoLive: isContributor || !canSaveRepoHere ? undefined : () => setGoLiveOpen(true), onRecord: isContributor || !canSaveRepoHere ? undefined : () => setRecordOpen(true), liveState: !liveJob ? 'idle' : !liveJob.done ? 'going' : liveJob.ok && liveJob.outcome === 'live' ? 'live' : liveJob.ok ? 'idle' : 'failed', collaborate: (_jsx(FroamCollaborate, { role: room.role, isOwner: room.role === 'owner', inRoom: room.inRoom, joined: roomJoined, myName: room.identity?.name ?? persona.name ?? 'You', me: roomMe, people: room.others, links: inviteLinks, opening: sharing, shareUnavailable: shareUnavailable, onOpenRoom: (fresh) => { void startSharing(fresh); }, onCopyLink: (link) => { void copyInviteLink(link); }, requests: requests, pendingChanges: contributorRequest?.changes ?? [], onSubmit: submitChangeRequest, onWithdraw: (request) => { void withdrawChangeRequest(request); }, previewingId: previewingRequestId, onPreview: previewChangeRequest, onDecide: decideChangeRequest, messaging: roomMessaging, onEditProfile: openPersonaEditor, needsName: room.needsName && invitedByLink, knownProfile: persona.name && persona.name !== DEFAULT_FROAM_PERSONA.name
                                     ? { name: persona.name, avatarUrl: persona.imageUrl || null, title: persona.role }
                                     : null, onJoin: joinRoomAs, onRevert: room.role === 'owner' ? revertApprovedRequest : undefined, checks: requestChecks, expiresAt: room.room?.expiresAt ?? null, openTarget: openTarget, onOpenedTarget: () => setOpenTarget(null), pinTarget: pinTarget, onShowAnchor: showMessageAnchor, onTyping: setComposingMessage, onEndRoom: room.role === 'owner' ? endCollaboration : undefined, reach: pageIsLocal && reachChecked ? {
                                     local: true,
@@ -7697,6 +7700,6 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
                             archiveCurrentSelection('interface-pattern');
                             break;
                     }
-                }, onClose: () => setContextMenuPos(null) }), _jsx(FroamUICustomizer, { open: uiCustomizerOpen, value: uiPreference, onChange: setUIPreference, onClose: () => setUICustomizerOpen(false) }), _jsx(FroamSmartGuides, { guides: smartGuides, visible: smartGuides.length > 0 }), _jsx(FroamImageFit, { request: imageFitRequest, onApply: placeMediaFit, onCancel: closeMediaFit }), _jsx(FroamShortcutOverlay, { visible: showShortcutOverlay, onClose: () => setShowShortcutOverlay(false) }), _jsx(FroamGoLive, { open: goLiveOpen, onClose: () => setGoLiveOpen(false), saveFirst: saveBeforeGoingLive, job: liveJob, onJob: setLiveJob })] }), portalContainer);
+                }, onClose: () => setContextMenuPos(null) }), _jsx(FroamUICustomizer, { open: uiCustomizerOpen, value: uiPreference, onChange: setUIPreference, onClose: () => setUICustomizerOpen(false) }), _jsx(FroamSmartGuides, { guides: smartGuides, visible: smartGuides.length > 0 }), _jsx(FroamImageFit, { request: imageFitRequest, onApply: placeMediaFit, onCancel: closeMediaFit }), _jsx(FroamShortcutOverlay, { visible: showShortcutOverlay, onClose: () => setShowShortcutOverlay(false) }), _jsx(FroamGoLive, { open: goLiveOpen, onClose: () => setGoLiveOpen(false), saveFirst: saveBeforeGoingLive, job: liveJob, onJob: setLiveJob }), _jsx(FroamRecord, { open: recordOpen, onClose: () => setRecordOpen(false) })] }), portalContainer);
 }
 //# sourceMappingURL=GlobalChefEditor.js.map

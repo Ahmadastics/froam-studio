@@ -44,6 +44,8 @@ type Plan = {
   offline?: boolean
   total?: number
   warnings?: string[]
+  /** The record of who changed what goes in the same commit (lib/record.mjs). */
+  recording?: boolean
 }
 
 type Props = {
@@ -259,6 +261,7 @@ export default function FroamGoLive({ open, onClose, saveFirst, job, onJob }: Pr
                     {plan.mode === 'git' && where.github && !where.github.reachable && where.github.reason && (
                       <p className="froam-golive__note">Froam can’t follow what {where.host ?? 'your host'} does with it: {where.github.reason}{where.url ? ' It will read your site’s address instead.' : ''}</p>
                     )}
+                    {plan.mode === 'git' && plan.recording && files.length > 0 && <p className="froam-golive__note">The record of who changed what and who approved it goes with it.</p>}
                     {(plan.others ?? 0) > 0 && <p className="froam-golive__note">{plan.others} other changed file{plan.others === 1 ? '' : 's'} in your project stay{plan.others === 1 ? 's' : ''} as {plan.others === 1 ? 'it is' : 'they are'}: only what Froam saved goes.</p>}
                     {plan.offline && <p className="froam-golive__note">Couldn’t reach {where.repo} to look for newer work. If there is some, the push is refused and nothing is lost.</p>}
                     {plan.warnings?.map((warning) => <p key={warning} className="froam-golive__note is-warning">{warning}</p>)}

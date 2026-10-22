@@ -1,5 +1,38 @@
 # Changelog
 
+## 9.12.0 - 2026-10-22
+
+- **The record: who changed what, and who approved it.** Every change is
+  now written to `froam/froam.record.jsonl`, next to the design: your own
+  saves (from the computer or a paired phone), each request a teammate
+  submits, who approved it or sent it back and with what note, anything
+  taken back, people joining a review room, and every Go Live. Each entry
+  names the person, their role, the time, the pages and what changed
+  (before and after). Rooms end; the record stays with the site.
+- **It can't be quietly rewritten.** Each entry carries the hash of the
+  one before it, so an edited, deleted or reordered line is caught, at the
+  line it happened. Go Live commits the record with the site and writes
+  its newest hash into the commit message (`Froam-Record: …`). To keep it
+  on your computer only, set `"record": { "commit": false }` in
+  `froam.config.json` or git-ignore it; `froam publish` never uploads it.
+- **Record in the editor, `froam record` in the terminal.** The scroll
+  icon beside Go live opens the record, newest first, with whether it
+  checks out, filters (asked and approved, saves, Go Live, people), and the
+  name your own saves go under. **Report to print** makes a page to print
+  or attach; **Spreadsheet** downloads it as CSV. `froam record --verify`
+  exits non-zero when the record doesn't check out; `--report` and `--csv`
+  write the same files. Hosts that run their own rooms get it through the
+  new `record` option of `createFroamRoomApi` and `onPublished` of
+  `createFroamPublishApi`.
+- **The command `froam new` prints works from any folder.** Started from
+  another folder, `npx @ahmadastic/froam "<site>"` saved edits in a
+  `froam/` folder where the terminal was, not in the site, so the site
+  never showed them. A folder served from outside the current one now uses
+  its own `froam/` (and its own `froam.config.json`).
+- **Invite links stay out of git.** Sites made with `froam new` now
+  git-ignore `froam/froam.rooms.json` (each invite link is a key to the
+  room) and the editor's `froam.project.json`.
+
 ## 9.11.1 - 2026-10-17
 
 - **A restyle no longer freezes the words.** Saving copied the words of

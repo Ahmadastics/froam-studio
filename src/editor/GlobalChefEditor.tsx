@@ -94,6 +94,7 @@ import FroamBlueprint from './FroamBlueprint'
 import { COARSE_POINTER_QUERY, MOBILE_UI_QUERY, useMediaQuery } from './froamMedia'
 import FroamShortcutOverlay from './FroamShortcutOverlay'
 import FroamGoLive, { type GoLiveJob } from './FroamGoLive'
+import FroamRecord from './FroamRecord'
 import FroamImageFit, { recallImageFit, rememberImageFit, type ImageFitChoice, type ImageFitRequest } from './FroamImageFit'
 import { aspectRatioCss, DEFAULT_IMAGE_FIT, imageFitStyles, liveFitStyles, outputSize, resolveAspectRatio, shapeStyles, slotSize, sourceRect, srcsetWidths, type FitSize, type ImageFitState } from './image-fit'
 import { DEFAULT_PLAYBACK, writeMediaDraft, type MediaDraft, type MediaPlayback } from './media/media-draft'
@@ -1628,6 +1629,8 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
   const [publishedEpoch, setPublishedEpoch] = useState(0)
   // Go Live (FroamGoLive.tsx): the sheet, and the bridge's job as last announced.
   const [goLiveOpen, setGoLiveOpen] = useState(false)
+  // The record (FroamRecord.tsx): who changed what, who approved it, when.
+  const [recordOpen, setRecordOpen] = useState(false)
   const [liveJob, setLiveJob] = useState<GoLiveJob | null>(null)
   const goLiveOpenRef = useRef(false)
   goLiveOpenRef.current = goLiveOpen
@@ -7138,6 +7141,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
               onSave={actionsRef.current.saveToRunam}
               onSaveRepo={isContributor ? undefined : () => { void actionsRef.current.saveToRepo() }}
               onGoLive={isContributor || !canSaveRepoHere ? undefined : () => setGoLiveOpen(true)}
+              onRecord={isContributor || !canSaveRepoHere ? undefined : () => setRecordOpen(true)}
               liveState={!liveJob ? 'idle' : !liveJob.done ? 'going' : liveJob.ok && liveJob.outcome === 'live' ? 'live' : liveJob.ok ? 'idle' : 'failed'}
               collaborate={(
                 <FroamCollaborate
@@ -9399,6 +9403,7 @@ export default function GlobalChefEditor({ initialOpen = false, routeKey: explic
         job={liveJob}
         onJob={setLiveJob}
       />
+      <FroamRecord open={recordOpen} onClose={() => setRecordOpen(false)} />
     </>,
     portalContainer
   )

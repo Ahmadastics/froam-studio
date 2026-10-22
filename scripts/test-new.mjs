@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { Readable, Writable } from 'node:stream'
 
@@ -225,9 +225,38 @@ test('froam new <folder>: writes the site and the workspace, then says how to op
     assert.ok(fs.existsSync(path.join(dir, rel)), rel)
   }
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'froam.config.json'), 'utf8')), { dir: 'froam', framework: 'static' })
+  // Review-room invite links are keys; the record is meant to be committed.
+  const ignored = fs.readFileSync(path.join(dir, '.gitignore'), 'utf8')
+  assert.match(ignored, /^froam\/froam\.rooms\.json$/m)
+  assert.doesNotMatch(ignored, /record/)
   assert.match(fs.readFileSync(path.join(dir, 'index.html'), 'utf8'), /Introducing Northwind/)
   assert.match(out, /made Northwind \(product or startup\)/)
   assert.match(out, /Open it in the editor: npx @ahmadastic\/froam/)
+})
+
+test('the command froam new prints opens the site\'s own froam/ folder, from any folder', async () => {
+  const { code, out } = froam(['new', 'harbour', '--kind', 'business', '--no-open'])
+  assert.equal(code, 0, out)
+  const site = path.join(base, 'harbour')
+  const elsewhere = path.join(base, 'somewhere-else')
+  fs.mkdirSync(elsewhere)
+  // The printed command serves the site by its full path; started from another folder, it must not save there.
+  const child = spawn(process.execPath, [CLI, 'dev', '--serve', site, '--port', '0'], { cwd: elsewhere, env: { ...process.env, NO_COLOR: '1', FROAM_SHARE: 'off' } })
+  let said = ''
+  try {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`froam dev said: ${said}`)), 20000)
+      const listen = (chunk) => { said += chunk; if (/Ctrl\+C to stop/.test(said)) { clearTimeout(timer); resolve() } }
+      child.stdout.on('data', listen)
+      child.stderr.on('data', listen)
+      child.on('exit', () => { clearTimeout(timer); reject(new Error(`froam dev stopped: ${said}`)) })
+    })
+  } finally {
+    child.kill()
+  }
+  const repoLine = said.split('\n').find((line) => line.includes('repo')) ?? ''
+  assert.ok(repoLine.includes(path.join(site, 'froam')), repoLine)
+  assert.deepEqual(fs.readdirSync(elsewhere), [], 'a froam/ folder was made where the terminal was')
 })
 
 test('froam new --style: the site wears it; a style that does not exist is refused, nothing written', () => {

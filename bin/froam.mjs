@@ -12,6 +12,7 @@
  *   froam build            recompile design.json → generated.css + runtime.js
  *   froam status           design summary, artifact freshness, git state
  *   froam check            find edits the page has drifted out from under
+ *   froam record           who changed what, who approved it — check it, export it
  *   froam doctor           health-check the whole setup
  *   froam migrate          upgrade froam.design.json to v3
  *   froam version          print the installed Froam package version
@@ -201,6 +202,27 @@ function resolveFroamDir(flagDir, appTarget = null, projectDir = undefined) {
     targetUrl: appTarget,
     cwd: projectDir === undefined ? cwd : projectDir,
   })
+}
+
+/**
+ * The workspace of a folder served from somewhere else: that folder's own
+ * froam.config.json "dir", else where Froam would put it with the folder as
+ * the project. `froam new` prints a command with the site's full path to run
+ * from anywhere, and the edits belong with the site, not with whichever folder
+ * the terminal happened to be in.
+ */
+function servedWorkspaceDir(serveDir) {
+  try {
+    const config = JSON.parse(fs.readFileSync(path.join(serveDir, CONFIG_FILE), 'utf8'))
+    if (typeof config?.dir === 'string' && config.dir) return path.resolve(serveDir, config.dir)
+  } catch { /* no config there */ }
+  return resolveSafeWorkspaceDir({ cwd: serveDir })
+}
+
+/** `dir` is `parent` or somewhere inside it. */
+function isWithin(dir, parent) {
+  const rel = path.relative(path.resolve(parent), path.resolve(dir))
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
 }
 
 function relDir(absDir) {
@@ -685,8 +707,10 @@ function createNewSite({ name, kind, style = 'original', pages = [], contact = {
     const readme = path.join(folder, 'README.md')
     if (!fs.existsSync(readme)) fs.writeFileSync(readme, starterReadme({ name, folder: path.basename(folder) }))
     // froam publish builds its upload in .froam/; it's made again each time, never committed.
+    // Review rooms hold their invite links (each one a key to the room), and the
+    // editor's own bookkeeping is no one else's business: neither goes in the repo.
     const gitignore = path.join(folder, '.gitignore')
-    if (!fs.existsSync(gitignore)) fs.writeFileSync(gitignore, '.froam/\n')
+    if (!fs.existsSync(gitignore)) fs.writeFileSync(gitignore, '.froam/\nfroam/froam.rooms.json\nfroam/froam.project.json\n')
     const configPath = path.join(folder, CONFIG_FILE)
     let config = {}
     try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')) } catch { /* new */ }
@@ -1059,7 +1083,10 @@ async function dev(flags) {
 
   let froamDir
   try {
-    froamDir = resolveFroamDir(flags.dir, normalizedApp, flags.project)
+    // Serving a folder outside this one: it's a site of its own, with its own froam/.
+    froamDir = serveDir && !flags.dir && !isWithin(serveDir, cwd)
+      ? servedWorkspaceDir(serveDir)
+      : resolveFroamDir(flags.dir, normalizedApp, flags.project)
     ensureScaffold(froamDir, { glue: false })
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error))
@@ -1503,6 +1530,63 @@ function migrate(flags) {
   log(`${OK} migrated design v${fromVersion} → v${DESIGN_VERSION} and rebuilt artifacts`)
 }
 
+/* ── record ──────────────────────────────────────────────────── */
+/**
+ * `froam record`: the site's record (lib/record.mjs), read from the project.
+ *   froam record                 the newest entries
+ *   froam record --all           every entry, oldest first
+ *   froam record --verify        check nothing was changed or removed (exit 1 if it was)
+ *   froam record --report [file] a page to print or attach (froam-record.html)
+ *   froam record --csv [file]    the same as a spreadsheet (froam-record.csv)
+ */
+async function recordCommand(flags) {
+  const { RECORD_FILE, createFroamRecord, describeEntry, recordToCsv, renderRecordReport } = await import('../lib/record.mjs')
+  const froamDir = resolveFroamDir(flags.dir)
+  const record = createFroamRecord({ froamDir })
+  const where = `${relDir(froamDir)}/${RECORD_FILE}`
+  if (!record.exists()) {
+    log(`${dim('No record yet')} — Froam starts one at ${where} the first time someone saves, asks for a change, approves one or goes live.`)
+    return
+  }
+  const verification = record.verify()
+  const verdict = () => {
+    if (verification.ok) log(`${OK} The record checks out: ${verification.count} entr${verification.count === 1 ? 'y' : 'ies'}, each linked to the one before, none changed since written.`)
+    else log(`${red('✗')} The record doesn't check out at line ${verification.problem.line}: ${verification.problem.reason}`)
+    log(dim(`  latest hash ${verification.head}`))
+  }
+  if (flags.verify) {
+    verdict()
+    if (!verification.ok) process.exitCode = 1
+    return
+  }
+  if (flags.report || flags.csv) {
+    const csv = Boolean(flags.csv)
+    const chosen = csv ? flags.csv : flags.report
+    const out = path.resolve(cwd, typeof chosen === 'string' ? chosen : csv ? 'froam-record.csv' : 'froam-record.html')
+    let site = null
+    try { site = JSON.parse(fs.readFileSync(path.join(cwd, CONFIG_FILE), 'utf8')).siteUrl ?? null } catch { /* no config */ }
+    fs.writeFileSync(out, csv ? recordToCsv(record.all()) : renderRecordReport(record.all(), verification, { site: site ?? path.basename(cwd) }))
+    log(`${OK} Wrote ${path.relative(cwd, out) || out}`)
+    verdict()
+    return
+  }
+  const entries = flags.all ? record.all() : record.read({ limit: Number(flags.limit) || 20 })
+  for (const entry of entries) {
+    // This computer's time, as the editor shows it; the report and the file keep UTC.
+    const at = new Date(entry.at)
+    const when = Number.isNaN(at.getTime()) ? String(entry.at ?? '') : `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')} ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+    log(`${dim(`#${entry.seq}`)} ${dim(when)}  ${describeEntry(entry)}${entry.by?.role ? dim(` (${entry.by.role})`) : ''}`)
+    for (const change of (entry.changes ?? []).slice(0, 5)) {
+      log(dim(`      ${change.label}${change.before || change.after ? `: ${change.before ?? '—'} → ${change.after ?? '—'}` : ''}`))
+    }
+    if ((entry.changes?.length ?? 0) > 5) log(dim(`      and ${(entry.count ?? entry.changes.length) - 5} more`))
+    if (entry.note) log(dim(`      note: ${entry.note}`))
+  }
+  log()
+  verdict()
+  if (!flags.all) log(dim(`  froam record --all for everything, --report for a page to print`))
+}
+
 /* ── help ────────────────────────────────────────────────────── */
 function help() {
   log(`${teal('◆')} ${bold('froam')} ${dim(`v${packageVersion()}`)} — visual editor for served HTML and static sites`)
@@ -1543,6 +1627,9 @@ function help() {
   log(`      ${dim('--app <url>')}        check against a running app`)
   log(`      ${dim('--serve [dir]')}      check against a built/static folder`)
   log(`      ${dim('--fix')}              re-anchor the edits that merely moved`)
+  log(`  ${teal('record')}             who changed what and who approved it, newest first`)
+  log(`      ${dim('--verify')}           check nothing in it was changed or removed`)
+  log(`      ${dim('--report [file]')}    a page to print or attach ${dim('(--csv for a spreadsheet)')}`)
   log(`  ${teal('doctor')}             health-check the setup`)
   log(`  ${teal('ai-check')}           send one test request to the AI froam dev would use`)
   log(`  ${teal('migrate')}            upgrade froam.design.json to v${DESIGN_VERSION}`)
@@ -1600,7 +1687,7 @@ async function aiCheck() {
   log(dim('  Turn on AI in Quick Edit to use it.'))
 }
 const KNOWN_COMMANDS = new Set([
-  'new', 'publish', 'init', 'dev', 'build', 'status', 'check', 'doctor', 'migrate', 'ai-check',
+  'new', 'publish', 'init', 'dev', 'build', 'status', 'check', 'record', 'doctor', 'migrate', 'ai-check',
   'version', '--version', '-v', 'help', '--help', '-h',
 ])
 
@@ -1658,6 +1745,7 @@ switch (resolvedCommand) {
   case 'build': build(flags); break
   case 'status': status(flags); break
   case 'check': await check(flags); break
+  case 'record': await recordCommand(flags); break
   case 'doctor': doctor(flags); break
   case 'ai-check': await aiCheck(); break
   case 'migrate': migrate(flags); break

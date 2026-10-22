@@ -25,6 +25,7 @@ import {
   Sparkles,
   Square,
   Tablet,
+  ScrollText,
   Type,
   Undo2,
   UserRound,
@@ -52,6 +53,8 @@ type Props = {
   onSaveRepo?: () => void
   /** Go Live (FroamGoLive): saved work onto the real site. Only where this device may write the project. */
   onGoLive?: () => void
+  /** The record (FroamRecord): who changed what and who approved it. Where this device may write the project. */
+  onRecord?: () => void
   liveState?: 'idle' | 'going' | 'live' | 'failed'
   repoStatus?: 'clean' | 'dirty' | 'offline' | null
   repoDirtyCount?: number
@@ -204,6 +207,7 @@ export default function FroamToolbar({
   onSave,
   onSaveRepo,
   onGoLive,
+  onRecord,
   liveState = 'idle',
   repoStatus,
   repoDirtyCount,
@@ -610,6 +614,18 @@ export default function FroamToolbar({
           >
             <Rocket size={15} />
             <span>{liveState === 'going' ? 'Going live…' : 'Go live'}</span>
+          </button>
+        )}
+        {onRecord && (
+          <button
+            type="button"
+            className="froam-tb__icon-btn froam-tb__record-btn"
+            onClick={onRecord}
+            aria-label="Record: who changed what, and who approved it"
+            title="Record — who changed what, and who approved it"
+            data-chef-editor-root="true"
+          >
+            <ScrollText size={15} />
           </button>
         )}
 

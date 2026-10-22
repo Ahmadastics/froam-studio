@@ -207,6 +207,29 @@ A request can span pages and screen sizes. Previewing it runs checks on the
 page — contrast, text running off the screen, broken images, missing alt
 text, links that go nowhere — before you approve.
 
+### The record: who changed what, and who approved it
+
+Every change is written down in `froam/froam.record.jsonl`, next to the
+design: your own saves (from the computer or a paired phone), each request a
+teammate submits, who approved it or sent it back and with what note, anything
+taken back, and every Go Live. Rooms end; the record stays with the site.
+
+- **Record** in the toolbar shows it newest first, with what changed in each
+  entry. **Report to print** makes a page you can print or attach, and
+  **Spreadsheet** downloads it as CSV. In the terminal: `froam record`.
+- Each entry carries the hash of the one before it, so an edited, deleted or
+  reordered line is caught: the panel says whether the record checks out, and
+  `froam record --verify` exits non-zero when it doesn't.
+- Go Live commits the record with the site and writes its newest hash into the
+  commit message (`Froam-Record: …`), so rewriting the record later would mean
+  rewriting pushed history too.
+- It holds names as people gave them, their role, pages, and the words or
+  settings that changed (clipped); no emails or tokens. Your own saves go
+  under the name in `froam.config.json` (`"record": { "name": "…" }`, set from
+  the panel), else git's `user.name`. Anyone who can read your repo can read
+  it: to keep it on your computer only, set `"record": { "commit": false }`
+  or git-ignore it. `froam publish` never uploads it.
+
 ### Sharing a site that's on your computer
 
 A link to `localhost` only opens on your machine. Under `froam dev`, Share
@@ -551,6 +574,10 @@ froam check               report edits that no longer match the page
     --app <url>           check against a running app
     --serve [dir]         check against a built or static folder
     --fix                 re-anchor the edits that only moved
+froam record              who changed what and who approved it, newest first
+    --verify              check nothing in it was changed or removed (exit 1 if so)
+    --report [file]       a page to print or attach (--csv [file] for a spreadsheet)
+    --all                 every entry, oldest first
 froam doctor              check setup health
 froam ai-check            send one test request to the AI froam dev would use
 froam migrate             migrate the design format to v3

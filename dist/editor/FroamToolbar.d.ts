@@ -18,6 +18,8 @@ type Props = {
     onSaveRepo?: () => void;
     /** Go Live (FroamGoLive): saved work onto the real site. Only where this device may write the project. */
     onGoLive?: () => void;
+    /** The record (FroamRecord): who changed what and who approved it. Where this device may write the project. */
+    onRecord?: () => void;
     liveState?: 'idle' | 'going' | 'live' | 'failed';
     repoStatus?: 'clean' | 'dirty' | 'offline' | null;
     repoDirtyCount?: number;
@@ -77,6 +79,6 @@ export type HistoryItem = {
 };
 /** "Home", "Pricing", "Blog / First post" — a route, as a person says it. */
 export declare function pageName(routeKey: string): string;
-export default function FroamToolbar({ workspace, collaborate, viewportMode, onViewportChange, activeTool, onToolChange, canUndo, canRedo, onUndo, onRedo, onSave, onSaveRepo, onGoLive, liveState, repoStatus, repoDirtyCount, onAskFroam, onCommandPalette, onShortcutsOverlay, onCustomize, routeKey, projectName, prototypeName, onOpenPages, onOpenLibrary, libraryOpen, onOpenPrototypes, persona, onOpenPersonaEditor, moveMode, onToggleMoveMode, zoom, setZoom, leftPanelOpen, rightPanelOpen, onToggleLeftPanel, onToggleRightPanel, onMinimize, onClose, unsavedCount, autosave, onToggleAutosave, history, onUndoChange, versions, onHistoryOpen, onNameMoment, onRestoreVersion, onOpenAllVersions, }: Props): import("react").JSX.Element;
+export default function FroamToolbar({ workspace, collaborate, viewportMode, onViewportChange, activeTool, onToolChange, canUndo, canRedo, onUndo, onRedo, onSave, onSaveRepo, onGoLive, onRecord, liveState, repoStatus, repoDirtyCount, onAskFroam, onCommandPalette, onShortcutsOverlay, onCustomize, routeKey, projectName, prototypeName, onOpenPages, onOpenLibrary, libraryOpen, onOpenPrototypes, persona, onOpenPersonaEditor, moveMode, onToggleMoveMode, zoom, setZoom, leftPanelOpen, rightPanelOpen, onToggleLeftPanel, onToggleRightPanel, onMinimize, onClose, unsavedCount, autosave, onToggleAutosave, history, onUndoChange, versions, onHistoryOpen, onNameMoment, onRestoreVersion, onOpenAllVersions, }: Props): import("react").JSX.Element;
 export type { ToolMode };
 //# sourceMappingURL=FroamToolbar.d.ts.map
