@@ -1,5 +1,16 @@
 # Changelog
 
+## 9.12.1 - 2026-10-23
+
+- **The page's name no longer slides under the tools.** On screens
+  around 1180 to 1370 pixels wide, the top bar's "project / page" name ran
+  under the tool buttons (the Record button in 9.12.0 made the right side
+  wider). The left side now keeps to its own space: short of room, the
+  project's name goes first and the page's stays whole; with no room to
+  say which page at all, the name steps aside rather than showing a lone
+  "…". Between 1181 and 1260 pixels, Quick Edit shows as its icon so the
+  screen sizes keep their place, and the button now has a spoken name.
+
 ## 9.12.0 - 2026-10-22
 
 - **The record: who changed what, and who approved it.** Every change is

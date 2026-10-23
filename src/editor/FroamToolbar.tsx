@@ -567,7 +567,7 @@ export default function FroamToolbar({
         {collaborate}
 
 
-        <button type="button" className="froam-tb__ask-btn" onClick={onAskFroam} title="Quick Edit — say what to change" data-chef-editor-root="true">
+        <button type="button" className="froam-tb__ask-btn" onClick={onAskFroam} title="Quick Edit — say what to change" aria-label="Quick Edit — say what to change" data-chef-editor-root="true">
           <Sparkles size={15} />
           <span>Quick Edit</span>
         </button>

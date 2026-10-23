@@ -37,7 +37,10 @@
   gap: 4px;
 }
 
-.froam-tb__left { justify-self: start; }
+/* The left side fills its column, never more: when the right side grows (it
+   is never narrower than its buttons), the page name gives way with an
+   ellipsis instead of sliding under the tools. */
+.froam-tb__left { justify-self: stretch; }
 .froam-tb__right { justify-self: end; }
 
 .froam-tb__center {
@@ -100,7 +103,15 @@
 .froam-tb__caret { opacity: 0.8; }
 
 /* ─── Where you are ─── */
+/* It takes the room the left side has left, and is the container the rules
+   below measure: short of room, the project's name goes first and the page's
+   stays whole; too narrow to say which page at all, neither shows (never a
+   lone "…"). The container is this and not the whole left side because a
+   container stacks its contents on their own, and the Froam menu would then
+   open underneath the page. */
 .froam-tb__where {
+  flex: 1 1 auto;
+  container: froam-tb-where / inline-size;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -110,6 +121,7 @@
 
 .froam-tb__crumb {
   min-width: 0;
+  overflow: hidden;
   height: 32px;
   display: inline-flex;
   align-items: center;
@@ -124,6 +136,8 @@
 .froam-tb__crumb:hover { background: var(--fs-surface-control-hover); }
 
 .froam-tb__crumb-project {
+  /* Short of room, the project's name gives way before the page's (shrink is weighted by width, hence 100). */
+  flex: 0 100 auto;
   min-width: 0;
   max-width: 160px;
   overflow: hidden;
@@ -133,7 +147,17 @@
 
 .froam-tb__crumb-sep { color: var(--fs-text-tertiary); }
 
+@container froam-tb-where (max-width: 148px) {
+  .froam-tb__where .froam-tb__crumb-project,
+  .froam-tb__where .froam-tb__crumb-sep { display: none; }
+}
+@container froam-tb-where (max-width: 38px) {
+  .froam-tb__where .froam-tb__crumb { display: none; }
+}
+
 .froam-tb__crumb strong {
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -806,10 +830,14 @@ html[data-froam-device] .froam-first-hint { display: none; }
 @media(min-width:769px) and (max-width:1320px){
   .froam-tb__crumb-project,.froam-tb__crumb-sep{display:none}
 }
-@media(min-width:769px) and (max-width:1180px){
-  .froam-tb__viewport-group,.froam-tb__zoom-group{display:none!important}
+/* Quick Edit becomes its icon before the screen sizes go: below this the
+   right side no longer leaves the left room for the logo and the page. */
+@media(min-width:769px) and (max-width:1260px){
   .froam-tb__ask-btn span{display:none}
   .froam-tb__ask-btn{width:32px;padding:0;justify-content:center}
+}
+@media(min-width:769px) and (max-width:1180px){
+  .froam-tb__viewport-group,.froam-tb__zoom-group{display:none!important}
   .froam-tb{padding-inline:6px;gap:6px}
 }
 @media(min-width:769px) and (max-width:980px){
