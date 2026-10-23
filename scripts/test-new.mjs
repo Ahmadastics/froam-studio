@@ -148,6 +148,20 @@ test('contact details replace the placeholders; WhatsApp is a button at the very
   assert.doesNotMatch(renderStarter({ name: 'X', kind: 'shop', contact: { whatsapp: 'not a number' } }), /wa\.me/, 'a bad number made a button')
   assert.equal(phoneDigits('+234 906 585 7458'), '2349065857458')
   assert.equal(phoneDigits('12'), '')
+  // A Nigerian mobile number written the local way gets its country code.
+  assert.equal(phoneDigits('0803 555 0101'), '2348035550101')
+  assert.equal(phoneDigits('08035550101'), '2348035550101')
+  assert.equal(phoneDigits('0701-234-5678'), '2347012345678')
+  assert.equal(phoneDigits('0906 585 7458'), '2349065857458')
+  assert.equal(phoneDigits('00234 906 585 7458'), '2349065857458')
+  // Anything else stays as typed: another country's local number, a short landline, a number already international.
+  assert.equal(phoneDigits('07911 123456'), '07911123456')
+  assert.equal(phoneDigits('+44 7911 123456'), '447911123456')
+  assert.equal(phoneDigits('09 2345678'), '092345678')
+  const local = renderStarter({ name: 'Zainab Hair Studio', kind: 'business', contact: { whatsapp: '0803 555 0101', phone: '0803 555 0101' } })
+  assert.match(local, /href="https:\/\/wa\.me\/2348035550101\?text=/, 'a local number made a WhatsApp link with no country code')
+  assert.match(local, /href="tel:\+2348035550101"/, 'a local number made a phone link with no country code')
+  assert.match(local, />0803 555 0101</, 'the number is no longer shown the way it was typed')
 })
 
 test('made with Froam: every page carries the generator tag, its site id and a faint credit under the footer', () => {

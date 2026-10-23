@@ -1,5 +1,16 @@
 # Changelog
 
+## 9.12.2 - 2026-10-23
+
+- **A Nigerian number typed the local way now opens a WhatsApp chat.** A
+  site's WhatsApp button and phone link need the number with its country
+  code; typed as `0803 555 0101`, the button pointed at `wa.me/0803…`,
+  which opens no chat. Nigerian mobile numbers (070/071, 080/081, 090/091)
+  now get their +234 in the links, and `00` before a country code counts as
+  `+`. The number still shows on the page the way it was typed, and other
+  countries' local numbers are left as they were. This covers `froam new
+  --whatsapp/--phone` and sites made on the Try page.
+
 ## 9.12.1 - 2026-10-23
 
 - **The page's name no longer slides under the tools.** On screens
